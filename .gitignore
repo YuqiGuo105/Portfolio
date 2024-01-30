@@ -5,6 +5,8 @@
 /.pnp
 .pnp.js
 .idea
+.gitignore
+
 # testing
 /coverage
 
