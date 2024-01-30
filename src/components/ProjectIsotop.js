@@ -1,10 +1,15 @@
 import Isotope from "isotope-layout";
 import Link from "next/link";
 import { Fragment, useEffect, useRef, useState } from "react";
+import { supabase } from '../supabase/supabaseClient';
+
 const ProjectIsotop = () => {
-  // Isotope
-  const isotope = useRef();
+  // State for projects and filter
+  const [projects, setProjects] = useState([]);
   const [filterKey, setFilterKey] = useState("*");
+
+  const isotope = useRef();
+
   useEffect(() => {
     setTimeout(() => {
       isotope.current = new Isotope(".works-items", {
@@ -23,240 +28,90 @@ const ProjectIsotop = () => {
     }, 1000);
     //     return () => isotope.current.destroy();
   }, []);
+
+  // Fetch projects from Supabase
   useEffect(() => {
-    if (isotope.current) {
-      filterKey === "*"
-        ? isotope.current.arrange({ filter: `*` })
-        : isotope.current.arrange({ filter: `.${filterKey}` });
-    }
-  }, [filterKey]);
+    const fetchProjects = async () => {
+      const { data, error } = await supabase
+          .from('Projects')
+          .select('*');
+
+      if (!error) {
+        setProjects(data);
+      } else {
+        console.error(error);
+      }
+    };
+
+    fetchProjects();
+  }, []);
+
+  // Filter projects by category
+  const filteredProjects = filterKey === "*"
+      ? projects
+      : projects.filter(project => project.category === filterKey);
+
+  // Handle filter change
   const handleFilterKeyChange = (key) => () => {
     setFilterKey(key);
+    isotope.current.arrange({ filter: key === "*" ? "*" : `.${key}` });
   };
+
   const activeBtn = (value) => (value === filterKey ? "active" : "");
+
   return (
     <Fragment>
       <div className="works-box">
         <div
-          className="filter-links"
+            className="filter-links"
         >
           <a
-            className={`c-pointer ${activeBtn("*")}`}
-            onClick={handleFilterKeyChange("*")}
-            data-href=".works-col"
+              className={`c-pointer ${activeBtn("*")}`}
+              onClick={handleFilterKeyChange("*")}
+              data-href=".works-col"
           >
             All
           </a>
           <a
-            className={`c-pointer ${activeBtn("sorting-ui-ux-design")}`}
-            onClick={handleFilterKeyChange("sorting-ui-ux-design")}
-            data-href=".sorting-ui-ux-design"
+              className={`c-pointer ${activeBtn("sorting-ui-ux-design")}`}
+              onClick={handleFilterKeyChange("sorting-ui-ux-design")}
+              data-href=".sorting-ui-ux-design"
           >
-            Backend APIs
+            Backend
           </a>
           <a
-            className={`c-pointer ${activeBtn("sorting-photo")}`}
-            onClick={handleFilterKeyChange("sorting-photo")}
-            data-href=".sorting-photo"
+              className={`c-pointer ${activeBtn("sorting-photo")}`}
+              onClick={handleFilterKeyChange("sorting-photo")}
+              data-href=".sorting-photo"
           >
             Mobile Application
           </a>
           <a
-            className={`c-pointer ${activeBtn("sorting-development")}`}
-            onClick={handleFilterKeyChange("sorting-development")}
-            data-href=".sorting-development"
+              className={`c-pointer ${activeBtn("sorting-development")}`}
+              onClick={handleFilterKeyChange("sorting-development")}
+              data-href=".sorting-development"
           >
-            Development
-          </a>
-          <a
-            className={`c-pointer ${activeBtn("sorting-branding")}`}
-            onClick={handleFilterKeyChange("sorting-branding")}
-            data-href=".sorting-branding"
-          >
-            Branding
+            Full Stack
           </a>
         </div>
         <div className="works-items works-list-items row">
-          <div className="works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 sorting-branding sorting-photo ">
-            <div className="works-item">
-              <Link href="/work-single">
-                <a>
-                  <span
-                    className="image"
-                  >
-                    <span className="img">
-                      <img src="assets/images/work4.jpg" alt="Zorro" />
-                      <span className="overlay" />
-                    </span>
+          {filteredProjects.map((project, index) => (
+              <div key={index} className={`works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 ${project.category}`}>
+                <div className="works-item">
+                  <Link href={`/work-single/${project.id}`}>
+                    <a>
+                  <span className="image">
+                    <img src={project.image_url} alt={project.name} />
                   </span>
-                  <span className="desc">
-                    <span
-                      className="name"
-                    >
-                      Zorro
-                    </span>
-                    <span
-                      className="category"
-                    >
-                      Branding
-                      <br />
-                      Photography
-                    </span>
+                      <span className="desc">
+                    <span className="name">{project.title}</span>
+                    <span className="category">{project.category}</span>
                   </span>
-                </a>
-              </Link>
-            </div>
-          </div>
-          <div className="works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 sorting-branding sorting-ui-ux-design ">
-            <div className="works-item">
-              <Link href="/work-single">
-                <a>
-                  <span
-                    className="image"
-                  >
-                    <span className="img">
-                      <img src="assets/images/work2.jpg" alt="Gooir" />
-                      <span className="overlay" />
-                    </span>
-                  </span>
-                  <span className="desc">
-                    <span
-                      className="name"
-                    >
-                      Gooir
-                    </span>
-                    <span
-                      className="category"
-                    >
-                      Branding
-                      <br />
-                      UI UX Design
-                    </span>
-                  </span>
-                </a>
-              </Link>
-            </div>
-          </div>
-          <div className="works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 sorting-development sorting-ui-ux-design ">
-            <div className="works-item">
-              <Link href="/work-single">
-                <a>
-                  <span
-                    className="image"
-                  >
-                    <span className="img">
-                      <img src="assets/images/work7.jpg" alt="Explore" />
-                      <span className="overlay" />
-                    </span>
-                  </span>
-                  <span className="desc">
-                    <span
-                      className="name"
-                    >
-                      Explore
-                    </span>
-                    <span
-                      className="category"
-                    >
-                      Development
-                      <br />
-                      UI UX Design
-                    </span>
-                  </span>
-                </a>
-              </Link>
-            </div>
-          </div>
-          <div className="works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 sorting-branding sorting-photo ">
-            <div className="works-item">
-              <Link href="/work-single">
-                <a>
-                  <span
-                    className="image"
-                  >
-                    <span className="img">
-                      <img src="assets/images/work1.jpg" alt="Mozar" />
-                      <span className="overlay" />
-                    </span>
-                  </span>
-                  <span className="desc">
-                    <span
-                      className="name"
-                    >
-                      Mozar
-                    </span>
-                    <span
-                      className="category"
-                    >
-                      Branding
-                      <br />
-                      Photography
-                    </span>
-                  </span>
-                </a>
-              </Link>
-            </div>
-          </div>
-          <div className="works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 sorting-branding sorting-photo ">
-            <div className="works-item">
-              <Link href="/work-single">
-                <a>
-                  <span
-                    className="image"
-                  >
-                    <span className="img">
-                      <img src="assets/images/single8.jpg" alt="Stay Fit" />
-                      <span className="overlay" />
-                    </span>
-                  </span>
-                  <span className="desc">
-                    <span
-                      className="name"
-                    >
-                      Stay Fit
-                    </span>
-                    <span
-                      className="category"
-                    >
-                      Development
-                      <br />
-                      UI UX Design
-                    </span>
-                  </span>
-                </a>
-              </Link>
-            </div>
-          </div>
-          <div className="works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 sorting-branding sorting-photo ">
-            <div className="works-item">
-              <Link href="/work-single">
-                <a>
-                  <span
-                    className="image"
-                  >
-                    <span className="img">
-                      <img src="assets/images/single6.jpg" alt="Kana" />
-                      <span className="overlay" />
-                    </span>
-                  </span>
-                  <span className="desc">
-                    <span
-                      className="name"
-                    >
-                      Kana
-                    </span>
-                    <span
-                      className="category"
-                    >
-                      Development
-                      <br />
-                      Photography
-                    </span>
-                  </span>
-                </a>
-              </Link>
-            </div>
-          </div>
+                    </a>
+                  </Link>
+                </div>
+              </div>
+          ))}
         </div>
       </div>
     </Fragment>
