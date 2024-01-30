@@ -191,22 +191,7 @@ const Header = () => {
                         Works
                       </a>
                     </li>
-                    <li className="menu-item">
-                      <a
-                        href="/#pricing-section"
-                        onClick={() => linkClick()}
-                      >
-                        Pricing
-                      </a>
-                    </li>
-                    <li className="menu-item">
-                      <a
-                        href="/#blog-section"
-                        onClick={() => linkClick()}
-                      >
-                        Blog
-                      </a>
-                    </li>
+
                     <li className="menu-item">
                       <a
                         href="/#contact-section"

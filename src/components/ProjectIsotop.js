@@ -73,22 +73,22 @@ const ProjectIsotop = () => {
             All
           </a>
           <a
-              className={`c-pointer ${activeBtn("sorting-ui-ux-design")}`}
-              onClick={handleFilterKeyChange("sorting-ui-ux-design")}
+              className={`c-pointer ${activeBtn("Backend")}`}
+              onClick={handleFilterKeyChange("Backend")}
               data-href=".sorting-ui-ux-design"
           >
             Backend
           </a>
           <a
-              className={`c-pointer ${activeBtn("sorting-photo")}`}
-              onClick={handleFilterKeyChange("sorting-photo")}
+              className={`c-pointer ${activeBtn("Mobile Application")}`}
+              onClick={handleFilterKeyChange("Mobile Application")}
               data-href=".sorting-photo"
           >
             Mobile Application
           </a>
           <a
-              className={`c-pointer ${activeBtn("sorting-development")}`}
-              onClick={handleFilterKeyChange("sorting-development")}
+              className={`c-pointer ${activeBtn("Full Stack")}`}
+              onClick={handleFilterKeyChange("Full Stack")}
               data-href=".sorting-development"
           >
             Full Stack
