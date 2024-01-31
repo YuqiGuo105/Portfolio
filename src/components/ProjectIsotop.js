@@ -4,117 +4,124 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { supabase } from '../supabase/supabaseClient';
 
 const ProjectIsotop = () => {
-  // State for projects and filter
-  const [projects, setProjects] = useState([]);
-  const [filterKey, setFilterKey] = useState("*");
+    const isotope = useRef();
+    const [filterKey, setFilterKey] = useState("*");
+    const [projects, setProjects] = useState([]);
 
-  const isotope = useRef();
+    // Fetch projects from Supabase
+    useEffect(() => {
+        const fetchProjects = async () => {
+            const { data, error } = await supabase
+                .from('Projects')
+                .select('*');
 
-  useEffect(() => {
-    setTimeout(() => {
-      isotope.current = new Isotope(".works-items", {
-        itemSelector: ".works-col",
-        //    layoutMode: "fitRows",
-        percentPosition: true,
-        masonry: {
-          columnWidth: ".works-col",
-        },
-        animationOptions: {
-          duration: 750,
-          easing: "linear",
-          queue: false,
-        },
-      });
-    }, 1000);
-    //     return () => isotope.current.destroy();
-  }, []);
+            if (!error) {
+                setProjects(data);
+            } else {
+                console.error(error);
+            }
+        };
 
-  // Fetch projects from Supabase
-  useEffect(() => {
-    const fetchProjects = async () => {
-      const { data, error } = await supabase
-          .from('Projects')
-          .select('*');
+        fetchProjects();
+    }, []);
 
-      if (!error) {
-        setProjects(data);
-      } else {
-        console.error(error);
-      }
+    // Initialize Isotope
+    useEffect(() => {
+        setTimeout(() => {
+            isotope.current = new Isotope(".works-items", {
+                itemSelector: ".works-col",
+                percentPosition: true,
+                masonry: {
+                    columnWidth: ".works-col",
+                },
+                animationOptions: {
+                    duration: 750,
+                    easing: "linear",
+                    queue: false,
+                },
+            });
+        }, 1000);
+
+        // Destroy Isotope instance on unmount
+        return () => isotope.current && isotope.current.destroy();
+    }, []);
+
+    // Update Isotope layout on filter change
+    useEffect(() => {
+        if (isotope.current) {
+            filterKey === "*"
+                ? isotope.current.arrange({ filter: `*` })
+                : isotope.current.arrange({ filter: `.${filterKey}` });
+        }
+    }, [filterKey]);
+
+    // Handle filter change
+    const handleFilterKeyChange = (key) => () => {
+        setFilterKey(key);
     };
 
-    fetchProjects();
-  }, []);
+    // Determine active button class
+    const activeBtn = (value) => (value === filterKey ? "active" : "");
 
-  // Filter projects by category
-  const filteredProjects = filterKey === "*"
-      ? projects
-      : projects.filter(project => project.category === filterKey);
-
-  // Handle filter change
-  const handleFilterKeyChange = (key) => () => {
-    setFilterKey(key);
-    isotope.current.arrange({ filter: key === "*" ? "*" : `.${key}` });
-  };
-
-  const activeBtn = (value) => (value === filterKey ? "active" : "");
-
-  return (
-    <Fragment>
-      <div className="works-box">
-        <div
-            className="filter-links"
-        >
-          <a
-              className={`c-pointer ${activeBtn("*")}`}
-              onClick={handleFilterKeyChange("*")}
-              data-href=".works-col"
-          >
-            All
-          </a>
-          <a
-              className={`c-pointer ${activeBtn("Backend")}`}
-              onClick={handleFilterKeyChange("Backend")}
-              data-href=".sorting-ui-ux-design"
-          >
-            Backend
-          </a>
-          <a
-              className={`c-pointer ${activeBtn("Mobile Application")}`}
-              onClick={handleFilterKeyChange("Mobile Application")}
-              data-href=".sorting-photo"
-          >
-            Mobile Application
-          </a>
-          <a
-              className={`c-pointer ${activeBtn("Full Stack")}`}
-              onClick={handleFilterKeyChange("Full Stack")}
-              data-href=".sorting-development"
-          >
-            Full Stack
-          </a>
-        </div>
-        <div className="works-items works-list-items row">
-          {filteredProjects.map((project, index) => (
-              <div key={index} className={`works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 ${project.category}`}>
-                <div className="works-item">
-                  <Link href={`/work-single/${project.id}`}>
-                    <a>
-                  <span className="image">
-                    <img src={project.image_url} alt={project.name} />
-                  </span>
-                      <span className="desc">
-                    <span className="name">{project.title}</span>
-                    <span className="category">{project.category}</span>
-                  </span>
+    return (
+        <Fragment>
+            <div className="works-box">
+                <div className="filter-links">
+                    <a
+                        className={`c-pointer ${activeBtn("*")}`}
+                        onClick={handleFilterKeyChange("*")}
+                    >
+                        All
                     </a>
-                  </Link>
+                    <a
+                        className={`c-pointer ${activeBtn("Backend")}`}
+                        onClick={handleFilterKeyChange("Backend")}
+                    >
+                        Backend
+                    </a>
+                    <a
+                        className={`c-pointer ${activeBtn("Mobile-Application")}`}
+                        onClick={handleFilterKeyChange("Mobile-Application")}
+                    >
+                        Mobile Application
+                    </a>
+                    <a
+                        className={`c-pointer ${activeBtn("Full-Stack")}`}
+                        onClick={handleFilterKeyChange("Full-Stack")}
+                    >
+                        Full Stack
+                    </a>
                 </div>
-              </div>
-          ))}
-        </div>
-      </div>
-    </Fragment>
-  );
+                <div className="works-items works-list-items row">
+                    {projects.map(project => (
+                        <div key={project.id}
+                             className={`works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 ${project.category}`}>
+                            <div className="works-item">
+                                <Link href={`/work-single/${project.id}`}>
+                                    <a>
+                                        <span className="image">
+                                            <span className="img">
+                                                <img src={project.image_url} alt={project.title}/>
+                                                <span className="overlay"/>
+                                            </span>
+                                        </span>
+                                        <span className="desc">
+                                            <span className="name">
+                                                {project.title}
+                                            </span>
+                                            <span className="category">
+                                                {project.category}
+                                            </span>
+                                        </span>
+                                    </a>
+                                </Link>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </Fragment>
+    );
 };
+
 export default ProjectIsotop;
