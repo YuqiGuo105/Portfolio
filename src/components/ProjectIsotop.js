@@ -97,7 +97,7 @@ const ProjectIsotop = () => {
                         <div key={project.id}
                              className={`works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 ${project.category}`}>
                             <div className="works-item">
-                                <Link href={`/work-single/${project.id}`}>
+                                <Link href={project.URL}>
                                     <a>
                                         <span className="image">
                                             <span className="img">
