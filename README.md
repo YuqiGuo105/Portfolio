@@ -30,7 +30,6 @@ To get a local copy up and running follow these simple steps.
   ```
 
 ### Install NPM packages
-- Clone the repo
   ```sh
   npm install
   ```
@@ -43,7 +42,6 @@ To get a local copy up and running follow these simple steps.
   ```
 
 ### Running the project
-- Clone the repo
   ```sh
   npm run dev
   ```
