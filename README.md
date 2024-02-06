@@ -22,26 +22,25 @@ To get a local copy up and running follow these simple steps.
   npm install npm@latest -g
   ```
 
-
 ### Installation
 - Clone the repo
   ```sh
   git clone https://github.com/YuqiGuo105/Portfolio.git
   ```
 
-### Install NPM packages
+- Install NPM packages
   ```sh
   npm install
   ```
 
-### Set up environment variables in '.env'
+- Set up environment variables in '.env'
   ```
   NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL
   NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
   SENDGRID_API_KEY=YOUR_SENDGRID_API_KEY
   ```
 
-### Running the project
+- Running the project
   ```sh
   npm run dev
   ```
