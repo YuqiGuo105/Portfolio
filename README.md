@@ -2,7 +2,7 @@
 
 This Next.js application showcases a dynamic portfolio with a contact form that emails submissions directly to your inbox, utilizing serverless functions for backend operations. It features project detail pages with parallax images and navigational links to browse through projects sequentially.
 
-Demo Link: https://www.yuqi.site
+🌐: https://www.yuqi.site
 
 ## Features
 
