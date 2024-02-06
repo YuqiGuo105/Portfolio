@@ -106,7 +106,7 @@ const Header = () => {
             <div className="logo">
               <Link href="/">
                 <a>
-                  <img src="assets/images/YuqiLogo.png" alt="" />
+                  <img src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/YuqiLogo.png" alt="" />
                 </a>
               </Link>
             </div>
