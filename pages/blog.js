@@ -1,184 +1,144 @@
 import Link from "next/link";
 import Layout from "../src/layout/Layout";
-const Blog = () => {
-  return (
-    <Layout>
-      <section className="section section-inner started-heading">
-        <div className="container">
-          <div className="row">
-            <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
-              {/* titles */}
-              <div className="h-titles">
-                <h1
-                  className="h-title"
-                >
-                  Blog
-                </h1>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-      <section className="section section-inner m-archive">
-        <div className="container">
-          <div className="row row-custom">
-            <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3"></div>
-            <div className="col-xs-12 col-sm-12 col-md-9 col-lg-9 vertical-line">
-              {/* Description */}
-              <div
-                className="text"
-              >
-                <h6>
-                  Suspendisse potenti. Sed egestas eros eu libero posuere
-                  ultrices. Nullam ut aliquet felis, sit amet imperdiet felis.
-                </h6>
-              </div>
-            </div>
-          </div>
-        </div>
-        {/* Blog */}
-        <div className="blog-items">
-          <div className="archive-item">
-            <div className="image">
-              <Link href="/blog-single">
-                <a>
-                  <img
-                    src="assets/images/blog4.jpg"
-                    alt="Usability Secrets to Create Better User Interfaces"
-                  />
-                </a>
-              </Link>
-            </div>
-            <div className="desc">
-              <div
-                className="category"
-              >
-                UI Design
-                <br />
-                <span>November 28, 2021</span>
-              </div>
-              <div
-                className="title"
-              >
-                <Link href="/blog-single">
-                  <a>Usability Secrets to Create Better User Interfaces</a>
-                </Link>
-              </div>
-              <div
-                className="text"
-              >
-                <p>
-                  Vivamus interdum suscipit lacus. Nunc ultrices accumsan
-                  mattis. Aliquam vel sem vel velit efficitur malesuada. Donec
-                  arcu lacus, ornare eget…{" "}
-                </p>
-                <div className="readmore">
-                  <Link href="/blog-single">
-                    <a className="lnk">Read more</a>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="archive-item">
-            <div className="image">
-              <Link href="/blog-single">
-                <a>
-                  <img
-                    src="assets/images/blog3.jpg"
-                    alt="Three Ways To Level Up Your Photography"
-                  />
-                </a>
-              </Link>
-            </div>
-            <div className="desc">
-              <div
-                className="category"
-              >
-                Branding
-                <br />
-                <span>November 28, 2021</span>
-              </div>
-              <div
-                className="title"
-              >
-                <Link href="/blog-single">
-                  <a>Three Ways To Level Up Your Photography</a>
-                </Link>
-              </div>
-              <div
-                className="text"
-              >
-                <p>
-                  Vivamus interdum suscipit lacus. Nunc ultrices accumsan
-                  mattis. Aliquam vel sem vel velit efficitur malesuada. Donec
-                  arcu lacus, ornare eget…{" "}
-                </p>
-                <div className="readmore">
-                  <Link href="/blog-single">
-                    <a className="lnk">Read more</a>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="archive-item">
-            <div className="image">
-              <Link href="/blog-single">
-                <a>
-                  <img
-                    src="assets/images/single7.jpg"
-                    alt="10 Useful Tips to Improve Your UI Designs"
-                  />
-                </a>
-              </Link>
-            </div>
-            <div className="desc">
-              <div
-                className="category"
-              >
-                Photography
-                <br />
-                <span>November 28, 2021</span>
-              </div>
-              <div
-                className="title"
-              >
-                <Link href="/blog-single">
-                  <a>10 Useful Tips to Improve Your UI Designs</a>
-                </Link>
-              </div>
-              <div
-                className="text"
-              >
-                <p>
-                  Vivamus interdum suscipit lacus. Nunc ultrices accumsan
-                  mattis. Aliquam vel sem vel velit efficitur malesuada. Donec
-                  arcu lacus, ornare eget…
-                </p>
-                <div className="readmore">
-                  <Link href="/blog-single">
-                    <a className="lnk">Read more</a>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+import React, {useState, useEffect} from 'react';
+import {supabase} from '../src/supabase/supabaseClient'; // Ensure you have this file set up
+
+// Pagination Component
+const Pagination = ({totalItems, itemsPerPage, currentPage, onPageChange}) => {
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+    return (
         <div className="pager">
-          <a className="prev page-numbers" href="#">
-            <i className="icon-arrow" />
-          </a>
-          <span className="page-numbers current">1</span>
-          <a className="page-numbers" href="#">
-            2
-          </a>
-          <a className="next page-numbers" href="#">
-            <i className="icon-arrow" />
-          </a>
+            {currentPage > 1 && (
+                <a className="prev page-numbers" href="#" onClick={() => onPageChange(currentPage - 1)}>
+                    <i className="icon-arrow"/> Prev
+                </a>
+            )}
+            {Array.from({length: totalPages}, (_, i) => i + 1).map(page => (
+                <a key={page} href="#" className={`page-numbers ${page === currentPage ? 'current' : ''}`}
+                   onClick={(e) => {
+                       e.preventDefault();
+                       onPageChange(page);
+                   }}>
+                    {page}
+                </a>
+            ))}
+            {currentPage < totalPages && (
+                <a className="next page-numbers" href="#" onClick={() => onPageChange(currentPage + 1)}>
+                    Next <i className="icon-arrow"/>
+                </a>
+            )}
         </div>
-      </section>
-    </Layout>
-  );
+    );
+};
+
+const Blog = () => {
+    const [blogs, setBlogs] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(5); // Adjust as per your requirement
+    const [totalItems, setTotalItems] = useState(0);
+
+    useEffect(() => {
+        const fetchBlogs = async () => {
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage - 1;
+
+            let {data, error, count} = await supabase
+                .from('Blogs')
+                .select('*', {count: 'exact'})
+                .range(startIndex, endIndex);
+
+            if (error) {
+                console.error('Error fetching blogs:', error);
+            } else {
+                setBlogs(data);
+                setTotalItems(count);
+            }
+            setLoading(false);
+        };
+
+        fetchBlogs();
+    }, [currentPage, itemsPerPage]);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+        // Optionally, add logic to scroll to the top of the page or perform other actions
+    };
+
+    if (loading) return <div>Loading...</div>;
+
+    return (
+        <Layout>
+            <section className="section section-inner started-heading">
+                <div className="container">
+                    <div className="row">
+                        <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                            {/* titles */}
+                            <div className="h-titles">
+                                <h1
+                                    className="h-title"
+                                >
+                                    My Technical Blogs
+                                </h1>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section className="section section-inner m-archive">
+                {/* Blog */}
+                <div className="blog-items">
+                    {blogs.map((blog) => (
+                        <div className="archive-item" key={blog.id}>
+                            <div className="image">
+                                <Link href={`/blog-single/${blog.id}`}>
+                                    <a>
+                                        <img src={blog.image_url} alt={blog.title}/>
+                                    </a>
+                                </Link>
+                            </div>
+                            <div className="desc">
+                                <div
+                                    className="category"
+                                >
+                                    {blog.category}
+                                    <br/>
+                                    <span>{blog.date}</span>
+                                </div>
+                                <h3
+                                    className="title"
+                                >
+                                    <Link href={`/blog-single/${blog.id}`}>
+                                        <a>Getting Started with Git and GitHub</a>
+                                    </Link>
+                                </h3>
+                                <div
+                                    className="text"
+                                >
+                                    <p>
+                                        {blog.description}
+                                    </p>
+                                    <div className="readmore">
+                                        <Link href={`/blog-single/${blog.id}`}>
+                                            <a className="lnk">Read more</a>
+                                        </Link>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <Pagination
+                    totalItems={totalItems}
+                    itemsPerPage={itemsPerPage}
+                    currentPage={currentPage}
+                    onPageChange={handlePageChange}
+                />
+
+            </section>
+        </Layout>
+    );
 };
 export default Blog;

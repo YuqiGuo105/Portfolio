@@ -331,6 +331,7 @@ const Index = () => {
                     <ProjectIsotop/>
                 </div>
             </section>
+
             <section className="section section-parallax section-parallax-5">
                 <div className="container">
                     {/* Section Heading */}
@@ -338,68 +339,65 @@ const Index = () => {
                         <h2
                             className="m-title"
                         >
-                            My Skillsets
+                            My Technical Blogs
                         </h2>
                     </div>
 
-                    <div className="text">
-                        <h4>
-                            Currently, I'm working with:
-                        </h4>
-
-                        <h6>
-                            Languages:
-                        </h6>
+                    <div className="blog-items">
+                        <div className="archive-item">
+                            <div className="image">
+                                <Link href="/blog-single">
+                                    <a>
+                                        <img
+                                            src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Blog/1_UDVSW1asPTzlML1eIJVjng.jpg"
+                                            alt="Usability Secrets to Create Better User Interfaces"
+                                        />
+                                    </a>
+                                </Link>
+                            </div>
+                            <div className="desc">
+                                <div
+                                    className="category"
+                                >
+                                    Software Development
+                                    <br/>
+                                    <span>November 28, 2023</span>
+                                </div>
+                                <h3
+                                    className="title"
+                                >
+                                    <Link href="/blog-single/1234">
+                                        <a>Getting Started with Git and GitHub</a>
+                                    </Link>
+                                </h3>
+                                <div
+                                    className="text"
+                                >
+                                    <p>
+                                        How to merge and resolve conflicts between branches.
+                                    </p>
+                                    <div className="readmore">
+                                        <Link href="/blog-single/1234">
+                                            <a className="lnk">Read more</a>
+                                        </Link>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-
-                    <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3 align-center">
-                        <p align="center">
-                            <a href="https://skillicons.dev">
-                                <img
-                                    src="https://skillicons.dev/icons?i=java,python,nodejs,javascript,html"/>
+                    <div className="blog-more-link">
+                        <Link href="/blog">
+                            <a
+                                className="btn"
+                            >
+                                <span>View Blog</span>
                             </a>
-                        </p>
-                        <p align="center">
-                            <a href="https://skillicons.dev">
-                                <img
-                                    src="https://skillicons.dev/icons?i=mongodb,mysql,git,,"/>
-                            </a>
-                        </p>
+                        </Link>
                     </div>
-
-                    <div className="text">
-                        <h6>
-                            Frameworks & Libraries:
-                        </h6>
-                    </div>
-
-                    <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3 align-center">
-                    <p align="center">
-                            <a href="https://skillicons.dev">
-                                <img
-                                    src="https://skillicons.dev/icons?i=react,vue,pytorch,tensorflow,flask"/>
-                            </a>
-                        </p>
-                    </div>
-
-                    <div className="text">
-                        <h6>
-                            Technologies:
-                        </h6>
-                    </div>
-
-                    <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3 align-center">
-                        <p align="center">
-                            <a href="https://skillicons.dev">
-                                <img
-                                    src="https://skillicons.dev/icons?i=postman,kubernetes,docker,aws,github"/>
-                            </a>
-                        </p>
-                    </div>
-
 
                 </div>
             </section>
+
             <ContactForm/>
         </Layout>
     );
