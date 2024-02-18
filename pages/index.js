@@ -332,7 +332,7 @@ const Index = () => {
                 </div>
             </section>
 
-            <section className="section section-parallax section-parallax-5">
+            <section className="section section-parallax section-parallax-5" id="Blog-section">
                 <div className="container">
                     {/* Section Heading */}
                     <div className="m-titles">
@@ -346,7 +346,7 @@ const Index = () => {
                     <div className="blog-items">
                         <div className="archive-item">
                             <div className="image">
-                                <Link href="/blog-single">
+                                <Link href="/blog-single/df9bed8e-163b-41bb-82be-7f970eb7875d">
                                     <a>
                                         <img
                                             src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Blog/1_UDVSW1asPTzlML1eIJVjng.jpg"
@@ -366,7 +366,7 @@ const Index = () => {
                                 <h3
                                     className="title"
                                 >
-                                    <Link href="/blog-single/1234">
+                                    <Link href="/blog-single/df9bed8e-163b-41bb-82be-7f970eb7875d">
                                         <a>Getting Started with Git and GitHub</a>
                                     </Link>
                                 </h3>
@@ -377,7 +377,7 @@ const Index = () => {
                                         How to merge and resolve conflicts between branches.
                                     </p>
                                     <div className="readmore">
-                                        <Link href="/blog-single/1234">
+                                        <Link href="/blog-single/df9bed8e-163b-41bb-82be-7f970eb7875d">
                                             <a className="lnk">Read more</a>
                                         </Link>
                                     </div>

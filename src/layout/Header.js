@@ -169,24 +169,24 @@ const Header = () => {
                   <ul className="menu-full">
                     <li className="menu-item">
                       <a
-                        href="/#about-section"
-                        onClick={() => linkClick()}
+                          href="/#about-section"
+                          onClick={() => linkClick()}
                       >
                         About
                       </a>
                     </li>
                     <li className="menu-item">
                       <a
-                        href="/#resume-section"
-                        onClick={() => linkClick()}
+                          href="/#resume-section"
+                          onClick={() => linkClick()}
                       >
                         Resume
                       </a>
                     </li>
                     <li className="menu-item">
                       <a
-                        href="/#works-section"
-                        onClick={() => linkClick()}
+                          href="/#works-section"
+                          onClick={() => linkClick()}
                       >
                         Works
                       </a>
@@ -194,29 +194,38 @@ const Header = () => {
 
                     <li className="menu-item">
                       <a
-                        href="/#contact-section"
-                        onClick={() => linkClick()}
+                          href="/#Blog-section"
+                          onClick={() => linkClick()}
+                      >
+                        Blog
+                      </a>
+                    </li>
+
+                    <li className="menu-item">
+                      <a
+                          href="/#contact-section"
+                          onClick={() => linkClick()}
                       >
                         Contact
                       </a>
                     </li>
                     <li className="menu-item menu-item-has-children has-children">
                       <a
-                        className="position-relative"
-                        onClick={() => setPageToggle(!pageToggle)}
+                          className="position-relative"
+                          onClick={() => setPageToggle(!pageToggle)}
                       >
                       </a>
                       <ul
-                        className="sub-menu"
-                        style={{
-                          marginTop: "1rem",
-                          display: `${pageToggle ? "block" : "none"}`,
-                        }}
+                          className="sub-menu"
+                          style={{
+                            marginTop: "1rem",
+                            display: `${pageToggle ? "block" : "none"}`,
+                          }}
                       >
                         <li className="menu-item">
                           <Link href="/works">
                             <a
-                              onClick={() => linkClick()}
+                                onClick={() => linkClick()}
                             >
                               Works (grid)
                             </a>
@@ -225,7 +234,7 @@ const Header = () => {
                         <li className="menu-item">
                           <Link href="/works-list">
                             <a
-                              onClick={() => linkClick()}
+                                onClick={() => linkClick()}
                             >
                               Works (list)
                             </a>
@@ -234,7 +243,7 @@ const Header = () => {
                         <li className="menu-item">
                           <Link href="/work-single">
                             <a
-                              onClick={() => linkClick()}
+                                onClick={() => linkClick()}
                             >
                               Work Single Page
                             </a>
@@ -243,7 +252,7 @@ const Header = () => {
                         <li className="menu-item">
                           <Link href="/blog">
                             <a
-                              onClick={() => linkClick()}
+                                onClick={() => linkClick()}
                             >
                               Blog Posts
                             </a>
@@ -252,7 +261,7 @@ const Header = () => {
                         <li className="menu-item">
                           <Link href="/blog-single">
                             <a
-                              onClick={() => linkClick()}
+                                onClick={() => linkClick()}
                             >
                               Blog Single Post
                             </a>
@@ -269,8 +278,8 @@ const Header = () => {
         {/* social */}
         <div className="menu-social-links">
           <a
-            href="https://www.linkedin.com/in/yuqi-g-ab3380146"
-            target="blank"
+              href="https://www.linkedin.com/in/yuqi-g-ab3380146"
+              target="blank"
             title="dribbble"
           >
             <i className="fab fa-linkedin" />
