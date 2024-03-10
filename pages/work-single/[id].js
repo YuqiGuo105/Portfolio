@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../../src/supabase/supabaseClient';
+import DOMPurify from 'dompurify';
 
 const WorkSingle = () => {
   const [project, setProject] = useState(null);
@@ -24,6 +25,9 @@ const WorkSingle = () => {
         console.error('Error fetching project:', error);
         return;
       }
+
+      // Sanitize the HTML content
+      data.content = DOMPurify.sanitize(data.content);
 
       setProject(data);
     };
@@ -112,8 +116,9 @@ const WorkSingle = () => {
               </div>
               <div
                 className="text"
+                dangerouslySetInnerHTML={{__html: project.content}}
               >
-                {project.content}
+
               </div>
             </div>
           </div>
