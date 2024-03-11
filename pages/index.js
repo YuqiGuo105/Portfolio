@@ -365,7 +365,7 @@ const Index = () => {
           </div>
 
           <div className="blog-items">
-            {blogs.slice(0, 3).map((blog) => (
+            {blogs.slice(0, 1).map((blog) => (
               <div key={blog.id} className="archive-item">
                 <div className="image">
                   <Link href={`/blog-single/${blog.id}`}>
