@@ -402,7 +402,7 @@ const Index = () => {
               <a
                 className="btn"
               >
-                <span>View Blog</span>
+                <span>View Blogs</span>
               </a>
             </Link>
           </div>

@@ -110,7 +110,7 @@ const Blog = () => {
                                     className="title"
                                 >
                                     <Link href={`/blog-single/${blog.id}`}>
-                                        <a>Getting Started with Git and GitHub</a>
+                                        <a>{blog.title}</a>
                                     </Link>
                                 </h3>
                                 <div
