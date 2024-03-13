@@ -24,43 +24,43 @@ function MyApp({ Component, pageProps }) {
         {/* <!-- CSS STYLES --> */}
         <link
           rel="stylesheet"
-          href="assets/css/vendors/bootstrap.css"
+          href="/assets/css/vendors/bootstrap.css"
           type="text/css"
           media="all"
         />
         <link
           rel="stylesheet"
-          href="assets/fonts/font-awesome/css/font-awesome.css"
+          href="/assets/fonts/font-awesome/css/font-awesome.css"
           type="text/css"
           media="all"
         />
         <link
           rel="stylesheet"
-          href="assets/css/vendors/magnific-popup.css"
+          href="/assets/css/vendors/magnific-popup.css"
           type="text/css"
           media="all"
         />
         <link
           rel="stylesheet"
-          href="assets/css/vendors/splitting.css"
+          href="/assets/css/vendors/splitting.css"
           type="text/css"
           media="all"
         />
         <link
           rel="stylesheet"
-          href="assets/css/vendors/swiper.css"
+          href="/assets/css/vendors/swiper.css"
           type="text/css"
           media="all"
         />
         <link
           rel="stylesheet"
-          href="assets/css/vendors/animate.css"
+          href="/assets/css/vendors/animate.css"
           type="text/css"
           media="all"
         />
         <link
           rel="stylesheet"
-          href="assets/css/main.css"
+          href="/assets/css/main.css"
           type="text/css"
           media="all"
         />
