@@ -7,7 +7,6 @@ const ProjectIsotop = () => {
   const isotope = useRef();
   const [filterKey, setFilterKey] = useState("all");
   const [projects, setProjects] = useState([]);
-  const [filteredProjects, setFilteredProjects] = useState([]);
 
   // Fetch projects from Supabase
   useEffect(() => {
@@ -18,7 +17,6 @@ const ProjectIsotop = () => {
 
       if (!error) {
         setProjects(data);
-        setFilteredProjects(data);
       } else {
         console.error(error);
       }
@@ -49,11 +47,8 @@ const ProjectIsotop = () => {
   // Handle Isotope layout update on filter change
   useEffect(() => {
     if (isotope.current) {
-      if (filterKey === '*') {
-        isotope.current.arrange({ filter: 'all' });
-      } else {
-        isotope.current.arrange({ filter: `.${filterKey}` });
-      }
+      const filter = filterKey === 'all' ? '*' : `.${filterKey}`;
+      isotope.current.arrange({ filter });
     }
   }, [filterKey]);
 
