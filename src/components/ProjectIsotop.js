@@ -27,41 +27,35 @@ const ProjectIsotop = () => {
     fetchProjects();
   }, []);
 
-  // Initialize Isotope
+  // Initialize Isotope after projects are fetched
   useEffect(() => {
-    setTimeout(() => {
+    if (projects.length && !isotope.current) {
       isotope.current = new Isotope(".works-items", {
         itemSelector: ".works-col",
         percentPosition: true,
         masonry: {
           columnWidth: ".works-col",
         },
-        animationOptions: {
-          duration: 750,
-          easing: "linear",
-          queue: false,
-        },
       });
-    }, 1000);
-
-    // Destroy Isotope instance on unmount
-    return () => isotope.current && isotope.current.destroy();
-  }, []);
-
-  useEffect(() => {
-    console.log('Current filterKey:', filterKey); // Debugging log
-
-    if (filterKey === 'all') {
-      setFilteredProjects(projects);
-    } else {
-      const filtered = projects.filter(project =>
-        project.category?.toLowerCase() === filterKey.toLowerCase()
-      );
-
-      console.log('Filtered projects:', filtered); // See what's being filtered
-      setFilteredProjects(filtered);
     }
-  }, [filterKey, projects]);
+
+    return () => {
+      if (isotope.current) {
+        isotope.current.destroy();
+      }
+    };
+  }, [projects]);
+
+  // Handle Isotope layout update on filter change
+  useEffect(() => {
+    if (isotope.current) {
+      if (filterKey === '*') {
+        isotope.current.arrange({ filter: 'all' });
+      } else {
+        isotope.current.arrange({ filter: `.${filterKey}` });
+      }
+    }
+  }, [filterKey]);
 
 
   // Handle filter change
@@ -85,7 +79,7 @@ const ProjectIsotop = () => {
              onClick={handleFilterKeyChange("Mobile-Application")}>Mobile Application</a>
         </div>
         <div className="works-items works-list-items row">
-          {filteredProjects.map(project => (
+          {projects.map(project => (
             <div key={project.id}
                  className={`works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 ${project.category}`}>
               <div className="works-item">
