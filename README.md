@@ -9,6 +9,7 @@ This Next.js application showcases a dynamic portfolio with a contact form that 
 - Dynamic project pages with detailed information.
 - Contact form integrated with serverless API to send messages via email.
 - Navigation to the next project for seamless browsing experience.
+- Utilize Supabase as the database backend, enabling users to seamlessly manage their "Works" or "Blogs" directly through the Supabase console.
 - Parallax effect for project images.
 
 ## Getting Started
