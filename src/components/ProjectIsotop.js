@@ -13,7 +13,8 @@ const ProjectIsotop = () => {
     const fetchProjects = async () => {
       const {data, error} = await supabase
         .from('Projects')
-        .select('*');
+        .select('*')
+        .order('num', {ascending: true});
 
       if (!error) {
         setProjects(data);
