@@ -397,6 +397,16 @@ const Index = () => {
               </div>
             ))}
           </div>
+
+          <style jsx>{`
+            .title {
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              max-width: 100%;
+            }
+          `}</style>
+
           <div className="blog-more-link">
             <Link href="/blog">
               <a
