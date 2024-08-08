@@ -43,19 +43,25 @@ const Header = () => {
   };
 
   const [day, setDay] = useState(true);
+
   useEffect(() => {
     const mood = localStorage.getItem("ober-mood");
-    localStorage.setItem("ober-mood", mood !== null ? "night" : "day");
+    if (mood) {
+      setDay(mood === "day");
+    } else {
+      localStorage.setItem("ober-mood", "day");
+    }
+  }, []);
+
+  useEffect(() => {
     if (day) {
       localStorage.setItem("ober-mood", "day");
-      document
-        .querySelector("body")
-        .classList.add("home", "page", "light-skin");
+      document.querySelector("body").classList.add("home", "page", "light-skin");
+      document.querySelector("body").classList.remove("dark-skin");
     } else {
       localStorage.setItem("ober-mood", "night");
-      document
-        .querySelector("body")
-        .classList.remove("home", "page", "light-skin");
+      document.querySelector("body").classList.remove("home", "page", "light-skin");
+      document.querySelector("body").classList.add("dark-skin");
     }
   }, [day]);
 
@@ -114,7 +120,6 @@ const Header = () => {
           <div className="col-xs-8 col-sm-8 col-md-8 col-lg-8 align-right">
             {/* switcher btn */}
             <a
-              href="#"
               className={`switcher-btn ${day ? "active" : ""}`}
               onClick={() => setDay(!day)}
             >

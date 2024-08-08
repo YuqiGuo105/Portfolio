@@ -282,7 +282,7 @@ const Index = () => {
                   <div
                     className="history-item"
                   >
-                    <div className="date">Sep 2021 - Feb 2022</div>
+                    <div className="date">Feb 2021 - Feb 2022</div>
                     <div className="name">Weina Technology Company</div>
                     <div className="subname">Backend Developer Intern</div>
                     <div className="text">

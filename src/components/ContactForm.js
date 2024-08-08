@@ -51,7 +51,7 @@ const ContactForm = () => {
                 <div className="icon">
                   <i aria-hidden="true" className="fas fa-phone" />
                 </div>
-                <div className="num">+1 (315) 863 7375</div>
+                <div className="num">+1 (315) 956 7675</div>
               </div>
               <div
                 className="numbers-item"
