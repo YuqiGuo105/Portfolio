@@ -5,10 +5,38 @@ import TestimonialSlider from "../src/components/TestimonialSlider";
 import Layout from "../src/layout/Layout";
 import {useEffect, useState} from "react";
 import {supabase} from "../src/supabase/supabaseClient";
-
+import Slider from "react-slick";
+import "slick-carousel/slick/slick.css";
+import "slick-carousel/slick/slick-theme.css";
 const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
   ssr: false,
 });
+// Slick slider settings
+const settings = {
+  dots: true,            // Dots for navigation
+  infinite: true,        // Infinite loop sliding
+  speed: 500,            // Transition speed
+  slidesToShow: 3,       // Number of slides to show at a time
+  slidesToScroll: 1,     // Number of slides to scroll on click
+  responsive: [
+    {
+      breakpoint: 1024,
+      settings: {
+        slidesToShow: 2,
+        slidesToScroll: 1,
+        infinite: true,
+        dots: true,
+      }
+    },
+    {
+      breakpoint: 600,
+      settings: {
+        slidesToShow: 1,
+        slidesToScroll: 1
+      }
+    }
+  ]
+};
 const Index = () => {
   const [blogs, setBlogs] = useState([]);
   const [error, setError] = useState(null);
@@ -28,6 +56,14 @@ const Index = () => {
 
   if (error) return <div>Error loading blogs: {error}</div>;
   if (!blogs.length) return <div>Loading...</div>;
+
+  const settings = {
+    infinite: true,
+    speed: 500,
+    slidesToShow: 1,
+    slidesToScroll: 1,
+    autoplay: true,
+  };
 
   return (
     <Layout>
@@ -365,37 +401,39 @@ const Index = () => {
           </div>
 
           <div className="blog-items">
-            {blogs.slice(0, 1).map((blog) => (
-              <div key={blog.id} className="archive-item">
-                <div className="image">
-                  <Link href={`/blog-single/${blog.id}`}>
-                    <a>
-                      <img src={blog.image_url} alt={blog.title}/>
-                    </a>
-                  </Link>
-                </div>
-                <div className="desc">
-                  <div className="category">
-                    {blog.category}
-                    <br/>
-                    <span>{blog.date}</span>
-                  </div>
-                  <h3 className="title">
+            <Slider {...settings}>
+              {blogs.map((blog) => (
+                <div key={blog.id} className="archive-item">
+                  <div className="image">
                     <Link href={`/blog-single/${blog.id}`}>
-                      <a>{blog.title}</a>
+                      <a>
+                        <img src={blog.image_url} alt={blog.title}/>
+                      </a>
                     </Link>
-                  </h3>
-                  <div className="text">
-                    <p>{blog.description}</p>
-                    <div className="readmore">
+                  </div>
+                  <div className="desc">
+                    <div className="category">
+                      {blog.category}
+                      <br/>
+                      <span>{blog.date}</span>
+                    </div>
+                    <h3 className="title">
                       <Link href={`/blog-single/${blog.id}`}>
-                        <a className="lnk">Read more</a>
+                        <a>{blog.title}</a>
                       </Link>
+                    </h3>
+                    <div className="text">
+                      <p>{blog.description}</p>
+                      <div className="readmore">
+                        <Link href={`/blog-single/${blog.id}`}>
+                          <a className="lnk">Read more</a>
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </Slider>
           </div>
 
           <style jsx>{`
