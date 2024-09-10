@@ -76,10 +76,21 @@
         font-size: 1.2rem; /* Slightly smaller on tablets */
     }
 
-    .leetcode-icon {
-        margin-top: 0.25rem;
-        width: 0.9rem;
-        height: 0.9rem;
+    .leetcode-icon-top {
+        width: 1rem; /* Responsive width based on the font size */
+        height: 1rem;
+        margin-bottom: 0.3rem;
+        margin-left: 0.1rem;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    .leetcode-icon-bottom {
+        width: 1rem; /* Responsive width based on the font size */
+        height: 1rem;
+        margin-bottom: 0.3rem;
+        margin-left: 0rem;
+        display: inline-block;
+        vertical-align: middle;
     }
 }
 
@@ -88,8 +99,20 @@
         font-size: 1rem; /* Even smaller on mobile devices */
     }
 
-    .leetcode-icon {
-        width: 0.9rem;
+    .leetcode-icon-top {
+        width: 0.9rem; /* Responsive width based on the font size */
         height: 0.9rem;
+        margin-top: 0.1rem;
+        margin-left: 0.1rem;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    .leetcode-icon-bottom {
+        width: 0.9rem; /* Responsive width based on the font size */
+        height: 0.9rem;
+        margin-bottom: 0.2rem;
+        margin-left: 0rem;
+        display: inline-block;
+        vertical-align: middle;
     }
 }
