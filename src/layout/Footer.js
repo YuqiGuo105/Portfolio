@@ -10,13 +10,22 @@ const Footer = () => {
                 className="social-links"
               >
                 <a target="_blank" rel="noreferrer" href="https://www.linkedin.com/in/yuqi-g-ab3380146">
-                  <i aria-hidden="true" className="fab fa-linkedin" />
+                  <i aria-hidden="true" className="fab fa-linkedin"/>
                 </a>
                 <a target="_blank" rel="noreferrer" href="https://github.com/YuqiGuo105">
-                  <i aria-hidden="true" className="fab fa-github" />
+                  <i aria-hidden="true" className="fab fa-github"/>
+                </a>
+                <a target="_blank" rel="noreferrer" href="https://leetcode.com/u/Yuqi_Guo/">
+                  <i aria-hidden="true" className="custom-leetcode-icon">
+                    <img
+                      src={"https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/leetcode.861x1024.png"}
+                      alt="LeetCode"
+                      className="leetcode-icon-bottom"
+                    />
+                  </i>
                 </a>
                 <a target="_blank" rel="noreferrer" href="https://www.instagram.com/yuqi_guo17/">
-                  <i aria-hidden="true" className="fab fa-instagram" />
+                  <i aria-hidden="true" className="fab fa-instagram"/>
                 </a>
               </div>
             </div>
@@ -31,7 +40,7 @@ const Footer = () => {
               <div
                 className="copyright-text"
               >
-                Developed by <strong>Yuqi Guo</strong>
+              Developed by <strong>Yuqi Guo</strong>
               </div>
             </div>
           </div>
