@@ -340,20 +340,7 @@ const Index = () => {
                       </p>
                     </div>
                   </div>
-                  <div
-                    className="history-item"
-                  >
-                    <div className="date">Jun 2020 - Aug 2020</div>
-                    <div className="name">Tree Technology Co., Ltd.</div>
-                    <div className="subname">Software Development Engineer Intern</div>
-                    <div className="text">
-                      <p>
-                        Developed an image annotation platform, improving user efficiency by
-                        25%; led backend Java development and integrated MyBatis and Vue.js,
-                        enhancing processing speed and user experience.
-                      </p>
-                    </div>
-                  </div>
+
                 </div>
               </div>
               <div className="clear"/>
