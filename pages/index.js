@@ -320,6 +320,8 @@ const Index = () => {
                     <div className="text">
                       <p>
                         Global Banking and Markets - Margins Team
+                      </p>
+                      <p>
                         New Chapter Starts Here.....
                       </p>
                     </div>
