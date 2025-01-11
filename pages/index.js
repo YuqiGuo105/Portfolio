@@ -310,6 +310,21 @@ const Index = () => {
                   >
                     EXPERIENCE
                   </div>
+
+                  <div
+                    className="history-item"
+                  >
+                    <div className="date">Dec 2024 - Current</div>
+                    <div className="name">Goldman Sachs</div>
+                    <div className="subname">Software Engineer</div>
+                    <div className="text">
+                      <p>
+                        Global Banking and Markets - Margins Team
+                        New Chapter Starts Here.....
+                      </p>
+                    </div>
+                  </div>
+
                   <div
                     className="history-item"
                   >
@@ -322,21 +337,6 @@ const Index = () => {
                         flashcards, using AWS ECS and DynamoDB. Implemented JWT/Cognito for
                         security, robust testing with Mockito and JUnit, and automated service
                         monitoring, achieving 99.9% uptime.
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    className="history-item"
-                  >
-                    <div className="date">Feb 2021 - Feb 2022</div>
-                    <div className="name">Weina Technology Company</div>
-                    <div className="subname">Backend Developer Intern</div>
-                    <div className="text">
-                      <p>
-                        Developed Python Flask backend services for scalable performance; led
-                        Kubernetes deployments with load balancing and auto-scaling; utilized
-                        Redis for node management, enhancing data synchronization and
-                        resilience.
                       </p>
                     </div>
                   </div>
