@@ -213,30 +213,28 @@ const Index = () => {
                   className="text"
                 >
                   <p>
-                    My name is Yuqi Guo, and I am an innovative programmer currently pursuing a
-                    Master's degree in
-                    Computer Science at Syracuse University, with an expected graduation date of May
-                    2024.
-                  </p>
-                  <p>
-                    I am actively seeking full-time Software Development Engineer (SDE) positions
-                    for the Fall of 2024,
-                    focusing on new graduate opportunities. My academic journey exposed me to a
-                    plethora of subjects including Data Structures, Algorithms,
-                    Operating Systems, Machine Learning, and more.
+                    Hello, my name is Yuqi Guo, and I am currently a Software Development Engineer in the Global Banking
+                    and Markets division at <strong>Goldman Sachs</strong>,
+                    focusing on the Margins team. My role involves designing and developing robust backend systems to
+                    ensure accurate and efficient margin calculations,
+                    leveraging technologies like Spring Boot, REST APIs, and microservices.
                   </p>
 
                   <p>
-                    Technically, I'm proficient in a range of languages including Java, Python, and
-                    HTML5. I've garnered
-                    experience with numerous frameworks and platforms like TensorFlow, Spring Boot,
-                    React, and AWS
-                    services such as ECS, EC2, and S3. Additionally, my toolkit consists of Postman,
-                    Docker &
-                    Kubernetes, GitHub, and JWT Authentication/Authorization mechanisms. I have a
-                    keen interest in Java
-                    Web development and Android Programming.
+                    I hold a Master's degree in Computer Science from Syracuse University and a Bachelor's degree in
+                    Information and Computing Science from the University of Liverpool.
+                    With a strong foundation in backend development, <strong>microservice architecture</strong>,
+                    and <strong>system design</strong>, I have experience deploying scalable solutions using tools
+                    like <em>Docker</em>, <em>Kubernetes</em>, and <em>AWS</em>.
                   </p>
+
+                  <p>
+                    My professional journey includes projects such as building microservices for scalable platforms,
+                    optimizing system performance, and maintaining secure, high-availability systems.
+                    I am passionate about solving complex problems, improving system efficiencies, and contributing to
+                    high-impact financial systems.
+                  </p>
+
                   <a
                     href="#contact-section"
                     className="btn"
@@ -284,10 +282,10 @@ const Index = () => {
                     Syracuse University
                     <div className="name">Syracuse University</div>
                     <div className="subname">Master Of Science, Computer Science</div>
-                    <div className="subname"><br></br>
-                      <strong>Relevant Courses: </strong> Blockchain, Object-Oriented Design,
-                      Structure Programming and Formal Method, Data Mining
-                    </div>
+                    {/*<div className="subname"><br></br>*/}
+                    {/*  <strong>Relevant Courses: </strong> Blockchain, Object-Oriented Design,*/}
+                    {/*  Structure Programming and Formal Method, Data Mining*/}
+                    {/*</div>*/}
                   </div>
                   <div
                     className="history-item"
@@ -295,6 +293,11 @@ const Index = () => {
                     <div className="date">2017 - 2022</div>
                     <div className="name">University of Liverpool</div>
                     <div className="subname">Bachelors of Science, Computer Science</div>
+                  </div>
+
+                  <div
+                    className="history-item"
+                  >
                     <div className="subname"><br></br>
                       <strong>Relevant Courses: </strong> Data Structure, Algorithm, Operating
                       System, Database, Computer Network, Human-Centric Interaction, Software
