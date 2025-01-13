@@ -111,7 +111,7 @@ const Index = () => {
                 <p> I am a Software Engineer at <strong>Goldman Sachs</strong>, specializing
                   in <strong>Microservices</strong> and <strong>Distributed Systems</strong>.
                 </p>
-                
+
                 <div className="social-links">
                   <a target="_blank" rel="noreferrer"
                      href="https://www.linkedin.com/in/yuqi-g-ab3380146">
@@ -173,7 +173,7 @@ const Index = () => {
                   <div className="icon">
                     <i aria-hidden="true" className="far fa-gem"/>
                   </div>
-                  <div className="num">3</div>
+                  <div className="num">2</div>
                   <div className="title">
                     Companies <br/>
                     Worked
