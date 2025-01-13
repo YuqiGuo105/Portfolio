@@ -41,8 +41,14 @@ const settings = {
 const Index = () => {
   const [blogs, setBlogs] = useState([]);
   const [error, setError] = useState(null);
+  const [yearsOfExperience, setYearsOfExperience] = useState(1);
 
   useEffect(() => {
+    // Calculate years of experience dynamically
+    const startYear = 2024;
+    const currentYear = new Date().getFullYear();
+    setYearsOfExperience(Math.max(currentYear - startYear, 1));
+
     const fetchBlogs = async () => {
       const {data, error} = await supabase
         .from('Blogs') // Adjust this to your actual table name
@@ -141,7 +147,7 @@ const Index = () => {
                   Degrees <strong>M.S. and B.S. in Computer Science</strong>
                 </li>
                 <li>
-                  Experience <strong>1 Years</strong>
+                  Experience <strong>{yearsOfExperience} Years</strong>
                 </li>
                 <li>
                 Commits on github <strong> 200+</strong>
@@ -197,7 +203,7 @@ const Index = () => {
                   <div className="icon">
                     <i aria-hidden="true" className="far fa-smile"/>
                   </div>
-                  <div className="num">1</div>
+                  <div className="num">{yearsOfExperience}</div>
                   <div className="title">
                     Year of <br/>
                     Experience
