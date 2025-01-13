@@ -42,6 +42,8 @@ const Index = () => {
   const [blogs, setBlogs] = useState([]);
   const [error, setError] = useState(null);
   const [yearsOfExperience, setYearsOfExperience] = useState(1);
+  const [experiences, setExperiences] = useState([]);
+  const [companiesCount, setCompaniesCount] = useState(0);
 
   useEffect(() => {
     // Calculate years of experience dynamically
@@ -58,7 +60,26 @@ const Index = () => {
       else setBlogs(data);
     };
 
+    // Fetch Experiences
+    const fetchExperiences = async () => {
+      const { data, error } = await supabase
+        .from("experience") // Ensure this matches your Supabase table name
+        .select("*")
+        .order("date", { ascending: false }); // Optional: Sort by date descending
+
+      if (error) {
+        setError(error.message);
+      } else {
+        setExperiences(data);
+
+        // Calculate the number of unique companies
+        const uniqueCompanies = new Set(data.map((exp) => exp.name));
+        setCompaniesCount(uniqueCompanies.size);
+      }
+    };
+
     fetchBlogs();
+    fetchExperiences();
   }, []); // The empty array ensures this effect runs only once after the initial render
 
   if (error) return <div>Error loading blogs: {error}</div>;
@@ -179,7 +200,7 @@ const Index = () => {
                   <div className="icon">
                     <i aria-hidden="true" className="far fa-gem"/>
                   </div>
-                  <div className="num">2</div>
+                  <div className="num">{companiesCount}</div>
                   <div className="title">
                     Companies <br/>
                     Worked
@@ -311,48 +332,27 @@ const Index = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Experience Section */}
               <div className="history-right">
                 <div className="history-items">
-                  <div
-                    className="p-title"
-                  >
-                    EXPERIENCE
-                  </div>
+                  <div className="p-title">EXPERIENCE</div>
 
-                  <div
-                    className="history-item"
-                  >
-                    <div className="date">Dec 2024 - Current</div>
-                    <div className="name">Goldman Sachs</div>
-                    <div className="subname">Software Engineer</div>
-                    <div className="text">
-                      <p>
-                        Global Banking and Markets - Margins Team
-                      </p>
-                      <p>
-                        New Chapter Starts Here.....
-                      </p>
+                  {experiences.map((experience) => (
+                    <div key={experience.id} className="history-item">
+                      <div className="date">{experience.date}</div>
+                      <div className="name">{experience.name}</div>
+                      <div className="subname">{experience.subname}</div>
+                      <div className="text">
+                        {experience.text.split('\n').map((para, index) => (
+                          <p key={index}>{para}</p>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-
-                  <div
-                    className="history-item"
-                  >
-                    <div className="date">Aug 2023 - Dec 2023</div>
-                    <div className="name">CuraStone Corp</div>
-                    <div className="subname">Backend Developer Intern</div>
-                    <div className="text">
-                      <p>
-                        Developed a Spring Boot application for converting PDFs into interactive
-                        flashcards, using AWS ECS and DynamoDB. Implemented JWT/Cognito for
-                        security, robust testing with Mockito and JUnit, and automated service
-                        monitoring, achieving 99.9% uptime.
-                      </p>
-                    </div>
-                  </div>
-
+                  ))}
                 </div>
               </div>
+
               <div className="clear"/>
               {/* Button CV */}
               <a
