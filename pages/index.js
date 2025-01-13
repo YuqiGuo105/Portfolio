@@ -108,11 +108,10 @@ const Index = () => {
               <div
                 className="description"
               >
-                <p>
-                  I am a CS Master in Syracuse University, with specializations in <strong>Full-Stack
-                  Development </strong>, <strong>Backend Programming </strong>, and <strong> Mobile
-                  Application Development </strong>.
+                <p> I am a Software Engineer at <strong>Goldman Sachs</strong>, specializing
+                  in <strong>Microservices</strong> and <strong>Distributed Systems</strong>.
                 </p>
+                
                 <div className="social-links">
                   <a target="_blank" rel="noreferrer"
                      href="https://www.linkedin.com/in/yuqi-g-ab3380146">
