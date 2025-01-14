@@ -47,7 +47,7 @@ const Index = () => {
 
   useEffect(() => {
     // Calculate years of experience dynamically
-    const startYear = 2024;
+    const startYear = process.env.NEXT_PUBLIC_START_YEAR;;
     const currentYear = new Date().getFullYear();
     setYearsOfExperience(Math.max(currentYear - startYear, 1));
 
