@@ -1,96 +1,105 @@
+/***********************************************************
+ * 1) Existing :root & char-index classes
+ ***********************************************************/
 :root .char-index-0 {
-  --char-index: 0;
+    --char-index: 0;
 }
 :root .char-index-1 {
-  --char-index: 1;
+    --char-index: 1;
 }
 :root .char-index-2 {
-  --char-index: 2;
+    --char-index: 2;
 }
 :root .char-index-3 {
-  --char-index: 3;
+    --char-index: 3;
 }
 :root .char-index-4 {
-  --char-index: 4;
+    --char-index: 4;
 }
 :root .char-index-5 {
-  --char-index: 5;
+    --char-index: 5;
 }
 :root .char-index-6 {
-  --char-index: 6;
+    --char-index: 6;
 }
 :root .char-index-7 {
-  --char-index: 7;
+    --char-index: 7;
 }
 :root .char-index-8 {
-  --char-index: 8;
+    --char-index: 8;
 }
 :root .char-index-9 {
-  --char-index: 9;
+    --char-index: 9;
 }
 :root .char-index-10 {
-  --char-index: 10;
+    --char-index: 10;
 }
 :root .char-index-11 {
-  --char-index: 11;
+    --char-index: 11;
 }
 :root .char-index-12 {
-  --char-index: 12;
+    --char-index: 12;
 }
 
 /* char total */
 :root .char-total-12 {
-  --char-total: 12;
+    --char-total: 12;
 }
 :root .word-index-0 {
-  --word-index: 0;
+    --word-index: 0;
 }
 
 .char {
-  white-space: pre;
+    white-space: pre;
 }
 
+/***********************************************************
+ * 2) Social-links icon size
+ ***********************************************************/
 .social-links i {
     font-size: 1.5rem; /* Set a relative font size for Font Awesome icons */
 }
 
+/***********************************************************
+ * 3) LeetCode icon sizing (existing)
+ ***********************************************************/
 .leetcode-icon-top {
-    width: 1.3rem; /* Responsive width based on the font size */
+    width: 1.3rem; /* Responsive width */
     height: 1.3rem;
     margin-bottom: 0.5rem;
     margin-left: 0.1rem;
     display: inline-block;
     vertical-align: middle;
 }
+
 .leetcode-icon-bottom {
-    width: 1.3rem; /* Responsive width based on the font size */
+    width: 1.3rem; /* Responsive width */
     height: 1.3rem;
     margin-bottom: 1rem;
     margin-left: 0rem;
     display: inline-block;
     vertical-align: middle;
 }
-/* Media queries for different device sizes */
+
+/***********************************************************
+ * 4) Media queries for different device sizes
+ ***********************************************************/
 @media (max-width: 768px) {
     .social-links i {
         font-size: 1.2rem; /* Slightly smaller on tablets */
     }
 
     .leetcode-icon-top {
-        width: 1rem; /* Responsive width based on the font size */
+        width: 1rem;
         height: 1rem;
         margin-bottom: 0.3rem;
         margin-left: 0.1rem;
-        display: inline-block;
-        vertical-align: middle;
     }
     .leetcode-icon-bottom {
-        width: 1rem; /* Responsive width based on the font size */
+        width: 1rem;
         height: 1rem;
         margin-bottom: 0.3rem;
         margin-left: 0rem;
-        display: inline-block;
-        vertical-align: middle;
     }
 }
 
@@ -100,19 +109,89 @@
     }
 
     .leetcode-icon-top {
-        width: 0.9rem; /* Responsive width based on the font size */
+        width: 0.9rem;
         height: 0.9rem;
         margin-top: 0.1rem;
         margin-left: 0.1rem;
-        display: inline-block;
-        vertical-align: middle;
     }
     .leetcode-icon-bottom {
-        width: 0.9rem; /* Responsive width based on the font size */
+        width: 0.9rem;
         height: 0.9rem;
         margin-bottom: 0.2rem;
         margin-left: 0rem;
-        display: inline-block;
-        vertical-align: middle;
     }
+}
+
+/***********************************************************
+ * 5) LeetCode icon swap using .light-skin & .dark-skin
+ *    on <body>
+ ***********************************************************/
+/* Sizing & layout rules for the icon */
+.leetcode-icon-bottom.custom-leetcode-icon {
+    display: inline-block;
+    vertical-align: middle;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    /* Use existing widths/margins from .leetcode-icon-bottom */
+}
+
+/* Day (light) mode icon */
+body.light-skin .leetcode-icon-bottom.custom-leetcode-icon {
+    background-image: url("https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/leetcode.861x1024.png");
+}
+
+/* Night (dark) mode icon */
+body.dark-skin .leetcode-icon-bottom.custom-leetcode-icon {
+    background-image: url("https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/leetcode.png");
+}
+
+/***********************************************************
+ * 6) Slick Slider (unchanged)
+ ***********************************************************/
+.slick-prev,
+.slick-next {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    font-size: 24px;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 10px;
+    border-radius: 50%;
+}
+
+.slick-prev {
+    left: 10px;
+}
+
+.slick-next {
+    right: 10px;
+}
+
+.slick-prev:before,
+.slick-next:before {
+    font-size: 30px;
+    color: white;
+}
+
+.slick-dots {
+    color: #0d6efd;
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+}
+
+.slick-dots li button:before {
+    font-size: 12px;
+    color: white;
+    opacity: 0.75;
+}
+
+.slick-dots li.slick-active button:before {
+    color: red;
+    opacity: 1;
 }

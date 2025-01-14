@@ -147,15 +147,18 @@ const Index = () => {
                   <a target="_blank" rel="noreferrer" href="https://github.com/YuqiGuo105">
                     <i aria-hidden="true" className="fab fa-github"/>
                   </a>
-                  <a target="_blank" rel="noreferrer" href="https://leetcode.com/u/Yuqi_Guo/">
-                    <i aria-hidden="true" className="custom-leetcode-icon">
-                      <img
-                        src={"https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/leetcode.861x1024.png"}
-                        alt="LeetCode"
-                        className="leetcode-icon-top"
-                      />
-                    </i>
+
+                  <a
+                    target="_blank"
+                    rel="noreferrer"
+                    href="https://leetcode.com/u/Yuqi_Guo/"
+                  >
+                    <i
+                      aria-hidden="true"
+                      className="leetcode-icon-bottom custom-leetcode-icon"
+                    />
                   </a>
+
                   <a target="_blank" rel="noreferrer" href="https://www.instagram.com/yuqi_guo17/">
                     <i aria-hidden="true" className="fab fa-instagram"/>
                   </a>
