@@ -141,7 +141,7 @@ const Index = () => {
 
                 <div className="social-links">
                   <a target="_blank" rel="noreferrer"
-                     href="https://www.linkedin.com/in/yuqi-g-ab3380146">
+                     href="https://www.linkedin.com/in/yuqi-g-185957355/">
                     <i aria-hidden="true" className="fab fa-linkedin"/>
                   </a>
                   <a target="_blank" rel="noreferrer" href="https://github.com/YuqiGuo105">
