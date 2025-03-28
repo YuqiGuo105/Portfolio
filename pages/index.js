@@ -102,7 +102,12 @@ const Index = () => {
             <div
               className="slide"
             >
-              <img src="assets/images/testimonial-2.jpg" alt=""/>
+              <img
+                src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/avator.png"
+                alt="avatar"
+                style={{ width: "90%" }}
+              />
+
               <span className="circle circle-1">
 
               </span>
