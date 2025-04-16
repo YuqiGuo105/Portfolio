@@ -62,6 +62,20 @@ const ProjectIsotop = () => {
   // Determine active button class
   const activeBtn = (value) => (value === filterKey ? "active" : "");
 
+  // Helper to record click events (you can also move this into a shared utils file)
+  const recordClick = async (clickEvent, targetUrl) => {
+    const localTime = new Date().toISOString();
+    try {
+      await fetch('/api/click', {      // or '/click' if that's your setup
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clickEvent, targetUrl, localTime }),
+      });
+    } catch (err) {
+      console.error('Error logging click event:', err);
+    }
+  };
+
   return (
     <Fragment>
       <div className="works-box">
@@ -75,31 +89,32 @@ const ProjectIsotop = () => {
              onClick={handleFilterKeyChange("Mobile-Application")}>Mobile Application</a>
         </div>
         <div className="works-items works-list-items row">
-          {projects.map(project => (
-            <div key={project.id}
-                 className={`works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 ${project.category}`}>
-              <div className="works-item">
-                <Link href={`/work-single/${project.id}`}>
-                  <a>
-                                        <span className="image">
-                                            <span className="img">
-                                                <img src={project.image_url} alt={project.title}/>
-                                                <span className="overlay"/>
-                                            </span>
-                                        </span>
-                    <span className="desc">
-                                            <span className="name">
-                                                {project.title}
-                                            </span>
-                                            <span className="category">
-                                                {project.category}
-                                            </span>
-                                        </span>
-                  </a>
-                </Link>
+          {projects.map((project) => {
+            const targetUrl = `/work-single/${project.id}`;
+            return (
+              <div
+                key={project.id}
+                className={`works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 ${project.category}`}
+              >
+                <div className="works-item">
+                  <Link href={targetUrl} passHref>
+                    <a onClick={() => recordClick('project-item', targetUrl)}>
+                      <span className="image">
+                        <span className="img">
+                          <img src={project.image_url} alt={project.title}/>
+                          <span className="overlay"/>
+                        </span>
+                      </span>
+                      <span className="desc">
+                        <span className="name">{project.title}</span>
+                        <span className="category">{project.category}</span>
+                      </span>
+                    </a>
+                  </Link>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </Fragment>

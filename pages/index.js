@@ -82,6 +82,45 @@ const Index = () => {
     fetchExperiences();
   }, []); // The empty array ensures this effect runs only once after the initial render
 
+  // Visitor tracking (only one endpoint call is needed)
+  useEffect(() => {
+    const trackVisitor = async () => {
+      // Capture the client's local time as an ISO string.
+      const localTime = new Date().toISOString();
+
+      try {
+        const response = await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ localTime }),
+        });
+
+        // Check if the response is not OK (e.g. status !== 200)
+        if (!response.ok) {
+          console.error('Visitor tracking failed with status:', response.status);
+        }
+      } catch (error) {
+        console.error('Error tracking visitor:', error);
+      }
+    };
+
+    trackVisitor();
+  }, []);
+
+  // Helper to record a click event
+  const recordClick = async (clickEvent, targetUrl) => {
+    const localTime = new Date().toISOString();
+    try {
+      await fetch('/api/click', {  // Ensure this URL is correct
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clickEvent, targetUrl, localTime })
+      });
+    } catch (err) {
+      console.error("Error logging click event:", err);
+    }
+  };
+
   if (error) return <div>Error loading blogs: {error}</div>;
   if (!blogs.length) return <div>Loading...</div>;
 
@@ -145,29 +184,40 @@ const Index = () => {
                 </p>
 
                 <div className="social-links">
-                  <a target="_blank" rel="noreferrer"
-                     href="https://www.linkedin.com/in/yuqi-g-185957355/">
+                  <a
+                    target="_blank"
+                    rel="noreferrer"
+                    href="https://www.linkedin.com/in/yuqi-g-185957355/"
+                    onClick={() => recordClick("social-link", "https://www.linkedin.com/in/yuqi-g-185957355/")}
+                  >
                     <i aria-hidden="true" className="fab fa-linkedin"/>
                   </a>
-                  <a target="_blank" rel="noreferrer" href="https://github.com/YuqiGuo105">
+                  <a
+                    target="_blank"
+                    rel="noreferrer"
+                    href="https://github.com/YuqiGuo105"
+                    onClick={() => recordClick("social-link", "https://github.com/YuqiGuo105")}
+                  >
                     <i aria-hidden="true" className="fab fa-github"/>
                   </a>
-
                   <a
                     target="_blank"
                     rel="noreferrer"
                     href="https://leetcode.com/u/Yuqi_Guo/"
+                    onClick={() => recordClick("social-link", "https://leetcode.com/u/Yuqi_Guo/")}
                   >
-                    <i
-                      aria-hidden="true"
-                      className="leetcode-icon-bottom custom-leetcode-icon"
-                    />
+                    <i aria-hidden="true" className="leetcode-icon-bottom custom-leetcode-icon"/>
                   </a>
-
-                  <a target="_blank" rel="noreferrer" href="https://www.instagram.com/yuqi_guo17/">
+                  <a
+                    target="_blank"
+                    rel="noreferrer"
+                    href="https://www.instagram.com/yuqi_guo17/"
+                    onClick={() => recordClick("social-link", "https://www.instagram.com/yuqi_guo17/")}
+                  >
                     <i aria-hidden="true" className="fab fa-instagram"/>
                   </a>
                 </div>
+
               </div>
             </div>
             <div className="info-list">
@@ -179,7 +229,7 @@ const Index = () => {
                   Experience <strong>{yearsOfExperience} Years</strong>
                 </li>
                 <li>
-                Commits on github <strong> 200+</strong>
+                  Commits on github <strong> 200+</strong>
                 </li>
               </ul>
             </div>
@@ -202,7 +252,7 @@ const Index = () => {
             <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3 align-right">
               {/* Section numbers */}
               <div className="numbers-items">
-                <div
+              <div
                   className="numbers-item"
                 >
                   <div className="icon">
@@ -421,7 +471,7 @@ const Index = () => {
                 <div key={blog.id} className="archive-item">
                   <div className="image">
                     <Link href={`/blog-single/${blog.id}`}>
-                      <a>
+                      <a onClick={() => recordClick("blog-item", `/blog-single/${blog.id}`)}>
                         <img src={blog.image_url} alt={blog.title}/>
                       </a>
                     </Link>
@@ -434,14 +484,21 @@ const Index = () => {
                     </div>
                     <h3 className="title">
                       <Link href={`/blog-single/${blog.id}`}>
-                        <a>{blog.title}</a>
+                        <a onClick={() => recordClick("blog-item", `/blog-single/${blog.id}`)}>
+                          {blog.title}
+                        </a>
                       </Link>
                     </h3>
                     <div className="text">
                       <p>{blog.description}</p>
                       <div className="readmore">
                         <Link href={`/blog-single/${blog.id}`}>
-                          <a className="lnk">Read more</a>
+                          <a
+                            className="lnk"
+                            onClick={() => recordClick("blog-readmore", `/blog-single/${blog.id}`)}
+                          >
+                            Read more
+                          </a>
                         </Link>
                       </div>
                     </div>
