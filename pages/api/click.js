@@ -1,109 +1,110 @@
-// src/pages/api/track.js  — debug‑heavy version
+// src/pages/api/track.js  — header‑first Geo, ipinfo fallback, zero 3rd‑party rate‑limit
 // -----------------------------------------------------------------------------
-//  Adds VERBOSE console output so you can see exactly what’s happening in the
-//  Vercel / Supabase logs. Remove or lower the log level once it’s stable.
+//  ❑ Order of geo resolution (no user prompt required):
+//    1. CDN / platform headers (Vercel, Cloudflare, AWS ALB)
+//    2. Self‑hosted MaxMind DB or ipinfo.io (tokened)
+//    3. Skip geo for private / localhost IPs
 // -----------------------------------------------------------------------------
-
 import { supabase } from '../../src/supabase/supabaseClient';
 
-export default async function handler(req, res) {
-  const startedAt = Date.now();
-  console.log(`[Track] ➜  ${req.method} ${req.url}  ${new Date().toISOString()}`);
+// Helpers --------------------------------------------------------------
+const isPrivate = (ip) =>
+  ip === '::1' || ip.startsWith('127.') || ip.startsWith('10.') || ip.startsWith('192.168.');
 
-  // ---------------------------------------------------------------------------
-  // Guard: only allow POST
-  // ---------------------------------------------------------------------------
-  if (req.method !== 'POST') {
-    console.warn('[Track] ✖  Non‑POST request rejected');
-    return res.status(405).json({ error: 'Method not allowed' });
+async function geoFromHeaders(h) {
+  /* Vercel Edge */
+  if (h['x-vercel-ip-country']) {
+    return {
+      country: h['x-vercel-ip-country'] || null,
+      region: h['x-vercel-ip-country-region'] || null,
+      city: h['x-vercel-ip-city'] || null,
+      latitude: h['x-vercel-ip-latitude'] || null,
+      longitude: h['x-vercel-ip-longitude'] || null,
+      _src: 'vercel',
+    };
   }
+  /* Cloudflare */
+  if (h['cf-ipcountry']) {
+    return {
+      country: h['cf-ipcountry'] || null,
+      region: h['cf-region'] || null,
+      city: h['cf-ipcity'] || null,
+      latitude: h['cf-latitude'] || null,
+      longitude: h['cf-longitude'] || null,
+      _src: 'cloudflare',
+    };
+  }
+  return null; // let caller try other sources
+}
 
-  // ---------------------------------------------------------------------------
-  // 1) Parse & echo body for inspection
-  // ---------------------------------------------------------------------------
-  let body;
+async function geoFromIpinfo(ip) {
+  const token = process.env.IPINFO_TOKEN; // free 50k/mo
+  if (!token) return null;
   try {
-    body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-  } catch (parseErr) {
-    console.error('[Track] ✖  Failed to parse JSON body:', parseErr);
-    return res.status(400).json({ error: 'Invalid JSON' });
+    const r = await fetch(`https://ipinfo.io/${ip}?token=${token}`, { timeout: 1500 });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const [lat, lon] = (d.loc || '').split(',');
+    return {
+      country: d.country || null,
+      region: d.region || null,
+      city: d.city || null,
+      latitude: lat || null,
+      longitude: lon || null,
+      _src: 'ipinfo',
+    };
+  } catch (_) {
+    return null;
   }
-  console.log('Raw body:', body);
+}
 
-  // Destructure with sane fallbacks
+export default async function handler(req, res) {
+  const start = Date.now();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
   const {
     localTime = new Date().toISOString(),
     screen = {},
     tz = null,
     lang = null,
     event = 'page_view',
-  } = body ?? {};
+  } = body;
 
-  // ---------------------------------------------------------------------------
-  // 2) Resolve IP address (handles proxies)
-  // ---------------------------------------------------------------------------
+  // ---- IP ------------------------------------------------------------------
   const forwarded = req.headers['x-forwarded-for'] || '';
   const ip = (forwarded.split(',')[0] || req.socket?.remoteAddress || '').trim();
-  console.log('Derived IP:', ip || '[none]');
 
-  // ---------------------------------------------------------------------------
-  // 3) Geo lookup (best‑effort)
-  // ---------------------------------------------------------------------------
-  let geo = {};
-  try {
-    const geoRes = await fetch(`https://ipapi.co/${ip}/json/`, { timeout: 1500 });
-    if (geoRes.ok) {
-      const g = await geoRes.json();
-      geo = {
-        country: g.country_name ?? null,
-        region: g.region ?? null,
-        city: g.city ?? null,
-        latitude: g.latitude ?? null,
-        longitude: g.longitude ?? null,
-      };
-      console.log('Geo lookup success:', geo);
-    } else {
-      console.warn('Geo lookup HTTP', geoRes.status);
-    }
-  } catch (geoErr) {
-    console.warn('Geo lookup failed:', geoErr.message);
+  // ---- Geo -----------------------------------------------------------------
+  let geo = (await geoFromHeaders(req.headers)) || {};
+  if (!Object.keys(geo).length && !isPrivate(ip)) {
+    geo = (await geoFromIpinfo(ip)) || {};
   }
 
-  // ---------------------------------------------------------------------------
-  // 4) User‑Agent string (trimmed)
-  // ---------------------------------------------------------------------------
-  const userAgent = (req.headers['user-agent'] ?? '').slice(0, 255);
-  console.log('UA:', userAgent);
-
-  // ---------------------------------------------------------------------------
-  // 5) Build insert payload
-  // ---------------------------------------------------------------------------
+  // ---- UA / Payload --------------------------------------------------------
+  const ua = (req.headers['user-agent'] || '').slice(0, 255);
   const insertPayload = {
     ip,
     local_time: localTime,
     event,
-    ua: userAgent,
+    ua,
     screen_w: screen.w ?? null,
     screen_h: screen.h ?? null,
     tz,
     lang,
     ...geo,
-    created_at: new Date().toISOString(),
+    created_at: new Date().toISOString(), // uncomment if you added this column
   };
-  console.log('Insert payload:', insertPayload);
 
-  // ---------------------------------------------------------------------------
-  // 6) Insert into Supabase
-  // ---------------------------------------------------------------------------
   try {
     const { error } = await supabase.from('visitor_logs').insert([insertPayload]);
     if (error) throw error;
-    console.log('Insert succeeded');
-    res.status(200).json({ success: true });
-  } catch (dbErr) {
-    console.error('Supabase insert error:', dbErr);
-    res.status(500).json({ success: false, message: dbErr.message });
+    res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('[Track] insert error:', err);
+    res.status(500).json({ ok: false, message: err.message, db: err.code });
   } finally {
-    console.log(`Done in ${Date.now() - startedAt} ms`);
+    const ms = Date.now() - start;
+    console.log(`[Track] done in ${ms}ms  src=${geo._src || 'none'}`);
   }
 }
