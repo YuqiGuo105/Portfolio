@@ -44,43 +44,43 @@ const Index = () => {
   const [yearsOfExperience, setYearsOfExperience] = useState(1);
   const [experiences, setExperiences] = useState([]);
   const [companiesCount, setCompaniesCount] = useState(0);
+  const [lifeBlogs, setLifeBlogs] = useState([]);
 
   useEffect(() => {
-    // Calculate years of experience dynamically
-    const startYear = process.env.NEXT_PUBLIC_START_YEAR;
-    const currentYear = new Date().getFullYear();
-    setYearsOfExperience(Math.max(currentYear - startYear, 1));
+    const bootstrap = async () => {
+      /* years of experience */
+      const startYear   = Number(process.env.NEXT_PUBLIC_START_YEAR ?? new Date().getFullYear());
+      const currentYear = new Date().getFullYear();
+      setYearsOfExperience(Math.max(currentYear - startYear, 1));
 
-    const fetchBlogs = async () => {
-      const {data, error} = await supabase
-        .from('Blogs') // Adjust this to your actual table name
-        .select('*'); // Fetches all columns, adjust if needed
-
-      if (error) setError(error.message);
-      else setBlogs(data);
-    };
-
-    // Fetch Experiences
-    const fetchExperiences = async () => {
-      const { data, error } = await supabase
-        .from("experience") // Ensure this matches your Supabase table name
+      /* tech blogs */
+      const { data: tech, error: techErr } = await supabase
+        .from("Blogs")
         .select("*")
-        .order("date", { ascending: false }); // Optional: Sort by date descending
+        .order("date", { ascending: false });
+      if (techErr) return setError(techErr.message);
+      setBlogs(tech);
 
-      if (error) {
-        setError(error.message);
-      } else {
-        setExperiences(data);
+      /* life blogs */
+      const { data: life, error: lifeErr } = await supabase
+        .from("life_blogs")
+        .select("id, title, image_url, category, published_at, description, require_login")
+        .order("published_at", { ascending: false });
+      if (lifeErr) return setError(lifeErr.message);
+      setLifeBlogs(life);
 
-        // Calculate the number of unique companies
-        const uniqueCompanies = new Set(data.map((exp) => exp.name));
-        setCompaniesCount(uniqueCompanies.size);
-      }
+      /* experience */
+      const { data: exp, error: expErr } = await supabase
+        .from("experience")
+        .select("*")
+        .order("date", { ascending: false });
+      if (expErr) return setError(expErr.message);
+      setExperiences(exp);
+      setCompaniesCount(new Set(exp.map(e => e.name)).size);
     };
 
-    fetchBlogs();
-    fetchExperiences();
-  }, []); // The empty array ensures this effect runs only once after the initial render
+    bootstrap();                 // run once
+  }, []);        // The empty array ensures this effect runs only once after the initial render
 
   // Visitor tracking (only one endpoint call is needed)
   useEffect(() => {
@@ -132,6 +132,18 @@ const Index = () => {
     autoplay: true,
   };
 
+  /* ─────────────────────────── Settings ──────────────────────────── */
+  const sliderSettings = {
+    arrows: false,
+    dots: true,
+    slidesToShow: 3,
+    slidesToScroll: 1,
+    responsive: [
+      { breakpoint: 1024, settings: { slidesToShow: 2 } },
+      { breakpoint: 640,  settings: { slidesToShow: 1 } },
+    ],
+  };
+
   return (
     <Layout>
       <section className="section section-started">
@@ -144,7 +156,7 @@ const Index = () => {
               <img
                 src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/avator.png"
                 alt="avatar"
-                style={{ width: "90%" }}
+                style={{width: "90%"}}
               />
 
               <span className="circle circle-1">
@@ -252,7 +264,7 @@ const Index = () => {
             <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3 align-right">
               {/* Section numbers */}
               <div className="numbers-items">
-              <div
+                <div
                   className="numbers-item"
                 >
                   <div className="icon">
@@ -454,15 +466,11 @@ const Index = () => {
         </div>
       </section>
 
-      <section className="section section-parallax section-parallax-5" id="Blog-section">
-        <div className="container">
-          {/* Section Heading */}
+      <section id="Blog-section" className="section section-parallax section-parallax-5">
+        <div className="container space-y-16">
+          {/* My Technical Blogs */}
           <div className="m-titles">
-            <h2
-              className="m-title"
-            >
-              My Technical Blogs
-            </h2>
+            <h2 className="m-title">My Technical Blogs</h2>
           </div>
 
           <div className="blog-items">
@@ -470,29 +478,32 @@ const Index = () => {
               {blogs.map((blog) => (
                 <div key={blog.id} className="archive-item">
                   <div className="image">
-                    <Link href={`/blog-single/${blog.id}`}>
+                    <Link href={`/blog-single/${blog.id}`} legacyBehavior>
                       <a onClick={() => recordClick("blog-item", `/blog-single/${blog.id}`)}>
                         <img src={blog.image_url} alt={blog.title}/>
                       </a>
                     </Link>
                   </div>
+
                   <div className="desc">
                     <div className="category">
                       {blog.category}
                       <br/>
                       <span>{blog.date}</span>
                     </div>
+
                     <h3 className="title">
-                      <Link href={`/blog-single/${blog.id}`}>
+                      <Link href={`/blog-single/${blog.id}`} legacyBehavior>
                         <a onClick={() => recordClick("blog-item", `/blog-single/${blog.id}`)}>
                           {blog.title}
                         </a>
                       </Link>
                     </h3>
+
                     <div className="text">
                       <p>{blog.description}</p>
                       <div className="readmore">
-                        <Link href={`/blog-single/${blog.id}`}>
+                        <Link href={`/blog-single/${blog.id}`} legacyBehavior>
                           <a
                             className="lnk"
                             onClick={() => recordClick("blog-readmore", `/blog-single/${blog.id}`)}
@@ -508,26 +519,116 @@ const Index = () => {
             </Slider>
           </div>
 
-          <style jsx>{`
-            .title {
-              overflow: hidden;
-              text-overflow: ellipsis;
-              white-space: nowrap;
-              max-width: 100%;
-            }
-          `}</style>
-
           <div className="blog-more-link">
-            <Link href="/blog">
-              <a
-                className="btn"
-              >
+            <Link href="/blog" legacyBehavior>
+              <a className="btn">
                 <span>View Blogs</span>
               </a>
             </Link>
           </div>
 
+          {/* Gap Between Sections */}
+          <section className="section section-parallax section-parallax-5">
+            <div className="container"></div>
+          </section>
+
+          {/* My Life */}
+          <div className="m-titles">
+            <h2 className="m-title">My Vibrant Life</h2>
+          </div>
+
+          <div className="row row-custom">
+            <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3"/>
+            <div className="col-xs-12 col-sm-12 col-md-9 col-lg-9 vertical-line">
+              <div className="text">
+                <p>
+                  Study Hard. Work Smart. Build the Future!
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="blog-items grid gap-8 lg:grid-cols-3">
+            {lifeBlogs.slice(0, 3).map(blog => {
+              const {
+                id,
+                title,
+                image_url,
+                category,
+                published_at,
+                description,
+                require_login,
+              } = blog;
+
+              const href = require_login
+                ? `/login?next=/blog-single/${id}`
+                : `/blog-single/${id}`;
+
+              return (
+                <div key={id} className="archive-item">
+                  <div className="image">
+                    <Link href={href} legacyBehavior>
+                      <a onClick={() => recordClick("life-blog-item", href)}>
+                        <img src={image_url} alt={title}/>
+                      </a>
+                    </Link>
+                  </div>
+
+                  <div className="desc">
+                    <div className="category">
+                      {category}
+                      <br/>
+                      <span>{published_at}</span>
+                    </div>
+
+                    <h3 className="title">
+                      <Link href={href} legacyBehavior>
+                        <a onClick={() => recordClick("life-blog", href)}>
+                          {title}
+                          {require_login && " (login required)"}
+                        </a>
+                      </Link>
+                    </h3>
+
+                    <div className="text">
+                      <p>{description}</p>
+
+                      <div className="readmore">
+                        <Link href={href} legacyBehavior>
+                          <a
+                            className="lnk"
+                            onClick={() => recordClick("life-blog-readmore", href)}
+                          >
+                            {require_login ? "Log in to read" : "Read more"}
+                          </a>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="blog-more-link">
+            <Link href="#" legacyBehavior>
+              <a className="btn">
+                <span>View Blog</span>
+              </a>
+            </Link>
+          </div>
+
         </div>
+
+        {/* Ellipsis trimming for over‑long titles */}
+        <style jsx>{`
+          .title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 100%;
+          }
+        `}</style>
       </section>
 
       <ContactForm/>
