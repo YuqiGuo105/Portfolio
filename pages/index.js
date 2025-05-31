@@ -45,6 +45,7 @@ const Index = () => {
   const [experiences, setExperiences] = useState([]);
   const [companiesCount, setCompaniesCount] = useState(0);
   const [lifeBlogs, setLifeBlogs] = useState([]);
+  const [loggedIn, setLoggedIn]     = useState(false);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -561,8 +562,8 @@ const Index = () => {
               } = blog;
 
               const href = require_login
-                ? `/login?next=/blog-single/${id}`
-                : `/blog-single/${id}`;
+                ? `/login?next=/life-blog/${id}`
+                : `/life-blog/${id}`;
 
               return (
                 <div key={id} className="archive-item">
