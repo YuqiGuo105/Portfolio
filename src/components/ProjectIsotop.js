@@ -85,8 +85,8 @@ const ProjectIsotop = () => {
           <a className={`c-pointer ${activeBtn("Full-Stack")}`} onClick={handleFilterKeyChange("Full-Stack")}>Full
             Stack</a>
           <a className={`c-pointer ${activeBtn("Backend")}`} onClick={handleFilterKeyChange("Backend")}>Backend</a>
-          <a className={`c-pointer ${activeBtn("Mobile-Application")}`}
-             onClick={handleFilterKeyChange("Mobile-Application")}>Mobile Application</a>
+          <a className={`c-pointer ${activeBtn("Web Infra")}`}
+             onClick={handleFilterKeyChange("Web-Infra")}>Web Infra</a>
         </div>
         <div className="works-items works-list-items row">
           {projects.map((project) => {
