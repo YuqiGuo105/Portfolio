@@ -598,7 +598,7 @@ const Index = () => {
                         <Link href={href} legacyBehavior>
                           <a
                             className="lnk"
-                            onClick={() => recordClick("life-blog-readmore", href)}
+                            onClick={() => recordClick("life-blog", href)}
                           >
                             {require_login ? "Log in to read" : "Read more"}
                           </a>
