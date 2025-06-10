@@ -12,6 +12,7 @@ const ensureRoot = () => {
   if (!el) {
     el = document.createElement('div')
     el.id = '__chat_widget_root'
+    el.className = 'bot-contain'
     document.body.appendChild(el)
     Object.assign(el.style, {
       position: 'fixed',
@@ -29,7 +30,7 @@ const ensureRoot = () => {
 function Overlay({ onClick }) {
   return (
     <div
-      className="fixed inset-0 z-[2147483646] bg-gray-900/40 backdrop-blur-sm transition-opacity sm:hidden" // show overlay on mobile; hide on >sm for subtlety
+      className="fixed inset-0 z-[2147483646] bg-gray-900/40 backdrop-blur-sm transition-opacity sm:hidden"
       onClick={onClick}
     />
   )
@@ -38,113 +39,155 @@ function Overlay({ onClick }) {
 /* =============================================================
  * ChatWindow – the expanded chat UI
  * ===========================================================*/
-function ChatWindow({ onMinimize }) {
-  const [messages, setMessages] = useState([])
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  );
+}
+
+function ChatWindow({ onMinimize, className = '' }) {
+  const [messages, setMessages] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('chatMessages');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef(null)
 
+  const apiUrl = process.env.NEXT_PUBLIC_ASSIST_API || '/api/assist'
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      const welcomeMessage = {
+        id: generateUUID(),
+        role: 'assistant',
+        content: 'Hi! How can I help you today?'
+      }
+      setMessages([welcomeMessage])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     const root = ensureRoot()
-    root.style.pointerEvents = 'auto' // allow interaction while open
+    root.style.pointerEvents = 'auto'
     return () => {
       root.style.pointerEvents = 'none'
     }
   }, [])
 
-  // keep latest message in view
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('chatMessages', JSON.stringify(messages));
+    }
+  }, [messages]);
+
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages, loading])
 
   const sendMessage = useCallback(
     async (e) => {
-      e.preventDefault()
-      const text = input.trim()
-      if (!text || loading) return
+      e.preventDefault();
+      const text = input.trim();
+      if (!text || loading) return;
 
-      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content: text }])
-      setInput('')
-      setLoading(true)
+      const newMessage = { id: generateUUID(), role: 'user', content: text };
+      setMessages((prev) => [...prev, newMessage]);
+      setInput('');
+      setLoading(true);
 
       try {
-        const res = await fetch('/api/assist', {
+        const res = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: text }),
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const { answer = 'Sorry, I have no response.' } = await res.json()
-        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: answer }])
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { answer = 'Sorry, I have no response.' } = await res.json();
+        const botMessage = { id: generateUUID(), role: 'assistant', content: answer };
+        setMessages((prev) => [...prev, botMessage]);
       } catch (err) {
-        console.error(err)
-        setMessages((prev) => [
-          ...prev,
-          { id: crypto.randomUUID(), role: 'assistant', content: '⚠️ Something went wrong. Please try again later.' },
-        ])
+        console.error(err);
+        const errorMessage = {
+          id: generateUUID(),
+          role: 'assistant',
+          content: '⚠️ Something went wrong. Please try again later.'
+        };
+        setMessages((prev) => [...prev, errorMessage]);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     },
     [input, loading]
-  )
+  );
 
   return (
-    <div
-      className="relative mb-6 mr-6 flex h-[80vh] w-[96vw] max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:bg-gray-900 dark:ring-gray-700 sm:h-[600px] sm:w-[400px] md:w-[480px]"
-    >
+    <div className="bot-container relative mb-6 flex flex-col h-[80vh] w-full max-w-full sm:max-w-full md:w-[480px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:bg-gray-900 dark:ring-gray-700 sm:px-0">
       {/* header */}
-      <header className="flex items-center justify-between border-b border-gray-200 px-4 py-2 dark:border-gray-700">
+      <header className="bot-header flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700">
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-100">
-          <Bot className="h-4 w-4 text-blue-600" /> Support Bot
+          <img
+            src="/assets/images/chatbot_pot_thinking.gif"
+            alt="Chat Bot"
+            className="object-contain w-4 h-4 sm:w-6 sm:h-6 md:w-8 md:h-8"
+          />
+          Mr.Pot
         </div>
         <button
           type="button"
           aria-label="Minimize chat"
-          className="rounded-md p-1 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+          className="shrink-button rounded-md p-1 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-300"
           onClick={onMinimize}
         >
-          <Minus className="h-4 w-4" />
+          <Minus className="h-4 w-4"/>
         </button>
       </header>
 
       {/* messages */}
-      <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+      <div ref={scrollRef} className="bot-messages flex-1 space-y-2 overflow-y-auto px-3 py-3">
         {messages.map((m) => (
           <div key={m.id} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-            <span
+            <div
               className={
                 m.role === 'user'
-                  ? 'max-w-[260px] rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow'
-                  : 'max-w-[260px] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100'
+                  ? 'user-message max-w-[260px] rounded-lg bg-blue-600 px-3 sm:px-1 py-2 text-sm text-white shadow'
+                  : 'bot-message max-w-[260px] rounded-lg bg-gray-100 px-3 sm:px-1 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100'
               }
+              style={{ width: 'fit-content', maxWidth: '100%' }}
             >
               {m.content}
-            </span>
+            </div>
           </div>
         ))}
         {loading && (
           <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
-            <Loader2 className="h-4 w-4 animate-spin" /> Assistant is typing…
+            <Loader2 className="h-4 w-4 animate-spin"/> Assistant is typing…
           </div>
         )}
       </div>
 
       {/* input */}
-      <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/60">
-        <div className="flex items-center gap-2">
+      <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-2 dark:border-gray-700 dark:bg-gray-800/60">
+        <div className="bot-actions flex items-center gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message..."
-            className="peer h-10 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 dark:text-gray-100 dark:placeholder-gray-500"
+            className="bot-input peer h-10 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 dark:text-gray-100 dark:placeholder-gray-100"
           />
           <button
             type="submit"
             disabled={!input.trim() || loading}
-            className="rounded-md bg-blue-600 p-2 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="send-button rounded-md bg-blue-600 p-2 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : <ArrowUpRight className="h-4 w-4"/>}
           </button>
         </div>
       </form>
@@ -165,15 +208,18 @@ function LauncherButton({ onOpen }) {
     <button
       type="button"
       onClick={onOpen}
-      className="relative mb-6 mr-6 flex items-center gap-3 rounded-full bg-white px-3 py-2 shadow-xl ring-1 ring-gray-200 backdrop-blur transition hover:shadow-2xl supports-[backdrop-filter]:bg-white/75 dark:bg-gray-900 dark:ring-gray-700"
+      className="relative flex items-center rounded-full mb-2 px-5 py-4 shadow-xl ring-1 ring-gray-200 backdrop-blur transition hover:shadow-2xl supports-[backdrop-filter]:bg-white/75 dark:bg-gray-900 dark:ring-gray-700 launch-button"
     >
-      <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white">
-        <Bot className="h-6 w-6" />
-        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-gray-900" />
+      <span className="relative flex h-15 w-15 items-center justify-center rounded-full bg-blue-600">
+        <img
+          src="/assets/images/chatPot.png"
+          alt="Chat Bot"
+          className="w-8 h-8 object-contain pot-image"
+        />
+        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-gray-900"/>
       </span>
       <span className="hidden flex-col items-start pr-2 text-left xs:flex">
-        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Support Bot</span>
-        <span className="text-xs text-gray-500 dark:text-gray-400">Online</span>
+        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Mr.Pot</span>
       </span>
     </button>
   )
@@ -190,7 +236,7 @@ export default function ChatWidget() {
   if (!mounted) return null
 
   const root = ensureRoot()
-  root.style.pointerEvents = open ? 'auto' : 'none'
+  root.style.pointerEvents = 'auto'
 
   return createPortal(
     open ? (

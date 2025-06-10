@@ -2,6 +2,7 @@ import Head from "next/head";
 import { Fragment } from "react";
 import "../styles/globals.css";
 import '../styles/carousel.css'
+import '../styles/chatWidget.css'
 function MyApp({ Component, pageProps }) {
   return (
     <Fragment>

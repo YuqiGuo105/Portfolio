@@ -1,0 +1,131 @@
+.bot-contain {
+    width: 100%
+  }
+  @media (min-width: 640px) {
+    .bot-contain {
+      width: 400px;
+      max-width: 400px;
+      padding: 0; 
+    }
+  }
+
+  @media (min-width: 768px) {
+    .bot-contain {
+      width: 480px;
+      max-width: 480px;
+    }
+  }
+  .launch-button {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: white;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: 1px solid #ff8059;
+    cursor: pointer;
+    z-index: 2147483647;
+    svg {
+        vertical-align: sub;
+    }
+    img {
+      height: 40px;
+      margin-bottom: 10px;
+    }
+  }
+  .launch-button:hover {
+    background: #ff8059;
+    border-color: #ff8059;
+  }
+  .bot-container {
+    display: flex;
+    flex-direction: column;
+    height: fit-content;
+    width: 100%;
+    max-width: none;
+    margin: 0 auto;
+    padding: 0 16px; 
+    border-radius: 1rem; 
+    overflow: hidden;
+  }
+
+  @media (min-width: 640px) {
+    .bot-container {
+      width: 400px;
+      max-width: 400px;
+      padding: 0;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .bot-container {
+      width: 480px;
+      max-width: 480px;
+    }
+  }
+  .bot-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .shrink-button {
+    display: flex;
+    align-items: center;
+    height: 30px;
+  }
+  .bot-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .send-button {
+    display: flex;
+    height: 35px;
+    width: 35px;
+    align-items: center;
+  }
+  .bot-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    max-height: 500px;
+    overflow: auto;
+  }
+  .bot-input {
+    display: flex;
+    flex: 1;
+  }
+  .user-message {
+    max-width: 260px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    background-color: rgb(37 99 235);
+    border-radius: 0.5rem;
+    float: right;
+  }
+
+  .bot-message {
+    max-width: 260px;
+    border-radius: 0.5rem;
+    background-color: #f3f4f6;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: #111827;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  }
+  @media (prefers-color-scheme: dark) {
+    .max-w-260 {
+      background-color: #1f2937;
+      color: #f3f4f6;
+    }
+  }
