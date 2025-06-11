@@ -9,6 +9,10 @@ import {
 import Footer from "./Footer";
 import Header from "./Header";
 import PreLoader from "./PreLoader";
+import dynamic from "next/dynamic";
+
+const ChatWidget = dynamic(() => import("../../src/components/ChatWidget"), { ssr: false });
+
 const Layout = ({ children, extraWrapClass }) => {
   useEffect(() => {
     initCursor();
@@ -44,6 +48,7 @@ const Layout = ({ children, extraWrapClass }) => {
         {/* Footer */}
         <Footer />
       </div>
+      <ChatWidget />
       <div className="cursor"></div>
     </Fragment>
   );
