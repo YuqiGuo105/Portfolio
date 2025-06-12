@@ -1468,13 +1468,28 @@ body.light-skin .header.sticky .navbar.default:before {
 }
 
 .switcher-btn {
-	margin-right: 40px;
-	position: relative;
-	display: inline-block;
-	vertical-align: top;
-	width: 25px;
-	height: 40px;
-	text-align: center;
+        margin-right: 40px;
+        position: relative;
+        display: inline-block;
+        vertical-align: top;
+        width: 25px;
+        height: 40px;
+        text-align: center;
+}
+
+.login-btn {
+        margin-right: 20px;
+        position: relative;
+        display: inline-block;
+        vertical-align: top;
+        width: 25px;
+        height: 40px;
+        text-align: center;
+}
+
+.login-btn i {
+        line-height: 40px;
+        color: #fff;
 }
 
 .switcher-btn .sw-before, .switcher-btn .sw-after {
@@ -5263,7 +5278,11 @@ body.light-skin .menu-full ul li ul li a {
 }
 
 body.light-skin .menu-social-links a {
-	color: #1c2528;
+        color: #1c2528;
+}
+
+body.light-skin .login-btn i {
+        color: #1c2528;
 }
 
 body.light-skin .header .logo .logotype__title {
@@ -5611,5 +5630,46 @@ body.light-skin .wc-block-product-search .wc-block-product-search__button {
 }
 
 body.light-skin.single-portfolio .m-titles:before {
-	background: #f7f5f2;
+        background: #f7f5f2;
+}
+
+.auth-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+}
+
+.auth-dialog {
+        position: relative;
+        background: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 400px;
+}
+
+body.dark-skin .auth-dialog {
+        background: #1c2528;
+        color: #fff;
+}
+
+.auth-dialog input {
+        width: 100%;
+        margin-bottom: 1rem;
+        padding: 8px;
+}
+
+.auth-close {
+        position: absolute;
+        top: 5px;
+        right: 10px;
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: inherit;
 }

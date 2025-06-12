@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
+import { supabase } from "../supabase/supabaseClient";
+import AuthDialog from "../components/AuthDialog";
 
 const Header = () => {
 
@@ -42,7 +45,24 @@ const Header = () => {
     }
   };
 
+  const router = useRouter();
+  const [session, setSession] = useState(null);
+  const [showAuth, setShowAuth] = useState(false);
   const [day, setDay] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const mood = localStorage.getItem("ober-mood");
@@ -118,6 +138,21 @@ const Header = () => {
             </div>
           </div>
           <div className="col-xs-8 col-sm-8 col-md-8 col-lg-8 align-right">
+            {/* login btn */}
+            <a
+              className="login-btn"
+              href="#"
+              onClick={async (e) => {
+                e.preventDefault();
+                if (session) {
+                  await supabase.auth.signOut();
+                } else {
+                  setShowAuth(true);
+                }
+              }}
+            >
+              <i className={`fa ${session ? "fa-sign-out" : "fa-sign-in"}`} />
+            </a>
             {/* switcher btn */}
             <a
               className={`switcher-btn ${day ? "active" : ""}`}
@@ -305,6 +340,7 @@ const Header = () => {
           </a>
         </div>
       </div>
+      <AuthDialog visible={showAuth} onClose={() => setShowAuth(false)} />
     </header>
   );
 };
