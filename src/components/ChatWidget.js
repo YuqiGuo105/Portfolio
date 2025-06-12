@@ -4,13 +4,17 @@ import { createPortal } from 'react-dom'
 import { useState, useEffect, useRef, useCallback, Fragment, useMemo } from 'react'
 import { Bot, Minus, ArrowUpRight, Loader2 } from 'lucide-react'
 
+/* ───────── minimal sanitizer ───────── */
+const sanitizeHtml = (html) =>
+  html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/on\w+="[^"]*"/gi, '')
+
 /**
  * @typedef {Object} ChatRequest
  * @property {string} message
  * @property {string} [session_id]
- */
-
-/**
+ *
  * @typedef {Object} ChatResponse
  * @property {string} answer
  */
@@ -125,26 +129,29 @@ function ChatWindow({ onMinimize, className = '' }) {
       setLoading(true);
 
       try {
-        /** @type {ChatRequest} */
-        const payload = { message: text, session_id: sessionId }
+        const payload = { message: text, session_id: sessionId };
         const res = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
         /** @type {ChatResponse} */
-        const { answer = "Sorry, I can only answer questions about my master's blog/experience." } = await res.json();
-        const botMessage = { id: generateUUID(), role: 'assistant', content: answer };
+        const { answer } = await res.json();
+
+        /* detect HTML */
+        const isHtml = /^\s*</.test(answer) || /<\/[a-z][\s\S]*>/i.test(answer);
+        const safe   = isHtml ? sanitizeHtml(answer) : answer;
+
+        const botMessage = { id: generateUUID(), role: 'assistant', content: safe, isHtml };
         setMessages((prev) => [...prev, botMessage]);
       } catch (err) {
         console.error(err);
-        const errorMessage = {
-          id: generateUUID(),
-          role: 'assistant',
-          content: '⚠️ Something went wrong. Please try again later.'
-        };
-        setMessages((prev) => [...prev, errorMessage]);
+        setMessages((prev) => [
+          ...prev,
+          { id: generateUUID(), role: 'assistant', content: '⚠️ Something went wrong. Please try again later.' }
+        ]);
       } finally {
         setLoading(false);
       }
@@ -178,16 +185,24 @@ function ChatWindow({ onMinimize, className = '' }) {
       <div ref={scrollRef} className="bot-messages flex-1 space-y-2 overflow-y-auto px-3 py-3">
         {messages.map((m) => (
           <div key={m.id} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-            <div
-              className={
-                m.role === 'user'
-                  ? 'user-message max-w-[260px] rounded-lg bg-blue-600 px-3 sm:px-1 py-2 text-sm text-white shadow'
-                  : 'bot-message max-w-[260px] rounded-lg bg-gray-100 px-3 sm:px-1 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100'
-              }
-              style={{ width: 'fit-content', maxWidth: '100%' }}
-            >
-              {m.content}
-            </div>
+            {m.role === 'assistant' && m.isHtml ? (
+              <div
+                className="bot-message max-w-[260px] rounded-lg bg-gray-100 px-3 sm:px-1 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100"
+                style={{ width: 'fit-content', maxWidth: '100%' }}
+                dangerouslySetInnerHTML={{ __html: m.content }}
+              />
+            ) : (
+              <div
+                className={
+                  m.role === 'user'
+                    ? 'user-message max-w-[260px] rounded-lg bg-blue-600 px-3 sm:px-1 py-2 text-sm text-white shadow'
+                    : 'bot-message max-w-[260px] rounded-lg bg-gray-100 px-3 sm:px-1 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100 whitespace-pre-line'
+                }
+                style={{ width: 'fit-content', maxWidth: '100%' }}
+              >
+                {m.content}
+              </div>
+            )}
           </div>
         ))}
         {loading && (
