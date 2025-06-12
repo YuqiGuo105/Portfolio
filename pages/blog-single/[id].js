@@ -11,6 +11,25 @@ const BlogSingle = () => {
   const router = useRouter();
   const {id} = router.query;
 
+  // Log click events for analytics
+  const recordClick = async (clickEvent, targetUrl) => {
+    const localTime = new Date().toISOString();
+    const pageUrl   = targetUrl || window.location.href;
+    try {
+      await fetch('/api/click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clickEvent, targetUrl: pageUrl, localTime })
+      });
+    } catch (err) {
+      console.error("Error logging click event:", err);
+    }
+  };
+
+  useEffect(() => {
+    recordClick('page-load');
+  }, []);
+
   useEffect(() => {
     if (!id) return; // Avoid fetching if the id isn't available yet
 
@@ -51,7 +70,11 @@ const BlogSingle = () => {
               <div className="m-titles">
                 <h1 className="m-title">{blog.title}</h1>
                 <div className="m-category">
-                  <a href="#" rel="category tag">
+                  <a
+                    href="#"
+                    rel="category tag"
+                    
+                  >
                     {blog.category}
                   </a>{" "}
                   / {blog.date}
@@ -81,7 +104,10 @@ const BlogSingle = () => {
                     {blog.tags.split(',').map((tag, index) => (
                       // Assuming you want to simply display the tags without linking to a specific URL
                       // If you have a tagging system where each tag has a specific URL, adjust the href accordingly
-                      <a href="#" key={index}>
+                      <a
+                        href="#"
+                        key={index}
+                      >
                         {tag.trim()} {/* Trim to remove any potential whitespace */}
                         {index < blog.tags.split(',').length - 1 ? '' : ''}
                       </a>
