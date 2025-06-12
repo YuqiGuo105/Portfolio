@@ -507,7 +507,6 @@ const Index = () => {
                         <Link href={`/blog-single/${blog.id}`} legacyBehavior>
                           <a
                             className="lnk"
-                            onClick={() => recordClick("blog-readmore", `/blog-single/${blog.id}`)}
                           >
                             Read more
                           </a>
@@ -569,7 +568,7 @@ const Index = () => {
                 <div key={id} className="archive-item">
                   <div className="image">
                     <Link href={href} legacyBehavior>
-                      <a onClick={() => recordClick("life-blog-item", href)}>
+                      <a >
                         <img src={image_url} alt={title}/>
                       </a>
                     </Link>
@@ -584,7 +583,7 @@ const Index = () => {
 
                     <h3 className="title">
                       <Link href={href} legacyBehavior>
-                        <a onClick={() => recordClick("life-blog", href)}>
+                        <a >
                           {title}
                           {require_login && " (login required)"}
                         </a>
@@ -598,7 +597,7 @@ const Index = () => {
                         <Link href={href} legacyBehavior>
                           <a
                             className="lnk"
-                            onClick={() => recordClick("life-blog", href)}
+                            
                           >
                             {require_login ? "Log in to read" : "Read more"}
                           </a>
