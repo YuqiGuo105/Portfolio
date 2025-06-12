@@ -11,6 +11,25 @@ const WorkSingle = () => {
   const router = useRouter();
   const { id } = router.query;
 
+  // Helper to log click events for analytics
+  const recordClick = async (clickEvent, targetUrl) => {
+    const localTime = new Date().toISOString();
+    const pageUrl   = targetUrl || window.location.href;
+    try {
+      await fetch('/api/click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clickEvent, targetUrl: pageUrl, localTime })
+      });
+    } catch (err) {
+      console.error("Error logging click event:", err);
+    }
+  };
+
+  useEffect(() => {
+    recordClick('page-load');
+  }, []);
+
   useEffect(() => {
     const fetchProject = async () => {
       if (!id) return; // Don't proceed if ID is not yet available
@@ -95,7 +114,12 @@ const WorkSingle = () => {
                   <span>Link</span>
                   <strong>
                     <Link href={project.URL}>
-                      <a target="_blank" rel="noopener noreferrer">Source Code</a>
+                      <a
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Source Code
+                      </a>
                     </Link>
                   </strong>
                 </div>
