@@ -66,7 +66,7 @@ const Index = () => {
       const { data: life, error: lifeErr } = await supabase
         .from("life_blogs")
         .select("id, title, image_url, category, published_at, description, require_login")
-        .order("published_at", { ascending: false });
+        .order("created_at", { ascending: true });
       if (lifeErr) return setError(lifeErr.message);
       setLifeBlogs(life);
 
@@ -548,7 +548,7 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="blog-items grid gap-8 lg:grid-cols-3">
+          <div className="blog-items grid gap-16 lg:grid-cols-3">
             {lifeBlogs.slice(0, 3).map(blog => {
               const {
                 id,
