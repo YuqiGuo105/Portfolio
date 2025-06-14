@@ -3,6 +3,7 @@
 import { createPortal } from 'react-dom'
 import { useState, useEffect, useRef, useCallback, Fragment, useMemo } from 'react'
 import { Bot, Minus, ArrowUpRight, Loader2 } from 'lucide-react'
+import { supabase } from '../supabase/supabaseClient'
 
 /* ───────── minimal sanitizer ───────── */
 const sanitizeHtml = (html) =>
@@ -146,6 +147,12 @@ function ChatWindow({ onMinimize, className = '' }) {
 
         const botMessage = { id: generateUUID(), role: 'assistant', content: safe, isHtml };
         setMessages((prev) => [...prev, botMessage]);
+
+        try {
+          await supabase.from('Chat').insert([{ question: text, answer: safe }]);
+        } catch (dbErr) {
+          console.error('Supabase insert error:', dbErr);
+        }
       } catch (err) {
         console.error(err);
         setMessages((prev) => [
