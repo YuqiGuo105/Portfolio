@@ -235,13 +235,13 @@ function ChatWindow({ onMinimize, className = '' }) {
       </div>
 
       {/* input */}
-      <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-2 dark:border-gray-700 dark:bg-gray-800/60">
+      <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-2">
         <div className="bot-actions flex items-center gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message..."
-            className="bot-input peer h-10 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 dark:text-gray-100 dark:placeholder-gray-100"
+            className="bot-input peer h-10 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm placeholder-gray-400 outline-none transition focus:border-blue-500"
           />
           <button
             type="submit"

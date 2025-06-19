@@ -102,6 +102,10 @@
   .bot-input {
     display: flex;
     flex: 1;
+    color: #111827;
+  }
+  .bot-input::placeholder {
+    color: #6b7280;
   }
   .user-message {
     max-width: 260px;
@@ -172,10 +176,10 @@
     color: #f3f4f6;
   }
   body.dark-skin .bot-input {
-    color: #f3f4f6;
+    color: #f3f4f6 !important;
   }
   body.dark-skin .bot-input::placeholder {
-    color: #9ca3af;
+    color: #9ca3af !important;
   }
   body.dark-skin .launch-button {
     background: #111827;
