@@ -180,7 +180,7 @@ function ChatWindow({ onMinimize, className = '' }) {
   );
 
   return (
-    <div className="bot-container relative mb-6 flex flex-col h-[80vh] w-full max-w-full sm:max-w-full md:w-[480px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:bg-gray-900 dark:ring-gray-700 sm:px-0">
+    <div className="bot-container relative mb-6 flex flex-col h-[80vh] w-full max-w-full sm:max-w-full md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:bg-gray-900 dark:ring-gray-700 sm:px-0">
       {/* header */}
       <header className="bot-header flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700">
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-100">
@@ -260,9 +260,16 @@ function ChatWindow({ onMinimize, className = '' }) {
  * LauncherButton – minimized state
  * ===========================================================*/
 function LauncherButton({ onOpen }) {
+  const [animating, setAnimating] = useState(true)
+
   useEffect(() => {
     const root = ensureRoot()
     root.style.pointerEvents = 'auto'
+  }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setAnimating(false), 3000)
+    return () => clearTimeout(timer)
   }, [])
 
   return (
@@ -275,7 +282,7 @@ function LauncherButton({ onOpen }) {
         <img
           src="/assets/images/chatPot.png"
           alt="Chat Bot"
-          className="w-8 h-8 object-contain pot-image"
+          className={`w-8 h-8 object-contain pot-image ${animating ? 'shake' : ''}`}
         />
         <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-gray-900"/>
       </span>

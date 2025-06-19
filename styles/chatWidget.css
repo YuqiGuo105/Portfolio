@@ -11,8 +11,8 @@
 
   @media (min-width: 768px) {
     .bot-contain {
-      width: 480px;
-      max-width: 480px;
+      width: 520px;
+      max-width: 520px;
     }
   }
   .launch-button {
@@ -65,8 +65,8 @@
 
   @media (min-width: 768px) {
     .bot-container {
-      width: 480px;
-      max-width: 480px;
+      width: 520px;
+      max-width: 520px;
     }
   }
   .bot-header {
@@ -201,4 +201,17 @@
   body.dark-skin .bot-container form {
     background-color: #1f2937;
     border-color: #374151;
+  }
+
+  .pot-image.shake {
+    animation: pot-shake 3s ease-in-out;
+  }
+
+  @keyframes pot-shake {
+    0% { transform: rotate(0deg); }
+    20% { transform: rotate(15deg); }
+    40% { transform: rotate(-10deg); }
+    60% { transform: rotate(15deg); }
+    80% { transform: rotate(-10deg); }
+    100% { transform: rotate(0deg); }
   }
