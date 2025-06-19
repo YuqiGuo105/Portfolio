@@ -194,3 +194,7 @@
   body.dark-skin .typing .dot {
     background-color: #d1d5db;
   }
+  body.dark-skin .bot-container form {
+    background-color: #1f2937;
+    border-color: #374151;
+  }
