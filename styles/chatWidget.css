@@ -129,3 +129,68 @@
       color: #f3f4f6;
     }
   }
+
+  /* Typing indicator */
+  .typing {
+    display: flex;
+    gap: 4px;
+  }
+  .typing .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #9ca3af;
+    animation: typing-bounce 1s infinite;
+  }
+  .typing .dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  .typing .dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+  @keyframes typing-bounce {
+    0%, 80%, 100% {
+      opacity: 0;
+      transform: translateY(0);
+    }
+    40% {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+  }
+
+  /* Dark mode overrides for body.dark-skin */
+  body.dark-skin .bot-container {
+    background-color: #111827;
+    border-color: #374151;
+  }
+  body.dark-skin .bot-header {
+    border-color: #374151;
+  }
+  body.dark-skin .bot-message {
+    background-color: #1f2937;
+    color: #f3f4f6;
+  }
+  body.dark-skin .bot-input {
+    color: #f3f4f6;
+  }
+  body.dark-skin .bot-input::placeholder {
+    color: #9ca3af;
+  }
+  body.dark-skin .launch-button {
+    background: #111827;
+    border-color: #374151;
+  }
+  body.dark-skin .launch-button:hover {
+    background: #374151;
+    border-color: #374151;
+  }
+  body.dark-skin .bot-actions .send-button {
+    background-color: #2563eb;
+  }
+  body.dark-skin .bot-actions .send-button:hover {
+    background-color: #1d4ed8;
+  }
+  body.dark-skin .typing .dot {
+    background-color: #d1d5db;
+  }
