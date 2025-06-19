@@ -40,6 +40,19 @@ const ensureRoot = () => {
 }
 
 /* -------------------------------------------------
+ * Typing animation component
+ * ------------------------------------------------*/
+function TypingIndicator() {
+  return (
+    <div className="typing">
+      <span className="dot" />
+      <span className="dot" />
+      <span className="dot" />
+    </div>
+  )
+}
+
+/* -------------------------------------------------
  * Overlay – darkened backdrop behind the chat window
  * ------------------------------------------------*/
 function Overlay({ onClick }) {
@@ -213,8 +226,10 @@ function ChatWindow({ onMinimize, className = '' }) {
           </div>
         ))}
         {loading && (
-          <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
-            <Loader2 className="h-4 w-4 animate-spin"/> Assistant is typing…
+          <div className="flex justify-start">
+            <div className="bot-message max-w-[260px] rounded-lg bg-gray-100 px-3 sm:px-1 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100" style={{ width: 'fit-content', maxWidth: '100%' }}>
+              <TypingIndicator />
+            </div>
           </div>
         )}
       </div>
