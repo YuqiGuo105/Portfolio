@@ -14,7 +14,7 @@ const ProjectIsotop = () => {
       const {data, error} = await supabase
         .from('Projects')
         .select('*')
-        .order('num', {ascending: true});
+        .order('num', {ascending: false});
 
       if (!error) {
         setProjects(data);
@@ -62,19 +62,6 @@ const ProjectIsotop = () => {
   // Determine active button class
   const activeBtn = (value) => (value === filterKey ? "active" : "");
 
-  // Helper to record click events (you can also move this into a shared utils file)
-  const recordClick = async (clickEvent, targetUrl) => {
-    const localTime = new Date().toISOString();
-    try {
-      await fetch('/api/click', {      // or '/click' if that's your setup
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clickEvent, targetUrl, localTime }),
-      });
-    } catch (err) {
-      console.error('Error logging click event:', err);
-    }
-  };
 
   return (
     <Fragment>
@@ -91,14 +78,20 @@ const ProjectIsotop = () => {
         <div className="works-items works-list-items row">
           {projects.map((project) => {
             const targetUrl = `/work-single/${project.id}`;
+            const categoryClasses = project.category
+              ? project.category
+                  .split(',')
+                  .map((cat) => cat.trim().replace(/\s+/g, '-'))
+                  .join(' ')
+              : '';
             return (
               <div
                 key={project.id}
-                className={`works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 ${project.category}`}
+                className={`works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 ${categoryClasses}`}
               >
                 <div className="works-item">
                   <Link href={targetUrl} passHref>
-                    <a onClick={() => recordClick('project-item', targetUrl)}>
+                    <a>
                       <span className="image">
                         <span className="img">
                           <img src={project.image_url} alt={project.title}/>

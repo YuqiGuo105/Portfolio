@@ -200,14 +200,6 @@ const Index = () => {
                   <a
                     target="_blank"
                     rel="noreferrer"
-                    href="https://www.linkedin.com/in/yuqi-g-185957355/"
-                    onClick={() => recordClick("social-link", "https://www.linkedin.com/in/yuqi-g-185957355/")}
-                  >
-                    <i aria-hidden="true" className="fab fa-linkedin"/>
-                  </a>
-                  <a
-                    target="_blank"
-                    rel="noreferrer"
                     href="https://github.com/YuqiGuo105"
                     onClick={() => recordClick("social-link", "https://github.com/YuqiGuo105")}
                   >
