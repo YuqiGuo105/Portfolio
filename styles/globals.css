@@ -195,3 +195,62 @@ body.dark-skin .leetcode-icon-bottom.custom-leetcode-icon {
     color: red;
     opacity: 1;
 }
+
+/***********************************************************
+ * Avatar halo & modal styles
+ ***********************************************************/
+.avatar-ring-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.avatar-ring-wrapper img {
+    display: block;
+    width: 100%;
+    border-radius: 50%;
+}
+
+.avatar-ring-wrapper::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: -6px;
+    right: -6px;
+    bottom: -6px;
+    border-radius: 50%;
+    background: conic-gradient(#f09433, #e6683c, #dc2743, #cc2366, #e6683c, #f09433);
+    animation: avatar-halo-spin 4s linear infinite;
+    z-index: -1;
+}
+
+@keyframes avatar-halo-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.avatar-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.6);
+    z-index: 1000;
+}
+
+.avatar-modal-content {
+    position: relative;
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+.avatar-modal-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+}

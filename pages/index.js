@@ -46,6 +46,7 @@ const Index = () => {
   const [companiesCount, setCompaniesCount] = useState(0);
   const [lifeBlogs, setLifeBlogs] = useState([]);
   const [loggedIn, setLoggedIn]     = useState(false);
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -147,6 +148,20 @@ const Index = () => {
 
   return (
     <Layout>
+      {avatarModalOpen && (
+        <div className="avatar-modal" onClick={() => setAvatarModalOpen(false)}>
+          <div className="avatar-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="avatar-modal-close" onClick={() => setAvatarModalOpen(false)}>
+              ×
+            </button>
+            <img
+              src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/avator.png"
+              alt="avatar"
+              style={{ width: "100%" }}
+            />
+          </div>
+        </div>
+      )}
       <section className="section section-started">
         <div className="container">
           {/* Hero Started */}
@@ -154,11 +169,16 @@ const Index = () => {
             <div
               className="slide"
             >
-              <img
-                src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/avator.png"
-                alt="avatar"
-                style={{width: "90%"}}
-              />
+              <div
+                className="avatar-ring-wrapper"
+                style={{ width: "90%" }}
+                onClick={() => setAvatarModalOpen(true)}
+              >
+                <img
+                  src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/avator.png"
+                  alt="avatar"
+                />
+              </div>
 
               <span className="circle circle-1">
 
