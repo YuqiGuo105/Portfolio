@@ -2,16 +2,18 @@ import Link from "next/link";
 import Layout from "../src/layout/Layout";
 import React, {useState, useEffect} from 'react';
 import {supabase} from '../src/supabase/supabaseClient'; // Ensure you have this file set up
+import { useTranslation } from '../src/context/TranslationContext';
 
 // Pagination Component
 const Pagination = ({totalItems, itemsPerPage, currentPage, onPageChange}) => {
+    const { t } = useTranslation();
     const totalPages = Math.ceil(totalItems / itemsPerPage);
 
     return (
         <div className="pager">
             {currentPage > 1 && (
                 <a className="prev page-numbers" href="#" onClick={() => onPageChange(currentPage - 1)}>
-                    <i className="icon-arrow"/> Prev
+                    <i className="icon-arrow"/> {t('prev')}
                 </a>
             )}
             {Array.from({length: totalPages}, (_, i) => i + 1).map(page => (
@@ -25,7 +27,7 @@ const Pagination = ({totalItems, itemsPerPage, currentPage, onPageChange}) => {
             ))}
             {currentPage < totalPages && (
                 <a className="next page-numbers" href="#" onClick={() => onPageChange(currentPage + 1)}>
-                    Next <i className="icon-arrow"/>
+                    {t('next')} <i className="icon-arrow"/>
                 </a>
             )}
         </div>
@@ -33,6 +35,7 @@ const Pagination = ({totalItems, itemsPerPage, currentPage, onPageChange}) => {
 };
 
 const Blog = () => {
+    const { t } = useTranslation();
     const [blogs, setBlogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
@@ -66,7 +69,7 @@ const Blog = () => {
         // Optionally, add logic to scroll to the top of the page or perform other actions
     };
 
-    if (loading) return <div>Loading...</div>;
+    if (loading) return <div>{t('loading')}</div>;
 
     return (
         <Layout>
@@ -76,11 +79,7 @@ const Blog = () => {
                         <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
                             {/* titles */}
                             <div className="h-titles">
-                                <h1
-                                    className="h-title"
-                                >
-                                    My Technical Blogs
-                                </h1>
+                                <h1 className="h-title">{t('my_technical_blogs')}</h1>
                             </div>
                         </div>
                     </div>
@@ -121,7 +120,7 @@ const Blog = () => {
                                     </p>
                                     <div className="readmore">
                                         <Link href={`/blog-single/${blog.id}`}>
-                                            <a className="lnk">Read more</a>
+                                            <a className="lnk">{t('read_more')}</a>
                                         </Link>
                                     </div>
                                 </div>

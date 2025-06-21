@@ -1,10 +1,12 @@
 import dynamic from "next/dynamic";
 import Layout from "../src/layout/Layout";
+import { useTranslation } from "../src/context/TranslationContext";
 
 const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
   ssr: false,
 });
 const WorksList = () => {
+  const { t } = useTranslation();
   return (
     <Layout>
       {/* Section Started Heading */}
@@ -14,11 +16,7 @@ const WorksList = () => {
             <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
               {/* titles */}
               <div className="h-titles">
-                <h1
-                  className="h-title"
-                >
-                  Projects (list)
-                </h1>
+                <h1 className="h-title">{t('projects_list')}</h1>
               </div>
             </div>
           </div>
@@ -34,10 +32,7 @@ const WorksList = () => {
               <div
                 className="text"
               >
-                <h6>
-                  A Collection of my favorites project I’ve designed recently.
-                  Feeling great while sharing here.
-                </h6>
+                <h6>{t('work_description')}</h6>
               </div>
             </div>
           </div>

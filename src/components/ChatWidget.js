@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useState, useEffect, useRef, useCallback, Fragment, useMemo } from 'react'
 import { Bot, Minus, ArrowUpRight, Loader2 } from 'lucide-react'
 import { supabase } from '../supabase/supabaseClient'
+import { useTranslation } from '../context/TranslationContext'
 
 /* ───────── minimal sanitizer ───────── */
 const sanitizeHtml = (html) =>
@@ -77,6 +78,7 @@ function generateUUID() {
 }
 
 function ChatWindow({ onMinimize, className = '' }) {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('chatMessages');
@@ -106,7 +108,7 @@ function ChatWindow({ onMinimize, className = '' }) {
       const welcomeMessage = {
         id: generateUUID(),
         role: 'assistant',
-        content: 'Hi! How can I help you today?'
+        content: t('chat_welcome')
       }
       setMessages([welcomeMessage])
     }
@@ -170,7 +172,7 @@ function ChatWindow({ onMinimize, className = '' }) {
         console.error(err);
         setMessages((prev) => [
           ...prev,
-          { id: generateUUID(), role: 'assistant', content: '⚠️ Something went wrong. Please try again later.' }
+          { id: generateUUID(), role: 'assistant', content: t('something_wrong') }
         ]);
       } finally {
         setLoading(false);
@@ -240,7 +242,7 @@ function ChatWindow({ onMinimize, className = '' }) {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
+            placeholder={t('type_your_message')}
             className="bot-input peer h-10 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm placeholder-gray-400 outline-none transition focus:border-blue-500"
           />
           <button

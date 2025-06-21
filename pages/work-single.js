@@ -3,6 +3,7 @@ import Layout from "../src/layout/Layout";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
+import { useTranslation } from "../src/context/TranslationContext";
 
 const WorkSingleIsotope = dynamic(
   () => import("../src/components/WorkSingleIsotope"),
@@ -13,6 +14,7 @@ const WorkSingleIsotope = dynamic(
 
 const WorkSingle = () => {
   const [videoToggle, setVideoToggle] = useState(false);
+  const { t } = useTranslation();
   return (
     <Layout extraWrapClass={"project-single"}>
       {/* Section Started Heading */}
@@ -40,15 +42,15 @@ const WorkSingle = () => {
             <div className="col-xs-12 col-sm-12 col-md-9 col-lg-9 vertical-line">
               <div className="m-details">
                 <div className="details-label">
-                  <span>Year</span>
+                  <span>{t('year')}</span>
                   <strong>2018</strong>
                 </div>
                 <div className="details-label">
-                  <span>Technology</span>
+                  <span>{t('technology')}</span>
                   <strong>Photoshop, XD</strong>
                 </div>
                 <div className="details-label">
-                  <span>Categories</span>
+                  <span>{t('categories') || 'Categories'}</span>
                   <strong>
                     Photography <br />
                     Branding
@@ -75,11 +77,7 @@ const WorkSingle = () => {
         <div className="container">
           <div className="row">
             <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
-              <div
-                className="p-title"
-              >
-                Project Goal
-              </div>
+              <div className="p-title">{t('project_goal') || 'Project Goal'}</div>
               <div
                 className="text"
               >
@@ -112,11 +110,7 @@ const WorkSingle = () => {
         <div className="container">
           <div className="row">
             <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
-              <div
-                className="p-title"
-              >
-                Project Goal
-              </div>
+              <div className="p-title">{t('project_goal') || 'Project Goal'}</div>
               <div
                 className="text"
               >
@@ -160,11 +154,7 @@ const WorkSingle = () => {
               <div className="h-titles h-navs">
                 <Link href="/work-single">
                   <a>
-                    <span
-                      className="nav-arrow"
-                    >
-                      Next Project
-                    </span>
+                    <span className="nav-arrow">{t('next_project')}</span>
                     <span
                       className="h-title"
                     >

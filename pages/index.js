@@ -4,6 +4,7 @@ import ContactForm from "../src/components/ContactForm";
 import TestimonialSlider from "../src/components/TestimonialSlider";
 import Layout from "../src/layout/Layout";
 import {useEffect, useState} from "react";
+import { useTranslation } from "../src/context/TranslationContext";
 import {supabase} from "../src/supabase/supabaseClient";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
@@ -39,6 +40,7 @@ const settings = {
 };
 
 const Index = () => {
+  const { t } = useTranslation();
   const [blogs, setBlogs] = useState([]);
   const [error, setError] = useState(null);
   const [yearsOfExperience, setYearsOfExperience] = useState(1);
@@ -122,8 +124,8 @@ const Index = () => {
     }
   };
 
-  if (error) return <div>Error loading blogs: {error}</div>;
-  if (!blogs.length) return <div>Loading...</div>;
+  if (error) return <div>{t('error_loading_blog_post')}</div>;
+  if (!blogs.length) return <div>{t('loading')}</div>;
 
   const settings = {
     infinite: true,
@@ -250,7 +252,7 @@ const Index = () => {
             <h2
               className="m-title"
             >
-              About Me
+              {t('about_me')}
             </h2>
           </div>
           <div className="row row-custom">
@@ -264,10 +266,7 @@ const Index = () => {
                     <i aria-hidden="true" className="far fa-gem"/>
                   </div>
                   <div className="num">{companiesCount}</div>
-                  <div className="title">
-                    Companies <br/>
-                    Worked
-                  </div>
+                  <div className="title">{t('companies_worked')}</div>
                 </div>
                 <div
                   className="numbers-item"
@@ -276,10 +275,7 @@ const Index = () => {
                     <i aria-hidden="true" className="far fa-check-circle"/>
                   </div>
                   <div className="num">2</div>
-                  <div className="title">
-                    Total <br/>
-                    Degrees
-                  </div>
+                  <div className="title">{t('total_degrees')}</div>
                 </div>
                 <div
                   className="numbers-item"
@@ -288,10 +284,7 @@ const Index = () => {
                     <i aria-hidden="true" className="far fa-smile"/>
                   </div>
                   <div className="num">{yearsOfExperience}</div>
-                  <div className="title">
-                    Year of <br/>
-                    Experience
-                  </div>
+                  <div className="title">{t('year_of_experience')}</div>
                 </div>
               </div>
             </div>
@@ -301,34 +294,17 @@ const Index = () => {
                 <div
                   className="text"
                 >
-                  <p>
-                    Hello, my name is Yuqi Guo, and I am currently a Software Development Engineer in the Global Banking
-                    and Markets division at <strong>Goldman Sachs</strong>,
-                    focusing on the Margins team. My role involves designing and developing robust backend systems to
-                    ensure accurate and efficient margin calculations,
-                    leveraging technologies like Spring Boot, REST APIs, and microservices.
-                  </p>
+                  <p>{t('profile_para1')}</p>
 
-                  <p>
-                    I hold a Master's degree in Computer Science from Syracuse University and a Bachelor's degree in
-                    Information and Computing Science from the University of Liverpool.
-                    With a strong foundation in backend development, <strong>microservice architecture</strong>,
-                    and <strong>system design</strong>, I have experience deploying scalable solutions using tools
-                    like <em>Docker</em>, <em>Kubernetes</em>, and <em>AWS</em>.
-                  </p>
+                  <p>{t('profile_para2')}</p>
 
-                  <p>
-                    My professional journey includes projects such as building microservices for scalable platforms,
-                    optimizing system performance, and maintaining secure, high-availability systems.
-                    I am passionate about solving complex problems, improving system efficiencies, and contributing to
-                    high-impact financial systems.
-                  </p>
+                  <p>{t('profile_para3')}</p>
 
                   <a
                     href="#contact-section"
                     className="btn"
                   >
-                    <span>Contact Me</span>
+                    <span>{t('contact_me')}</span>
                   </a>
                   <div
                     className="signature"
@@ -350,7 +326,7 @@ const Index = () => {
             <h2
               className="m-title"
             >
-              My Background
+              {t('my_background')}
             </h2>
           </div>
           <div className="row row-custom">
@@ -359,11 +335,7 @@ const Index = () => {
               {/* History */}
               <div className="history-left">
                 <div className="history-items">
-                  <div
-                    className="p-title"
-                  >
-                    EDUCATION
-                  </div>
+                  <div className="p-title">{t('education')}</div>
                   <div
                     className="history-item"
                   >
@@ -399,7 +371,7 @@ const Index = () => {
               {/* Experience Section */}
               <div className="history-right">
                 <div className="history-items">
-                  <div className="p-title">EXPERIENCE</div>
+                  <div className="p-title">{t('experience')}</div>
 
                   {experiences.map((experience) => (
                     <div key={experience.id} className="history-item">
@@ -424,7 +396,7 @@ const Index = () => {
                 href="https://github.com/YuqiGuo105/Resume/blob/main/Yuqi_Guo_Resume.pdf"
                 className="btn"
               >
-                <span>Download CV</span>
+                <span>{t('download_cv')}</span>
               </a>
             </div>
           </div>
@@ -438,20 +410,13 @@ const Index = () => {
         <div className="container">
           {/* Section Heading */}
           <div className="m-titles">
-            <h2
-              className="m-title"
-            >
-              My Projects
-            </h2>
+            <h2 className="m-title">{t('my_projects')}</h2>
           </div>
 
           <div
             className="text"
           >
-            <h4>
-              A Collection of my sample projects I’ve developed.
-              Feeling great while sharing here!
-            </h4>
+            <h4>{t('sample_projects_text')}</h4>
           </div>
 
           {/* Works */}
@@ -463,7 +428,7 @@ const Index = () => {
         <div className="container space-y-16">
           {/* My Technical Blogs */}
           <div className="m-titles">
-            <h2 className="m-title">My Technical Blogs</h2>
+            <h2 className="m-title">{t('my_technical_blogs')}</h2>
           </div>
 
           <div className="blog-items">
@@ -500,7 +465,7 @@ const Index = () => {
                           <a
                             className="lnk"
                           >
-                            Read more
+                            {t('read_more')}
                           </a>
                         </Link>
                       </div>
@@ -514,7 +479,7 @@ const Index = () => {
           <div className="blog-more-link">
             <Link href="/blog" legacyBehavior>
               <a className="btn">
-                <span>View Blogs</span>
+                <span>{t('view_blogs')}</span>
               </a>
             </Link>
           </div>
@@ -526,16 +491,14 @@ const Index = () => {
 
           {/* My Life */}
           <div className="m-titles">
-            <h2 className="m-title">My Vibrant Life</h2>
+            <h2 className="m-title">{t('my_vibrant_life')}</h2>
           </div>
 
           <div className="row row-custom">
             <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3"/>
             <div className="col-xs-12 col-sm-12 col-md-9 col-lg-9 vertical-line">
               <div className="text">
-                <p>
-                  Study Hard. Work Smart. Build the Future!
-                </p>
+                <p>{t('study_hard_msg')}</p>
               </div>
             </div>
           </div>
@@ -577,7 +540,7 @@ const Index = () => {
                       <Link href={href} legacyBehavior>
                         <a >
                           {title}
-                          {require_login && " (login required)"}
+                          {require_login && ` ${t('login_required')}`}
                         </a>
                       </Link>
                     </h3>
@@ -589,9 +552,9 @@ const Index = () => {
                         <Link href={href} legacyBehavior>
                           <a
                             className="lnk"
-                            
+
                           >
-                            {require_login ? "Log in to read" : "Read more"}
+                            {require_login ? t('log_in_to_read') : t('read_more')}
                           </a>
                         </Link>
                       </div>
@@ -605,7 +568,7 @@ const Index = () => {
           <div className="blog-more-link">
             <Link href="#" legacyBehavior>
               <a className="btn">
-                <span>View Blog</span>
+                <span>{t('view_blog')}</span>
               </a>
             </Link>
           </div>

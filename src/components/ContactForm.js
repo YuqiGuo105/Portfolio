@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useTranslation } from "../context/TranslationContext";
 
 const ContactForm = () => {
+  const { t } = useTranslation();
   const [contactData, setContactData] = useState({
     name: "",
     email: "",
@@ -44,7 +46,7 @@ const ContactForm = () => {
     <section className="section section-bg section-parallax section-parallax-2" id="contact-section">
       <div className="container">
         <div className="m-titles">
-          <h2 className="m-title">Contact Me</h2>
+          <h2 className="m-title">{t('contact_me')}</h2>
         </div>
         <div className="row row-custom">
           <div className="col-md-3 align-right">
@@ -67,27 +69,27 @@ const ContactForm = () => {
             <div className="contacts-form">
               <form onSubmit={onSubmit}>
                 <label>
-                  Name
+                  {t('name')}
                   <input type="text" name="name" value={name} onChange={onChange} placeholder="Enter your full name"/>
                   {error && !name && <span className="error">This field is required.</span>}
                 </label>
                 <label>
-                  Email Address
+                  {t('email_address')}
                   <input type="email" name="email" value={email} onChange={onChange}
                          placeholder="Enter your email address"/>
                   {error && !email && <span className="error">This field is required.</span>}
                 </label>
                 <label>
-                  Message
+                  {t('message')}
                   <textarea name="message" value={message} onChange={onChange} placeholder="Enter your message here"/>
                   {error && !message && <span className="error">This field is required.</span>}
                 </label>
-                <button type="submit" className="btn">Submit</button>
+                <button type="submit" className="btn">{t('submit')}</button>
               </form>
             </div>
             {submitted && (
               <div className="alert-success">
-                <p>Thanks, your message has been sent successfully.</p>
+                <p>{t('thanks_message')}</p>
               </div>
             )}
           </div>

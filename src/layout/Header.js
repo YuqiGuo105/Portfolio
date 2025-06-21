@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useTranslation } from "../context/TranslationContext";
 
 const Header = () => {
+  const { t, language, setLanguage } = useTranslation();
 
   const openMenu = event => {
     event.preventDefault();
@@ -152,6 +154,15 @@ const Header = () => {
                 </svg>
               </span>
             </a>
+            <select
+              className="lang-select"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              style={{ marginLeft: '10px' }}
+            >
+              <option value="en">EN</option>
+              <option value="zh">中文</option>
+            </select>
             {/* menu btn */}
             <a
             href="#"
@@ -177,7 +188,7 @@ const Header = () => {
                           href="/#about-section"
                           onClick={() => linkClick()}
                       >
-                        About
+                        {t('about')}
                       </a>
                     </li>
                     <li className="menu-item">
@@ -185,7 +196,7 @@ const Header = () => {
                           href="/#resume-section"
                           onClick={() => linkClick()}
                       >
-                        Resume
+                        {t('resume')}
                       </a>
                     </li>
                     <li className="menu-item">
@@ -193,7 +204,7 @@ const Header = () => {
                           href="/#works-section"
                           onClick={() => linkClick()}
                       >
-                        Works
+                        {t('works')}
                       </a>
                     </li>
 
@@ -202,7 +213,7 @@ const Header = () => {
                           href="/#Blog-section"
                           onClick={() => linkClick()}
                       >
-                        Blog
+                        {t('blog')}
                       </a>
                     </li>
 
@@ -211,7 +222,7 @@ const Header = () => {
                           href="/#contact-section"
                           onClick={() => linkClick()}
                       >
-                        Contact
+                        {t('contact')}
                       </a>
                     </li>
                     <li className="menu-item menu-item-has-children has-children">
@@ -232,7 +243,7 @@ const Header = () => {
                             <a
                                 onClick={() => linkClick()}
                             >
-                              Works (grid)
+                              {t('works_grid')}
                             </a>
                           </Link>
                         </li>
@@ -241,7 +252,7 @@ const Header = () => {
                             <a
                                 onClick={() => linkClick()}
                             >
-                              Works (list)
+                              {t('works_list')}
                             </a>
                           </Link>
                         </li>
@@ -250,7 +261,7 @@ const Header = () => {
                             <a
                                 onClick={() => linkClick()}
                             >
-                              Work Single Page
+                              {t('work_single_page')}
                             </a>
                           </Link>
                         </li>
@@ -259,7 +270,7 @@ const Header = () => {
                             <a
                                 onClick={() => linkClick()}
                             >
-                              Blog Posts
+                              {t('blog_posts')}
                             </a>
                           </Link>
                         </li>
@@ -268,7 +279,7 @@ const Header = () => {
                             <a
                                 onClick={() => linkClick()}
                             >
-                              Blog Single Post
+                              {t('blog_single_post')}
                             </a>
                           </Link>
                         </li>

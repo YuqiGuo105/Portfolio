@@ -3,8 +3,10 @@ import {supabase} from '../../src/supabase/supabaseClient';
 import {useRouter} from 'next/router';
 import {useState, useEffect} from 'react';
 import DOMPurify from 'dompurify';
+import { useTranslation } from '../../src/context/TranslationContext';
 
 const BlogSingle = () => {
+  const { t } = useTranslation();
   const [blog, setBlog] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -55,9 +57,9 @@ const BlogSingle = () => {
     fetchBlog();
   }, [id]); // This effect depends on 'id' and runs again if 'id' changes
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error loading blog post.</div>;
-  if (!blog) return <div>Blog post not found.</div>;
+  if (loading) return <div>{t('loading')}</div>;
+  if (error) return <div>{t('error_loading_blog_post')}</div>;
+  if (!blog) return <div>{t('blog_post_not_found')}</div>;
 
   return (
     <Layout extraWrapClass={"single-post"}>
@@ -100,7 +102,7 @@ const BlogSingle = () => {
 
                   {/* Tags Section */}
                   <span className="tags-links">
-                     <span>Tags:</span>
+                     <span>{t('tags')}</span>
                     {blog.tags.split(',').map((tag, index) => (
                       // Assuming you want to simply display the tags without linking to a specific URL
                       // If you have a tagging system where each tag has a specific URL, adjust the href accordingly

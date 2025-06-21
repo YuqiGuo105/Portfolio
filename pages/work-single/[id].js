@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../../src/supabase/supabaseClient';
 import DOMPurify from 'dompurify';
+import { useTranslation } from '../../src/context/TranslationContext';
 
 const WorkSingle = () => {
+  const { t } = useTranslation();
   const [project, setProject] = useState(null);
   const [nextProject, setNextProject] = useState(null);
   const router = useRouter();
@@ -74,7 +76,7 @@ const WorkSingle = () => {
     if (id) fetchNextProject();
   }, [id, project]);
 
-  if (!project) return <div>Loading...</div>;
+  if (!project) return <div>{t('loading')}</div>;
 
   return (
     <Layout extraWrapClass={"project-single"}>
@@ -103,15 +105,15 @@ const WorkSingle = () => {
             <div className="col-xs-12 col-sm-12 col-md-9 col-lg-9 vertical-line">
               <div className="m-details">
                 <div className="details-label">
-                  <span>Year</span>
+                  <span>{t('year')}</span>
                   <strong>{project.year}</strong>
                 </div>
                 <div className="details-label">
-                  <span>Technology</span>
+                  <span>{t('technology')}</span>
                   <strong>{project.technology}</strong>
                 </div>
                 <div className="details-label">
-                  <span>Link</span>
+                  <span>{t('link')}</span>
                   <strong>
                     <Link href={project.URL}>
                       <a
@@ -119,7 +121,7 @@ const WorkSingle = () => {
                         rel="noopener noreferrer"
                         
                       >
-                        Source Code
+                        {t('source_code')}
                       </a>
                     </Link>
                   </strong>
@@ -134,11 +136,7 @@ const WorkSingle = () => {
         <div className="container">
           <div className="row">
             <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
-              <div
-                className="p-title"
-              >
-                Project
-              </div>
+              <div className="p-title">{t('project')}</div>
               <div
                 className="text"
                 dangerouslySetInnerHTML={{__html: project.content}}
@@ -159,7 +157,7 @@ const WorkSingle = () => {
                   <div className="h-titles h-navs">
                     <Link href={`/work-single/${nextProject.id}`}>
                       <a>
-                        <span className="nav-arrow">Next Project</span>
+                        <span className="nav-arrow">{t('next_project')}</span>
                         <span className="h-title">{nextProject.title}</span>
                       </a>
                     </Link>

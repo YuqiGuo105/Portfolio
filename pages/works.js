@@ -1,12 +1,14 @@
 import Layout from "../src/layout/Layout";
 
 import dynamic from "next/dynamic";
+import { useTranslation } from "../src/context/TranslationContext";
 
 const WorkIsotope = dynamic(() => import("../src/components/WorkIsotope"), {
   ssr: false,
 });
 
 const works = () => {
+  const { t } = useTranslation();
   return (
     <Layout>
       {/* Section Started Heading */}
@@ -16,11 +18,7 @@ const works = () => {
             <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
               {/* titles */}
               <div className="h-titles">
-                <h1
-                  className="h-title"
-                >
-                  Projects (grid)
-                </h1>
+                <h1 className="h-title">{t('projects_grid')}</h1>
               </div>
             </div>
           </div>
@@ -36,10 +34,7 @@ const works = () => {
               <div
                 className="text"
               >
-                <h6>
-                  A Collection of my favorites project I’ve designed recently.
-                  Feeling great while sharing here.
-                </h6>
+                <h6>{t('work_description')}</h6>
               </div>
             </div>
           </div>
