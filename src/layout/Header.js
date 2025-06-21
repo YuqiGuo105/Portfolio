@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "../context/TranslationContext";
 
 const Header = () => {
-  const { t, language, setLanguage } = useTranslation();
+  const { t } = useTranslation();
 
   const openMenu = event => {
     event.preventDefault();
@@ -154,15 +154,6 @@ const Header = () => {
                 </svg>
               </span>
             </a>
-            <select
-              className="lang-select"
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              style={{ marginLeft: '10px' }}
-            >
-              <option value="en">EN</option>
-              <option value="zh">中文</option>
-            </select>
             {/* menu btn */}
             <a
             href="#"

@@ -340,9 +340,9 @@ const Index = () => {
                     className="history-item"
                   >
                     <div className="date">2022 - 2024</div>
-                    Syracuse University
-                    <div className="name">Syracuse University</div>
-                    <div className="subname">Master Of Science, Computer Science</div>
+                    {t('syracuse_university')}
+                    <div className="name">{t('syracuse_university')}</div>
+                    <div className="subname">{t('master_cs')}</div>
                     {/*<div className="subname"><br></br>*/}
                     {/*  <strong>Relevant Courses: </strong> Blockchain, Object-Oriented Design,*/}
                     {/*  Structure Programming and Formal Method, Data Mining*/}
@@ -352,19 +352,16 @@ const Index = () => {
                     className="history-item"
                   >
                     <div className="date">2017 - 2022</div>
-                    <div className="name">University of Liverpool</div>
-                    <div className="subname">Bachelors of Science, Computer Science</div>
+                    <div className="name">{t('university_of_liverpool')}</div>
+                    <div className="subname">{t('bachelor_cs')}</div>
                   </div>
 
                   <div
                     className="history-item"
                   >
-                    <div className="subname"><br></br>
-                      <strong>Relevant Courses: </strong> Data Structure, Algorithm, Operating
-                      System, Database, Computer Network, Human-Centric Interaction, Software
-                      Engineering, Mobile Computing, Computer Graphics, Machine Learning
-                    </div>
+                    <div className="subname"><br></br>{t('relevant_courses')}</div>
                   </div>
+
                 </div>
               </div>
 

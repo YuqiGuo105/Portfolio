@@ -70,19 +70,19 @@ const ContactForm = () => {
               <form onSubmit={onSubmit}>
                 <label>
                   {t('name')}
-                  <input type="text" name="name" value={name} onChange={onChange} placeholder="Enter your full name"/>
-                  {error && !name && <span className="error">This field is required.</span>}
+                  <input type="text" name="name" value={name} onChange={onChange} placeholder={t('enter_full_name')}/>
+                  {error && !name && <span className="error">{t('field_required')}</span>}
                 </label>
                 <label>
                   {t('email_address')}
                   <input type="email" name="email" value={email} onChange={onChange}
-                         placeholder="Enter your email address"/>
-                  {error && !email && <span className="error">This field is required.</span>}
+                         placeholder={t('enter_email')}/>
+                  {error && !email && <span className="error">{t('field_required')}</span>}
                 </label>
                 <label>
                   {t('message')}
-                  <textarea name="message" value={message} onChange={onChange} placeholder="Enter your message here"/>
-                  {error && !message && <span className="error">This field is required.</span>}
+                  <textarea name="message" value={message} onChange={onChange} placeholder={t('enter_message')}/>
+                  {error && !message && <span className="error">{t('field_required')}</span>}
                 </label>
                 <button type="submit" className="btn">{t('submit')}</button>
               </form>
