@@ -283,10 +283,10 @@ function LauncherButton({ onOpen }) {
         <Image
           src="/assets/images/chatPot.png"
           alt="Chat Bot"
-          width={32}
-          height={32}
+          width={48}
+          height={48}
           priority
-          className={`w-8 h-8 object-contain pot-image ${animating ? 'shake' : ''}`}
+          className={`w-12 h-12 object-contain pot-image ${animating ? 'shake' : ''}`}
         />
         <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-gray-900"/>
       </span>
