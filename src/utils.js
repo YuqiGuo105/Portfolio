@@ -32,11 +32,12 @@ export function initCursor() {
     });
   });
 
-  setInterval(move, 1000 / 60);
-  function move() {
-    cursor.x = lerp(cursor.x, mouseX, 0.1);
-    cursor.y = lerp(cursor.y, mouseY, 0.1);
+  requestAnimationFrame(animate);
+  function animate() {
+    cursor.x = lerp(cursor.x, mouseX, 0.2);
+    cursor.y = lerp(cursor.y, mouseY, 0.2);
     cursor.update();
+    requestAnimationFrame(animate);
   }
   function lerp(start, end, amt) {
     return (1 - amt) * start + amt * end;
