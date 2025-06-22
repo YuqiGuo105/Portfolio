@@ -283,13 +283,6 @@ const Header = () => {
         {/* social */}
         <div className="menu-social-links">
           <a
-              href="https://www.linkedin.com/in/yuqi-g-ab3380146"
-              target="blank"
-            title="dribbble"
-          >
-            <i className="fab fa-linkedin" />
-          </a>
-          <a
             href="https://github.com/YuqiGuo105"
             target="blank"
             title="twitter"

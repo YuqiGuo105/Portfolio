@@ -155,7 +155,7 @@ const Index = () => {
               className="slide"
             >
               <img
-                src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/avator.png"
+                src="/assets/images/profile_guyuqi.jpg"
                 alt="avatar"
                 style={{width: "90%"}}
               />
@@ -178,7 +178,7 @@ const Index = () => {
             </div>
             <div className="content">
               <div className="titles">
-                <div
+              <div
                   className="subtitle"
                 >
                   Full-Stack, Backend, Mobile Application Developer
@@ -197,14 +197,6 @@ const Index = () => {
                 </p>
 
                 <div className="social-links">
-                  <a
-                    target="_blank"
-                    rel="noreferrer"
-                    href="https://www.linkedin.com/in/yuqi-g-185957355/"
-                    onClick={() => recordClick("social-link", "https://www.linkedin.com/in/yuqi-g-185957355/")}
-                  >
-                    <i aria-hidden="true" className="fab fa-linkedin"/>
-                  </a>
                   <a
                     target="_blank"
                     rel="noreferrer"

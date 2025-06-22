@@ -3,6 +3,7 @@
 import { createPortal } from 'react-dom'
 import { useState, useEffect, useRef, useCallback, Fragment, useMemo } from 'react'
 import { Bot, Minus, ArrowUpRight, Loader2 } from 'lucide-react'
+import Image from 'next/image'
 import { supabase } from '../supabase/supabaseClient'
 
 /* ───────── minimal sanitizer ───────── */
@@ -180,7 +181,7 @@ function ChatWindow({ onMinimize, className = '' }) {
   );
 
   return (
-    <div className="bot-container relative mb-6 flex flex-col h-[80vh] w-full max-w-full sm:max-w-full md:w-[480px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:bg-gray-900 dark:ring-gray-700 sm:px-0">
+    <div className="bot-container relative mb-6 flex flex-col h-[80vh] w-full max-w-full sm:max-w-full md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:bg-gray-900 dark:ring-gray-700 sm:px-0">
       {/* header */}
       <header className="bot-header flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700">
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-100">
@@ -235,13 +236,13 @@ function ChatWindow({ onMinimize, className = '' }) {
       </div>
 
       {/* input */}
-      <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-2 dark:border-gray-700 dark:bg-gray-800/60">
+      <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-2">
         <div className="bot-actions flex items-center gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message..."
-            className="bot-input peer h-10 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 dark:text-gray-100 dark:placeholder-gray-100"
+            className="bot-input peer h-10 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm placeholder-gray-400 outline-none transition focus:border-blue-500"
           />
           <button
             type="submit"
@@ -260,9 +261,16 @@ function ChatWindow({ onMinimize, className = '' }) {
  * LauncherButton – minimized state
  * ===========================================================*/
 function LauncherButton({ onOpen }) {
+  const [animating, setAnimating] = useState(true)
+
   useEffect(() => {
     const root = ensureRoot()
     root.style.pointerEvents = 'auto'
+  }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setAnimating(false), 3000)
+    return () => clearTimeout(timer)
   }, [])
 
   return (
@@ -271,11 +279,17 @@ function LauncherButton({ onOpen }) {
       onClick={onOpen}
       className="relative flex items-center rounded-full mb-2 px-5 py-4 shadow-xl ring-1 ring-gray-200 backdrop-blur transition hover:shadow-2xl supports-[backdrop-filter]:bg-white/75 dark:bg-gray-900 dark:ring-gray-700 launch-button"
     >
-      <span className="relative flex h-15 w-15 items-center justify-center rounded-full bg-blue-600">
-        <img
+      <span
+        className="relative flex items-center justify-center rounded-full bg-blue-600"
+        style={{ width: 60, height: 60 }}
+      >
+        <Image
           src="/assets/images/chatPot.png"
           alt="Chat Bot"
-          className="w-8 h-8 object-contain pot-image"
+          width={48}
+          height={48}
+          priority
+          className={`object-contain pot-image ${animating ? 'shake' : ''}`}
         />
         <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-gray-900"/>
       </span>
