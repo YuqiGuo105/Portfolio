@@ -3,6 +3,7 @@
 import { createPortal } from 'react-dom'
 import { useState, useEffect, useRef, useCallback, Fragment, useMemo } from 'react'
 import { Bot, Minus, ArrowUpRight, Loader2 } from 'lucide-react'
+import Image from 'next/image'
 import { supabase } from '../supabase/supabaseClient'
 
 /* ───────── minimal sanitizer ───────── */
@@ -279,9 +280,12 @@ function LauncherButton({ onOpen }) {
       className="relative flex items-center rounded-full mb-2 px-5 py-4 shadow-xl ring-1 ring-gray-200 backdrop-blur transition hover:shadow-2xl supports-[backdrop-filter]:bg-white/75 dark:bg-gray-900 dark:ring-gray-700 launch-button"
     >
       <span className="relative flex h-15 w-15 items-center justify-center rounded-full bg-blue-600">
-        <img
+        <Image
           src="/assets/images/chatPot.png"
           alt="Chat Bot"
+          width={32}
+          height={32}
+          priority
           className={`w-8 h-8 object-contain pot-image ${animating ? 'shake' : ''}`}
         />
         <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-gray-900"/>
