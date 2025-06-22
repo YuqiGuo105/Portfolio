@@ -155,7 +155,7 @@ const Index = () => {
               className="slide"
             >
               <img
-                src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/avator.png"
+                src="/assets/images/profile_guyuqi.jpg"
                 alt="avatar"
                 style={{width: "90%"}}
               />
@@ -178,7 +178,7 @@ const Index = () => {
             </div>
             <div className="content">
               <div className="titles">
-                <div
+              <div
                   className="subtitle"
                 >
                   Full-Stack, Backend, Mobile Application Developer
