@@ -38,6 +38,7 @@
       height: 48px;
       width: 48px;
       margin-bottom: 0;
+      display: block;
     }
   }
   .launch-button:hover {
