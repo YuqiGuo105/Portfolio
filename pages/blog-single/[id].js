@@ -2,6 +2,7 @@ import Layout from "../../src/layout/Layout";
 import {supabase} from '../../src/supabase/supabaseClient';
 import {useRouter} from 'next/router';
 import {useState, useEffect} from 'react';
+import SeoHead from "../../src/components/SeoHead";
 import DOMPurify from 'dompurify';
 
 const BlogSingle = () => {
@@ -60,7 +61,9 @@ const BlogSingle = () => {
   if (!blog) return <div>Blog post not found.</div>;
 
   return (
-    <Layout extraWrapClass={"single-post"}>
+    <>
+      <SeoHead title={blog.title} description={blog.description} />
+      <Layout extraWrapClass={"single-post"}>
       {/* Section Started Heading */}
       <section className="section section-inner started-heading">
         <div className="container">
@@ -122,6 +125,7 @@ const BlogSingle = () => {
         </div>
       </section>
     </Layout>
+    </>
   );
 };
 export default BlogSingle;

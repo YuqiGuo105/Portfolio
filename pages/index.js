@@ -3,6 +3,7 @@ import Link from "next/link";
 import ContactForm from "../src/components/ContactForm";
 import TestimonialSlider from "../src/components/TestimonialSlider";
 import Layout from "../src/layout/Layout";
+import SeoHead from "../src/components/SeoHead";
 import {useEffect, useState} from "react";
 import {supabase} from "../src/supabase/supabaseClient";
 import Slider from "react-slick";
@@ -146,7 +147,9 @@ const Index = () => {
   };
 
   return (
-    <Layout>
+    <>
+      <SeoHead title="Yuqi Guo Portfolio" />
+      <Layout>
       <section className="section section-started">
         <div className="container">
           {/* Hero Started */}
@@ -625,6 +628,7 @@ const Index = () => {
 
       <ContactForm/>
     </Layout>
+    </>
   );
 };
 export default Index;
