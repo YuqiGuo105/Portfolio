@@ -6,6 +6,7 @@ import Layout from "../src/layout/Layout";
 import SeoHead from "../src/components/SeoHead";
 import {useEffect, useState} from "react";
 import {supabase} from "../src/supabase/supabaseClient";
+import LoginModal from "../src/components/LoginModal";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -47,6 +48,26 @@ const Index = () => {
   const [companiesCount, setCompaniesCount] = useState(0);
   const [lifeBlogs, setLifeBlogs] = useState([]);
   const [loggedIn, setLoggedIn]     = useState(false);
+  const [showLogin, setShowLogin]   = useState(false);
+  const [nextUrl, setNextUrl]       = useState('/');
+
+  // Check authentication status once on mount
+  useEffect(() => {
+    (async () => {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+      if (error) console.error('Session err:', error);
+      setLoggedIn(!!session);
+    })();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setLoggedIn(!!session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -555,15 +576,20 @@ const Index = () => {
                 require_login,
               } = blog;
 
-              const href = require_login
-                ? `/login?next=/life-blog/${id}`
-                : `/life-blog/${id}`;
+              const href = `/life-blog/${id}`;
+              const handleClick = (e) => {
+                if (require_login && !loggedIn) {
+                  e.preventDefault();
+                  setNextUrl(href);
+                  setShowLogin(true);
+                }
+              };
 
               return (
                 <div key={id} className="archive-item">
                   <div className="image">
                     <Link href={href} legacyBehavior>
-                      <a >
+                      <a onClick={handleClick}>
                         <img src={image_url} alt={title}/>
                       </a>
                     </Link>
@@ -578,7 +604,7 @@ const Index = () => {
 
                     <h3 className="title">
                       <Link href={href} legacyBehavior>
-                        <a >
+                        <a onClick={handleClick}>
                           {title}
                           {require_login && " (login required)"}
                         </a>
@@ -592,7 +618,7 @@ const Index = () => {
                         <Link href={href} legacyBehavior>
                           <a
                             className="lnk"
-                            
+                            onClick={handleClick}
                           >
                             {require_login ? "Log in to read" : "Read more"}
                           </a>
@@ -627,6 +653,11 @@ const Index = () => {
       </section>
 
       <ContactForm/>
+      <LoginModal
+        open={showLogin}
+        onClose={() => setShowLogin(false)}
+        nextUrl={nextUrl}
+      />
     </Layout>
     </>
   );

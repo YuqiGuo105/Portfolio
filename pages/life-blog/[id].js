@@ -62,7 +62,7 @@ const LifeBlog = () => {
 
       /* gate: requires login? */
       if (data.require_login && !loggedIn) {
-        router.replace(`/login?next=/life-blog/${id}`);
+        router.replace('/');
         return;
       }
 
