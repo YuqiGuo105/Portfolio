@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../supabase/supabaseClient';
 
@@ -7,6 +7,19 @@ const LoginModal = ({ open, onClose, nextUrl = '/' }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
+
+  const handleClose = () => {
+    setError(null);
+    onClose();
+  };
+
+  useEffect(() => {
+    const esc = (e) => {
+      if (e.key === 'Escape') handleClose();
+    };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, []);
 
   if (!open) return null;
 
@@ -19,15 +32,15 @@ const LoginModal = ({ open, onClose, nextUrl = '/' }) => {
       setEmail('');
       setPassword('');
       setError(null);
-      onClose();
+      handleClose();
       router.push(nextUrl);
     }
   };
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal">
-        <button className="close" onClick={onClose}>×</button>
+    <div className="modal-backdrop" onClick={handleClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <button className="close" onClick={handleClose}>×</button>
         <h2>Login</h2>
         {error && <p className="error">{error}</p>}
         <form onSubmit={handleSubmit}>
