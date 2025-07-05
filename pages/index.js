@@ -6,6 +6,8 @@ import Layout from "../src/layout/Layout";
 import SeoHead from "../src/components/SeoHead";
 import {useEffect, useState} from "react";
 import {supabase} from "../src/supabase/supabaseClient";
+import { useRouter } from "next/router";
+import AuthDialog from "../src/components/AuthDialog";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -47,6 +49,26 @@ const Index = () => {
   const [companiesCount, setCompaniesCount] = useState(0);
   const [lifeBlogs, setLifeBlogs] = useState([]);
   const [loggedIn, setLoggedIn]     = useState(false);
+  const [showAuth, setShowAuth]     = useState(false);
+  const [authNext, setAuthNext]     = useState("/");
+  const router = useRouter();
+
+  // Check auth state once and subscribe to changes
+  useEffect(() => {
+    let isMounted = true;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (isMounted) setLoggedIn(!!session);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setLoggedIn(!!session);
+    });
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -121,6 +143,12 @@ const Index = () => {
     } catch (err) {
       console.error("Error logging click event:", err);
     }
+  };
+
+  const handleLoginClick = (e, nextUrl) => {
+    e.preventDefault();
+    setAuthNext(nextUrl);
+    setShowAuth(true);
   };
 
   if (error) return <div>Error loading blogs: {error}</div>;
@@ -555,18 +583,24 @@ const Index = () => {
                 require_login,
               } = blog;
 
-              const href = require_login
-                ? `/login?next=/life-blog/${id}`
-                : `/life-blog/${id}`;
+              const href = `/life-blog/${id}`;
+
+              const needsLogin = require_login && !loggedIn;
 
               return (
                 <div key={id} className="archive-item">
                   <div className="image">
-                    <Link href={href} legacyBehavior>
-                      <a >
-                        <img src={image_url} alt={title}/>
+                    {needsLogin ? (
+                      <a href="#" onClick={(e) => handleLoginClick(e, href)}>
+                        <img src={image_url} alt={title} />
                       </a>
-                    </Link>
+                    ) : (
+                      <Link href={href} legacyBehavior>
+                        <a>
+                          <img src={image_url} alt={title} />
+                        </a>
+                      </Link>
+                    )}
                   </div>
 
                   <div className="desc">
@@ -577,26 +611,34 @@ const Index = () => {
                     </div>
 
                     <h3 className="title">
-                      <Link href={href} legacyBehavior>
-                        <a >
-                          {title}
-                          {require_login && " (login required)"}
+                      {needsLogin ? (
+                        <a href="#" onClick={(e) => handleLoginClick(e, href)}>
+                          {title} (login required)
                         </a>
-                      </Link>
+                      ) : (
+                        <Link href={href} legacyBehavior>
+                          <a>{title}</a>
+                        </Link>
+                      )}
                     </h3>
 
                     <div className="text">
                       <p>{description}</p>
 
                       <div className="readmore">
-                        <Link href={href} legacyBehavior>
+                        {needsLogin ? (
                           <a
+                            href="#"
                             className="lnk"
-                            
+                            onClick={(e) => handleLoginClick(e, href)}
                           >
-                            {require_login ? "Log in to read" : "Read more"}
+                            Log in to read
                           </a>
-                        </Link>
+                        ) : (
+                          <Link href={href} legacyBehavior>
+                            <a className="lnk">Read more</a>
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -628,6 +670,9 @@ const Index = () => {
 
       <ContactForm/>
     </Layout>
+    {showAuth && (
+      <AuthDialog next={authNext} onClose={() => setShowAuth(false)} />
+    )}
     </>
   );
 };
