@@ -53,6 +53,23 @@ const Index = () => {
   const [authNext, setAuthNext]     = useState("/");
   const router = useRouter();
 
+  // Check auth state once and subscribe to changes
+  useEffect(() => {
+    let isMounted = true;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (isMounted) setLoggedIn(!!session);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setLoggedIn(!!session);
+    });
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   useEffect(() => {
     const bootstrap = async () => {
       /* years of experience */
@@ -568,10 +585,12 @@ const Index = () => {
 
               const href = `/life-blog/${id}`;
 
+              const needsLogin = require_login && !loggedIn;
+
               return (
                 <div key={id} className="archive-item">
                   <div className="image">
-                    {require_login ? (
+                    {needsLogin ? (
                       <a href="#" onClick={(e) => handleLoginClick(e, href)}>
                         <img src={image_url} alt={title} />
                       </a>
@@ -592,7 +611,7 @@ const Index = () => {
                     </div>
 
                     <h3 className="title">
-                      {require_login ? (
+                      {needsLogin ? (
                         <a href="#" onClick={(e) => handleLoginClick(e, href)}>
                           {title} (login required)
                         </a>
@@ -607,7 +626,7 @@ const Index = () => {
                       <p>{description}</p>
 
                       <div className="readmore">
-                        {require_login ? (
+                        {needsLogin ? (
                           <a
                             href="#"
                             className="lnk"

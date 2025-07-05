@@ -28,6 +28,7 @@ export default function AuthDialog({ next = '/', onClose }) {
         password,
       });
       if (err) throw err;
+      console.log('Login successful');
       if (onClose) onClose();
       router.replace(next);
     } catch (err) {
