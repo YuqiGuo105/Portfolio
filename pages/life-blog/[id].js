@@ -10,7 +10,6 @@ const LifeBlog = () => {
   const [error, setError] = useState(null);
   const router = useRouter();
   const {id} = router.query;
-  const [loggedIn,  setLoggedIn]  = useState(false);
 
   // Log click events for analytics
   const recordClick = async (clickEvent, targetUrl) => {
@@ -31,17 +30,6 @@ const LifeBlog = () => {
     recordClick('page-load');
   }, []);
 
-  /* ────────── 1. one‑off session check ────────── */
-  useEffect(() => {
-    (async () => {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
-      if (error) console.error("Session err:", error);
-      setLoggedIn(!!session);
-    })();
-  }, []);
 
   /* ────────── 2. fetch post when id ready ────────── */
   useEffect(() => {
@@ -61,7 +49,8 @@ const LifeBlog = () => {
       }
 
       /* gate: requires login? */
-      if (data.require_login && !loggedIn) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (data.require_login && !session) {
         router.replace("/");
         return;
       }
@@ -73,7 +62,7 @@ const LifeBlog = () => {
     };
 
     fetchBlog();
-  }, [id, loggedIn, router]);
+  }, [id, router]);
 
   /* ────────── guard rails ────────── */
   if (loading) return <div>Loading…</div>;

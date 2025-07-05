@@ -12,11 +12,10 @@ export default function AuthDialog({ next = '/', onClose }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        if (onClose) onClose();
         router.replace(next);
       }
     });
-  }, [next, router, onClose]);
+  }, [next, router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -29,7 +28,6 @@ export default function AuthDialog({ next = '/', onClose }) {
       });
       if (err) throw err;
       console.log('Login successful');
-      if (onClose) onClose();
       router.replace(next);
     } catch (err) {
       setError(err.message);
