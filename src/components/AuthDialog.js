@@ -158,7 +158,15 @@ export default function AuthDialog({ next = '/', onClose }) {
           text-decoration: underline;
         }
 
+        /* basic link color inside dialog */
+        .auth-dialog a {
+          color: #0070f3;
+        }
+
         body.dark-skin .link-btn {
+          color: #60a5fa;
+        }
+        body.dark-skin .auth-dialog a {
           color: #60a5fa;
         }
 
@@ -193,6 +201,9 @@ export default function AuthDialog({ next = '/', onClose }) {
         }
         body.dark-skin .auth-form button {
           background: #2563eb;
+        }
+        body.dark-skin .auth-error {
+          color: #f87171;
         }
       `}</style>
     </div>

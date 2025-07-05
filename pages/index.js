@@ -572,7 +572,7 @@ const Index = () => {
           </div>
 
           <div className="blog-items grid gap-16 lg:grid-cols-3">
-            {lifeBlogs.slice(0, 2).map(blog => {
+            {lifeBlogs.slice(0, 3).map(blog => {
               const {
                 id,
                 title,
