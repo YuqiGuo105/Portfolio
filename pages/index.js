@@ -6,6 +6,8 @@ import Layout from "../src/layout/Layout";
 import SeoHead from "../src/components/SeoHead";
 import {useEffect, useState} from "react";
 import {supabase} from "../src/supabase/supabaseClient";
+import { useRouter } from "next/router";
+import AuthDialog from "../src/components/AuthDialog";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -47,6 +49,9 @@ const Index = () => {
   const [companiesCount, setCompaniesCount] = useState(0);
   const [lifeBlogs, setLifeBlogs] = useState([]);
   const [loggedIn, setLoggedIn]     = useState(false);
+  const [showAuth, setShowAuth]     = useState(false);
+  const [authNext, setAuthNext]     = useState("/");
+  const router = useRouter();
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -121,6 +126,12 @@ const Index = () => {
     } catch (err) {
       console.error("Error logging click event:", err);
     }
+  };
+
+  const handleLoginClick = (e, nextUrl) => {
+    e.preventDefault();
+    setAuthNext(nextUrl);
+    setShowAuth(true);
   };
 
   if (error) return <div>Error loading blogs: {error}</div>;
@@ -544,7 +555,7 @@ const Index = () => {
           </div>
 
           <div className="blog-items grid gap-16 lg:grid-cols-3">
-            {lifeBlogs.slice(0, 3).map(blog => {
+            {lifeBlogs.slice(0, 2).map(blog => {
               const {
                 id,
                 title,
@@ -555,9 +566,7 @@ const Index = () => {
                 require_login,
               } = blog;
 
-              const href = require_login
-                ? `/login?next=/life-blog/${id}`
-                : `/life-blog/${id}`;
+              const href = `/life-blog/${id}`;
 
               return (
                 <div key={id} className="archive-item">
@@ -592,7 +601,7 @@ const Index = () => {
                         <Link href={href} legacyBehavior>
                           <a
                             className="lnk"
-                            
+                            onClick={require_login ? (e) => handleLoginClick(e, href) : undefined}
                           >
                             {require_login ? "Log in to read" : "Read more"}
                           </a>
@@ -628,6 +637,9 @@ const Index = () => {
 
       <ContactForm/>
     </Layout>
+    {showAuth && (
+      <AuthDialog next={authNext} onClose={() => setShowAuth(false)} />
+    )}
     </>
   );
 };
