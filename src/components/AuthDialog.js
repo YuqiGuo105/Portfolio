@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import { supabase } from '../supabase/supabaseClient';
 
 export default function AuthDialog({ next = '/', onClose }) {
@@ -8,6 +9,7 @@ export default function AuthDialog({ next = '/', onClose }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState('login');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -45,27 +47,53 @@ export default function AuthDialog({ next = '/', onClose }) {
     >
       <div className="auth-dialog">
         <button className="close-btn" onClick={onClose} aria-label="Close">&times;</button>
-        <h2>Login</h2>
-        {error && <p className="auth-error">{error}</p>}
-        <form onSubmit={handleSubmit} className="auth-form">
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          <button type="submit" disabled={loading}>
-            Login
-          </button>
-        </form>
+        {mode === 'login' ? (
+          <>
+            <h2>Login</h2>
+            {error && <p className="auth-error">{error}</p>}
+            <form onSubmit={handleSubmit} className="auth-form">
+              <input
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button type="submit" disabled={loading}>
+                Login
+              </button>
+            </form>
+            <p className="auth-switch">
+              Don't have an account?{' '}
+              <button type="button" className="link-btn" onClick={() => setMode('register')}>
+                Register
+              </button>
+            </p>
+          </>
+        ) : (
+          <>
+            <h2>Register</h2>
+            <p>
+              Please use{' '}
+              <Link href="/#contact-section" legacyBehavior>
+                <a>the contact form</a>
+              </Link>{' '}
+              to write register request.
+            </p>
+            <p className="auth-switch">
+              <button type="button" className="link-btn" onClick={() => setMode('login')}>
+                Back to Login
+              </button>
+            </p>
+          </>
+        )}
       </div>
       <style jsx>{`
         .auth-overlay {
@@ -115,6 +143,23 @@ export default function AuthDialog({ next = '/', onClose }) {
         .auth-error {
           color: red;
           margin-bottom: 1rem;
+        }
+        .auth-switch {
+          margin-top: 1rem;
+          text-align: center;
+        }
+        .link-btn {
+          background: none;
+          border: none;
+          color: #0070f3;
+          cursor: pointer;
+          padding: 0;
+          font: inherit;
+          text-decoration: underline;
+        }
+
+        body.dark-skin .link-btn {
+          color: #60a5fa;
         }
 
         @keyframes fade-in {
