@@ -4,7 +4,6 @@ import { supabase } from '../supabase/supabaseClient';
 
 export default function AuthDialog({ next = '/', onClose }) {
   const router = useRouter();
-  const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,13 +23,11 @@ export default function AuthDialog({ next = '/', onClose }) {
     setLoading(true);
     setError('');
     try {
-      let res;
-      if (mode === 'login') {
-        res = await supabase.auth.signInWithPassword({ email, password });
-      } else {
-        res = await supabase.auth.signUp({ email, password });
-      }
-      if (res.error) throw res.error;
+      const { error: err } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (err) throw err;
       if (onClose) onClose();
       router.replace(next);
     } catch (err) {
@@ -43,7 +40,8 @@ export default function AuthDialog({ next = '/', onClose }) {
   return (
     <div className="auth-overlay" onClick={(e) => e.target.classList.contains('auth-overlay') && onClose?.() }>
       <div className="auth-dialog">
-        <h2>{mode === 'login' ? 'Login' : 'Register'}</h2>
+        <button className="close-btn" onClick={onClose} aria-label="Close">&times;</button>
+        <h2>Login</h2>
         {error && <p className="auth-error">{error}</p>}
         <form onSubmit={handleSubmit} className="auth-form">
           <input
@@ -61,15 +59,9 @@ export default function AuthDialog({ next = '/', onClose }) {
             required
           />
           <button type="submit" disabled={loading}>
-            {mode === 'login' ? 'Login' : 'Register'}
+            Login
           </button>
         </form>
-        <p className="auth-toggle">
-          {mode === 'login' ? 'Need an account?' : 'Already have an account?'}{' '}
-          <button type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
-            {mode === 'login' ? 'Register' : 'Login'}
-          </button>
-        </p>
       </div>
       <style jsx>{`
         .auth-overlay {
@@ -82,6 +74,7 @@ export default function AuthDialog({ next = '/', onClose }) {
           z-index: 9999;
         }
         .auth-dialog {
+          position: relative;
           background: #fff;
           padding: 2rem;
           border-radius: 8px;
@@ -95,6 +88,15 @@ export default function AuthDialog({ next = '/', onClose }) {
           border: 1px solid #ccc;
           border-radius: 4px;
         }
+        .close-btn {
+          position: absolute;
+          top: 0.5rem;
+          right: 0.5rem;
+          background: none;
+          border: none;
+          font-size: 1.25rem;
+          cursor: pointer;
+        }
         .auth-form button {
           width: 100%;
           padding: 0.5rem;
@@ -107,12 +109,6 @@ export default function AuthDialog({ next = '/', onClose }) {
         .auth-error {
           color: red;
           margin-bottom: 1rem;
-        }
-        .auth-toggle button {
-          background: none;
-          border: none;
-          color: #0070f3;
-          cursor: pointer;
         }
       `}</style>
     </div>

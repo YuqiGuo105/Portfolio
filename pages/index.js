@@ -571,11 +571,17 @@ const Index = () => {
               return (
                 <div key={id} className="archive-item">
                   <div className="image">
-                    <Link href={href} legacyBehavior>
-                      <a >
-                        <img src={image_url} alt={title}/>
+                    {require_login ? (
+                      <a href="#" onClick={(e) => handleLoginClick(e, href)}>
+                        <img src={image_url} alt={title} />
                       </a>
-                    </Link>
+                    ) : (
+                      <Link href={href} legacyBehavior>
+                        <a>
+                          <img src={image_url} alt={title} />
+                        </a>
+                      </Link>
+                    )}
                   </div>
 
                   <div className="desc">
@@ -586,26 +592,34 @@ const Index = () => {
                     </div>
 
                     <h3 className="title">
-                      <Link href={href} legacyBehavior>
-                        <a >
-                          {title}
-                          {require_login && " (login required)"}
+                      {require_login ? (
+                        <a href="#" onClick={(e) => handleLoginClick(e, href)}>
+                          {title} (login required)
                         </a>
-                      </Link>
+                      ) : (
+                        <Link href={href} legacyBehavior>
+                          <a>{title}</a>
+                        </Link>
+                      )}
                     </h3>
 
                     <div className="text">
                       <p>{description}</p>
 
                       <div className="readmore">
-                        <Link href={href} legacyBehavior>
+                        {require_login ? (
                           <a
+                            href="#"
                             className="lnk"
-                            onClick={require_login ? (e) => handleLoginClick(e, href) : undefined}
+                            onClick={(e) => handleLoginClick(e, href)}
                           >
-                            {require_login ? "Log in to read" : "Read more"}
+                            Log in to read
                           </a>
-                        </Link>
+                        ) : (
+                          <Link href={href} legacyBehavior>
+                            <a className="lnk">Read more</a>
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </div>
