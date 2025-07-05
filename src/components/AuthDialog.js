@@ -37,7 +37,12 @@ export default function AuthDialog({ next = '/', onClose }) {
   };
 
   return (
-    <div className="auth-overlay" onClick={(e) => e.target.classList.contains('auth-overlay') && onClose?.() }>
+    <div
+      className="auth-overlay"
+      onClick={(e) =>
+        e.target.classList.contains('auth-overlay') && onClose?.()
+      }
+    >
       <div className="auth-dialog">
         <button className="close-btn" onClick={onClose} aria-label="Close">&times;</button>
         <h2>Login</h2>
@@ -71,6 +76,7 @@ export default function AuthDialog({ next = '/', onClose }) {
           align-items: center;
           justify-content: center;
           z-index: 9999;
+          animation: fade-in 0.3s ease-out;
         }
         .auth-dialog {
           position: relative;
@@ -79,6 +85,7 @@ export default function AuthDialog({ next = '/', onClose }) {
           border-radius: 8px;
           width: 100%;
           max-width: 400px;
+          animation: slide-down 0.3s ease-out;
         }
         .auth-form input {
           width: 100%;
@@ -108,6 +115,39 @@ export default function AuthDialog({ next = '/', onClose }) {
         .auth-error {
           color: red;
           margin-bottom: 1rem;
+        }
+
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes slide-down {
+          from {
+            transform: translateY(-20px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+
+        /* dark mode overrides */
+        body.dark-skin .auth-dialog {
+          background: #1f2937;
+          color: #f3f4f6;
+        }
+        body.dark-skin .auth-form input {
+          background: #111827;
+          border-color: #374151;
+          color: #f3f4f6;
+        }
+        body.dark-skin .auth-form input::placeholder {
+          color: #9ca3af;
+        }
+        body.dark-skin .auth-form button {
+          background: #2563eb;
         }
       `}</style>
     </div>
