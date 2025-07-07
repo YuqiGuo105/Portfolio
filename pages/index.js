@@ -409,7 +409,8 @@ const Index = () => {
               fontSize: '1rem',
               textShadow: '0 1px 2px rgba(0,0,0,0.8)',
             }}>
-              Software Engineer @ Goldman Sachs
+              {stories[currentStoryIndex]?.description ||
+               'Software Engineer @ Goldman Sachs'}
             </div>
           </div>
 
