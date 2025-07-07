@@ -4,11 +4,14 @@ import ContactForm from "../src/components/ContactForm";
 import TestimonialSlider from "../src/components/TestimonialSlider";
 import Layout from "../src/layout/Layout";
 import SeoHead from "../src/components/SeoHead";
-import {useEffect, useState} from "react";
+import {useEffect, useState, useRef} from "react";
 import {supabase} from "../src/supabase/supabaseClient";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
+import Modal from "react-modal";
+
+Modal.setAppElement('#__next');
 const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
   ssr: false,
 });
@@ -39,6 +42,7 @@ const settings = {
   ]
 };
 
+
 const Index = () => {
   const [blogs, setBlogs] = useState([]);
   const [error, setError] = useState(null);
@@ -47,7 +51,13 @@ const Index = () => {
   const [companiesCount, setCompaniesCount] = useState(0);
   const [lifeBlogs, setLifeBlogs] = useState([]);
   const [loggedIn, setLoggedIn]     = useState(false);
-
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const timerRef = useRef(null);
+  const progressBarRef = useRef(null);
+  const [stories, setStories] = useState([]);
   useEffect(() => {
     const bootstrap = async () => {
       /* years of experience */
@@ -81,32 +91,69 @@ const Index = () => {
       setCompaniesCount(new Set(exp.map(e => e.name)).size);
     };
 
-    bootstrap();                 // run once
-  }, []);        // The empty array ensures this effect runs only once after the initial render
+    bootstrap();
+    if (!isProfileModalOpen || !isPlaying || stories.length === 0) return;
 
-  // Visitor tracking (only one endpoint call is needed)
-  useEffect(() => {
-    const trackVisitor = async () => {
-      // Capture the client's local time as an ISO string.
-      const localTime = new Date().toISOString();
-
-      try {
-        const response = await fetch('/api/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ localTime }),
-        });
-
-        // Check if the response is not OK (e.g. status !== 200)
-        if (!response.ok) {
-          console.error('Visitor tracking failed with status:', response.status);
+    timerRef.current = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 100) {
+          // 当前故事结束，切换到下一个
+          setCurrentStoryIndex(prevIndex => {
+            if (prevIndex >= stories.length - 1) {
+              clearInterval(timerRef.current);
+              setIsProfileModalOpen(false);
+              return 0;
+            }
+            return prevIndex + 1;
+          });
+          return 0;
         }
-      } catch (error) {
-        console.error('Error tracking visitor:', error);
+        return prev + 1;
+      });
+    }, 50);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
       }
     };
 
-    trackVisitor();
+  }, [isProfileModalOpen, isPlaying, currentStoryIndex, stories.length]);
+
+
+  useEffect(() => {
+    const fetchStories = async () => {
+      try {
+        const endpoint = process.env.NEXT_PUBLIC_STORIES_ENDPOINT;
+        const owner    = encodeURIComponent(process.env.NEXT_PUBLIC_STORIES_OWNER);
+        const res      = await fetch(`${endpoint}/records/owner/${owner}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        if (!data || data.length === 0) {
+          setStories([]);
+          setIsPlaying(false);
+          return;
+        }
+
+        // Normalise → {id, url, createdAt, description}
+        const formatted = data.map((item, idx) => ({
+          id: item.id ?? idx,
+          url: item.url,
+          description: item.description ?? "",
+          createdAt: (item.createdAt?.seconds ?? 0) * 1000,
+        }));
+
+        // Newest first (optional)
+        formatted.sort((a, b) => b.createdAt - a.createdAt);
+
+        setStories(formatted);
+      } catch (err) {
+        console.error("❌ Failed to fetch stories:", err);
+      }
+    };
+
+    fetchStories();
   }, []);
 
   // Helper to record a click event
@@ -133,6 +180,38 @@ const Index = () => {
     slidesToScroll: 1,
     autoplay: true,
   };
+  const openStoryModal = () => {
+    if (!stories.length) return;
+
+    setCurrentStoryIndex(0);
+    setProgress(0);
+    setIsPlaying(true);
+    setIsProfileModalOpen(true);
+  };
+
+  // 手动切换故事
+  const goToStory = (index) => {
+    setCurrentStoryIndex(index);
+    setProgress(0); // 只重置当前故事的进度
+  };
+
+  // 暂停/播放控制
+  const togglePlay = () => {
+    setIsPlaying(!isPlaying);
+  };
+
+  // 处理点击进度条
+  const handleProgressClick = (e) => {
+    if (!progressBarRef.current) return;
+
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const clickPosition = (e.clientX - rect.left) / rect.width;
+    const newIndex = Math.floor(clickPosition * stories.length);
+
+    if (newIndex >= 0 && newIndex < stories.length) {
+      goToStory(newIndex);
+    }
+  };
 
   /* ─────────────────────────── Settings ──────────────────────────── */
   const sliderSettings = {
@@ -150,34 +229,301 @@ const Index = () => {
     <>
       <SeoHead title="Yuqi Guo Portfolio" />
       <Layout>
+      <Modal
+        isOpen={isProfileModalOpen}
+        onRequestClose={() => {
+          setIsProfileModalOpen(false)
+          setCurrentStoryIndex(0);
+          setProgress(0);
+        }}
+        contentLabel="Instagram Stories"
+        style={{
+          overlay: {
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            zIndex: 1000,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            backdropFilter: 'blur(5px)',
+          },
+          content: {
+            position: 'relative',
+            inset: 'auto',
+            width: '100%',
+            maxWidth: '500px',
+            height: '90vh',
+            maxHeight: '800px',
+            padding: 0,
+            border: 'none',
+            background: 'none',
+            overflow: 'hidden',
+            borderRadius: '16px',
+          }
+        }}
+      >
+        <div className="story-container" style={{
+          position: 'relative',
+          width: '100%',
+          height: '100%',
+          background: 'black',
+        }}>
+          {/* 进度条 */}
+          <div
+            ref={progressBarRef}
+            style={{
+              display: 'flex',
+              position: 'absolute',
+              top: '16px',
+              left: '16px',
+              right: '16px',
+              height: '3px',
+              zIndex: 10,
+              gap: '4px',
+              cursor: 'pointer',
+            }}
+            onClick={handleProgressClick}
+          >
+            {stories.map((_, index) => {
+              // 计算当前分段的宽度：
+              // - 已播放的故事：100%
+              // - 当前故事：progress%
+              // - 未播放的故事：0%
+              const width =
+                index < currentStoryIndex ? 100 :
+                index === currentStoryIndex ? progress : 0;
+
+              return (
+                <div
+                  key={index}
+                  style={{
+                    flex: 1,
+                    height: '100%',
+                    background: 'rgba(255, 255, 255, 0.3)',
+                    borderRadius: '2px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${width}%`,
+                      height: '100%',
+                      background: 'white',
+                      transition: index === currentStoryIndex ? 'width 0.05s linear' : 'none',
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 关闭按钮 */}
+          <button
+            onClick={() => {
+              setIsProfileModalOpen(false)
+              setCurrentStoryIndex(0);
+              setProgress(0);
+            }}
+            style={{
+              position: 'absolute',
+              top: '24px',
+              right: '24px',
+              background: 'none',
+              border: 'none',
+              color: 'white',
+              fontSize: '28px',
+              cursor: 'pointer',
+              zIndex: 10,
+              padding: 0,
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0, 0, 0, 0.3)',
+            }}
+          >
+            ×
+          </button>
+
+          {/* 播放/暂停按钮 */}
+
+          {/* 当前故事索引显示 */}
+          <div style={{
+            position: 'absolute',
+            top: '24px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            color: 'white',
+            background: 'rgba(0, 0, 0, 0.3)',
+            padding: '4px 12px',
+            borderRadius: '12px',
+            zIndex: 10,
+            fontSize: '0.9rem',
+          }}>
+            {currentStoryIndex + 1} / {stories.length}
+          </div>
+
+          {/* 故事图片 */}
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}>
+            {stories[currentStoryIndex] && (
+              <img
+                src={stories[currentStoryIndex].url}
+                alt={`Story ${currentStoryIndex + 1}`}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                }}
+                onClick={() => goToStory((currentStoryIndex + 1) % stories.length)}
+              />
+            )}
+          </div>
+
+          {/* 底部用户信息 */}
+          <div style={{
+            position: 'absolute',
+            bottom: '30px',
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            padding: '0 20px',
+          }}>
+            <div style={{
+              color: 'white',
+              fontSize: '1.5rem',
+              fontWeight: '600',
+              marginBottom: '8px',
+              textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+            }}>
+              {stories[currentStoryIndex]?.description}
+            </div>
+            <div style={{
+              color: '#ddd',
+              fontSize: '1rem',
+              textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+            }}>
+              {stories[currentStoryIndex]
+                ? new Date(stories[currentStoryIndex].createdAt).toLocaleDateString()
+                : 'Today'}
+            </div>
+          </div>
+
+          {/* 导航箭头 */}
+          {currentStoryIndex > 0 && (
+            <button
+              onClick={() => goToStory(currentStoryIndex - 1)}
+              style={{
+                position: 'absolute',
+                left: '16px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                fontSize: '28px',
+                cursor: 'pointer',
+                zIndex: 10,
+                padding: 0,
+                width: '50px',
+                height: '50px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(0, 0, 0, 0.3)',
+              }}
+            >
+              ←
+            </button>
+          )}
+
+          {currentStoryIndex < stories.length - 1 && (
+            <button
+              onClick={() => goToStory(currentStoryIndex + 1)}
+              style={{
+                position: 'absolute',
+                right: '16px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                fontSize: '28px',
+                cursor: 'pointer',
+                zIndex: 10,
+                padding: 0,
+                width: '50px',
+                height: '50px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(0, 0, 0, 0.3)',
+              }}
+            >
+              →
+            </button>
+          )}
+        </div>
+      </Modal>
       <section className="section section-started">
         <div className="container">
           {/* Hero Started */}
           <div className="hero-started">
-            <div
-              className="slide"
+            <div className="slide" style={{
+              display: 'inline-block',
+              cursor: 'pointer',
+            }}
+                 onClick={openStoryModal}
             >
-              <img
-                src="/assets/images/profile_guyuqi.jpg"
-                alt="avatar"
-                style={{width: "90%"}}
-              />
+              <div style={{
+                display: 'inline-block',
+                position: 'relative',
+                width: '90%',
+                height: '100%',
+                transition: 'transform 0.3s ease',
+              }}>
+                {/* 渐变圆环 */}
+                <div style={{
+                  position: 'absolute',
+                  top: '-10px',
+                  left: '-10px',
+                  right: '-10px',
+                  bottom: '-10px',
+                  borderRadius: '380px',
+                  background: 'linear-gradient(5deg, #ff6b6b, #ff8e8e, #4ecdc4, #8deee0, #ffe66d, #ffef9f, #1a535c, #2b7a78, #ff6b6b)',
+                  zIndex: 0,
+                  animation: stories.length ? 'verticalGradient 8s linear infinite' : 'none',
+                  backgroundSize: '100% 400%',
+                }}></div>
 
-              <span className="circle circle-1">
+                <img
+                  src="/assets/images/profile_guyuqi.jpg"
+                  alt="avatar"
+                  style={{
+                    width: '100%',
+                    borderRadius: '380px',
+                    position: 'relative',
+                    zIndex: 1,
+                    border: '5px solid white',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
 
-              </span>
-              <span className="circle circle-2">
-
-              </span>
-              <span className="circle circle-3">
-
-              </span>
-              <span className="circle circle-4">
-
-              </span>
-              <span className="circle circle-5">
-
-              </span>
+              {/* 隐藏原有circle元素但保留在DOM中 */}
+              <span className="circle circle-1" style={{ display: 'none' }}></span>
+              <span className="circle circle-2" style={{ display: 'none' }}></span>
+              <span className="circle circle-3" style={{ display: 'none' }}></span>
+              <span className="circle circle-4" style={{ display: 'none' }}></span>
+              <span className="circle circle-5" style={{ display: 'none' }}></span>
             </div>
             <div className="content">
               <div className="titles">
@@ -592,7 +938,7 @@ const Index = () => {
                         <Link href={href} legacyBehavior>
                           <a
                             className="lnk"
-                            
+
                           >
                             {require_login ? "Log in to read" : "Read more"}
                           </a>

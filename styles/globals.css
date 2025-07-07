@@ -195,3 +195,59 @@ body.dark-skin .leetcode-icon-bottom.custom-leetcode-icon {
     color: red;
     opacity: 1;
 }
+
+@keyframes verticalGradient {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 0% 100%;
+  }
+  100% {
+    background-position: 0% 0%;
+  }
+}
+
+/* 模态框动画 */
+.ReactModal__Overlay {
+  opacity: 0;
+  transition: opacity 300ms ease-in-out;
+}
+
+.ReactModal__Overlay--after-open {
+  opacity: 1;
+}
+
+.ReactModal__Overlay--before-close {
+  opacity: 0;
+}
+
+.ReactModal__Content {
+  transform: scale(0.8);
+  transition: transform 300ms ease-in-out;
+}
+
+.ReactModal__Content--after-open {
+  transform: scale(1);
+}
+
+.ReactModal__Content--before-close {
+  transform: scale(0.8);
+}
+
+/* 头像悬停效果 */
+.slide:hover > div img {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+}
+
+/* 相机图标动画 */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.slide > div:last-child {
+  animation: pulse 2s infinite;
+}
