@@ -42,13 +42,6 @@ const settings = {
   ]
 };
 
-  const initialStories  = [
-  { id: 1, url: "/assets/images/profile_guyuqi.jpg" },
-  { id: 2, url: "https://firebasestorage.googleapis.com/v0/b/blog-d45ae.firebasestorage.app/o/uploads%2FtsJjFkNP36NBJOcXsZfBs1i1aQn1%2F1751068980268_IMG_0051.jpeg?alt=media&token=05ef9aa4-bc86-4ad8-8e95-ddc1dc01856a" },
-  // { id: 3, url: "/assets/images/tech-blog2.jpg" },
-  // { id: 4, url: "/assets/images/life-blog1.jpg" },
-  // { id: 5, url: "/assets/images/life-blog2.jpg" },
-];
 
 const Index = () => {
   const [blogs, setBlogs] = useState([]);
@@ -65,7 +58,6 @@ const Index = () => {
   const timerRef = useRef(null);
   const progressBarRef = useRef(null);
   const [stories, setStories] = useState([]);
-  const [imagesLoaded, setImagesLoaded] = useState(false);
   useEffect(() => {
     const bootstrap = async () => {
       /* years of experience */
@@ -100,36 +92,7 @@ const Index = () => {
     };
 
     bootstrap();
-    if (!isProfileModalOpen || !isPlaying) return;
-    // stories.forEach(story => {
-    //   const img = new Image();
-    //   img.src = story.url;
-    // });
-    let loadedCount = 0;
-    const totalImages = initialStories.length;
-
-    const checkAllLoaded = () => {
-      loadedCount++;
-      if (loadedCount === totalImages) {
-        setImagesLoaded(true);
-      }
-    };
-
-    // 为每个故事图片创建Image对象并加载
-    initialStories.forEach(story => {
-      const img = new Image();
-      img.onload = checkAllLoaded;
-      img.onerror = () => {
-        console.error(`Failed to load image: ${story.url}`);
-        checkAllLoaded(); // 即使加载失败也计数
-      };
-      img.src = story.url;
-    });
-
-    // 如果没有图片需要加载，直接设置为已加载
-    if (totalImages === 0) {
-      setImagesLoaded(true);
-    }
+    if (!isProfileModalOpen || !isPlaying || stories.length === 0) return;
 
     timerRef.current = setInterval(() => {
       setProgress(prev => {
@@ -154,32 +117,9 @@ const Index = () => {
         clearInterval(timerRef.current);
       }
     };
-  }, [isProfileModalOpen, isPlaying, currentStoryIndex, stories.length]);        // The empty array ensures this effect runs only once after the initial render
 
-  // Visitor tracking (only one endpoint call is needed)
-  // useEffect(() => {
-  //   const trackVisitor = async () => {
-  //     // Capture the client's local time as an ISO string.
-  //     const localTime = new Date().toISOString();
+  }, [isProfileModalOpen, isPlaying, currentStoryIndex, stories.length]);
 
-  //     try {
-  //       const response = await fetch('/api/track', {
-  //         method: 'POST',
-  //         headers: { 'Content-Type': 'application/json' },
-  //         body: JSON.stringify({ localTime }),
-  //       });
-
-  //       // Check if the response is not OK (e.g. status !== 200)
-  //       if (!response.ok) {
-  //         console.error('Visitor tracking failed with status:', response.status);
-  //       }
-  //     } catch (error) {
-  //       console.error('Error tracking visitor:', error);
-  //     }
-  //   };
-
-  //   trackVisitor();
-  // }, []);
 
   useEffect(() => {
     const fetchStories = async () => {
@@ -190,6 +130,11 @@ const Index = () => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const data = await res.json();
+        if (!data || data.length === 0) {
+          setStories([]);
+          setIsPlaying(false);
+          return;
+        }
 
         // Normalise → {id, url, createdAt, description}
         const formatted = data.map((item, idx) => ({
@@ -235,51 +180,8 @@ const Index = () => {
     slidesToScroll: 1,
     autoplay: true,
   };
-
-  // 处理快拍播放
-  // useEffect(() => {
-  //   if (!isProfileModalOpen || !isPlaying) return;
-
-  //   // 重置进度
-  //   setProgress(0);
-
-  //   // 设置计时器
-  //   timerRef.current = setInterval(() => {
-  //     setProgress(prev => {
-  //       if (prev >= 100) {
-  //         // 当前故事结束，切换到下一个
-  //         setCurrentStoryIndex(prevIndex => {
-  //           if (prevIndex >= stories.length - 1) {
-  //             // 所有故事结束，关闭模态框
-  //             clearInterval(timerRef.current);
-  //             setIsProfileModalOpen(false);
-  //             return 0;
-  //           }
-  //           return prevIndex + 1;
-  //         });
-  //         return 0;
-  //       }
-  //       return prev + 1;
-  //     });
-  //   }, 50); // 每50ms更新一次进度，5秒完成100%
-
-  //   return () => {
-  //     if (timerRef.current) {
-  //       clearInterval(timerRef.current);
-  //     }
-  //   };
-  // }, [isProfileModalOpen, isPlaying, currentStoryIndex, stories.length]);
-
-  // 打开模态框时重置状态
-  // const openStoryModal = () => {
-  //   setCurrentStoryIndex(0);
-  //   setProgress(0);
-  //   setIsPlaying(true);
-  //   setIsProfileModalOpen(true);
-  // };
   const openStoryModal = () => {
     if (!stories.length) return;
-    if (!imagesLoaded) return;
 
     setCurrentStoryIndex(0);
     setProgress(0);
@@ -445,30 +347,6 @@ const Index = () => {
           </button>
 
           {/* 播放/暂停按钮 */}
-          {/* <button
-            onClick={togglePlay}
-            style={{
-              position: 'absolute',
-              top: '24px',
-              left: '24px',
-              background: 'none',
-              border: 'none',
-              color: 'white',
-              fontSize: '20px',
-              cursor: 'pointer',
-              zIndex: 10,
-              padding: 0,
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(0, 0, 0, 0.3)',
-            }}
-          >
-            {isPlaying ? '⏸️' : '▶️'}
-          </button> */}
 
           {/* 当前故事索引显示 */}
           <div style={{
@@ -494,18 +372,18 @@ const Index = () => {
             justifyContent: 'center',
             alignItems: 'center',
           }}>
-            {stories.length > 0 && (
+            {stories[currentStoryIndex] && (
               <img
-                  src={stories[currentStoryIndex]?.url ?? ''}
-                  alt={`Story ${currentStoryIndex + 1}`}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                  }}
-                  onClick={() => goToStory((currentStoryIndex + 1) % stories.length)}
-                />
-              )}
+                src={stories[currentStoryIndex].url}
+                alt={`Story ${currentStoryIndex + 1}`}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                }}
+                onClick={() => goToStory((currentStoryIndex + 1) % stories.length)}
+              />
+            )}
           </div>
 
           {/* 底部用户信息 */}
@@ -620,7 +498,7 @@ const Index = () => {
                   borderRadius: '380px',
                   background: 'linear-gradient(5deg, #ff6b6b, #ff8e8e, #4ecdc4, #8deee0, #ffe66d, #ffef9f, #1a535c, #2b7a78, #ff6b6b)',
                   zIndex: 0,
-                  animation: 'verticalGradient 8s linear infinite',
+                  animation: stories.length ? 'verticalGradient 8s linear infinite' : 'none',
                   backgroundSize: '100% 400%',
                 }}></div>
 
