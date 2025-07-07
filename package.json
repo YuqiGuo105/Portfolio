@@ -16,8 +16,10 @@
     "jarallax": "^2.0.4",
     "lucide-react": "^0.512.0",
     "next": "12.3.1",
+    "nodemailer": "^6.9.11",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "react-modal": "^3.16.3",
     "react-scroll": "^1.8.7",
     "react-skrollr": "^1.0.4",
     "react-slick": "^0.30.2",
@@ -25,8 +27,7 @@
     "slick-carousel": "^1.8.1",
     "swiper": "^8.4.3",
     "uuid": "^11.1.0",
-    "wowjs": "^1.1.3",
-    "nodemailer": "^6.9.11"
+    "wowjs": "^1.1.3"
   },
   "devDependencies": {
     "dotenv": "^16.4.1",

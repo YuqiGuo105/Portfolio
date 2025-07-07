@@ -4,11 +4,14 @@ import ContactForm from "../src/components/ContactForm";
 import TestimonialSlider from "../src/components/TestimonialSlider";
 import Layout from "../src/layout/Layout";
 import SeoHead from "../src/components/SeoHead";
-import {useEffect, useState} from "react";
+import {useEffect, useState, useRef} from "react";
 import {supabase} from "../src/supabase/supabaseClient";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
+import Modal from "react-modal";
+
+Modal.setAppElement('#__next');
 const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
   ssr: false,
 });
@@ -39,6 +42,14 @@ const settings = {
   ]
 };
 
+  const initialStories  = [
+  { id: 1, url: "/assets/images/profile_guyuqi.jpg" },
+  { id: 2, url: "https://firebasestorage.googleapis.com/v0/b/blog-d45ae.firebasestorage.app/o/uploads%2FtsJjFkNP36NBJOcXsZfBs1i1aQn1%2F1751068980268_IMG_0051.jpeg?alt=media&token=05ef9aa4-bc86-4ad8-8e95-ddc1dc01856a" },
+  // { id: 3, url: "/assets/images/tech-blog2.jpg" },
+  // { id: 4, url: "/assets/images/life-blog1.jpg" },
+  // { id: 5, url: "/assets/images/life-blog2.jpg" },
+];
+
 const Index = () => {
   const [blogs, setBlogs] = useState([]);
   const [error, setError] = useState(null);
@@ -47,7 +58,14 @@ const Index = () => {
   const [companiesCount, setCompaniesCount] = useState(0);
   const [lifeBlogs, setLifeBlogs] = useState([]);
   const [loggedIn, setLoggedIn]     = useState(false);
-
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const timerRef = useRef(null);
+  const progressBarRef = useRef(null);
+  const [stories, setStories] = useState([]);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
   useEffect(() => {
     const bootstrap = async () => {
       /* years of experience */
@@ -81,32 +99,116 @@ const Index = () => {
       setCompaniesCount(new Set(exp.map(e => e.name)).size);
     };
 
-    bootstrap();                 // run once
-  }, []);        // The empty array ensures this effect runs only once after the initial render
+    bootstrap();
+    if (!isProfileModalOpen || !isPlaying) return;
+    // stories.forEach(story => {
+    //   const img = new Image();
+    //   img.src = story.url;
+    // });
+    let loadedCount = 0;
+    const totalImages = initialStories.length;
 
-  // Visitor tracking (only one endpoint call is needed)
-  useEffect(() => {
-    const trackVisitor = async () => {
-      // Capture the client's local time as an ISO string.
-      const localTime = new Date().toISOString();
-
-      try {
-        const response = await fetch('/api/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ localTime }),
-        });
-
-        // Check if the response is not OK (e.g. status !== 200)
-        if (!response.ok) {
-          console.error('Visitor tracking failed with status:', response.status);
-        }
-      } catch (error) {
-        console.error('Error tracking visitor:', error);
+    const checkAllLoaded = () => {
+      loadedCount++;
+      if (loadedCount === totalImages) {
+        setImagesLoaded(true);
       }
     };
 
-    trackVisitor();
+    // 为每个故事图片创建Image对象并加载
+    initialStories.forEach(story => {
+      const img = new Image();
+      img.onload = checkAllLoaded;
+      img.onerror = () => {
+        console.error(`Failed to load image: ${story.url}`);
+        checkAllLoaded(); // 即使加载失败也计数
+      };
+      img.src = story.url;
+    });
+
+    // 如果没有图片需要加载，直接设置为已加载
+    if (totalImages === 0) {
+      setImagesLoaded(true);
+    }
+
+    timerRef.current = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 100) {
+          // 当前故事结束，切换到下一个
+          setCurrentStoryIndex(prevIndex => {
+            if (prevIndex >= stories.length - 1) {
+              clearInterval(timerRef.current);
+              setIsProfileModalOpen(false);
+              return 0;
+            }
+            return prevIndex + 1;
+          });
+          return 0;
+        }
+        return prev + 1;
+      });
+    }, 50);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [isProfileModalOpen, isPlaying, currentStoryIndex, stories.length]);        // The empty array ensures this effect runs only once after the initial render
+
+  // Visitor tracking (only one endpoint call is needed)
+  // useEffect(() => {
+  //   const trackVisitor = async () => {
+  //     // Capture the client's local time as an ISO string.
+  //     const localTime = new Date().toISOString();
+
+  //     try {
+  //       const response = await fetch('/api/track', {
+  //         method: 'POST',
+  //         headers: { 'Content-Type': 'application/json' },
+  //         body: JSON.stringify({ localTime }),
+  //       });
+
+  //       // Check if the response is not OK (e.g. status !== 200)
+  //       if (!response.ok) {
+  //         console.error('Visitor tracking failed with status:', response.status);
+  //       }
+  //     } catch (error) {
+  //       console.error('Error tracking visitor:', error);
+  //     }
+  //   };
+
+  //   trackVisitor();
+  // }, []);
+
+  useEffect(() => {
+    const fetchStories = async () => {
+      try {
+        const endpoint = process.env.NEXT_PUBLIC_STORIES_ENDPOINT;
+        const owner    = encodeURIComponent(process.env.NEXT_PUBLIC_STORIES_OWNER);
+        const res      = await fetch(`${endpoint}/records/owner/${owner}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        // Normalise → {id, url, createdAt, description}
+        const formatted = data.map((item, idx) => ({
+          id: item.id ?? idx,
+          url: item.url,
+          description: item.description ?? "",
+          createdAt: (item.createdAt?.seconds ?? 0) * 1000,
+        }));
+
+        // Newest first (optional)
+        formatted.sort((a, b) => b.createdAt - a.createdAt);
+
+        setStories(formatted);
+      } catch (err) {
+        console.error("❌ Failed to fetch stories:", err);
+      }
+    };
+
+    fetchStories();
   }, []);
 
   // Helper to record a click event
@@ -134,6 +236,81 @@ const Index = () => {
     autoplay: true,
   };
 
+  // 处理快拍播放
+  // useEffect(() => {
+  //   if (!isProfileModalOpen || !isPlaying) return;
+
+  //   // 重置进度
+  //   setProgress(0);
+
+  //   // 设置计时器
+  //   timerRef.current = setInterval(() => {
+  //     setProgress(prev => {
+  //       if (prev >= 100) {
+  //         // 当前故事结束，切换到下一个
+  //         setCurrentStoryIndex(prevIndex => {
+  //           if (prevIndex >= stories.length - 1) {
+  //             // 所有故事结束，关闭模态框
+  //             clearInterval(timerRef.current);
+  //             setIsProfileModalOpen(false);
+  //             return 0;
+  //           }
+  //           return prevIndex + 1;
+  //         });
+  //         return 0;
+  //       }
+  //       return prev + 1;
+  //     });
+  //   }, 50); // 每50ms更新一次进度，5秒完成100%
+
+  //   return () => {
+  //     if (timerRef.current) {
+  //       clearInterval(timerRef.current);
+  //     }
+  //   };
+  // }, [isProfileModalOpen, isPlaying, currentStoryIndex, stories.length]);
+
+  // 打开模态框时重置状态
+  // const openStoryModal = () => {
+  //   setCurrentStoryIndex(0);
+  //   setProgress(0);
+  //   setIsPlaying(true);
+  //   setIsProfileModalOpen(true);
+  // };
+  const openStoryModal = () => {
+    if (!stories.length) return;
+    if (!imagesLoaded) return;
+
+    setCurrentStoryIndex(0);
+    setProgress(0);
+    setIsPlaying(true);
+    setIsProfileModalOpen(true);
+  };
+
+  // 手动切换故事
+  const goToStory = (index) => {
+    setCurrentStoryIndex(index);
+    setProgress(0); // 只重置当前故事的进度
+  };
+
+  // 暂停/播放控制
+  const togglePlay = () => {
+    setIsPlaying(!isPlaying);
+  };
+
+  // 处理点击进度条
+  const handleProgressClick = (e) => {
+    if (!progressBarRef.current) return;
+
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const clickPosition = (e.clientX - rect.left) / rect.width;
+    const newIndex = Math.floor(clickPosition * stories.length);
+
+    if (newIndex >= 0 && newIndex < stories.length) {
+      goToStory(newIndex);
+    }
+  };
+
   /* ─────────────────────────── Settings ──────────────────────────── */
   const sliderSettings = {
     arrows: false,
@@ -150,34 +327,323 @@ const Index = () => {
     <>
       <SeoHead title="Yuqi Guo Portfolio" />
       <Layout>
+      <Modal
+        isOpen={isProfileModalOpen}
+        onRequestClose={() => {
+          setIsProfileModalOpen(false)
+          setCurrentStoryIndex(0);
+          setProgress(0);
+        }}
+        contentLabel="Instagram Stories"
+        style={{
+          overlay: {
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            zIndex: 1000,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            backdropFilter: 'blur(5px)',
+          },
+          content: {
+            position: 'relative',
+            inset: 'auto',
+            width: '100%',
+            maxWidth: '500px',
+            height: '90vh',
+            maxHeight: '800px',
+            padding: 0,
+            border: 'none',
+            background: 'none',
+            overflow: 'hidden',
+            borderRadius: '16px',
+          }
+        }}
+      >
+        <div className="story-container" style={{
+          position: 'relative',
+          width: '100%',
+          height: '100%',
+          background: 'black',
+        }}>
+          {/* 进度条 */}
+          <div
+            ref={progressBarRef}
+            style={{
+              display: 'flex',
+              position: 'absolute',
+              top: '16px',
+              left: '16px',
+              right: '16px',
+              height: '3px',
+              zIndex: 10,
+              gap: '4px',
+              cursor: 'pointer',
+            }}
+            onClick={handleProgressClick}
+          >
+            {stories.map((_, index) => {
+              // 计算当前分段的宽度：
+              // - 已播放的故事：100%
+              // - 当前故事：progress%
+              // - 未播放的故事：0%
+              const width =
+                index < currentStoryIndex ? 100 :
+                index === currentStoryIndex ? progress : 0;
+
+              return (
+                <div
+                  key={index}
+                  style={{
+                    flex: 1,
+                    height: '100%',
+                    background: 'rgba(255, 255, 255, 0.3)',
+                    borderRadius: '2px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${width}%`,
+                      height: '100%',
+                      background: 'white',
+                      transition: index === currentStoryIndex ? 'width 0.05s linear' : 'none',
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 关闭按钮 */}
+          <button
+            onClick={() => {
+              setIsProfileModalOpen(false)
+              setCurrentStoryIndex(0);
+              setProgress(0);
+            }}
+            style={{
+              position: 'absolute',
+              top: '24px',
+              right: '24px',
+              background: 'none',
+              border: 'none',
+              color: 'white',
+              fontSize: '28px',
+              cursor: 'pointer',
+              zIndex: 10,
+              padding: 0,
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0, 0, 0, 0.3)',
+            }}
+          >
+            ×
+          </button>
+
+          {/* 播放/暂停按钮 */}
+          {/* <button
+            onClick={togglePlay}
+            style={{
+              position: 'absolute',
+              top: '24px',
+              left: '24px',
+              background: 'none',
+              border: 'none',
+              color: 'white',
+              fontSize: '20px',
+              cursor: 'pointer',
+              zIndex: 10,
+              padding: 0,
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0, 0, 0, 0.3)',
+            }}
+          >
+            {isPlaying ? '⏸️' : '▶️'}
+          </button> */}
+
+          {/* 当前故事索引显示 */}
+          <div style={{
+            position: 'absolute',
+            top: '24px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            color: 'white',
+            background: 'rgba(0, 0, 0, 0.3)',
+            padding: '4px 12px',
+            borderRadius: '12px',
+            zIndex: 10,
+            fontSize: '0.9rem',
+          }}>
+            {currentStoryIndex + 1} / {stories.length}
+          </div>
+
+          {/* 故事图片 */}
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}>
+            {stories.length > 0 && (
+              <img
+                  src={stories[currentStoryIndex]?.url ?? ''}
+                  alt={`Story ${currentStoryIndex + 1}`}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                  }}
+                  onClick={() => goToStory((currentStoryIndex + 1) % stories.length)}
+                />
+              )}
+          </div>
+
+          {/* 底部用户信息 */}
+          <div style={{
+            position: 'absolute',
+            bottom: '30px',
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            padding: '0 20px',
+          }}>
+            <div style={{
+              color: 'white',
+              fontSize: '1.5rem',
+              fontWeight: '600',
+              marginBottom: '8px',
+              textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+            }}>
+              Yuqi Guo
+            </div>
+            <div style={{
+              color: '#ddd',
+              fontSize: '1rem',
+              textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+            }}>
+              Software Engineer @ Goldman Sachs
+            </div>
+          </div>
+
+          {/* 导航箭头 */}
+          {currentStoryIndex > 0 && (
+            <button
+              onClick={() => goToStory(currentStoryIndex - 1)}
+              style={{
+                position: 'absolute',
+                left: '16px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                fontSize: '28px',
+                cursor: 'pointer',
+                zIndex: 10,
+                padding: 0,
+                width: '50px',
+                height: '50px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(0, 0, 0, 0.3)',
+              }}
+            >
+              ←
+            </button>
+          )}
+
+          {currentStoryIndex < stories.length - 1 && (
+            <button
+              onClick={() => goToStory(currentStoryIndex + 1)}
+              style={{
+                position: 'absolute',
+                right: '16px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                fontSize: '28px',
+                cursor: 'pointer',
+                zIndex: 10,
+                padding: 0,
+                width: '50px',
+                height: '50px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(0, 0, 0, 0.3)',
+              }}
+            >
+              →
+            </button>
+          )}
+        </div>
+      </Modal>
       <section className="section section-started">
         <div className="container">
           {/* Hero Started */}
           <div className="hero-started">
-            <div
-              className="slide"
+            <div className="slide" style={{
+              display: 'inline-block',
+              cursor: 'pointer',
+            }}
+                 onClick={openStoryModal}
             >
-              <img
-                src="/assets/images/profile_guyuqi.jpg"
-                alt="avatar"
-                style={{width: "90%"}}
-              />
+              <div style={{
+                display: 'inline-block',
+                position: 'relative',
+                width: '90%',
+                height: '100%',
+                transition: 'transform 0.3s ease',
+              }}>
+                {/* 渐变圆环 */}
+                <div style={{
+                  position: 'absolute',
+                  top: '-10px',
+                  left: '-10px',
+                  right: '-10px',
+                  bottom: '-10px',
+                  borderRadius: '380px',
+                  background: 'linear-gradient(5deg, #ff6b6b, #ff8e8e, #4ecdc4, #8deee0, #ffe66d, #ffef9f, #1a535c, #2b7a78, #ff6b6b)',
+                  zIndex: 0,
+                  animation: 'verticalGradient 8s linear infinite',
+                  backgroundSize: '100% 400%',
+                }}></div>
 
-              <span className="circle circle-1">
+                <img
+                  src="/assets/images/profile_guyuqi.jpg"
+                  alt="avatar"
+                  style={{
+                    width: '100%',
+                    borderRadius: '380px',
+                    position: 'relative',
+                    zIndex: 1,
+                    border: '5px solid white',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
 
-              </span>
-              <span className="circle circle-2">
-
-              </span>
-              <span className="circle circle-3">
-
-              </span>
-              <span className="circle circle-4">
-
-              </span>
-              <span className="circle circle-5">
-
-              </span>
+              {/* 隐藏原有circle元素但保留在DOM中 */}
+              <span className="circle circle-1" style={{ display: 'none' }}></span>
+              <span className="circle circle-2" style={{ display: 'none' }}></span>
+              <span className="circle circle-3" style={{ display: 'none' }}></span>
+              <span className="circle circle-4" style={{ display: 'none' }}></span>
+              <span className="circle circle-5" style={{ display: 'none' }}></span>
             </div>
             <div className="content">
               <div className="titles">
@@ -592,7 +1058,7 @@ const Index = () => {
                         <Link href={href} legacyBehavior>
                           <a
                             className="lnk"
-                            
+
                           >
                             {require_login ? "Log in to read" : "Read more"}
                           </a>
