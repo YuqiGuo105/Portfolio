@@ -150,6 +150,8 @@ const Index = () => {
         setStories(formatted);
       } catch (err) {
         console.error("❌ Failed to fetch stories:", err);
+        setStories([]);
+        setIsPlaying(false);
       }
     };
 
