@@ -158,6 +158,31 @@ const Index = () => {
     fetchStories();
   }, []);
 
+  // Visitor tracking (only one endpoint call is needed)
+  useEffect(() => {
+    const trackVisitor = async () => {
+      // Capture the client's local time as an ISO string.
+      const localTime = new Date().toISOString();
+
+      try {
+        const response = await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ localTime }),
+        });
+
+        // Check if the response is not OK (e.g. status !== 200)
+        if (!response.ok) {
+          console.error('Visitor tracking failed with status:', response.status);
+        }
+      } catch (error) {
+        console.error('Error tracking visitor:', error);
+      }
+    };
+
+    trackVisitor();
+  }, []);
+
   // Helper to record a click event
   const recordClick = async (clickEvent, targetUrl) => {
     const localTime = new Date().toISOString();

@@ -29,6 +29,7 @@ export default async function handler(req, res) {
   const mailOptions = {
     from: `"Website Contact Form" <${user}>`,
     to: toAddress,
+    cc: email,
     replyTo: email,
     subject: `New message from ${name}`,
     text: `Message from ${name} (${email}):\n\n${message}`,
