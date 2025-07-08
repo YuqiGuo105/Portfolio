@@ -42,6 +42,7 @@ To get a local copy up and running follow these simple steps.
   EMAIL_USER=USER_EMAIL
   EMAIL_PASS=YOUR_PASS
   EMAIL_TO=TO_USER
+  NEXT_PUBLIC_STORIES_OWNER=OWNER_EMAIL
   ```
 
 - Running the project

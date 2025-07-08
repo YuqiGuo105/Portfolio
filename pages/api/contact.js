@@ -12,9 +12,9 @@ export default async function handler(req, res) {
 
   const user = process.env.EMAIL_USER;
   const pass = process.env.EMAIL_PASS;
-  const toAddress = process.env.EMAIL_TO;
+  const ownerAddress = process.env.NEXT_PUBLIC_STORIES_OWNER || process.env.EMAIL_TO;
 
-  if (!user || !pass || !toAddress) {
+  if (!user || !pass || !ownerAddress) {
     return res.status(500).json({ error: 'Server configuration error' });
   }
 
@@ -28,7 +28,8 @@ export default async function handler(req, res) {
 
   const mailOptions = {
     from: `"Website Contact Form" <${user}>`,
-    to: toAddress,
+    to: ownerAddress,
+    cc: email,
     replyTo: email,
     subject: `New message from ${name}`,
     text: `Message from ${name} (${email}):\n\n${message}`,
