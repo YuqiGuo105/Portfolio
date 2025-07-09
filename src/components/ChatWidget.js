@@ -1,8 +1,8 @@
 'use client'
 
 import { createPortal } from 'react-dom'
-import { useState, useEffect, useRef, useCallback, Fragment, useMemo } from 'react'
-import { Bot, Minus, ArrowUpRight, Loader2 } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react'
+import { Minus, ArrowUpRight, Loader2 } from 'lucide-react'
 import Image from 'next/image'
 import { supabase } from '../supabase/supabaseClient'
 
@@ -308,14 +308,10 @@ function LauncherButton({ onOpen, onDragStart }) {
  * ChatWidget – main export
  * ===========================================================*/
 export default function ChatWidget() {
-  const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const offsetRef = useRef(offset)
   const dragRef = useRef({ dragging: false })
-
-  useEffect(() => setMounted(true), [])
-  if (!mounted) return null
 
   const root = ensureRoot()
   root.style.pointerEvents = 'auto'
