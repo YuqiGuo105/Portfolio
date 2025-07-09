@@ -309,36 +309,58 @@ function LauncherButton({ onOpen, onDragStart }) {
  * ===========================================================*/
 export default function ChatWidget() {
   const [open, setOpen] = useState(false)
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [offset, setOffset] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chatWidgetOffset')
+      if (saved) return JSON.parse(saved)
+    }
+    return { x: 0, y: 0 }
+  })
+
+  const rootRef = useRef(null)
   const offsetRef = useRef(offset)
   const dragRef = useRef({ dragging: false })
 
-  const root = ensureRoot()
-  root.style.pointerEvents = 'auto'
-  root.style.transform = `translate(${offset.x}px, ${offset.y}px)`
+  useEffect(() => {
+    const el = ensureRoot()
+    rootRef.current = el
+    el.style.pointerEvents = 'auto'
+    el.style.transform = `translate(${offset.x}px, ${offset.y}px)`
+  }, [])
 
   useEffect(() => {
     offsetRef.current = offset
+    if (rootRef.current) {
+      rootRef.current.style.transform = `translate(${offset.x}px, ${offset.y}px)`
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('chatWidgetOffset', JSON.stringify(offset))
+      }
+    }
   }, [offset])
 
   const startDrag = (e) => {
     dragRef.current.dragging = false
-    const startX = e.clientX
-    const startY = e.clientY
+    const point = 'touches' in e ? e.touches[0] : e
+    const startX = point.clientX
+    const startY = point.clientY
     const { x, y } = offsetRef.current
 
+    const moveEvent = 'touches' in e ? 'touchmove' : 'mousemove'
+    const upEvent = 'touches' in e ? 'touchend' : 'mouseup'
+
     const onMove = (ev) => {
-      const dx = ev.clientX - startX
-      const dy = ev.clientY - startY
+      const movePoint = 'touches' in ev ? ev.touches[0] : ev
+      const dx = movePoint.clientX - startX
+      const dy = movePoint.clientY - startY
       if (Math.abs(dx) > 2 || Math.abs(dy) > 2) dragRef.current.dragging = true
       setOffset({ x: x + dx, y: y + dy })
     }
     const onUp = () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener(moveEvent, onMove)
+      window.removeEventListener(upEvent, onUp)
     }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    window.addEventListener(moveEvent, onMove)
+    window.addEventListener(upEvent, onUp)
   }
 
   const handleOpen = () => {

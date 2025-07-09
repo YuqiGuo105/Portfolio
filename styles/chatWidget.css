@@ -41,6 +41,9 @@
       display: block;
     }
   }
+  .launch-button:active {
+    cursor: grabbing;
+  }
   .launch-button:hover {
     background: #ff8059;
     border-color: #ff8059;
@@ -77,6 +80,9 @@
     align-items: center;
     justify-content: space-between;
     cursor: grab;
+  }
+  .bot-header:active {
+    cursor: grabbing;
   }
   .shrink-button {
     display: flex;
