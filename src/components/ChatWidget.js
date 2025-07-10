@@ -371,6 +371,11 @@ export default function ChatWidget() {
     setOpen(true)
   }
 
+  // Ensure the widget is mounted only after the root element exists
+  if (!rootRef.current) {
+    return null
+  }
+
   return createPortal(
     open ? (
       <Fragment>
@@ -380,6 +385,6 @@ export default function ChatWidget() {
     ) : (
       <LauncherButton onOpen={handleOpen} onDragStart={startDrag} />
     ),
-    root
+    rootRef.current
   )
 }
