@@ -99,6 +99,9 @@ function ChatWindow({ onMinimize, className = '' }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef(null)
+  const dragRef = useRef(null)
+  const [dragPos, setDragPos] = useState({ x: 0, y: 0 })
+  const dragPosRef = useRef({ x: 0, y: 0 })
 
   const apiUrl = process.env.NEXT_PUBLIC_ASSIST_API || '/api/chat'
 
@@ -119,6 +122,39 @@ function ChatWindow({ onMinimize, className = '' }) {
     root.style.pointerEvents = 'auto'
     return () => {
       root.style.pointerEvents = 'none'
+    }
+  }, [])
+
+  useEffect(() => {
+    const node = dragRef.current
+    if (!node) return
+    const header = node.querySelector('.bot-header')
+    if (!header) return
+
+    const handlePointerDown = (e) => {
+      e.preventDefault()
+      const startX = e.clientX - dragPosRef.current.x
+      const startY = e.clientY - dragPosRef.current.y
+
+      const handlePointerMove = (evt) => {
+        const x = evt.clientX - startX
+        const y = evt.clientY - startY
+        dragPosRef.current = { x, y }
+        setDragPos({ x, y })
+      }
+
+      const handlePointerUp = () => {
+        window.removeEventListener('pointermove', handlePointerMove)
+        window.removeEventListener('pointerup', handlePointerUp)
+      }
+
+      window.addEventListener('pointermove', handlePointerMove)
+      window.addEventListener('pointerup', handlePointerUp)
+    }
+
+    header.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      header.removeEventListener('pointerdown', handlePointerDown)
     }
   }, [])
 
@@ -181,9 +217,13 @@ function ChatWindow({ onMinimize, className = '' }) {
   );
 
   return (
-    <div className="bot-container relative mb-6 flex flex-col h-[80vh] w-full max-w-full sm:max-w-full md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:bg-gray-900 dark:ring-gray-700 sm:px-0">
+    <div
+      ref={dragRef}
+      style={{ transform: `translate(${dragPos.x}px, ${dragPos.y}px)` }}
+      className="bot-container relative mb-6 flex flex-col h-[80vh] w-full max-w-full sm:max-w-full md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:bg-gray-900 dark:ring-gray-700 sm:px-0"
+    >
       {/* header */}
-      <header className="bot-header flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700">
+      <header className="bot-header cursor-move flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700">
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-100">
           <img
             src="/assets/images/chatbot_pot_thinking.gif"
