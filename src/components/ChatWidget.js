@@ -77,7 +77,7 @@ function generateUUID() {
   );
 }
 
-function ChatWindow({ onMinimize, className = '' }) {
+function ChatWindow({ onMinimize, onDragStart, className = '' }) {
   const [messages, setMessages] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('chatMessages');
@@ -183,7 +183,12 @@ function ChatWindow({ onMinimize, className = '' }) {
   return (
     <div className="bot-container relative mb-6 flex flex-col h-[80vh] w-full max-w-full sm:max-w-full md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:bg-gray-900 dark:ring-gray-700 sm:px-0">
       {/* header */}
-      <header className="bot-header flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700">
+      <header
+        className="bot-header flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700"
+        onMouseDown={onDragStart}
+        onTouchStart={onDragStart}
+        style={{ cursor: 'move' }}
+      >
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-100">
           <img
             src="/assets/images/chatbot_pot_thinking.gif"
@@ -260,7 +265,7 @@ function ChatWindow({ onMinimize, className = '' }) {
 /* =============================================================
  * LauncherButton – minimized state
  * ===========================================================*/
-function LauncherButton({ onOpen }) {
+function LauncherButton({ onOpen, onDragStart }) {
   const [animating, setAnimating] = useState(true)
 
   useEffect(() => {
@@ -277,6 +282,8 @@ function LauncherButton({ onOpen }) {
     <button
       type="button"
       onClick={onOpen}
+      onMouseDown={onDragStart}
+      onTouchStart={onDragStart}
       className="relative flex items-center rounded-full mb-2 px-5 py-4 shadow-xl ring-1 ring-gray-200 backdrop-blur transition hover:shadow-2xl supports-[backdrop-filter]:bg-white/75 dark:bg-gray-900 dark:ring-gray-700 launch-button"
     >
       <span
@@ -306,21 +313,63 @@ function LauncherButton({ onOpen }) {
 export default function ChatWidget() {
   const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('chatWidgetPos')
+        if (stored) return JSON.parse(stored)
+      } catch {}
+    }
+    return { x: 0, y: 0 }
+  })
+  const dragRef = useRef(null)
 
   useEffect(() => setMounted(true), [])
   if (!mounted) return null
 
   const root = ensureRoot()
   root.style.pointerEvents = 'auto'
+  root.style.transform = `translate(${position.x}px, ${position.y}px)`
+
+  useEffect(() => {
+    root.style.transform = `translate(${position.x}px, ${position.y}px)`
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('chatWidgetPos', JSON.stringify(position))
+    }
+  }, [position])
+
+  const startDrag = useCallback((e) => {
+    e.preventDefault()
+    const startX = e.clientX ?? (e.touches ? e.touches[0].clientX : 0)
+    const startY = e.clientY ?? (e.touches ? e.touches[0].clientY : 0)
+    const origX = position.x
+    const origY = position.y
+
+    const onMove = (ev) => {
+      const clientX = ev.clientX ?? (ev.touches ? ev.touches[0].clientX : 0)
+      const clientY = ev.clientY ?? (ev.touches ? ev.touches[0].clientY : 0)
+      setPosition({ x: origX + clientX - startX, y: origY + clientY - startY })
+    }
+    const onEnd = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onEnd)
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onEnd)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onEnd)
+    window.addEventListener('touchmove', onMove)
+    window.addEventListener('touchend', onEnd)
+  }, [position])
 
   return createPortal(
     open ? (
       <Fragment>
         <Overlay onClick={() => setOpen(false)} />
-        <ChatWindow onMinimize={() => setOpen(false)} />
+        <ChatWindow onMinimize={() => setOpen(false)} onDragStart={startDrag} />
       </Fragment>
     ) : (
-      <LauncherButton onOpen={() => setOpen(true)} />
+      <LauncherButton onOpen={() => setOpen(true)} onDragStart={startDrag} />
     ),
     root
   )
