@@ -29,7 +29,7 @@
     background: white;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     border: 1px solid #ff8059;
-    cursor: pointer;
+    cursor: grab;
     z-index: 2147483647;
     svg {
         vertical-align: sub;
@@ -40,6 +40,9 @@
       margin-bottom: 0;
       display: block;
     }
+  }
+  .launch-button:active {
+    cursor: grabbing;
   }
   .launch-button:hover {
     background: #ff8059;
@@ -76,6 +79,10 @@
     justify-content: center;
     align-items: center;
     justify-content: space-between;
+    cursor: grab;
+  }
+  .bot-header:active {
+    cursor: grabbing;
   }
   .shrink-button {
     display: flex;
