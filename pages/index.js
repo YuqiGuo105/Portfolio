@@ -518,18 +518,23 @@ const Index = () => {
                 transition: 'transform 0.3s ease',
               }}>
                 {/* 渐变圆环 */}
-                <div style={{
-                  position: 'absolute',
-                  top: '-10px',
-                  left: '-10px',
-                  right: '-10px',
-                  bottom: '-10px',
-                  borderRadius: '380px',
-                  background: 'linear-gradient(5deg, #ff6b6b, #ff8e8e, #4ecdc4, #8deee0, #ffe66d, #ffef9f, #1a535c, #2b7a78, #ff6b6b)',
-                  zIndex: 0,
-                  animation: stories.length ? 'verticalGradient 8s linear infinite' : 'none',
-                  backgroundSize: '100% 400%',
-                }}></div>
+                {stories.length > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '-10px',
+                      left: '-10px',
+                      right: '-10px',
+                      bottom: '-10px',
+                      borderRadius: '380px',
+                      background:
+                        'linear-gradient(5deg, #ff6b6b, #ff8e8e, #4ecdc4, #8deee0, #ffe66d, #ffef9f, #1a535c, #2b7a78, #ff6b6b)',
+                      zIndex: 0,
+                      animation: 'verticalGradient 8s linear infinite',
+                      backgroundSize: '100% 400%',
+                    }}
+                  />
+                )}
 
                 <img
                   src="/assets/images/profile_guyuqi.jpg"
