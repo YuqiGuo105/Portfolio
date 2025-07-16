@@ -25,6 +25,19 @@ const ensureRoot = () => {
       right: '0',
       zIndex: '2147483647',
     })
+    if (window.innerWidth < 640) {
+      Object.assign(el.style, {
+        width: '100%',
+        left: '0',
+        right: '0',
+      })
+    }
+  } else if (window.innerWidth < 640) {
+    Object.assign(el.style, {
+      width: '100%',
+      left: '0',
+      right: '0',
+    })
   }
   return el
 }
@@ -147,6 +160,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
       <header
         className="bot-header flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700"
         onMouseDown={onDragStart}
+        onTouchStart={onDragStart}
       >
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-100">
           <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" className="w-6 h-6" />
@@ -229,6 +243,7 @@ function LauncherButton({ onOpen, onDragStart }) {
       type="button"
       onClick={onOpen}
       onMouseDown={onDragStart}
+      onTouchStart={onDragStart}
       className="launch-button relative flex items-center rounded-full mb-2 px-5 py-4 shadow-xl ring-1 ring-gray-200 backdrop-blur hover:shadow-2xl"
     >
       <span
@@ -276,13 +291,14 @@ export default function ChatWidget() {
   }, [offset])
 
   const startDrag = (e) => {
+    e.preventDefault()
     dragRef.current.dragging = false
-    const point = e.touches ? e.touches[0] : e
+    const point = 'touches' in e ? e.touches[0] : e
     const startX = point.clientX
     const startY = point.clientY
     const { x, y } = offsetRef.current
-    const moveEvent = e.touches ? 'touchmove' : 'mousemove'
-    const upEvent = e.touches ? 'touchend' : 'mouseup'
+    const moveEvent = 'touches' in e ? 'touchmove' : 'mousemove'
+    const upEvent = 'touches' in e ? 'touchend' : 'mouseup'
 
     const onMove = (ev) => {
       const mp = ev.touches ? ev.touches[0] : ev
