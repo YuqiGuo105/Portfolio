@@ -97,6 +97,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef(null)
   const apiUrl = process.env.NEXT_PUBLIC_ASSIST_API || '/api/chat'
+  const streamUrl =
+    process.env.NEXT_PUBLIC_ASSIST_STREAM_API || `${apiUrl.replace(/\/$/, '')}/stream`
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -132,26 +134,68 @@ function ChatWindow({ onMinimize, onDragStart }) {
     setMessages(prev => [...prev, { id: generateUUID(), role: 'user', content: text }])
     setInput('')
 
+    const botId = generateUUID()
+    let fullText = ''
+    let firstChunk = true
+
     try {
-      const res = await fetch(apiUrl, {
+      const res = await fetch(streamUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, session_id: sessionId }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const { answer } = await res.json()
-      const isHtml = /^\s*</.test(answer) || /<\/[a-z][\s\S]*>/i.test(answer)
-      const content = isHtml ? sanitizeHtml(answer) : answer
-      setMessages(prev => [...prev, { id: generateUUID(), role: 'assistant', content, isHtml }])
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let done = false
+      while (!done) {
+        const { value, done: readerDone } = await reader.read()
+        if (readerDone) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+        for (const part of parts) {
+          let event = ''
+          let data = ''
+          for (const line of part.split('\n')) {
+            if (line.startsWith('event:')) event = line.slice(6).trim()
+            else if (line.startsWith('data:')) data += line.slice(5).trim()
+          }
+          if (event === 'message' && data) {
+            const payload = JSON.parse(data)
+            if (payload.delta) {
+              fullText += payload.delta
+              if (firstChunk) {
+                firstChunk = false
+                setLoading(false)
+                setMessages(prev => [...prev, { id: botId, role: 'assistant', content: payload.delta }])
+              } else {
+                setMessages(prev =>
+                  prev.map(m => (m.id === botId ? { ...m, content: fullText } : m))
+                )
+              }
+            }
+          } else if (event === 'done') {
+            done = true
+          }
+        }
+      }
+
+      if (firstChunk) setLoading(false)
+      const isHtml = /^\s*</.test(fullText) || /<\/[a-z][\s\S]*>/i.test(fullText)
+      const content = isHtml ? sanitizeHtml(fullText) : fullText
+      setMessages(prev =>
+        prev.map(m => (m.id === botId ? { ...m, content, isHtml } : m))
+      )
       await supabase.from('Chat').insert([{ question: text, answer: content }])
     } catch (err) {
       console.error(err)
+      setLoading(false)
       setMessages(prev => [
         ...prev,
         { id: generateUUID(), role: 'assistant', content: '⚠️ Something went wrong. Please try again later.' },
       ])
-    } finally {
-      setLoading(false)
     }
   }
 
