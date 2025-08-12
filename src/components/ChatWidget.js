@@ -36,6 +36,30 @@ const sanitizeHtml = (html) =>
     .replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"')
     .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'")
 
+/* Convert plain guideline text into clickable links */
+function formatGuideText(text) {
+  if (text.startsWith('Need a hand?')) {
+    return (
+      'Need a hand?<br />Sections → '
+      + '<a href="/#about-section">About Me</a> | '
+      + '<a href="/#works-section">Projects</a> | '
+      + '<a href="/blog">Tech Blogs</a> | '
+      + '<a href="/#resume-section">Experience</a>'
+    )
+  }
+  if (text.startsWith('导航：')) {
+    return (
+      '导航：'
+      + '<a href="/#about-section">关于我</a>｜'
+      + '<a href="/#resume-section">经历</a>｜'
+      + '<a href="/#works-section">项目</a>｜'
+      + '<a href="/blog">技术博客</a>｜'
+      + '<a href="/#contact-section">联系我</a>'
+    )
+  }
+  return text
+}
+
 /** Ensure there's a root container for the chat widget */
 const ensureRoot = () => {
   let el = document.getElementById('__chat_widget_root')
@@ -292,6 +316,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
     let buffer = ''
 
     const finalize = () => {
+      buffer = formatGuideText(buffer)
       // decide if buffer looks like HTML
       const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(buffer)
       const finalContent = looksHtml ? sanitizeHtml(buffer) : buffer
@@ -349,8 +374,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
       const payload = { message: text, session_id: sessionId, skip_cache: SKIP_CACHE_DEFAULT }
       const json = await postOnce(url, payload)
       const raw = json?.answer ?? ''
-      const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(raw)
-      const finalContent = looksHtml ? sanitizeHtml(raw) : raw
+      const processed = formatGuideText(raw)
+      const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(processed)
+      const finalContent = looksHtml ? sanitizeHtml(processed) : processed
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false } : m
       )))
