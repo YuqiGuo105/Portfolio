@@ -6,11 +6,35 @@ import { Minus, ArrowUpRight, Loader2 } from 'lucide-react'
 import Image from 'next/image'
 import { supabase } from '../supabase/supabaseClient'
 
+/* ============================================================
+   ChatWidget — streaming-ready for new backend API (Aug 2025)
+   - English comments only
+   - Uses SSE streaming via GET /api/chat/stream (EventSource)
+   - Falls back to JSON POST /api/chat on failure
+   - Health check against /health (updated; was /healthz)
+   - Structured logger + retries for non-streaming fallback
+   - Stores final Q&A to Supabase chat_history
+   ============================================================ */
+
+/* ───────── structured logger ───────── */
+const logger = {
+  info: (...a) => console.log('[ChatWidget]', ...a),
+  warn: (...a) => console.warn('[ChatWidget]', ...a),
+  error: (...a) => console.error('[ChatWidget]', ...a),
+  time: (label) => console.time(`[ChatWidget] ${label}`),
+  timeEnd: (label) => console.timeEnd(`[ChatWidget] ${label}`),
+}
+
 /* ───────── minimal sanitizer ───────── */
 const sanitizeHtml = (html) =>
   html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/on\w+="[^"]*"/gi, '')
+    // strip <script>
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    // strip inline handlers like onclick="..."
+    .replace(/\s(on\w+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    // neutralize javascript: URLs
+    .replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"')
+    .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'")
 
 /** Ensure there's a root container for the chat widget */
 const ensureRoot = () => {
@@ -24,22 +48,117 @@ const ensureRoot = () => {
       bottom: '0',
       right: '0',
       zIndex: '2147483647',
-    })
-    if (window.innerWidth < 640) {
-      Object.assign(el.style, {
-        width: '100%',
-        left: '0',
-        right: '0',
-      })
-    }
-  } else if (window.innerWidth < 640) {
-    Object.assign(el.style, {
-      width: '100%',
-      left: '0',
-      right: '0',
+      pointerEvents: 'auto',
     })
   }
   return el
+}
+
+/** Small helper: sleep */
+const delay = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/** Fetch with timeout */
+async function fetchWithTimeout(resource, options = {}, timeoutMs = 20000) {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(resource, { ...options, signal: controller.signal })
+    return res
+  } finally {
+    clearTimeout(id)
+  }
+}
+
+/** Normalize to /api/chat if caller passed an origin or arbitrary path */
+function normalizeChatUrl(raw) {
+  if (!raw) return ''
+  const u = new URL(raw, typeof window !== 'undefined' ? window.location.origin : 'http://localhost')
+  if (!/\/api\/chat\/?$/.test(u.pathname)) {
+    u.pathname = u.pathname.replace(/\/$/, '') + '/api/chat'
+  }
+  return u.toString().replace(/\/$/, '')
+}
+
+/** Build the streaming GET URL from a base /api/chat URL */
+function toStreamUrl(chatUrl, query) {
+  const base = new URL(chatUrl, window.location.origin)
+  base.pathname = base.pathname.replace(/\/api\/chat\/?$/, '/api/chat/stream')
+  const url = new URL(base.toString())
+  for (const [k, v] of Object.entries(query || {})) {
+    if (v !== undefined && v !== null) url.searchParams.set(k, String(v))
+  }
+  return url.toString()
+}
+
+/** Resolve the chat endpoint based on env + health check.
+ *  - If NEXT_PUBLIC_ASSIST_API is set, normalize to /api/chat and probe ORIGIN:/health
+ *  - Fallback to relative '/api/chat'
+ */
+async function resolveChatEndpoint() {
+  const primaryRaw = process.env.NEXT_PUBLIC_ASSIST_API || ''
+  const primary = primaryRaw ? normalizeChatUrl(primaryRaw) : ''
+  const fallback = '/api/chat'
+
+  const candidates = []
+  if (primary) candidates.push(primary)
+  candidates.push(fallback)
+
+  for (const ep of candidates) {
+    try {
+      const u = new URL(ep, window.location.origin)
+      const healthUrl = new URL('/health', u.origin).toString() // updated: /health
+      const res = await fetchWithTimeout(healthUrl, { method: 'GET' }, 3000)
+      if (res.ok) return u.toString().replace(/\/$/, '')
+    } catch (e) {
+      logger.warn('Health probe failed:', e?.message || e)
+    }
+  }
+  return candidates[0]
+}
+
+/** UUID generator */
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
+    (
+      c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))
+    ).toString(16)
+  )
+}
+
+/** Non-streaming POST with tiny retry */
+async function postOnce(url, body, maxRetries = 1) {
+  let attempt = 0
+  while (attempt <= maxRetries) {
+    try {
+      const res = await fetchWithTimeout(
+        url,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(body),
+          mode: 'cors',
+        },
+        30000
+      )
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '')
+        throw new Error(`HTTP ${res.status} ${res.statusText}${txt ? ' — ' + txt.slice(0, 200) : ''}`)
+      }
+      const ct = res.headers.get('content-type') || ''
+      if (!/application\/json/i.test(ct)) {
+        const txt = await res.text().catch(() => '')
+        throw new Error(`Expected JSON, got ${ct || 'unknown'}${txt ? ' — ' + txt.slice(0, 120) : ''}`)
+      }
+      return await res.json()
+    } catch (e) {
+      if (attempt === maxRetries) throw e
+      await delay(600 * (attempt + 1))
+      attempt++
+    }
+  }
 }
 
 /** Typing animation component */
@@ -63,16 +182,6 @@ function Overlay({ onClick }) {
   )
 }
 
-/** UUID generator */
-function generateUUID() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID()
-  }
-  return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
-    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4))).toString(16)
-  )
-}
-
 /** Chat window UI */
 function ChatWindow({ onMinimize, onDragStart }) {
   const [messages, setMessages] = useState(() => {
@@ -82,6 +191,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
     return []
   })
+
   const [sessionId] = useState(() => {
     if (typeof window !== 'undefined') {
       let id = sessionStorage.getItem('chatSessionId')
@@ -93,10 +203,17 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
     return ''
   })
+
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [offline, setOffline] = useState(false)
+  const [endpoint, setEndpoint] = useState('')
   const scrollRef = useRef(null)
-  const apiUrl = process.env.NEXT_PUBLIC_ASSIST_API || '/api/chat'
+  const chatEndpointRef = useRef(null)
+  const esRef = useRef(null) // active EventSource
+
+  // Smaller latency path: let backend decide caching (false means allow cache)
+  const SKIP_CACHE_DEFAULT = false
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -124,34 +241,161 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
   }, [messages, loading])
 
+  // Resolve endpoint and check health on mount
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      const ep = await resolveChatEndpoint()
+      if (!mounted) return
+      chatEndpointRef.current = ep
+      setEndpoint(ep)
+
+      try {
+        const u = new URL(ep, window.location.origin)
+        const res = await fetchWithTimeout(new URL('/health', u.origin), { method: 'GET' }, 3000)
+        setOffline(!res.ok)
+        if (!res.ok) logger.warn('Health check non-OK:', res.status, res.statusText)
+      } catch (e) {
+        setOffline(true)
+        logger.warn('Health check error:', e?.message || e)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  // Clean up the active stream when minimizing/unmounting
+  useEffect(() => () => {
+    if (esRef.current) {
+      try { esRef.current.close() } catch {}
+      esRef.current = null
+    }
+  }, [])
+
+  const startSSE = ({ text, onFinal }) => {
+    // Build GET /api/chat/stream?message=...&skip_cache=...
+    const base = chatEndpointRef.current || '/api/chat'
+    const streamUrl = toStreamUrl(base, {
+      message: text,
+      skip_cache: SKIP_CACHE_DEFAULT ? 'true' : 'false',
+      // Note: GET version on server ignores session_id; caching is cross-user
+    })
+
+    const es = new EventSource(streamUrl)
+    esRef.current = es
+
+    // create placeholder assistant message
+    const assistantId = generateUUID()
+    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
+
+    let buffer = ''
+
+    const finalize = () => {
+      // decide if buffer looks like HTML
+      const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(buffer)
+      const finalContent = looksHtml ? sanitizeHtml(buffer) : buffer
+      setMessages((prev) => prev.map((m) => (
+        m.id === assistantId ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false } : m
+      )))
+      onFinal?.(finalContent)
+    }
+
+    es.addEventListener('meta', (ev) => {
+      try {
+        const data = JSON.parse(ev.data || '{}')
+      } catch {}
+    })
+
+    es.addEventListener('message', (ev) => {
+      // data should be a JSON like { delta: '...' } but also accept raw text
+      let delta = ''
+      try {
+        const d = JSON.parse(ev.data)
+        delta = d?.delta ?? ''
+      } catch {
+        delta = ev.data || ''
+      }
+      if (!delta) return
+      buffer += delta
+      setMessages((prev) => prev.map((m) => (
+        m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
+      )))
+    })
+
+    es.addEventListener('done', () => {
+      try { es.close() } catch {}
+      if (esRef.current === es) esRef.current = null
+      finalize()
+    })
+
+    es.onerror = (err) => {
+      try { es.close() } catch {}
+      if (esRef.current === es) esRef.current = null
+      // Mark streaming bubble as failed and fallback
+      setMessages((prev) => prev.map((m) => (
+        m.id === assistantId ? { ...m, streaming: false } : m
+      )))
+      // Fallback to non-streaming POST
+      fallbackJson({ text, assistantId, onFinal })
+    }
+  }
+
+  const fallbackJson = async ({ text, assistantId, onFinal }) => {
+    // POST /api/chat
+    const base = chatEndpointRef.current || (await resolveChatEndpoint())
+    const url = new URL(base, window.location.origin).toString()
+    try {
+      const payload = { message: text, session_id: sessionId, skip_cache: SKIP_CACHE_DEFAULT }
+      const json = await postOnce(url, payload)
+      const raw = json?.answer ?? ''
+      const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(raw)
+      const finalContent = looksHtml ? sanitizeHtml(raw) : raw
+      setMessages((prev) => prev.map((m) => (
+        m.id === assistantId ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false } : m
+      )))
+      onFinal?.(finalContent)
+    } catch (err) {
+      logger.error('Fallback POST failed:', err)
+      setMessages((prev) => prev.map((m) => (
+        m.id === assistantId ? { ...m, content: '⚠️ Failed to contact assistant.', streaming: false } : m
+      )))
+    }
+  }
+
   const sendMessage = async (e) => {
     e.preventDefault()
     const text = input.trim()
     if (!text || loading) return
+
+    // If a previous stream is open, close it
+    if (esRef.current) {
+      try { esRef.current.close() } catch {}
+      esRef.current = null
+    }
+
     setLoading(true)
-    setMessages(prev => [...prev, { id: generateUUID(), role: 'user', content: text }])
+    setMessages((prev) => [...prev, { id: generateUUID(), role: 'user', content: text }])
     setInput('')
 
-    try {
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, session_id: sessionId }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const { answer } = await res.json()
-      const isHtml = /^\s*</.test(answer) || /<\/[a-z][\s\S]*>/i.test(answer)
-      const content = isHtml ? sanitizeHtml(answer) : answer
-      setMessages(prev => [...prev, { id: generateUUID(), role: 'assistant', content, isHtml }])
-      await supabase.from('Chat').insert([{ question: text, answer: content }])
-    } catch (err) {
-      console.error(err)
-      setMessages(prev => [
-        ...prev,
-        { id: generateUUID(), role: 'assistant', content: '⚠️ Something went wrong. Please try again later.' },
-      ])
-    } finally {
+    const finalizeAndPersist = async (finalAnswer) => {
+      try {
+        await supabase.from('chat_history').insert([{ question: text, answer: finalAnswer }])
+      } catch (dbErr) {
+        logger.warn('Supabase insert failed', dbErr)
+      }
       setLoading(false)
+    }
+
+    // Prefer streaming via EventSource
+    try {
+      startSSE({ text, onFinal: finalizeAndPersist })
+    } catch (err) {
+      logger.error('Failed to start SSE:', err)
+      // Fallback to JSON POST immediately
+      const assistantId = generateUUID()
+      setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
+      await fallbackJson({ text, assistantId, onFinal: finalizeAndPersist })
     }
   }
 
@@ -160,11 +404,15 @@ function ChatWindow({ onMinimize, onDragStart }) {
       <header
         className="bot-header flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700"
         onMouseDown={onDragStart}
-        onTouchStart={onDragStart}
       >
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-100">
           <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" className="w-6 h-6" />
           Mr.Pot
+          {offline && (
+            <span title="Service unavailable" className="ml-2 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+              OFFLINE
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -177,40 +425,33 @@ function ChatWindow({ onMinimize, onDragStart }) {
       </header>
 
       <div ref={scrollRef} className="bot-messages flex-1 space-y-2 overflow-y-auto px-3 py-3">
-        {messages.map(m => (
+        {messages.map((m) => (
           <div key={m.id} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
             {m.role === 'assistant' && m.isHtml ? (
               <div
-                className="bot-message max-w-[260px] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100"
+                className="bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100"
                 dangerouslySetInnerHTML={{ __html: m.content }}
               />
             ) : (
               <div
                 className={
                   m.role === 'user'
-                    ? 'user-message max-w-[260px] rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow'
-                    : 'bot-message max-w-[260px] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100'
+                    ? 'user-message max-w-[320px] md:max-w-[420px] rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow'
+                    : 'bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100'
                 }
               >
-                {m.content}
+                {m.streaming && m.content === '' ? <TypingIndicator /> : m.content}
               </div>
             )}
           </div>
         ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bot-message max-w-[260px] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100">
-              <TypingIndicator />
-            </div>
-          </div>
-        )}
       </div>
 
       <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-2">
         <div className="bot-actions flex items-center gap-2">
           <input
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message..."
             className="bot-input h-10 flex-1 rounded-md border-transparent bg-transparent px-2 text-sm outline-none focus:border-blue-500"
           />
@@ -243,19 +484,13 @@ function LauncherButton({ onOpen, onDragStart }) {
       type="button"
       onClick={onOpen}
       onMouseDown={onDragStart}
-      onTouchStart={onDragStart}
       className="launch-button relative flex items-center rounded-full mb-2 px-5 py-4 shadow-xl ring-1 ring-gray-200 backdrop-blur hover:shadow-2xl"
     >
-      <span
-        className="relative flex items-center justify-center rounded-full bg-blue-600"
-        style={{ width: 60, height: 60 }}
-      >
+      <span className="relative flex items-center justify-center rounded-full bg-blue-600" style={{ width: 60, height: 60 }}>
         <Image src="/assets/images/chatPot.png" alt="Chat Bot" width={48} height={48} priority />
         <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white" />
       </span>
-      <span className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-        Mr.Pot
-      </span>
+      <span className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">Mr.Pot</span>
     </button>
   )
 }
@@ -291,14 +526,13 @@ export default function ChatWidget() {
   }, [offset])
 
   const startDrag = (e) => {
-    e.preventDefault()
     dragRef.current.dragging = false
-    const point = 'touches' in e ? e.touches[0] : e
+    const point = e.touches ? e.touches[0] : e
     const startX = point.clientX
     const startY = point.clientY
     const { x, y } = offsetRef.current
-    const moveEvent = 'touches' in e ? 'touchmove' : 'mousemove'
-    const upEvent = 'touches' in e ? 'touchend' : 'mouseup'
+    const moveEvent = e.touches ? 'touchmove' : 'mousemove'
+    const upEvent = e.touches ? 'touchend' : 'mouseup'
 
     const onMove = (ev) => {
       const mp = ev.touches ? ev.touches[0] : ev
