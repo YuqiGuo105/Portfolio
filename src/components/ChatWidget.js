@@ -230,7 +230,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [offline, setOffline] = useState(false)
   const [endpoint, setEndpoint] = useState('')
   const scrollRef = useRef(null)
   const chatEndpointRef = useRef(null)
@@ -277,10 +276,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
       try {
         const u = new URL(ep, window.location.origin)
         const res = await fetchWithTimeout(new URL('/health', u.origin), { method: 'GET' }, 3000)
-        setOffline(!res.ok)
         if (!res.ok) logger.warn('Health check non-OK:', res.status, res.statusText)
       } catch (e) {
-        setOffline(true)
         logger.warn('Health check error:', e?.message || e)
       }
     })()
@@ -406,7 +403,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
     const finalizeAndPersist = async (finalAnswer) => {
       try {
-        await supabase.from('chat_history').insert([{ question: text, answer: finalAnswer }])
+        await supabase.from('Chat').insert([{ question: text, answer: finalAnswer }])
       } catch (dbErr) {
         logger.warn('Supabase insert failed', dbErr)
       }
@@ -426,19 +423,14 @@ function ChatWindow({ onMinimize, onDragStart }) {
   }
 
   return (
-    <div className="bot-container relative mb-6 flex flex-col h-[80vh] w-full max-w-full sm:max-w-full md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700">
+    <div className="bot-container relative mb-6 flex flex-col h-[80vh] w-screen md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700">
       <header
         className="bot-header flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700"
         onMouseDown={onDragStart}
       >
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-100">
-          <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" className="w-6 h-6" />
+          <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" className="w-6 h-6"/>
           Mr.Pot
-          {offline && (
-            <span title="Service unavailable" className="ml-2 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-600">
-              OFFLINE
-            </span>
-          )}
         </div>
         <button
           type="button"
@@ -446,7 +438,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           className="shrink-button rounded-md p-1 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
           onClick={onMinimize}
         >
-          <Minus className="h-4 w-4" />
+          <Minus className="h-4 w-4"/>
         </button>
       </header>
 
@@ -456,7 +448,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
             {m.role === 'assistant' && m.isHtml ? (
               <div
                 className="bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100"
-                dangerouslySetInnerHTML={{ __html: m.content }}
+                dangerouslySetInnerHTML={{__html: m.content}}
               />
             ) : (
               <div
@@ -466,7 +458,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
                     : 'bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100'
                 }
               >
-                {m.streaming && m.content === '' ? <TypingIndicator /> : m.content}
+                {m.streaming && m.content === '' ? <TypingIndicator/> : m.content}
               </div>
             )}
           </div>
@@ -486,7 +478,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
             disabled={!input.trim() || loading}
             className="send-button rounded-md bg-blue-600 p-2 text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : <ArrowUpRight className="h-4 w-4"/>}
           </button>
         </div>
       </form>
@@ -495,7 +487,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
 }
 
 /** Minimized launcher button */
-function LauncherButton({ onOpen, onDragStart }) {
+function LauncherButton({onOpen, onDragStart}) {
   const [animating, setAnimating] = useState(true)
 
   useEffect(() => {
