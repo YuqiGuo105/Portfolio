@@ -230,7 +230,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [offline, setOffline] = useState(false)
   const [endpoint, setEndpoint] = useState('')
   const scrollRef = useRef(null)
   const chatEndpointRef = useRef(null)
@@ -277,10 +276,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
       try {
         const u = new URL(ep, window.location.origin)
         const res = await fetchWithTimeout(new URL('/health', u.origin), { method: 'GET' }, 3000)
-        setOffline(!res.ok)
         if (!res.ok) logger.warn('Health check non-OK:', res.status, res.statusText)
       } catch (e) {
-        setOffline(true)
         logger.warn('Health check error:', e?.message || e)
       }
     })()
@@ -426,7 +423,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
   }
 
   return (
-    <div className="bot-container relative mb-6 flex flex-col h-[80vh] w-full max-w-full sm:max-w-full md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700">
+    <div className="bot-container relative mb-6 flex flex-col h-[80vh] w-screen md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700">
       <header
         className="bot-header flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700"
         onMouseDown={onDragStart}
@@ -434,11 +431,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-100">
           <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" className="w-6 h-6" />
           Mr.Pot
-          {offline && (
-            <span title="Service unavailable" className="ml-2 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-600">
-              OFFLINE
-            </span>
-          )}
         </div>
         <button
           type="button"
