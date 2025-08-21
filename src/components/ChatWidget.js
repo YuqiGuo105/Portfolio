@@ -196,6 +196,11 @@ function TypingIndicator() {
   )
 }
 
+/** Blinking cursor shown during streaming */
+function StreamingCursor() {
+  return <span className="blinking-cursor" />
+}
+
 /** Dark backdrop overlay */
 function Overlay({ onClick }) {
   return (
@@ -448,7 +453,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
             {m.role === 'assistant' && m.isHtml ? (
               <div
                 className="bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100"
-                dangerouslySetInnerHTML={{__html: m.content}}
+                dangerouslySetInnerHTML={{ __html: m.content }}
               />
             ) : (
               <div
@@ -458,7 +463,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
                     : 'bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100'
                 }
               >
-                {m.streaming && m.content === '' ? <TypingIndicator/> : m.content}
+                {m.streaming
+                  ? m.content === ''
+                    ? <TypingIndicator />
+                    : <><span>{m.content}</span><StreamingCursor /></>
+                  : m.content}
               </div>
             )}
           </div>
