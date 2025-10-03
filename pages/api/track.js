@@ -44,6 +44,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.warn('[Track] Supabase credentials missing – skipping insert');
+    return res.status(200).json({ ok: true, skipped: 'supabase-not-configured' });
+  }
+
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
   const { localTime = new Date().toISOString(), event = 'page_view' } = body;
 

@@ -44,6 +44,36 @@ To get a local copy up and running follow these simple steps.
   EMAIL_TO=TO_USER
   ```
 
+### Supabase setup
+
+1. **Create a project** at [app.supabase.com](https://app.supabase.com) and copy the "Project URL" and "anon" API key from the _Project Settings → API_ page. Paste them into the `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` variables shown above.
+2. **Create the `visitor_logs` table** (used by `/api/track`) by running the SQL below in the Supabase SQL editor:
+   ```sql
+   create table if not exists public.visitor_logs (
+     id uuid default gen_random_uuid() primary key,
+     created_at timestamptz default now(),
+     local_time timestamptz,
+     event text,
+     ip text,
+     ua text,
+     country text,
+     region text,
+     city text,
+     latitude double precision,
+     longitude double precision
+   );
+   ```
+3. **Enable Row Level Security (RLS)** on the table and add a policy to allow inserts from the anon key:
+   ```sql
+   alter table public.visitor_logs enable row level security;
+
+   create policy "Allow inserts from anon" on public.visitor_logs
+     for insert
+     to anon
+     with check (true);
+   ```
+4. Deploy the updated environment variables to Vercel (or your hosting provider) so the API route can access Supabase in production.
+
 - Running the project
   ```sh
   npm run dev
