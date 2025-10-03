@@ -126,6 +126,12 @@ const Index = () => {
       try {
         const endpoint = process.env.NEXT_PUBLIC_STORIES_ENDPOINT;
         const owner    = encodeURIComponent(process.env.NEXT_PUBLIC_STORIES_OWNER);
+        if (!endpoint || !process.env.NEXT_PUBLIC_STORIES_OWNER) {
+          console.warn("Stories endpoint/owner env vars missing – skipping stories fetch.");
+          setStories([]);
+          setIsPlaying(false);
+          return;
+        }
         const res      = await fetch(`${endpoint}/records/owner/${owner}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
