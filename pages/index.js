@@ -11,6 +11,10 @@ import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Modal from "react-modal";
 
+const GITHUB_URL = process.env.REACT_APP_GITHUB_URL || "https://github.com/YuqiGuo105";
+const LEETCODE_URL = process.env.REACT_APP_LEETCODE_URL || "https://leetcode.com/u/Yuqi_Guo/";
+const INSTAGRAM_URL = process.env.REACT_APP_INSTAGRAM_URL || "https://www.instagram.com/yuqi_guo17/";
+
 Modal.setAppElement('#__next');
 const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
   ssr: false,
@@ -587,24 +591,24 @@ const Index = () => {
                   <a
                     target="_blank"
                     rel="noreferrer"
-                    href="https://github.com/YuqiGuo105"
-                    onClick={() => recordClick("social-link", "https://github.com/YuqiGuo105")}
+                    href={GITHUB_URL}
+                    onClick={() => recordClick("social-link", GITHUB_URL)}
                   >
                     <i aria-hidden="true" className="fab fa-github"/>
                   </a>
                   <a
                     target="_blank"
                     rel="noreferrer"
-                    href="https://leetcode.com/u/Yuqi_Guo/"
-                    onClick={() => recordClick("social-link", "https://leetcode.com/u/Yuqi_Guo/")}
+                    href={LEETCODE_URL}
+                    onClick={() => recordClick("social-link", LEETCODE_URL)}
                   >
                     <i aria-hidden="true" className="leetcode-icon-bottom custom-leetcode-icon"/>
                   </a>
                   <a
                     target="_blank"
                     rel="noreferrer"
-                    href="https://www.instagram.com/yuqi_guo17/"
-                    onClick={() => recordClick("social-link", "https://www.instagram.com/yuqi_guo17/")}
+                    href={INSTAGRAM_URL}
+                    onClick={() => recordClick("social-link", INSTAGRAM_URL)}
                   >
                     <i aria-hidden="true" className="fab fa-instagram"/>
                   </a>

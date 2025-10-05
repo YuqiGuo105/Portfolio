@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+const GITHUB_URL = process.env.REACT_APP_GITHUB_URL || "https://github.com/YuqiGuo105";
+const INSTAGRAM_URL = process.env.REACT_APP_INSTAGRAM_URL || "https://www.instagram.com/yuqi_guo17/";
+
 const Header = () => {
 
   const openMenu = event => {
@@ -283,14 +286,14 @@ const Header = () => {
         {/* social */}
         <div className="menu-social-links">
           <a
-            href="https://github.com/YuqiGuo105"
+            href={GITHUB_URL}
             target="blank"
             title="twitter"
           >
             <i className="fab fa-github" />
           </a>
           <a
-            href="https://www.instagram.com/yuqi_guo17/"
+            href={INSTAGRAM_URL}
             target="blank"
             title="behance"
           >
