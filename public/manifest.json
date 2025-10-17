@@ -1,0 +1,16 @@
+{
+  "name": "Portfolio Web OS",
+  "short_name": "WebOS",
+  "description": "A desktop-like interface for the portfolio site.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0f16",
+  "theme_color": "#243b8a",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}
