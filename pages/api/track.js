@@ -60,6 +60,22 @@ export default async function handler(req, res) {
   const geo = geoFromHeaders(req.headers);
   const { country, region, city, latitude, longitude, _src } = geo;
 
+  const regionHeader =
+    req.headers['cf-region-code'] || req.headers['cf-region'] || req.headers['x-vercel-ip-country-region'] || region || '';
+  const normalizedRegion = String(regionHeader).trim().toUpperCase();
+  const normalizedCompact = normalizedRegion.replace(/\s+/g, '');
+  const isTexas =
+    normalizedRegion === 'TX' ||
+    normalizedRegion === 'TEXAS' ||
+    normalizedRegion.endsWith('-TX') ||
+    normalizedRegion.includes('TEXAS') ||
+    normalizedCompact.endsWith('UNITEDSTATESTX');
+
+  if (isTexas) {
+    console.warn(`[Track] Blocked request from Texas ip=${ip}`);
+    return res.status(403).json({ ok: false, error: 'Access denied' });
+  }
+
   // UA & explicit payload ---------------------------------------------------
   const ua = (req.headers['user-agent'] || '').slice(0, 255);
   const insertPayload = {
