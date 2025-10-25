@@ -5,7 +5,9 @@ import TestimonialSlider from "../src/components/TestimonialSlider";
 import Layout from "../src/layout/Layout";
 import SeoHead from "../src/components/SeoHead";
 import {useEffect, useState, useRef} from "react";
+import { useRouter } from "next/router";
 import {supabase} from "../src/supabase/supabaseClient";
+import LoginDialog from "../src/components/LoginDialog";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -55,6 +57,8 @@ const Index = () => {
   const [companiesCount, setCompaniesCount] = useState(0);
   const [lifeBlogs, setLifeBlogs] = useState([]);
   const [loggedIn, setLoggedIn]     = useState(false);
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+  const [pendingRedirect, setPendingRedirect] = useState(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -62,6 +66,24 @@ const Index = () => {
   const timerRef = useRef(null);
   const progressBarRef = useRef(null);
   const [stories, setStories] = useState([]);
+  const router = useRouter();
+
+  useEffect(() => {
+    const initialiseAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      setLoggedIn(!!data?.session);
+    };
+
+    initialiseAuth();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setLoggedIn(!!session);
+    });
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
   useEffect(() => {
     const bootstrap = async () => {
       /* years of experience */
@@ -205,6 +227,35 @@ const Index = () => {
     } catch (err) {
       console.error("Error logging click event:", err);
     }
+  };
+
+  const openLoginDialog = targetUrl => {
+    setPendingRedirect(targetUrl);
+    setIsLoginDialogOpen(true);
+  };
+
+  const closeLoginDialog = () => {
+    setIsLoginDialogOpen(false);
+    setPendingRedirect(null);
+  };
+
+  const handleLoginSuccess = () => {
+    const destination = pendingRedirect;
+    setIsLoginDialogOpen(false);
+    setPendingRedirect(null);
+    if (destination) {
+      router.push(destination);
+    }
+  };
+
+  const handleProtectedNavigation = (event, targetUrl) => {
+    event.preventDefault();
+    if (loggedIn) {
+      router.push(targetUrl);
+      return;
+    }
+
+    openLoginDialog(targetUrl);
   };
 
   if (error) return <div>Error loading blogs: {error}</div>;
@@ -943,18 +994,29 @@ const Index = () => {
                 require_login,
               } = blog;
 
-              const href = require_login
-                ? `/login?next=/life-blog/${id}`
-                : `/life-blog/${id}`;
+              const href = `/life-blog/${id}`;
+              const handleClick = event => handleProtectedNavigation(event, href);
+              const titleContent = (
+                <>
+                  {title}
+                  {require_login && " (login required)"}
+                </>
+              );
 
               return (
                 <div key={id} className="archive-item">
                   <div className="image">
-                    <Link href={href} legacyBehavior>
-                      <a >
+                    {require_login ? (
+                      <a href={href} onClick={handleClick}>
                         <img src={image_url} alt={title}/>
                       </a>
-                    </Link>
+                    ) : (
+                      <Link href={href} legacyBehavior>
+                        <a >
+                          <img src={image_url} alt={title}/>
+                        </a>
+                      </Link>
+                    )}
                   </div>
 
                   <div className="desc">
@@ -965,26 +1027,41 @@ const Index = () => {
                     </div>
 
                     <h3 className="title">
-                      <Link href={href} legacyBehavior>
-                        <a >
-                          {title}
-                          {require_login && " (login required)"}
+                      {require_login ? (
+                        <a href={href} onClick={handleClick}>
+                          {titleContent}
                         </a>
-                      </Link>
+                      ) : (
+                        <Link href={href} legacyBehavior>
+                          <a >
+                            {titleContent}
+                          </a>
+                        </Link>
+                      )}
                     </h3>
 
                     <div className="text">
                       <p>{description}</p>
 
                       <div className="readmore">
-                        <Link href={href} legacyBehavior>
+                        {require_login ? (
                           <a
                             className="lnk"
-
+                            href={href}
+                            onClick={handleClick}
                           >
-                            {require_login ? "Log in to read" : "Read more"}
+                            Log in to read
                           </a>
-                        </Link>
+                        ) : (
+                          <Link href={href} legacyBehavior>
+                            <a
+                              className="lnk"
+
+                            >
+                              Read more
+                            </a>
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1013,6 +1090,13 @@ const Index = () => {
           }
         `}</style>
       </section>
+
+      <LoginDialog
+        isOpen={isLoginDialogOpen}
+        onClose={closeLoginDialog}
+        onSuccess={handleLoginSuccess}
+        redirectPath={pendingRedirect}
+      />
 
       <ContactForm/>
     </Layout>
