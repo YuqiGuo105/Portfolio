@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../supabase/supabaseClient";
 
 const LoginDialog = ({ isOpen, onClose, onSuccess, redirectPath }) => {
@@ -9,17 +10,35 @@ const LoginDialog = ({ isOpen, onClose, onSuccess, redirectPath }) => {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [isClient, setIsClient] = useState(false);
+
   useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+
     if (isOpen) {
       setMode("login");
       setEmail("");
       setPassword("");
       setError("");
       setMessage("");
+      setLoading(false);
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
     }
+
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [isOpen]);
 
-  if (!isOpen) {
+  if (!isOpen || !isClient) {
     return null;
   }
 
@@ -96,7 +115,7 @@ const LoginDialog = ({ isOpen, onClose, onSuccess, redirectPath }) => {
     setPassword("");
   };
 
-  return (
+  const dialog = (
     <div className="login-dialog-overlay" role="dialog" aria-modal="true">
       <div className="login-dialog">
         <button className="close" type="button" onClick={onClose} aria-label="Close login dialog">
@@ -333,6 +352,14 @@ const LoginDialog = ({ isOpen, onClose, onSuccess, redirectPath }) => {
       `}</style>
     </div>
   );
+
+  const portalTarget = typeof document !== "undefined" ? document.body : null;
+
+  if (!portalTarget) {
+    return null;
+  }
+
+  return createPortal(dialog, portalTarget);
 };
 
 export default LoginDialog;

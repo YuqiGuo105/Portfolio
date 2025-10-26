@@ -249,7 +249,11 @@ const Index = () => {
   };
 
   const handleProtectedNavigation = (event, targetUrl) => {
-    event.preventDefault();
+    if (event) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+    }
+
     if (loggedIn) {
       router.push(targetUrl);
       return;
