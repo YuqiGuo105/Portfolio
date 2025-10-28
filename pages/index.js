@@ -16,6 +16,27 @@ const LEETCODE_URL = process.env.REACT_APP_LEETCODE_URL || "https://leetcode.com
 const INSTAGRAM_URL = process.env.REACT_APP_INSTAGRAM_URL || "https://www.instagram.com/yuqi_guo17/";
 
 Modal.setAppElement('#__next');
+
+// sha256("1234") — used so the password never appears in plaintext in the bundle.
+const PASSWORD_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8f9664f0ad69d1c2a2aab7fe";
+
+const hashPassword = async (value) => {
+  if (typeof window === "undefined") {
+    const { createHash } = await import("crypto");
+    return createHash("sha256").update(value).digest("hex");
+  }
+
+  if (!window.crypto?.subtle) {
+    throw new Error("Web Crypto API is unavailable");
+  }
+
+  const encoder = new TextEncoder();
+  const data = encoder.encode(value);
+  const digest = await window.crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .map(byte => byte.toString(16).padStart(2, "0"))
+    .join("");
+};
 const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
   ssr: false,
 });
@@ -47,7 +68,7 @@ const settings = {
 };
 
 
-const Index = () => {
+const Index = ({ requirePassword }) => {
   const [blogs, setBlogs] = useState([]);
   const [error, setError] = useState(null);
   const [yearsOfExperience, setYearsOfExperience] = useState(1);
@@ -62,6 +83,9 @@ const Index = () => {
   const timerRef = useRef(null);
   const progressBarRef = useRef(null);
   const [stories, setStories] = useState([]);
+  const [isAuthenticated, setIsAuthenticated] = useState(!requirePassword);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   useEffect(() => {
     const bootstrap = async () => {
       /* years of experience */
@@ -206,6 +230,101 @@ const Index = () => {
       console.error("Error logging click event:", err);
     }
   };
+
+  const handlePasswordSubmit = async (event) => {
+    event.preventDefault();
+    try {
+      const hashedInput = await hashPassword(passwordInput.trim());
+      if (hashedInput === PASSWORD_HASH) {
+        setIsAuthenticated(true);
+        setPasswordError("");
+        setPasswordInput("");
+        return;
+      }
+      setPasswordError("Incorrect password. Please try again.");
+    } catch (err) {
+      console.error("Failed to verify password", err);
+      setPasswordError("Something went wrong. Please retry.");
+    }
+  };
+
+  if (requirePassword && !isAuthenticated) {
+    return (
+      <>
+        <SeoHead title="Yuqi Guo Portfolio" />
+        <Layout>
+          <div
+            style={{
+              minHeight: "70vh",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <form
+              onSubmit={handlePasswordSubmit}
+              style={{
+                maxWidth: "360px",
+                width: "100%",
+                background: "#ffffff",
+                borderRadius: "16px",
+                boxShadow: "0 20px 45px rgba(15, 23, 42, 0.1)",
+                padding: "32px",
+              }}
+            >
+              <h2 style={{ marginBottom: "16px", fontSize: "1.5rem", fontWeight: 600 }}>
+                Enter password
+              </h2>
+              <p style={{ marginBottom: "24px", color: "#475569" }}>
+                This page is protected. Please provide the password to continue.
+              </p>
+              <label
+                htmlFor="homepage-password"
+                style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}
+              >
+                Password
+              </label>
+              <input
+                id="homepage-password"
+                type="password"
+                value={passwordInput}
+                onChange={(event) => {
+                  setPasswordInput(event.target.value);
+                  if (passwordError) setPasswordError("");
+                }}
+                autoFocus
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: "12px",
+                  border: "1px solid #cbd5f5",
+                  marginBottom: "16px",
+                }}
+              />
+              {passwordError && (
+                <p style={{ color: "#ef4444", marginBottom: "16px" }}>{passwordError}</p>
+              )}
+              <button
+                type="submit"
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: "12px",
+                  border: "none",
+                  backgroundColor: "#111827",
+                  color: "white",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Continue
+              </button>
+            </form>
+          </div>
+        </Layout>
+      </>
+    );
+  }
 
   if (error) return <div>Error loading blogs: {error}</div>;
   if (!blogs.length) return <div>Loading...</div>;
@@ -1019,4 +1138,19 @@ const Index = () => {
     </>
   );
 };
+
+export async function getServerSideProps() {
+  const passwordFromEnv = process.env.PASSWORD ?? "";
+  let requirePassword = false;
+
+  if (passwordFromEnv) {
+    const hashedEnvPassword = await hashPassword(passwordFromEnv);
+    requirePassword = hashedEnvPassword === PASSWORD_HASH;
+  }
+
+  return {
+    props: { requirePassword },
+  };
+}
+
 export default Index;
