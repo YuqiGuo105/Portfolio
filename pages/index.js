@@ -4,6 +4,7 @@ import ContactForm from "../src/components/ContactForm";
 import TestimonialSlider from "../src/components/TestimonialSlider";
 import Layout from "../src/layout/Layout";
 import SeoHead from "../src/components/SeoHead";
+import DashboardPanels from "../src/components/DashboardPanels";
 import {useEffect, useState, useRef} from "react";
 import {supabase} from "../src/supabase/supabaseClient";
 import Slider from "react-slick";
@@ -1013,6 +1014,8 @@ const Index = () => {
           }
         `}</style>
       </section>
+
+      <DashboardPanels />
 
       <ContactForm/>
     </Layout>
