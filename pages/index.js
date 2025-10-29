@@ -11,6 +11,8 @@ import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Modal from "react-modal";
+import { useRouter } from 'next/router';
+import LogInDialog from "../src/components/LogInDialog";
 
 const GITHUB_URL = process.env.REACT_APP_GITHUB_URL || "https://github.com/YuqiGuo105";
 const LEETCODE_URL = process.env.REACT_APP_LEETCODE_URL || "https://leetcode.com/u/Yuqi_Guo/";
@@ -55,7 +57,6 @@ const Index = () => {
   const [experiences, setExperiences] = useState([]);
   const [companiesCount, setCompaniesCount] = useState(0);
   const [lifeBlogs, setLifeBlogs] = useState([]);
-  const [loggedIn, setLoggedIn]     = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -63,6 +64,11 @@ const Index = () => {
   const timerRef = useRef(null);
   const progressBarRef = useRef(null);
   const [stories, setStories] = useState([]);
+  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const [showLogin, setShowLogin] = useState(false);
+  const [pendingNext, setPendingNext] = useState(null);
+
   useEffect(() => {
     const bootstrap = async () => {
       /* years of experience */
@@ -102,7 +108,6 @@ const Index = () => {
     timerRef.current = setInterval(() => {
       setProgress(prev => {
         if (prev >= 100) {
-          // 当前故事结束，切换到下一个
           setCurrentStoryIndex(prevIndex => {
             if (prevIndex >= stories.length - 1) {
               clearInterval(timerRef.current);
@@ -261,6 +266,13 @@ const Index = () => {
       { breakpoint: 1024, settings: { slidesToShow: 2 } },
       { breakpoint: 640,  settings: { slidesToShow: 1 } },
     ],
+  };
+
+  const handleProtectedClick = (e, requireLogin, nextHref) => {
+    if (!requireLogin) return;            // Not login -> directly jump
+    e.preventDefault();                   // Requires login
+    setPendingNext(nextHref);             // 记录本来要去的地址
+    setShowLogin(true);                   // 打开登录弹窗
   };
 
   return (
@@ -944,15 +956,15 @@ const Index = () => {
                 require_login,
               } = blog;
 
-              const href = require_login
-                ? `/login?next=/life-blog/${id}`
-                : `/life-blog/${id}`;
+              const nextHref = `/life-blog/${id}`;
 
               return (
                 <div key={id} className="archive-item">
                   <div className="image">
-                    <Link href={href} legacyBehavior>
-                      <a >
+                    <Link href={nextHref} legacyBehavior>
+                      <a
+                        onClick={(e) => handleProtectedClick(e, require_login, nextHref)}
+                      >
                         <img src={image_url} alt={title}/>
                       </a>
                     </Link>
@@ -966,8 +978,10 @@ const Index = () => {
                     </div>
 
                     <h3 className="title">
-                      <Link href={href} legacyBehavior>
-                        <a >
+                      <Link href={nextHref} legacyBehavior>
+                        <a
+                          onClick={(e) => handleProtectedClick(e, require_login, nextHref)}
+                        >
                           {title}
                           {require_login && " (login required)"}
                         </a>
@@ -978,10 +992,10 @@ const Index = () => {
                       <p>{description}</p>
 
                       <div className="readmore">
-                        <Link href={href} legacyBehavior>
+                        <Link href={nextHref} legacyBehavior>
                           <a
                             className="lnk"
-
+                            onClick={(e) => handleProtectedClick(e, require_login, nextHref)}
                           >
                             {require_login ? "Log in to read" : "Read more"}
                           </a>
@@ -1015,6 +1029,20 @@ const Index = () => {
         `}</style>
       </section>
 
+        <LogInDialog
+          open={showLogin}
+          title="Log In Required"
+          onClose={() => setShowLogin(false)}
+          onConfirm={() => {
+            // 跳到登录页，带 next 回跳
+            const target = pendingNext || '/';
+            router.push(`/login?next=${encodeURIComponent(target)}`);
+          }}
+        >
+          You need to log in to read this post.
+        </LogInDialog>
+
+        <ContactForm/>
       <DashboardPanels />
 
       <ContactForm/>
