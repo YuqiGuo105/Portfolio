@@ -151,7 +151,7 @@ const DashboardPanels = () => {
     return amt * currency.rate;
   }, [amount, currency]);
 
-  const [temperatureUnit, setTemperatureUnit] = useState("F");
+  const [temperatureUnit, setTemperatureUnit] = useState("C");
 
   const toggleTemperatureUnit = () => {
     setTemperatureUnit((current) => (current === "F" ? "C" : "F"));
@@ -329,15 +329,17 @@ const DashboardPanels = () => {
               {weatherIcon}
             </div>
             <div className="weather-info">
-              <div className="temperature">{displayTemperature}</div>
-              <button
-                type="button"
-                className="unit-toggle"
-                onClick={toggleTemperatureUnit}
-                aria-label={`Switch to ${temperatureUnit === "F" ? "Celsius" : "Fahrenheit"}`}
-              >
-                Show °{temperatureUnit === "F" ? "C" : "F"}
-              </button>
+              <div className="temperature-row">
+                <div className="temperature">{displayTemperature}</div>
+                <button
+                  type="button"
+                  className="unit-toggle"
+                  onClick={toggleTemperatureUnit}
+                  aria-label={`Switch to ${temperatureUnit === "F" ? "Celsius" : "Fahrenheit"}`}
+                >
+                  Show °{temperatureUnit === "F" ? "C" : "F"}
+                </button>
+              </div>
               <div className="description">Outlook: {weather.weatherDescription}</div>
               {weather.location && (
                 <div className="location">
@@ -578,14 +580,22 @@ const DashboardPanels = () => {
           font-variant-numeric: tabular-nums;
         }
 
+        .temperature-row {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
         .unit-toggle {
-          align-self: flex-start;
-          border: 1px solid rgba(99, 102, 241, 0.4);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid rgba(99, 102, 241, 0.35);
           background: rgba(79, 70, 229, 0.08);
           color: #4338ca;
           border-radius: 999px;
-          padding: 0.3rem 0.75rem;
-          font-size: 0.75rem;
+          padding: 0.2rem 0.6rem;
+          font-size: 0.7rem;
           font-weight: 600;
           letter-spacing: 0.04em;
           text-transform: uppercase;
