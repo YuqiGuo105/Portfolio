@@ -319,9 +319,62 @@ const DashboardPanels = () => {
 
       <style jsx>{`
         .dashboard-wrapper {
-          background: #f8f8fb;
+          --dashboard-bg: #f8f8fb;
+          --card-bg: #ffffff;
+          --card-border: rgba(15, 23, 42, 0.06);
+          --card-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+          --heading-color: #1a1c2d;
+          --text-primary: #1f2937;
+          --text-secondary: #374151;
+          --text-muted: #6b7280;
+          --text-subtle: #9ca3af;
+          --badge-text: #ef4444;
+          --badge-bg: rgba(239, 68, 68, 0.12);
+          --badge-warning-text: #b45309;
+          --badge-warning-bg: rgba(251, 191, 36, 0.18);
+          --positive: #16a34a;
+          --negative: #dc2626;
+          --neutral: #6b7280;
+          --input-bg: #ffffff;
+          --input-border: rgba(148, 163, 184, 0.6);
+          --input-text: #111827;
+          --conversion-text: #1f2937;
+          --weather-accent: #f97316;
+          --weather-accent-bg: rgba(249, 115, 22, 0.08);
+          --unit-toggle-bg: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+          --unit-toggle-hover-bg: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+          --provider-indicator: #f97316;
+          background: var(--dashboard-bg);
           padding: 3rem 0;
           font-family: "Inter", "Segoe UI", "Roboto", sans-serif;
+        }
+
+        :global(body.dark-skin) #market-weather-dashboard .dashboard-wrapper {
+          --dashboard-bg: #0b1120;
+          --card-bg: #111827;
+          --card-border: rgba(148, 163, 184, 0.12);
+          --card-shadow: 0 24px 40px rgba(15, 23, 42, 0.45);
+          --heading-color: #e2e8f0;
+          --text-primary: #e2e8f0;
+          --text-secondary: #cbd5f5;
+          --text-muted: #94a3b8;
+          --text-subtle: #64748b;
+          --badge-text: #fca5a5;
+          --badge-bg: rgba(239, 68, 68, 0.25);
+          --badge-warning-text: #fbbf24;
+          --badge-warning-bg: rgba(251, 191, 36, 0.22);
+          --positive: #22c55e;
+          --negative: #f87171;
+          --neutral: #94a3b8;
+          --input-bg: rgba(15, 23, 42, 0.8);
+          --input-border: rgba(148, 163, 184, 0.35);
+          --input-text: #f8fafc;
+          --conversion-text: #f1f5f9;
+          --weather-accent: #f97316;
+          --weather-accent-bg: rgba(249, 115, 22, 0.18);
+          --unit-toggle-bg: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+          --unit-toggle-hover-bg: linear-gradient(135deg, #4338ca 0%, #312e81 100%);
+          --provider-indicator: #f97316;
         }
 
         .dashboard-container {
@@ -334,14 +387,15 @@ const DashboardPanels = () => {
         }
 
         .dashboard-card {
-          background: #ffffff;
-          border: 1px solid rgba(15, 23, 42, 0.06);
+          background: var(--card-bg);
+          border: 1px solid var(--card-border);
           border-radius: 18px;
           padding: 1.75rem;
-          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+          box-shadow: var(--card-shadow);
           display: flex;
           flex-direction: column;
           gap: 1.25rem;
+          color: var(--text-primary);
         }
 
         .dashboard-card header {
@@ -355,23 +409,23 @@ const DashboardPanels = () => {
           font-size: 1.35rem;
           font-weight: 600;
           margin: 0;
-          color: #1a1c2d;
+          color: var(--heading-color);
         }
 
         .badge {
           font-size: 0.7rem;
           text-transform: uppercase;
           letter-spacing: 0.08em;
-          color: #ef4444;
-          background: rgba(239, 68, 68, 0.12);
+          color: var(--badge-text);
+          background: var(--badge-bg);
           padding: 0.35rem 0.5rem;
           border-radius: 999px;
           font-weight: 600;
         }
 
         .badge.badge-warning {
-          color: #b45309;
-          background: rgba(251, 191, 36, 0.18);
+          color: var(--badge-warning-text);
+          background: var(--badge-warning-bg);
         }
 
         .market-rows {
@@ -391,7 +445,7 @@ const DashboardPanels = () => {
           grid-template-columns: 1fr auto auto auto;
           gap: 0.75rem;
           align-items: baseline;
-          color: #111827;
+          color: var(--text-primary);
           font-size: 0.95rem;
         }
 
@@ -406,7 +460,7 @@ const DashboardPanels = () => {
         }
 
         .currency {
-          color: #6b7280;
+          color: var(--text-muted);
           font-size: 0.85rem;
         }
 
@@ -417,24 +471,24 @@ const DashboardPanels = () => {
         }
 
         .change .percent {
-          color: #16a34a;
+          color: var(--positive);
         }
 
         .change.negative {
-          color: #dc2626;
+          color: var(--negative);
         }
 
         .change.positive {
-          color: #16a34a;
+          color: var(--positive);
         }
 
         .change.neutral {
-          color: #6b7280;
+          color: var(--neutral);
         }
 
         .row-sub {
           font-size: 0.75rem;
-          color: #6b7280;
+          color: var(--text-muted);
           letter-spacing: 0.04em;
         }
 
@@ -447,13 +501,13 @@ const DashboardPanels = () => {
         .currency-card .rate {
           font-size: 1.1rem;
           font-weight: 600;
-          color: #111827;
+          color: var(--text-primary);
         }
 
         .currency-card .timestamp,
         .disclaimer {
           font-size: 0.75rem;
-          color: #6b7280;
+          color: var(--text-muted);
           letter-spacing: 0.03em;
         }
 
@@ -468,17 +522,17 @@ const DashboardPanels = () => {
           flex-direction: column;
           gap: 0.4rem;
           font-size: 0.8rem;
-          color: #374151;
+          color: var(--text-secondary);
         }
 
         input,
         select {
-          border: 1px solid rgba(148, 163, 184, 0.6);
+          border: 1px solid var(--input-border);
           border-radius: 10px;
           padding: 0.6rem 0.75rem;
           font-size: 0.95rem;
-          background: #ffffff;
-          color: #111827;
+          background: var(--input-bg);
+          color: var(--input-text);
           font-family: inherit;
         }
 
@@ -497,7 +551,7 @@ const DashboardPanels = () => {
         .conversion-output {
           font-size: 0.9rem;
           font-weight: 500;
-          color: #1f2937;
+          color: var(--conversion-text);
         }
 
         .disclaimer {
@@ -516,10 +570,10 @@ const DashboardPanels = () => {
         }
 
         .icon-wrapper {
-          --accent-color: #f97316;
+          --accent-color: var(--weather-accent);
           display: grid;
           place-items: center;
-          background: rgba(249, 115, 22, 0.08);
+          background: var(--weather-accent-bg);
           border-radius: 14px;
           padding: 0.75rem;
         }
@@ -533,7 +587,7 @@ const DashboardPanels = () => {
         .temperature {
           font-size: 2.25rem;
           font-weight: 600;
-          color: #111827;
+          color: var(--text-primary);
           font-variant-numeric: tabular-nums;
         }
 
@@ -548,7 +602,7 @@ const DashboardPanels = () => {
           align-items: center;
           justify-content: center;
           border: none;
-          background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+          background: var(--unit-toggle-bg);
           color: #ffffff;
           border-radius: 8px;
           padding: 0.4rem 0.75rem;
@@ -562,7 +616,7 @@ const DashboardPanels = () => {
         }
 
         .unit-toggle:hover {
-          background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+          background: var(--unit-toggle-hover-bg);
           box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
           transform: translateY(-1px);
         }
@@ -579,19 +633,19 @@ const DashboardPanels = () => {
 
         .description {
           font-size: 0.95rem;
-          color: #374151;
+          color: var(--text-secondary);
         }
 
         .location {
           font-size: 0.85rem;
-          color: #6b7280;
+          color: var(--text-muted);
         }
 
         .sun-times {
           display: flex;
           flex-direction: column;
           font-size: 0.78rem;
-          color: #6b7280;
+          color: var(--text-muted);
           letter-spacing: 0.04em;
         }
 
@@ -601,7 +655,7 @@ const DashboardPanels = () => {
           align-items: center;
           justify-content: space-between;
           font-size: 0.75rem;
-          color: #9ca3af;
+          color: var(--text-subtle);
         }
 
         .provider {
@@ -616,7 +670,7 @@ const DashboardPanels = () => {
           width: 14px;
           height: 14px;
           border-radius: 4px;
-          border: 1.5px solid #f97316;
+          border: 1.5px solid var(--provider-indicator);
         }
 
         @media (max-width: 1024px) {
