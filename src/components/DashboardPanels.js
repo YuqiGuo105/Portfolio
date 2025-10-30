@@ -24,8 +24,8 @@ const getHoursSince = (timestamp) => {
 
 const weatherIcon = (
   <svg
-    width="42"
-    height="42"
+    width="40"
+    height="40"
     viewBox="0 0 48 48"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
@@ -173,7 +173,7 @@ const DashboardPanels = () => {
           <header>
             <h3>Market Data</h3>
             {marketFallback && (
-              <span className="badge">live feed unavailable · showing sample</span>
+              <span className="badge">live feed unavailable</span>
             )}
           </header>
           <div className="market-rows">
@@ -315,7 +315,7 @@ const DashboardPanels = () => {
       <style jsx>{`
         .dashboard-wrapper {
           background: #f8f8fb;
-          padding: 3rem 0;
+          padding: 2.75rem 1.25rem 3.5rem;
           font-family: "Inter", "Segoe UI", "Roboto", sans-serif;
         }
 
@@ -323,9 +323,10 @@ const DashboardPanels = () => {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 1.5rem;
-          max-width: 1200px;
+          max-width: 1160px;
           margin: 0 auto;
-          padding: 0 1.5rem;
+          width: 100%;
+          align-items: stretch;
         }
 
         .dashboard-card {
@@ -337,6 +338,7 @@ const DashboardPanels = () => {
           display: flex;
           flex-direction: column;
           gap: 1.25rem;
+          height: 100%;
         }
 
         .dashboard-card header {
@@ -506,7 +508,12 @@ const DashboardPanels = () => {
           place-items: center;
           background: rgba(249, 115, 22, 0.08);
           border-radius: 14px;
-          padding: 0.75rem;
+          padding: 0.65rem;
+        }
+
+        .icon-wrapper svg {
+          width: 38px;
+          height: 38px;
         }
 
         .weather-info {
@@ -607,6 +614,95 @@ const DashboardPanels = () => {
           .sun-times {
             flex-direction: row;
             gap: 0.75rem;
+          }
+        }
+
+        @media (max-width: 600px) {
+          .dashboard-wrapper {
+            padding: 2.25rem 1rem 3rem;
+          }
+
+          .dashboard-card {
+            padding: 1.5rem;
+            border-radius: 16px;
+            gap: 1rem;
+          }
+
+          .dashboard-card h3 {
+            font-size: 1.25rem;
+          }
+
+          .row-main {
+            gap: 0.6rem;
+          }
+
+          .weather-main {
+            align-items: flex-start;
+            gap: 1rem;
+          }
+
+          .temperature {
+            font-size: 2rem;
+          }
+
+          .weather-card footer {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.35rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .dashboard-wrapper {
+            padding: 2rem 0.75rem 2.75rem;
+          }
+
+          .dashboard-container {
+            gap: 1.25rem;
+          }
+
+          .dashboard-card {
+            padding: 1.25rem;
+          }
+
+          .badge {
+            font-size: 0.65rem;
+          }
+
+          .market-rows {
+            gap: 1rem;
+          }
+
+          .row-main {
+            grid-template-columns: 1fr;
+            gap: 0.4rem;
+          }
+
+          .price,
+          .change {
+            justify-self: flex-start;
+          }
+
+          .converter-form {
+            gap: 0.6rem;
+          }
+
+          .conversion-output {
+            font-size: 0.85rem;
+          }
+
+          .icon-wrapper {
+            padding: 0.5rem;
+          }
+
+          .icon-wrapper svg {
+            width: 32px;
+            height: 32px;
+          }
+
+          .sun-times {
+            flex-direction: column;
+            gap: 0.25rem;
           }
         }
       `}</style>
