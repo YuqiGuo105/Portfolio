@@ -61,6 +61,7 @@ const weatherIcon = (
 const DashboardPanels = () => {
   const [marketData, setMarketData] = useState([]);
   const [marketFallback, setMarketFallback] = useState(false);
+  const [marketMeta, setMarketMeta] = useState(null);
   const [currency, setCurrency] = useState({
     amount: 1,
     base: "USD",
@@ -91,8 +92,9 @@ const DashboardPanels = () => {
         const json = await response.json();
         if (json?.data) {
           setMarketData(json.data);
-          setMarketFallback(Boolean(json.fallback));
         }
+        setMarketFallback(Boolean(json?.fallback));
+        setMarketMeta(json?.meta ?? null);
       } catch (error) {
         console.error("Failed to load market data", error);
       }
@@ -149,6 +151,46 @@ const DashboardPanels = () => {
     return amt * currency.rate;
   }, [amount, currency]);
 
+  const [temperatureUnit, setTemperatureUnit] = useState("F");
+
+  const toggleTemperatureUnit = () => {
+    setTemperatureUnit((current) => (current === "F" ? "C" : "F"));
+  };
+
+  const displayTemperature = useMemo(() => {
+    if (
+      isWeatherLoading ||
+      weather.temperature === null ||
+      weather.temperature === undefined
+    ) {
+      return "--";
+    }
+
+    if (temperatureUnit === "C") {
+      const celsius = ((weather.temperature - 32) * 5) / 9;
+      return `${Math.round(celsius)}°C`;
+    }
+
+    return `${Math.round(weather.temperature)}°F`;
+  }, [isWeatherLoading, weather.temperature, temperatureUnit]);
+
+  const { marketBadgeText, marketBadgeClassName } = useMemo(() => {
+    if (marketMeta?.source && marketMeta.source !== "live") {
+      const text =
+        marketMeta.source === "simulated"
+          ? "live feed unavailable · showing simulated snapshot"
+          : `cached snapshot · source: ${marketMeta.source}`;
+
+      return { text, className: "badge badge-warning" };
+    }
+
+    if (marketFallback) {
+      return { text: "live feed unavailable", className: "badge" };
+    }
+
+    return { text: null, className: "badge" };
+  }, [marketFallback, marketMeta]);
+
   const hoursAgoLabel = (timestamp) => {
     const hours = getHoursSince(timestamp);
     if (hours === null) return "Updated just now";
@@ -172,8 +214,8 @@ const DashboardPanels = () => {
         <div className="dashboard-card market-card">
           <header>
             <h3>Market Data</h3>
-            {marketFallback && (
-              <span className="badge">live feed unavailable · showing sample</span>
+            {marketBadgeText && (
+              <span className={marketBadgeClassName}>{marketBadgeText}</span>
             )}
           </header>
           <div className="market-rows">
@@ -287,11 +329,15 @@ const DashboardPanels = () => {
               {weatherIcon}
             </div>
             <div className="weather-info">
-              <div className="temperature">
-                {isWeatherLoading || weather.temperature === null || weather.temperature === undefined
-                  ? "--"
-                  : Math.round(weather.temperature)}°F
-              </div>
+              <div className="temperature">{displayTemperature}</div>
+              <button
+                type="button"
+                className="unit-toggle"
+                onClick={toggleTemperatureUnit}
+                aria-label={`Switch to ${temperatureUnit === "F" ? "Celsius" : "Fahrenheit"}`}
+              >
+                Show °{temperatureUnit === "F" ? "C" : "F"}
+              </button>
               <div className="description">Outlook: {weather.weatherDescription}</div>
               {weather.location && (
                 <div className="location">
@@ -362,6 +408,11 @@ const DashboardPanels = () => {
           padding: 0.35rem 0.5rem;
           border-radius: 999px;
           font-weight: 600;
+        }
+
+        .badge.badge-warning {
+          color: #b45309;
+          background: rgba(251, 191, 36, 0.18);
         }
 
         .market-rows {
@@ -472,6 +523,11 @@ const DashboardPanels = () => {
           font-family: inherit;
         }
 
+        .converter-form .input-group input,
+        .converter-form .input-group select {
+          width: 100%;
+        }
+
         input:focus,
         select:focus {
           outline: none;
@@ -512,7 +568,7 @@ const DashboardPanels = () => {
         .weather-info {
           display: flex;
           flex-direction: column;
-          gap: 0.35rem;
+          gap: 0.5rem;
         }
 
         .temperature {
@@ -520,6 +576,31 @@ const DashboardPanels = () => {
           font-weight: 600;
           color: #111827;
           font-variant-numeric: tabular-nums;
+        }
+
+        .unit-toggle {
+          align-self: flex-start;
+          border: 1px solid rgba(99, 102, 241, 0.4);
+          background: rgba(79, 70, 229, 0.08);
+          color: #4338ca;
+          border-radius: 999px;
+          padding: 0.3rem 0.75rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          cursor: pointer;
+          transition: background 0.2s ease, color 0.2s ease;
+        }
+
+        .unit-toggle:hover {
+          background: rgba(79, 70, 229, 0.16);
+          color: #312e81;
+        }
+
+        .unit-toggle:focus {
+          outline: none;
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
         }
 
         .description {

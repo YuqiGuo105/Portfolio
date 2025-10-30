@@ -1042,7 +1042,6 @@ const Index = () => {
           You need to log in to read this post.
         </LogInDialog>
 
-        <ContactForm/>
       <DashboardPanels />
 
       <ContactForm/>
