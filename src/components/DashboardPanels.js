@@ -349,7 +349,7 @@ const DashboardPanels = () => {
           font-family: "Inter", "Segoe UI", "Roboto", sans-serif;
         }
 
-        :global(body.dark-skin) #market-weather-dashboard .dashboard-wrapper {
+        :global(body.dark-skin) #market-weather-dashboard {
           --dashboard-bg: #0b1120;
           --card-bg: #111827;
           --card-border: rgba(148, 163, 184, 0.12);
