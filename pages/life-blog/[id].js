@@ -10,7 +10,8 @@ const LifeBlog = () => {
   const [error, setError] = useState(null);
   const router = useRouter();
   const {id} = router.query;
-  const [loggedIn,  setLoggedIn]  = useState(false);
+  const [loggedIn,  setLoggedIn]  = useState(null);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   // Log click events for analytics
   const recordClick = async (clickEvent, targetUrl) => {
@@ -45,7 +46,7 @@ const LifeBlog = () => {
 
   /* ────────── 2. fetch post when id ready ────────── */
   useEffect(() => {
-    if (!id) return;                       // wait for dynamic route
+    if (!id || loggedIn === null) return;   // wait for dynamic route & auth
 
     const fetchBlog = async () => {
       const { data, error } = await supabase
@@ -62,12 +63,14 @@ const LifeBlog = () => {
 
       /* gate: requires login? */
       if (data.require_login && !loggedIn) {
-        router.replace("/");
+        setAccessDenied(true);
+        setLoading(false);
         return;
       }
 
       /* sanitise & store */
       data.content = DOMPurify.sanitize(data.content ?? "");
+      setAccessDenied(false);
       setBlog(data);
       setLoading(false);
     };
@@ -76,6 +79,26 @@ const LifeBlog = () => {
   }, [id, loggedIn, router]);
 
   /* ────────── guard rails ────────── */
+  if (accessDenied) {
+    return (
+      <Layout extraWrapClass={"single-post"}>
+        <section className="section section-inner started-heading">
+          <div className="container">
+            <div className="row">
+              <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                <div className="m-titles">
+                  <h1 className="m-title">Login Required</h1>
+                  <div className="m-category">
+                    Please log in to view this life blog post.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </Layout>
+    );
+  }
   if (loading) return <div>Loading…</div>;
   if (error)   return <div>Error loading blog post.</div>;
   if (!blog)   return <div>Blog post not found.</div>;
