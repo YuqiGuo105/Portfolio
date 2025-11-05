@@ -277,7 +277,11 @@ const Index = () => {
 
   return (
     <>
-      <SeoHead title="Yuqi Guo Portfolio" />
+      <SeoHead
+        title="Yuqi Guo Portfolio"
+        description="Explore the software engineering portfolio of Yuqi Guo (郭育奇), featuring backend projects, professional experience, and technical articles."
+        keywords="Yuqi Guo, 郭育奇, software engineer, portfolio, backend engineer, Goldman Sachs"
+      />
       <Layout>
       <Modal
         isOpen={isProfileModalOpen}
