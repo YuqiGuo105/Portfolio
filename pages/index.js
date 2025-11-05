@@ -277,7 +277,11 @@ const Index = () => {
 
   return (
     <>
-      <SeoHead title="Yuqi Guo Portfolio" />
+      <SeoHead
+        title="Yuqi Guo Portfolio"
+        description="Explore the software engineering portfolio of Yuqi Guo (郭育奇), featuring backend projects, professional experience, and technical articles."
+        keywords="Yuqi Guo, 郭育奇, software engineer, portfolio, backend engineer, Goldman Sachs"
+      />
       <Layout>
       <Modal
         isOpen={isProfileModalOpen}
@@ -706,7 +710,7 @@ const Index = () => {
                   className="text"
                 >
                   <p>
-                    Hello, my name is Yuqi Guo, and I am currently a Software Development Engineer in the Global Banking
+                    Hello, my name is Yuqi Guo (<strong>郭育奇</strong>), and I am currently a Software Development Engineer in the Global Banking
                     and Markets division at <strong>Goldman Sachs</strong>,
                     focusing on the Margins team. My role involves designing and developing robust backend systems to
                     ensure accurate and efficient margin calculations,

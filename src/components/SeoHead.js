@@ -2,8 +2,8 @@ import Head from 'next/head'
 
 const SeoHead = ({
   title,
-  description = "Portfolio and blog of Yuqi Guo featuring project showcases and tech articles.",
-  keywords = "Yuqi Guo, portfolio, blog, projects, software engineer",
+  description = "Portfolio and blog of Yuqi Guo (郭育奇) featuring project showcases and tech articles.",
+  keywords = "Yuqi Guo, 郭育奇, portfolio, blog, projects, software engineer",
   image = "/assets/images/profile_guyuqi.jpg",
   url = "https://www.yuqi.site"
 }) => {
@@ -16,6 +16,9 @@ const SeoHead = ({
       <title>{metaTitle}</title>
       <meta name="description" content={description} />
       <meta name="keywords" content={keywords} />
+      <meta name="robots" content="index, follow" />
+      <meta name="googlebot" content="index, follow" />
+      <meta name="author" content="Yuqi Guo (郭育奇)" />
       <link rel="canonical" href={metaUrl} />
       {/* Open Graph / Facebook */}
       <meta property="og:type" content="website" />
