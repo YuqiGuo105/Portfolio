@@ -16,6 +16,8 @@ export default function LogInDialog({
   const ref = useRef(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   // sync open -> <dialog> with graceful transitions
   useEffect(() => {
@@ -51,6 +53,8 @@ export default function LogInDialog({
     if (open) {
       setUsername('');
       setPassword('');
+      setErrorMessage('');
+      setSubmitting(false);
     }
   }, [open]);
 
@@ -67,14 +71,32 @@ export default function LogInDialog({
     if (e.target === ref.current) onClose && onClose();
   };
 
-  const handleLogin = () => {
-    if (onConfirm) onConfirm();
-    if (onClose) onClose();
+  const handleLogin = async () => {
+    if (!onConfirm) {
+      if (onClose) onClose();
+      return;
+    }
+
+    setSubmitting(true);
+    setErrorMessage('');
+
+    try {
+      const result = await onConfirm(username, password);
+      if (result === false || result?.error) {
+        setErrorMessage(result?.error || 'Invalid username or password.');
+        return;
+      }
+      if (onClose) onClose();
+    } catch (err) {
+      setErrorMessage(err?.message || 'Invalid username or password.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    handleLogin();
+    await handleLogin();
   };
 
   const handleRegister = () => {
@@ -130,8 +152,9 @@ export default function LogInDialog({
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
-          <button type="submit" className="login-button">
-            LOG IN
+          {errorMessage && <p className="error-text">{errorMessage}</p>}
+          <button type="submit" className="login-button" disabled={submitting}>
+            {submitting ? 'LOGGING IN…' : 'LOG IN'}
           </button>
         </form>
 
@@ -277,6 +300,12 @@ export default function LogInDialog({
           outline: none;
           border-color: rgba(56, 189, 248, 0.8);
           box-shadow: 0 0 0 3px var(--button-bg-focus);
+        }
+
+        .error-text {
+          margin: 0;
+          color: #dc2626;
+          font-weight: 600;
         }
 
         .login-button {

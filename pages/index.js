@@ -69,6 +69,11 @@ const Index = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [pendingNext, setPendingNext] = useState(null);
 
+  const sanitizeNextPath = (value) => {
+    if (typeof value !== 'string') return '/';
+    return value.startsWith('/') ? value : '/';
+  };
+
   useEffect(() => {
     const bootstrap = async () => {
       /* years of experience */
@@ -273,6 +278,27 @@ const Index = () => {
     e.preventDefault();                   // Requires login
     setPendingNext(nextHref);             // 记录本来要去的地址
     setShowLogin(true);                   // 打开登录弹窗
+  };
+
+  const handleLoginConfirm = async (username, password) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: username,
+        password,
+      });
+
+      if (error) {
+        return { error: 'Invalid username or password.' };
+      }
+
+      const target = sanitizeNextPath(pendingNext || '/');
+      setPendingNext(null);
+      setShowLogin(false);
+      await router.push(target);
+      return { ok: true };
+    } catch (err) {
+      return { error: err?.message || 'Unable to log in right now.' };
+    }
   };
 
   return (
@@ -1037,11 +1063,7 @@ const Index = () => {
           open={showLogin}
           title="Log In Required"
           onClose={() => setShowLogin(false)}
-          onConfirm={() => {
-            // 跳到登录页，带 next 回跳
-            const target = pendingNext || '/';
-            router.push(`/login?next=${encodeURIComponent(target)}`);
-          }}
+          onConfirm={handleLoginConfirm}
         >
           You need to log in to read this post.
         </LogInDialog>
