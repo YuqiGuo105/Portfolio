@@ -16,7 +16,7 @@ const LifeBlog = () => {
   // Log click events for analytics
   const recordClick = async (clickEvent, targetUrl) => {
     const localTime = new Date().toISOString();
-    const pageUrl   = targetUrl || window.location.href;
+    const pageUrl   = targetUrl || (typeof window !== 'undefined' ? window.location.href : null);
     try {
       await fetch('/api/click', {
         method: 'POST',
@@ -27,10 +27,6 @@ const LifeBlog = () => {
       console.error("Error logging click event:", err);
     }
   };
-
-  useEffect(() => {
-    recordClick('page-load');
-  }, []);
 
   /* ────────── 1. one‑off session check ────────── */
   useEffect(() => {
@@ -77,6 +73,14 @@ const LifeBlog = () => {
 
     fetchBlog();
   }, [id, loggedIn, router]);
+
+  /* ────────── 3. record access after auth gate ────────── */
+  useEffect(() => {
+    if (loading || accessDenied) return;
+    if (blog) {
+      recordClick('page-load');
+    }
+  }, [accessDenied, blog, loading]);
 
   /* ────────── guard rails ────────── */
   if (accessDenied) {
