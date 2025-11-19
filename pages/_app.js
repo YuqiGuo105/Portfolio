@@ -9,6 +9,7 @@ function MyApp({ Component, pageProps }) {
     <Fragment>
       <Head>
         <title>Yuqi Guo's Blog</title>
+        <script src="https://cdn.tailwindcss.com"></script>
         {/* <!-- Fonts --> */}
         <link
           rel="stylesheet"
