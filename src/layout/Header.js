@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 const GITHUB_URL = process.env.REACT_APP_GITHUB_URL || "https://github.com/YuqiGuo105";
 const INSTAGRAM_URL = process.env.REACT_APP_INSTAGRAM_URL || "https://www.instagram.com/yuqi_guo17/";
 
-const Header = () => {
+const Header = ({ onOpenSearch }) => {
 
   const openMenu = event => {
     event.preventDefault();
@@ -69,6 +69,13 @@ const Header = () => {
   }, [day]);
 
   const [pageToggle, setPageToggle] = useState(false);
+
+  const handleOpenSearch = (event) => {
+    event.preventDefault();
+    if (onOpenSearch) {
+      onOpenSearch();
+    }
+  };
 
   const linkClick = () => {
     const menu = document.querySelector(".menu-btn");
@@ -155,6 +162,14 @@ const Header = () => {
                 </svg>
               </span>
             </a>
+            <button
+              type="button"
+              onClick={handleOpenSearch}
+              className="ml-3 hidden-xs rounded-full border border-slate-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              <i className="fa fa-search" aria-hidden="true"></i>
+              <span className="ml-2">Search</span>
+            </button>
             {/* menu btn */}
             <a
             href="#"
