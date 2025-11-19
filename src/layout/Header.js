@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 const GITHUB_URL = process.env.REACT_APP_GITHUB_URL || "https://github.com/YuqiGuo105";
 const INSTAGRAM_URL = process.env.REACT_APP_INSTAGRAM_URL || "https://www.instagram.com/yuqi_guo17/";
 
-const Header = () => {
+const Header = ({ onOpenSearch }) => {
 
   const openMenu = event => {
     event.preventDefault();
@@ -70,6 +70,13 @@ const Header = () => {
 
   const [pageToggle, setPageToggle] = useState(false);
 
+  const handleOpenSearch = (event) => {
+    event.preventDefault();
+    if (onOpenSearch) {
+      onOpenSearch();
+    }
+  };
+
   const linkClick = () => {
     const menu = document.querySelector(".menu-btn");
     if (menu.classList.contains("active")) {
@@ -120,7 +127,15 @@ const Header = () => {
               </Link>
             </div>
           </div>
-          <div className="col-xs-8 col-sm-8 col-md-8 col-lg-8 align-right">
+          <div className="flex items-center col-xs-8 col-sm-8 col-md-8 col-lg-8 align-right">
+            <button
+              type="button"
+              onClick={handleOpenSearch}
+              className="header-search-btn mr-5 hidden-xs flex h-10 w-10 items-center justify-center rounded-full transition"
+              aria-label="Open search"
+            >
+              <i className="fa fa-search" aria-hidden="true"></i>
+            </button>
             {/* switcher btn */}
             <a
               className={`switcher-btn ${day ? "active" : ""}`}
@@ -305,3 +320,4 @@ const Header = () => {
   );
 };
 export default Header;
+

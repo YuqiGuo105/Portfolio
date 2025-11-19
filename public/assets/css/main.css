@@ -1467,6 +1467,27 @@ body.light-skin .header.sticky .navbar.default:before {
 	vertical-align: .155em;
 }
 
+.header-search-btn {
+	border: none !important;
+	padding: 0 !important;
+	background: transparent;
+  }
+  
+.header-search-btn::before {
+	display: none !important;
+  }
+  
+.header-search-btn,
+.header-search-btn:hover,
+.header-search-btn:focus,
+.header-search-btn:active {
+	background: transparent !important; /* 不要变白 */
+	color: inherit !important;         /* 保持原来的文字/图标颜色 */
+	border: none !important;
+	box-shadow: none !important;
+}
+
+
 .switcher-btn {
 	margin-right: 40px;
 	position: relative;
@@ -1945,7 +1966,29 @@ body.light-skin .header.sticky .navbar.default:before {
 	transform: rotate(180deg);
 }
 
-
+.search-select {
+	width: 150px;
+}
+.search-close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border-radius: 9999px;
+	border: 1px solid #ffffff;
+	background-color: transparent;
+	color: #ffffff !important;
+	font-size: 20px;
+	font-weight: 700;
+	cursor: pointer;
+	transition: background-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+  }
+.search-close:hover {
+	background-color: #ffffff;
+	color: #020617 !important;
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+  }
 /**
 * Footer
 **/

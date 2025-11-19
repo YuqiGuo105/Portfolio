@@ -514,7 +514,7 @@ function LauncherButton({onOpen, onDragStart}) {
       onMouseDown={onDragStart}
       className="launch-button relative flex items-center rounded-full mb-2 px-5 py-4 shadow-xl ring-1 ring-gray-200 backdrop-blur hover:shadow-2xl"
     >
-      <span className="relative flex items-center justify-center rounded-full bg-blue-600" style={{ width: 60, height: 60 }}>
+      <span className="relative flex items-center justify-center rounded-full" style={{ width: 60, height: 60 }}>
         <Image src="/assets/images/chatPot.png" alt="Chat Bot" width={48} height={48} priority />
         <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white" />
       </span>

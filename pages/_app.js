@@ -9,6 +9,7 @@ function MyApp({ Component, pageProps }) {
     <Fragment>
       <Head>
         <title>Yuqi Guo's Blog</title>
+        <script src="https://cdn.tailwindcss.com"></script>
         {/* <!-- Fonts --> */}
         <link
           rel="stylesheet"
@@ -66,7 +67,6 @@ function MyApp({ Component, pageProps }) {
           type="text/css"
           media="all"
         />
-
         {/* <!-- Favicon --> */}
         <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
         <link rel="icon" href="/favicon.ico" type="image/x-icon" />
