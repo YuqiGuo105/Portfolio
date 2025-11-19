@@ -38,11 +38,8 @@ const ResultRow = ({ item, onNavigate }) => {
           </span>
         )}
       </div>
-      {item.description && (
-        <p className="mt-2 text-sm text-slate-300 overflow-hidden text-ellipsis">{item.description}</p>
-      )}
-      <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
-        <span className="font-medium">{item.url}</span>
+      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400">
+        <span className="font-medium truncate max-w-[70%]" title={item.url || undefined}>{item.url}</span>
         {formatDate(item.publishedAt) && <span>{formatDate(item.publishedAt)}</span>}
       </div>
     </a>
@@ -170,9 +167,10 @@ const SearchOverlay = ({ isOpen, onClose }) => {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-800"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-900 text-lg font-bold shadow transition hover:bg-slate-200"
+            aria-label="Close search"
           >
-            Esc
+            ×
           </button>
         </div>
 

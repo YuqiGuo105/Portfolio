@@ -128,6 +128,14 @@ const Header = ({ onOpenSearch }) => {
             </div>
           </div>
           <div className="col-xs-8 col-sm-8 col-md-8 col-lg-8 align-right">
+            <button
+              type="button"
+              onClick={handleOpenSearch}
+              className="mr-3 hidden-xs flex h-10 w-10 items-center justify-center rounded-full bg-black text-white transition hover:bg-slate-800"
+              aria-label="Open search"
+            >
+              <i className="fa fa-search" aria-hidden="true"></i>
+            </button>
             {/* switcher btn */}
             <a
               className={`switcher-btn ${day ? "active" : ""}`}
@@ -162,14 +170,6 @@ const Header = ({ onOpenSearch }) => {
                 </svg>
               </span>
             </a>
-            <button
-              type="button"
-              onClick={handleOpenSearch}
-              className="ml-3 hidden-xs rounded-full border border-slate-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
-              <i className="fa fa-search" aria-hidden="true"></i>
-              <span className="ml-2">Search</span>
-            </button>
             {/* menu btn */}
             <a
             href="#"
