@@ -85,6 +85,7 @@ const DashboardPanels = () => {
   const metrics = useMemo(() => {
     const totalVisits = visitorLogs.length
     const uniqueIps = new Set(visitorLogs.map((log) => log.ip)).size
+    const uniqueCountries = new Set(visitorLogs.map((log) => log.country)).size
     const signupEvents = visitorLogs.filter((log) => log.event === "demo_signup").length
     const contactEvents = visitorLogs.filter((log) => log.event === "contact_form").length
     const engagementRate = totalVisits === 0 ? 0 : ((signupEvents + contactEvents) / totalVisits) * 100
@@ -94,6 +95,7 @@ const DashboardPanels = () => {
       uniqueIps,
       engagementRate,
       signupEvents,
+      uniqueCountries,
     }
   }, [])
 
@@ -115,6 +117,26 @@ const DashboardPanels = () => {
     return visitorLogs.filter((log) => log.event === activeEventFilter)
   }, [activeEventFilter])
 
+  const countryMarkers = useMemo(
+    () =>
+      trafficByLocation.map((location) => {
+        const sample = visitorLogs.find((log) => log.country === location.country)
+        return {
+          ...location,
+          latitude: sample?.latitude ?? 0,
+          longitude: sample?.longitude ?? 0,
+        }
+      }),
+    [trafficByLocation]
+  )
+
+  const countryToFlag = {
+    "United States": "🇺🇸",
+    Canada: "🇨🇦",
+    Germany: "🇩🇪",
+    Australia: "🇦🇺",
+  }
+
   return (
     <section className="dashboard-wrapper" id="visitor-analytics-dashboard">
       <div className="dashboard-container">
@@ -133,6 +155,10 @@ const DashboardPanels = () => {
               <p className="value">{formatNumber(metrics.uniqueIps)}</p>
             </div>
             <div className="metric">
+              <p className="label">Countries</p>
+              <p className="value">{formatNumber(metrics.uniqueCountries)}</p>
+            </div>
+            <div className="metric">
               <p className="label">Engagement Rate</p>
               <p className="value accent">{formatPercent(metrics.engagementRate)}</p>
             </div>
@@ -148,6 +174,29 @@ const DashboardPanels = () => {
           <header>
             <h3>Geography</h3>
           </header>
+          <div className="map-card">
+            <div className="map" aria-hidden>
+              {countryMarkers.map((marker) => (
+                <div
+                  key={marker.country}
+                  className="map-marker"
+                  style={{
+                    left: `${50 + (marker.longitude / 180) * 50}%`,
+                    top: `${50 - (marker.latitude / 90) * 30}%`,
+                  }}
+                  title={`${marker.country} · ${marker.count} visitors`}
+                >
+                  <span className="flag">{countryToFlag[marker.country] ?? "📍"}</span>
+                  <span className="marker-count">{marker.count}</span>
+                </div>
+              ))}
+              <div className="map-gradient" />
+            </div>
+            <div className="map-meta">
+              <p className="value">{formatNumber(metrics.uniqueCountries)}</p>
+              <p className="label">Countries this week</p>
+            </div>
+          </div>
           <div className="location-list">
             {trafficByLocation.map((location) => (
               <div className="location-row" key={location.country}>
@@ -290,7 +339,7 @@ const DashboardPanels = () => {
 
         .metrics-grid {
           display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
           gap: 1rem;
         }
 
@@ -331,6 +380,73 @@ const DashboardPanels = () => {
           display: flex;
           flex-direction: column;
           gap: 1rem;
+        }
+
+        .map-card {
+          border: 1px solid var(--card-border);
+          border-radius: 14px;
+          padding: 1rem;
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.07), rgba(16, 185, 129, 0.08));
+          position: relative;
+          overflow: hidden;
+          display: grid;
+          grid-template-columns: 3fr 1fr;
+          gap: 1rem;
+          align-items: center;
+        }
+
+        .map {
+          position: relative;
+          padding-top: 55%;
+          border-radius: 12px;
+          background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.35), transparent 30%),
+            radial-gradient(circle at 80% 30%, rgba(255, 255, 255, 0.25), transparent 35%),
+            linear-gradient(135deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.02));
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .map-gradient {
+          position: absolute;
+          inset: 0;
+          background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 110' preserveAspectRatio='none'%3E%3Cpath d='M2,50 C20,30 50,20 80,35 C110,50 140,40 160,25 C180,10 198,20 198,20 L198,108 L2,108 Z' fill='%23dbeafe' fill-opacity='0.2'/%3E%3C/svg%3E") center/cover;
+          opacity: 0.8;
+          pointer-events: none;
+        }
+
+        .map-marker {
+          position: absolute;
+          transform: translate(-50%, -50%);
+          display: inline-flex;
+          gap: 0.35rem;
+          align-items: center;
+          background: #fff;
+          color: var(--text-primary);
+          padding: 0.35rem 0.6rem;
+          border-radius: 999px;
+          box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
+          font-weight: 700;
+          font-size: 0.85rem;
+          border: 1px solid var(--card-border);
+        }
+
+        :global(body.dark-skin) #visitor-analytics-dashboard .map-marker {
+          background: #0f172a;
+          color: #e2e8f0;
+        }
+
+        .flag {
+          font-size: 1rem;
+        }
+
+        .marker-count {
+          color: var(--accent);
+        }
+
+        .map-meta {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.3rem;
         }
 
         .location-row {
@@ -440,6 +556,10 @@ const DashboardPanels = () => {
 
           .metrics-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .map-card {
+            grid-template-columns: 1fr;
           }
         }
 
