@@ -223,20 +223,29 @@ const VisitorsPage = () => {
       if (!countryCounts.length) return 0
       const props = geo.properties || {}
 
-      const candidatesRaw = [
-        props.ISO_A2 || props.iso_a2,
-        props.ISO_A3 || props.iso_a3,
-        props.NAME || props.name,
-        props.ADMIN,
-      ].filter(Boolean)
+      const iso2 = normalizeKey(props.ISO_A2 || props.iso_a2)
+      const iso3 = normalizeKey(props.ISO_A3 || props.iso_a3)
+      const name = normalizeKey(props.NAME || props.name)
+      const admin = normalizeKey(props.ADMIN)
+
+      const candidatesRaw = [iso2, iso3, name, admin].filter(Boolean)
 
       if (!candidatesRaw.length) return 0
 
-      const candidateKeys = candidatesRaw.map(normalizeKey).filter(Boolean)
+      const candidateKeys = candidatesRaw.filter(Boolean)
 
       for (const cand of candidateKeys) {
         if (countryCountLookup.has(cand)) {
           return countryCountLookup.get(cand)
+        }
+      }
+
+      // 如果有 ISO2，则允许把其他字段映射为 ISO2 进行匹配（例如 CHN → CN）
+      if (iso2) {
+        const aliasCandidates = [iso3, name, admin].filter(Boolean)
+        for (const alias of aliasCandidates) {
+          if (countryCountLookup.has(alias)) return countryCountLookup.get(alias)
+          if (countryCountLookup.has(iso2)) return countryCountLookup.get(iso2)
         }
       }
 
