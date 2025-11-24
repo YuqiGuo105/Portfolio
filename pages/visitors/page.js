@@ -17,6 +17,21 @@ const normalizeKey = (value) => {
   return String(value).trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
 }
 
+// Manual canonicals: some data rows may store variants like "CHINA" or ISO3 "CHN";
+// map them to the expected ISO2 code so the map shading stays consistent.
+const COUNTRY_KEY_OVERRIDES = {
+  CHINA: "CN",
+  CHN: "CN",
+  PEOPLESREPUBLICOFCHINA: "CN",
+  MAINLANDCHINA: "CN",
+}
+
+const canonicalizeCountryKey = (value) => {
+  const normalized = normalizeKey(value)
+  if (!normalized) return ""
+  return COUNTRY_KEY_OVERRIDES[normalized] || normalized
+}
+
 const VisitorsPage = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -90,9 +105,9 @@ const VisitorsPage = () => {
           const dateStr = t.toISOString().slice(0, 10)
           dateMap.set(dateStr, (dateMap.get(dateStr) || 0) + 1)
 
-          // country 聚合：这里不假设一定是 ISO2，只做 normalize
+          // country 聚合：这里不假设一定是 ISO2，只做 normalize + canonicalize
           if (log.country) {
-            const key = normalizeKey(log.country)
+            const key = canonicalizeCountryKey(log.country)
             if (key) {
               countryMap.set(key, (countryMap.get(key) || 0) + 1)
             }
@@ -201,7 +216,7 @@ const VisitorsPage = () => {
   const countryCountLookup = useMemo(() => {
     const lookup = new Map()
     for (const entry of countryCounts) {
-      const k = normalizeKey(entry.key)
+      const k = canonicalizeCountryKey(entry.key)
       if (k) lookup.set(k, entry.count)
     }
     return lookup
@@ -223,10 +238,10 @@ const VisitorsPage = () => {
       if (!countryCounts.length) return 0
       const props = geo.properties || {}
 
-      const iso2 = normalizeKey(props.ISO_A2 || props.iso_a2)
-      const iso3 = normalizeKey(props.ISO_A3 || props.iso_a3)
-      const name = normalizeKey(props.NAME || props.name)
-      const admin = normalizeKey(props.ADMIN)
+      const iso2 = canonicalizeCountryKey(props.ISO_A2 || props.iso_a2)
+      const iso3 = canonicalizeCountryKey(props.ISO_A3 || props.iso_a3)
+      const name = canonicalizeCountryKey(props.NAME || props.name)
+      const admin = canonicalizeCountryKey(props.ADMIN)
 
       const candidatesRaw = [iso2, iso3, name, admin].filter(Boolean)
 
