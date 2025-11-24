@@ -59,6 +59,7 @@ const DashboardPanels = () => {
     totalVisits: null,
     topCountry: null,
     topCountryCount: null,
+    topCountries: [], // [{ country: string, count: number }]
     lastVisitAt: null,
     last30Days: [], // [{ date: "YYYY-MM-DD", visits: number }]
   })
@@ -137,14 +138,16 @@ const DashboardPanels = () => {
           .sort(([a], [b]) => (a < b ? -1 : 1))
           .map(([date, visits]) => ({ date, visits }))
 
-        let topCountry = null
-        let topCountryCount = 0
-        countryCount.forEach((count, country) => {
-          if (count > topCountryCount) {
-            topCountryCount = count
-            topCountry = country
-          }
-        })
+        const sortedCountries = Array.from(countryCount.entries())
+          .map(([country, count]) => ({ country, count }))
+          .sort((a, b) => {
+            if (b.count !== a.count) return b.count - a.count
+            return a.country.localeCompare(b.country)
+          })
+
+        const topCountry = sortedCountries[0]?.country || null
+        const topCountryCount = sortedCountries[0]?.count || 0
+        const topCountries = sortedCountries.slice(0, 3)
 
         // 2) All-time total visits
         const { count: totalVisits, error: totalVisitsError } = await supabase
@@ -159,6 +162,7 @@ const DashboardPanels = () => {
           totalVisits: totalVisits ?? null,
           topCountry,
           topCountryCount: topCountry ? topCountryCount : null,
+          topCountries,
           lastVisitAt,
           last30Days,
         })
@@ -330,14 +334,14 @@ const DashboardPanels = () => {
 
                 <div className="market-row">
                   <div className="row-main">
-                    <span className="symbol">Top visitors' country</span>
+                    <span className="symbol">Top visitors' countries</span>
                     <span className="price">
-                      {visitorSummary.topCountry
-                        ? `${visitorSummary.topCountry}${
-                            visitorSummary.topCountryCount
-                              ? ` (${visitorSummary.topCountryCount})`
-                              : ""
-                          }`
+                      {visitorSummary.topCountries?.length
+                        ? visitorSummary.topCountries
+                            .map(({ country, count }) =>
+                              count ? `${country} (${count})` : country
+                            )
+                            .join(", ")
                         : "—"}
                     </span>
                   </div>
