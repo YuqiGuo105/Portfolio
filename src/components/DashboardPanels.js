@@ -1,25 +1,13 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-
-const formatCurrency = (value, currency) => {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return "—"
-  }
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: currency === "JPY" ? 0 : 2,
-    }).format(value)
-  } catch (error) {
-    return `${value.toFixed(2)} ${currency}`
-  }
-}
+import { supabase } from "../supabase/supabaseClient"
 
 const getHoursSince = (timestamp) => {
   if (!timestamp) return null
-  const diffMs = Date.now() - timestamp
+  const ts = typeof timestamp === "number" ? timestamp : new Date(timestamp).getTime()
+  if (!Number.isFinite(ts)) return null
+  const diffMs = Date.now() - ts
   const hours = diffMs / (1000 * 60 * 60)
   return Math.max(hours, 0)
 }
@@ -47,9 +35,18 @@ const weatherIcon = (
 )
 
 const DashboardPanels = () => {
-  const [marketData, setMarketData] = useState([])
-  const [marketFallback, setMarketFallback] = useState(false)
-  const [marketMeta, setMarketMeta] = useState(null)
+  // ---- Visitor summary (from visitor_logs & visitor_clicks) ----
+  const [visitorSummary, setVisitorSummary] = useState({
+    totalVisits: null,
+    totalClicks: null,
+    topCountry: null,
+    lastVisitAt: null,
+    last30Days: [], // [{ date: "YYYY-MM-DD", visits: number }]
+  })
+  const [isVisitorLoading, setIsVisitorLoading] = useState(true)
+  const [visitorError, setVisitorError] = useState(null)
+
+  // Currency converter
   const [currency, setCurrency] = useState({
     amount: 1,
     base: "USD",
@@ -61,6 +58,8 @@ const DashboardPanels = () => {
   const [amount, setAmount] = useState("1")
   const [baseCurrency, setBaseCurrency] = useState("USD")
   const [targetCurrency, setTargetCurrency] = useState("EUR")
+
+  // Weather panel
   const [weather, setWeather] = useState({
     temperature: 49,
     weatherDescription: "Partly cloudy",
@@ -72,25 +71,98 @@ const DashboardPanels = () => {
   })
   const [isWeatherLoading, setIsWeatherLoading] = useState(true)
 
+  // ---- Fetch visitor summary (Supabase) ----
   useEffect(() => {
-    const fetchMarket = async () => {
+    const fetchVisitorSummary = async () => {
+      setIsVisitorLoading(true)
       try {
-        const response = await fetch("/api/market-data")
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const json = await response.json()
-        if (json?.data) {
-          setMarketData(json.data)
+        const now = new Date()
+        const thirtyDaysAgo = new Date()
+        thirtyDaysAgo.setDate(now.getDate() - 30)
+
+        // 1) Last 30 days visits from visitor_logs
+        const { data: logs, error: logsError } = await supabase
+          .from("visitor_logs")
+          .select("local_time, country")
+          .gte("local_time", thirtyDaysAgo.toISOString())
+          .order("local_time", { ascending: true })
+
+        if (logsError) {
+          throw logsError
         }
-        setMarketFallback(Boolean(json?.fallback))
-        setMarketMeta(json?.meta ?? null)
+
+        const buckets = new Map() // dateStr -> count
+        const countryCount = new Map()
+        let lastVisitAt = null
+
+        for (const log of logs || []) {
+          const d = new Date(log.local_time)
+          if (!Number.isNaN(d.getTime())) {
+            const dateStr = d.toISOString().slice(0, 10) // YYYY-MM-DD
+            buckets.set(dateStr, (buckets.get(dateStr) || 0) + 1)
+
+            if (!lastVisitAt || d > lastVisitAt) {
+              lastVisitAt = d
+            }
+          }
+
+          if (log.country) {
+            const c = log.country
+            countryCount.set(c, (countryCount.get(c) || 0) + 1)
+          }
+        }
+
+        const last30Days = Array.from(buckets.entries())
+          .sort(([a], [b]) => (a < b ? -1 : 1))
+          .map(([date, visits]) => ({ date, visits }))
+
+        let topCountry = null
+        let topCountryCount = 0
+        countryCount.forEach((count, country) => {
+          if (count > topCountryCount) {
+            topCountryCount = count
+            topCountry = country
+          }
+        })
+
+        // 2) All-time total visits
+        const { count: totalVisits, error: totalVisitsError } = await supabase
+          .from("visitor_logs")
+          .select("*", { count: "exact", head: true })
+
+        if (totalVisitsError) {
+          throw totalVisitsError
+        }
+
+        // 3) All-time total clicks
+        const { count: totalClicks, error: totalClicksError } = await supabase
+          .from("visitor_clicks")
+          .select("*", { count: "exact", head: true })
+
+        if (totalClicksError) {
+          throw totalClicksError
+        }
+
+        setVisitorSummary({
+          totalVisits: totalVisits ?? null,
+          totalClicks: totalClicks ?? null,
+          topCountry,
+          lastVisitAt,
+          last30Days,
+        })
+        setVisitorError(null)
       } catch (error) {
-        console.error("Failed to load market data", error)
+        console.error("Failed to load visitor summary from Supabase", error)
+        setVisitorError("Unable to load visitor data")
+      } finally {
+        setIsVisitorLoading(false)
       }
     }
 
-    fetchMarket()
+    fetchVisitorSummary()
   }, [])
 
+  // ---- Currency ----
   useEffect(() => {
     const fetchCurrency = async () => {
       try {
@@ -113,6 +185,7 @@ const DashboardPanels = () => {
     fetchCurrency()
   }, [baseCurrency, targetCurrency, amount])
 
+  // ---- Weather ----
   useEffect(() => {
     const fetchWeather = async () => {
       setIsWeatherLoading(true)
@@ -133,6 +206,7 @@ const DashboardPanels = () => {
     fetchWeather()
   }, [])
 
+  // ---- Derived values ----
   const convertedAmount = useMemo(() => {
     const amt = Number.parseFloat(amount)
     if (Number.isNaN(amt) || !currency?.rate) return null
@@ -158,23 +232,6 @@ const DashboardPanels = () => {
     return `${Math.round(weather.temperature)}°F`
   }, [isWeatherLoading, weather.temperature, temperatureUnit])
 
-  const { marketBadgeText, marketBadgeClassName } = useMemo(() => {
-    if (marketMeta?.source && marketMeta.source !== "live") {
-      const text =
-        marketMeta.source === "simulated"
-          ? "live feed unavailable · showing simulated snapshot"
-          : `cached snapshot · source: ${marketMeta.source}`
-
-      return { text, className: "badge badge-warning" }
-    }
-
-    if (marketFallback) {
-      return { text: "live feed unavailable", className: "badge" }
-    }
-
-    return { text: null, className: "badge" }
-  }, [marketFallback, marketMeta])
-
   const hoursAgoLabel = (timestamp) => {
     const hours = getHoursSince(timestamp)
     if (hours === null) return "Updated just now"
@@ -192,44 +249,104 @@ const DashboardPanels = () => {
     return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
   }
 
+  // ---- Last 30 days chart data (柱状图) ----
+  const last30Total = useMemo(() => {
+    if (!Array.isArray(visitorSummary.last30Days)) return null
+    return visitorSummary.last30Days.reduce((sum, p) => sum + (p.visits || 0), 0)
+  }, [visitorSummary.last30Days])
+
+  const chartPoints = useMemo(() => {
+    const pts = Array.isArray(visitorSummary.last30Days) ? visitorSummary.last30Days : []
+    if (!pts.length) return []
+
+    const max = Math.max(...pts.map((p) => p.visits || 0))
+    if (max <= 0) return []
+
+    return pts.map((p) => {
+      const label = p.date ? p.date.slice(5) : "" // MM-DD
+      const value = p.visits || 0
+      return {
+        label,
+        value,
+        height: (value / max) * 100,
+      }
+    })
+  }, [visitorSummary.last30Days])
+
   return (
     <section className="dashboard-wrapper" id="market-weather-dashboard">
       <div className="dashboard-container">
+        {/* Visitor summary */}
         <div className="dashboard-card market-card">
           <header>
-            <h3>Market Data</h3>
-            {marketBadgeText && <span className={marketBadgeClassName}>{marketBadgeText}</span>}
+            <h3>Visitor Summary</h3>
           </header>
-          <div className="market-rows">
-            {marketData.map((item) => {
-              const changeValue = typeof item.change === "number" && !Number.isNaN(item.change) ? item.change : null
-              const changePercent =
-                typeof item.changePercent === "number" && !Number.isNaN(item.changePercent) ? item.changePercent : null
-              const changeSign = changeValue !== null ? (changeValue >= 0 ? "+" : "") : ""
-              const changeColor = changeValue === null ? "neutral" : changeValue >= 0 ? "positive" : "negative"
-              return (
-                <div className="market-row" key={item.label}>
+
+          {isVisitorLoading ? (
+            <p className="row-sub">Loading visitor data…</p>
+          ) : visitorError ? (
+            <p className="row-sub">{visitorError}</p>
+          ) : (
+            <>
+              <div className="market-rows">
+                <div className="market-row">
                   <div className="row-main">
-                    <span className="symbol">{item.label}</span>
-                    <span className="price">{formatCurrency(item.price, item.currency)}</span>
-                    <span className="currency">{item.currency}</span>
-                    <span className={`change ${changeColor}`}>
-                      {changeValue !== null ? `${changeSign}${changeValue.toFixed(2)}` : "—"}
-                      {", "}
-                      <span className="percent">
-                        {changePercent !== null ? `${changeSign}${changePercent.toFixed(2)}%` : "—"}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="row-sub">
-                    <span className="timestamp">{hoursAgoLabel(item.timestamp)}</span>
+                    <span className="symbol">Total visits (all time)</span>
+                    <span className="price">{visitorSummary.totalVisits ?? "—"}</span>
                   </div>
                 </div>
-              )
-            })}
-          </div>
+
+                <div className="market-row">
+                  <div className="row-main">
+                    <span className="symbol">Last 30 days visits</span>
+                    <span className="price">{last30Total ?? "—"}</span>
+                  </div>
+                  <div className="visitor-chart">
+                    {chartPoints.length === 0 ? (
+                      <span className="chart-empty">No data for the last 30 days</span>
+                    ) : (
+                      <div className="chart-bars" aria-hidden="true">
+                        {chartPoints.map((p, index) => (
+                          <div key={p.label || index} className="chart-bar-wrapper">
+                            <div className="chart-bar" style={{ height: `${p.height || 0}%` }} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="market-row">
+                  <div className="row-main">
+                    <span className="symbol">Total clicks</span>
+                    <span className="price">{visitorSummary.totalClicks ?? "—"}</span>
+                  </div>
+                </div>
+
+                <div className="market-row">
+                  <div className="row-main">
+                    <span className="symbol">Top location</span>
+                    <span className="price">{visitorSummary.topCountry || "—"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="row-sub">
+                <span className="timestamp">
+                  {visitorSummary.lastVisitAt
+                    ? `Last visit: ${hoursAgoLabel(visitorSummary.lastVisitAt)}`
+                    : "No visits yet"}
+                </span>
+                {" · "}
+                <a href="/visitors/page" className="timestamp">
+                  Read more
+                </a>
+              </div>
+            </>
+          )}
         </div>
 
+        {/* Currency converter */}
         <div className="dashboard-card currency-card">
           <header>
             <h3>Currency Converter</h3>
@@ -277,6 +394,7 @@ const DashboardPanels = () => {
           </p>
         </div>
 
+        {/* Weather panel */}
         <div className="dashboard-card weather-card">
           <header>
             <h3>Weather</h3>
@@ -412,22 +530,6 @@ const DashboardPanels = () => {
           color: var(--heading-color);
         }
 
-        .badge {
-          font-size: 0.7rem;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          color: var(--badge-text);
-          background: var(--badge-bg);
-          padding: 0.35rem 0.5rem;
-          border-radius: 999px;
-          font-weight: 600;
-        }
-
-        .badge.badge-warning {
-          color: var(--badge-warning-text);
-          background: var(--badge-warning-bg);
-        }
-
         .market-rows {
           display: flex;
           flex-direction: column;
@@ -442,7 +544,7 @@ const DashboardPanels = () => {
 
         .row-main {
           display: grid;
-          grid-template-columns: 1fr auto auto auto;
+          grid-template-columns: 1fr auto;
           gap: 0.75rem;
           align-items: baseline;
           color: var(--text-primary);
@@ -459,49 +561,62 @@ const DashboardPanels = () => {
           font-variant-numeric: tabular-nums;
         }
 
-        .currency {
-          color: var(--text-muted);
-          font-size: 0.85rem;
-        }
-
-        .change {
-          justify-self: end;
-          font-weight: 600;
-          font-size: 0.85rem;
-        }
-
-        .change .percent {
-          color: var(--positive);
-        }
-
-        .change.negative {
-          color: var(--negative);
-        }
-
-        .change.positive {
-          color: var(--positive);
-        }
-
-        .change.neutral {
-          color: var(--neutral);
-        }
-
         .row-sub {
           font-size: 0.75rem;
           color: var(--text-muted);
           letter-spacing: 0.04em;
         }
 
+        .timestamp a,
+        a.timestamp {
+          text-decoration: none;
+        }
+
+        .timestamp a:hover,
+        a.timestamp:hover {
+          text-decoration: underline;
+        }
+
+        /* Visitor chart (柱状图) */
+        .visitor-chart {
+          margin-top: 0.35rem;
+        }
+
+        .chart-bars {
+          display: flex;
+          align-items: flex-end;
+          gap: 3px;
+          height: 52px;
+        }
+
+        .chart-bar-wrapper {
+          flex: 1;
+          min-width: 2px;
+          border-radius: 999px;
+          background: rgba(148, 163, 184, 0.25);
+          overflow: hidden;
+        }
+
+        .chart-bar {
+          width: 100%;
+          background: linear-gradient(180deg, #4f46e5, #6366f1);
+          border-radius: 999px 999px 0 0;
+          transition: height 0.25s ease-out;
+        }
+
+        :global(body.dark-skin) #market-weather-dashboard .chart-bar {
+          background: linear-gradient(180deg, #6366f1, #4f46e5);
+        }
+
+        .chart-empty {
+          font-size: 0.75rem;
+          color: var(--text-muted);
+        }
+
         .currency-card .currency-rate {
           display: flex;
           flex-direction: column;
           gap: 0.35rem;
-        }
-
-        .currency-card .rate {
-          font-size: 1.1rem;
-          font-weight: 600;
-          color: var(--text-primary);
         }
 
         .currency-card .timestamp,
@@ -534,11 +649,6 @@ const DashboardPanels = () => {
           background: var(--input-bg);
           color: var(--input-text);
           font-family: inherit;
-        }
-
-        .converter-form .input-group input,
-        .converter-form .input-group select {
-          width: 100%;
         }
 
         input:focus,
@@ -628,7 +738,8 @@ const DashboardPanels = () => {
 
         .unit-toggle:focus {
           outline: none;
-          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4), 0 2px 4px rgba(79, 70, 229, 0.2);
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4),
+            0 2px 4px rgba(79, 70, 229, 0.2);
         }
 
         .description {
@@ -682,31 +793,6 @@ const DashboardPanels = () => {
         @media (max-width: 768px) {
           .dashboard-container {
             grid-template-columns: 1fr;
-          }
-
-          .row-main {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            grid-template-areas:
-              "symbol price"
-              "currency change";
-          }
-
-          .symbol {
-            grid-area: symbol;
-          }
-
-          .price {
-            grid-area: price;
-            justify-self: end;
-          }
-
-          .currency {
-            grid-area: currency;
-          }
-
-          .change {
-            grid-area: change;
-            justify-self: end;
           }
 
           .converter-form {
