@@ -1,15 +1,20 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { supabase } from "../../src/supabase/supabaseClient"
-import { ComposableMap, Geographies, Geography } from "react-simple-maps"
+import {
+  ComposableMap,
+  Geographies,
+  Geography,
+  ZoomableGroup,
+} from "react-simple-maps"
 
 const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json"
 
 // 统一处理 key：大写、去掉标点
 const normalizeKey = (value) => {
   if (!value) return ""
-  return String(value).trim().toUpperCase().replace(/[.,']/g, "")
+  return String(value).trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
 }
 
 const VisitorsPage = () => {
@@ -24,6 +29,7 @@ const VisitorsPage = () => {
   const [countryCounts, setCountryCounts] = useState([]) // [{ key, count }]
   const [topPages, setTopPages] = useState([]) // [{ url, count }]
   const [topEvents, setTopEvents] = useState([]) // [{ event, count }]
+  const [mapZoom, setMapZoom] = useState(1)
 
   useEffect(() => {
     const loadData = async () => {
@@ -192,6 +198,15 @@ const VisitorsPage = () => {
     [countryCounts]
   )
 
+  const countryCountLookup = useMemo(() => {
+    const lookup = new Map()
+    for (const entry of countryCounts) {
+      const k = normalizeKey(entry.key)
+      if (k) lookup.set(k, entry.count)
+    }
+    return lookup
+  }, [countryCounts])
+
   const getCountryFill = (count) => {
     if (!count || maxCountryCount <= 0) return "#f3f4f6"
     const ratio = count / maxCountryCount
@@ -203,33 +218,44 @@ const VisitorsPage = () => {
   }
 
   // 核心修复：对每个 polygon 从 properties 生成多个候选 key，和 countryCounts 做模糊匹配
-  const getGeoCount = (geo) => {
-    if (!countryCounts.length) return 0
-    const props = geo.properties || {}
+  const getGeoCount = useCallback(
+    (geo) => {
+      if (!countryCounts.length) return 0
+      const props = geo.properties || {}
 
-    const candidatesRaw = [
-      props.ISO_A2 || props.iso_a2,
-      props.ISO_A3 || props.iso_a3,
-      props.NAME || props.name,
-      props.ADMIN,
-    ].filter(Boolean)
+      const candidatesRaw = [
+        props.ISO_A2 || props.iso_a2,
+        props.ISO_A3 || props.iso_a3,
+        props.NAME || props.name,
+        props.ADMIN,
+      ].filter(Boolean)
 
-    if (!candidatesRaw.length) return 0
+      if (!candidatesRaw.length) return 0
 
-    const candidateKeys = candidatesRaw.map(normalizeKey)
+      const candidateKeys = candidatesRaw.map(normalizeKey).filter(Boolean)
 
-    for (const c of countryCounts) {
-      const ck = normalizeKey(c.key)
-      if (!ck) continue
       for (const cand of candidateKeys) {
-        if (!cand) continue
-        if (cand === ck || cand.includes(ck) || ck.includes(cand)) {
-          return c.count
+        if (countryCountLookup.has(cand)) {
+          return countryCountLookup.get(cand)
         }
       }
-    }
-    return 0
-  }
+
+      for (const cand of candidateKeys) {
+        for (const [ck, count] of countryCountLookup.entries()) {
+          if (cand.includes(ck) || ck.includes(cand)) {
+            return count
+          }
+        }
+      }
+
+      return 0
+    },
+    [countryCounts.length, countryCountLookup]
+  )
+
+  const handleZoomIn = () => setMapZoom((z) => Math.min(z * 1.5, 8))
+  const handleZoomOut = () => setMapZoom((z) => Math.max(z / 1.5, 1))
+  const handleZoomReset = () => setMapZoom(1)
 
   return (
     <main className="visitors-wrapper">
@@ -329,44 +355,66 @@ const VisitorsPage = () => {
                 </div>
 
                 <div className="geo-map-wrapper">
-                  <ComposableMap
-                    projectionConfig={{ scale: 155 }}
-                    height={320}
-                    style={{ width: "100%", height: "auto" }}
-                  >
-                    <Geographies geography={geoUrl}>
-                      {({ geographies }) =>
-                        geographies.map((geo) => {
-                          const count = getGeoCount(geo)
-                          const fill = getCountryFill(count)
-                          return (
-                            <Geography
-                              key={geo.rsmKey}
-                              geography={geo}
-                              style={{
-                                default: { outline: "none" },
-                                hover: { outline: "none" },
-                                pressed: { outline: "none" },
-                              }}
-                              fill={fill}
-                              stroke="#e5e7eb"
-                              strokeWidth={0.4}
-                            />
-                          )
-                        })
-                      }
-                    </Geographies>
-                  </ComposableMap>
-                  <div className="geo-legend">
-                    <span>Low</span>
-                    <div className="legend-bar">
-                      <span className="grad grad-1" />
-                      <span className="grad grad-2" />
-                      <span className="grad grad-3" />
-                      <span className="grad grad-4" />
-                      <span className="grad grad-5" />
+                  <div className="geo-map">
+                    <ComposableMap
+                      projectionConfig={{ scale: 155 }}
+                      height={340}
+                      style={{ width: "100%", height: "100%" }}
+                    >
+                      <ZoomableGroup
+                        minZoom={1}
+                        maxZoom={8}
+                        zoom={mapZoom}
+                        onMoveEnd={({ zoom }) => setMapZoom(zoom)}
+                      >
+                        <Geographies geography={geoUrl}>
+                          {({ geographies }) =>
+                            geographies.map((geo) => {
+                              const count = getGeoCount(geo)
+                              const fill = getCountryFill(count)
+                              return (
+                                <Geography
+                                  key={geo.rsmKey}
+                                  geography={geo}
+                                  style={{
+                                    default: { outline: "none" },
+                                    hover: { outline: "none" },
+                                    pressed: { outline: "none" },
+                                  }}
+                                  fill={fill}
+                                  stroke="#e5e7eb"
+                                  strokeWidth={0.4}
+                                />
+                              )
+                            })
+                          }
+                        </Geographies>
+                      </ZoomableGroup>
+                    </ComposableMap>
+                  </div>
+                  <div className="geo-toolbar">
+                    <div className="geo-legend" aria-hidden>
+                      <span>Low</span>
+                      <div className="legend-bar">
+                        <span className="grad grad-1" />
+                        <span className="grad grad-2" />
+                        <span className="grad grad-3" />
+                        <span className="grad grad-4" />
+                        <span className="grad grad-5" />
+                      </div>
+                      <span>High</span>
                     </div>
-                    <span>High</span>
+                    <div className="geo-zoom-controls" aria-label="Map zoom controls">
+                      <button type="button" onClick={handleZoomOut}>
+                        −
+                      </button>
+                      <button type="button" onClick={handleZoomIn}>
+                        +
+                      </button>
+                      <button type="button" onClick={handleZoomReset}>
+                        Reset
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -666,14 +714,29 @@ const VisitorsPage = () => {
         .geo-map-wrapper {
           border-radius: 12px;
           background: #f9fafb;
-          padding: 0.75rem;
+          padding: 0.75rem 0.9rem 0.9rem;
           border: 1px solid rgba(148, 163, 184, 0.3);
           margin-bottom: 0.9rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.35rem;
         }
 
         :global(body.dark-skin) .geo-map-wrapper {
           background: #020617;
           border-color: rgba(148, 163, 184, 0.5);
+        }
+
+        .geo-map {
+          width: 100%;
+          height: 360px;
+          border-radius: 10px;
+          overflow: hidden;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+        }
+
+        :global(body.dark-skin) .geo-map {
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
         }
 
         .geo-legend {
@@ -686,6 +749,14 @@ const VisitorsPage = () => {
           color: var(--text-sub);
         }
 
+        .geo-toolbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+          flex-wrap: wrap;
+        }
+
         .legend-bar {
           display: flex;
           gap: 2px;
@@ -695,6 +766,32 @@ const VisitorsPage = () => {
         .legend-bar .grad {
           width: 16px;
           border-radius: 999px;
+        }
+
+        .geo-zoom-controls {
+          display: flex;
+          gap: 0.35rem;
+        }
+
+        .geo-zoom-controls button {
+          border: 1px solid var(--border);
+          background: #fff;
+          color: var(--text-main);
+          padding: 0.3rem 0.75rem;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: transform 120ms ease, box-shadow 120ms ease;
+        }
+
+        .geo-zoom-controls button:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 10px 20px rgba(79, 70, 229, 0.08);
+        }
+
+        :global(body.dark-skin) .geo-zoom-controls button {
+          background: #0b1120;
+          color: #e2e8f0;
         }
 
         .grad-1 {
@@ -806,6 +903,9 @@ const VisitorsPage = () => {
           .bottom-row {
             grid-template-columns: 1fr;
           }
+          .geo-map {
+            height: 320px;
+          }
         }
 
         @media (max-width: 640px) {
@@ -814,6 +914,21 @@ const VisitorsPage = () => {
           }
           .now-sub-metrics {
             flex-wrap: wrap;
+          }
+          .now-card,
+          .mini-card,
+          .panel {
+            padding: 0.9rem 1rem;
+          }
+          .geo-toolbar {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          .geo-legend {
+            justify-content: flex-start;
+          }
+          .geo-map {
+            height: 260px;
           }
         }
       `}</style>

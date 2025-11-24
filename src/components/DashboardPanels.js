@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { supabase } from "../supabase/supabaseClient"
 
 const getHoursSince = (timestamp) => {
@@ -338,9 +339,9 @@ const DashboardPanels = () => {
                     : "No visits yet"}
                 </span>
                 {" · "}
-                <a href="/visitors/page" className="timestamp">
+                <Link href="/visitors/page" className="timestamp">
                   Read more
-                </a>
+                </Link>
               </div>
             </>
           )}
