@@ -4,6 +4,24 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { supabase } from "../supabase/supabaseClient"
 
+const normalizeCountryKey = (value) => {
+  if (!value) return ""
+  return String(value).trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
+}
+
+const COUNTRY_OVERRIDES = {
+  CHINA: "CN",
+  CHN: "CN",
+  PEOPLESREPUBLICOFCHINA: "CN",
+  MAINLANDCHINA: "CN",
+}
+
+const canonicalizeCountry = (value) => {
+  const normalized = normalizeCountryKey(value)
+  if (!normalized) return ""
+  return COUNTRY_OVERRIDES[normalized] || normalized
+}
+
 const getHoursSince = (timestamp) => {
   if (!timestamp) return null
   const ts = typeof timestamp === "number" ? timestamp : new Date(timestamp).getTime()
@@ -36,11 +54,11 @@ const weatherIcon = (
 )
 
 const DashboardPanels = () => {
-  // ---- Visitor summary (from visitor_logs & visitor_clicks) ----
+  // ---- Visitor summary (from visitor_logs) ----
   const [visitorSummary, setVisitorSummary] = useState({
     totalVisits: null,
-    totalClicks: null,
     topCountry: null,
+    topCountryCount: null,
     lastVisitAt: null,
     last30Days: [], // [{ date: "YYYY-MM-DD", visits: number }]
   })
@@ -108,8 +126,10 @@ const DashboardPanels = () => {
           }
 
           if (log.country) {
-            const c = log.country
-            countryCount.set(c, (countryCount.get(c) || 0) + 1)
+            const c = canonicalizeCountry(log.country)
+            if (c) {
+              countryCount.set(c, (countryCount.get(c) || 0) + 1)
+            }
           }
         }
 
@@ -135,19 +155,10 @@ const DashboardPanels = () => {
           throw totalVisitsError
         }
 
-        // 3) All-time total clicks
-        const { count: totalClicks, error: totalClicksError } = await supabase
-          .from("visitor_clicks")
-          .select("*", { count: "exact", head: true })
-
-        if (totalClicksError) {
-          throw totalClicksError
-        }
-
         setVisitorSummary({
           totalVisits: totalVisits ?? null,
-          totalClicks: totalClicks ?? null,
           topCountry,
+          topCountryCount: topCountry ? topCountryCount : null,
           lastVisitAt,
           last30Days,
         })
@@ -319,15 +330,16 @@ const DashboardPanels = () => {
 
                 <div className="market-row">
                   <div className="row-main">
-                    <span className="symbol">Total clicks</span>
-                    <span className="price">{visitorSummary.totalClicks ?? "—"}</span>
-                  </div>
-                </div>
-
-                <div className="market-row">
-                  <div className="row-main">
-                    <span className="symbol">Top location</span>
-                    <span className="price">{visitorSummary.topCountry || "—"}</span>
+                    <span className="symbol">Top visitors' country</span>
+                    <span className="price">
+                      {visitorSummary.topCountry
+                        ? `${visitorSummary.topCountry}${
+                            visitorSummary.topCountryCount
+                              ? ` (${visitorSummary.topCountryCount})`
+                              : ""
+                          }`
+                        : "—"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -338,7 +350,7 @@ const DashboardPanels = () => {
                     ? `Last visit: ${hoursAgoLabel(visitorSummary.lastVisitAt)}`
                     : "No visits yet"}
                 </span>
-                {" · "}
+                <span aria-hidden="true">·</span>
                 <Link href="/visitors/page" className="timestamp">
                   Read more
                 </Link>
@@ -540,7 +552,7 @@ const DashboardPanels = () => {
         .market-row {
           display: flex;
           flex-direction: column;
-          gap: 0.35rem;
+          gap: 0.2rem;
         }
 
         .row-main {
@@ -563,14 +575,18 @@ const DashboardPanels = () => {
         }
 
         .row-sub {
-          font-size: 0.75rem;
+          font-size: 0.85rem;
           color: var(--text-muted);
           letter-spacing: 0.04em;
+          display: flex;
+          align-items: center;
+          gap: 0.35rem;
         }
 
         .timestamp a,
         a.timestamp {
           text-decoration: none;
+          font-weight: 700;
         }
 
         .timestamp a:hover,
@@ -580,7 +596,7 @@ const DashboardPanels = () => {
 
         /* Visitor chart (柱状图) */
         .visitor-chart {
-          margin-top: 0.35rem;
+          margin-top: 0.15rem;
         }
 
         .chart-bars {
