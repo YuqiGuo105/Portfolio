@@ -39,6 +39,13 @@ To get a local copy up and running follow these simple steps.
   npm install
   ```
 
+- Start the development server (Next.js defaults to http://localhost:3000)
+  ```sh
+  npm run dev
+  ```
+
+- Open the site locally in your browser at `http://localhost:3000`
+
 - Set up environment variables in '.env'
   ```
   NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL
@@ -60,6 +67,7 @@ To get a local copy up and running follow these simple steps.
 - Browse the project portfolio and use the contact form to send messages directly to the project owner's email.
 - Utilize Supabase as database, so user can edit work/blog part.
 - Integrate WYSIWYG to web content that user can easily editor "Blogs"/"Work" content.
+- To open the chat widget automatically, use a URL with `?openChat=1` appended (`http://localhost:3000/?openChat=1`).
 
 ## SEO Improvements
 This project includes basic search engine optimization features:

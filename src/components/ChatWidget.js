@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, Fragment } from 'react'
 import { Minus, ArrowUpRight, Loader2 } from 'lucide-react'
 import Image from 'next/image'
 import { supabase } from '../supabase/supabaseClient'
+import { useRouter } from 'next/router'
 
 /* ============================================================
    ChatWidget — streaming-ready for new backend API (Aug 2025)
@@ -524,6 +525,7 @@ function LauncherButton({onOpen, onDragStart}) {
 
 /** Main ChatWidget export */
 export default function ChatWidget() {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [offset, setOffset] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -551,6 +553,26 @@ export default function ChatWidget() {
       localStorage.setItem('chatWidgetOffset', JSON.stringify(offset))
     }
   }, [offset])
+
+  // Auto-open the widget when the URL contains ?openChat=1 (or any truthy value)
+  useEffect(() => {
+    if (!router?.isReady) return
+
+    const openChatParam = router.query?.openChat
+    if (!openChatParam) return
+
+    // Ensure we land on the homepage with the param preserved during the redirect
+    if (router.pathname !== '/') {
+      router.replace({ pathname: '/', query: { openChat: openChatParam } }, undefined, { shallow: true })
+      return
+    }
+
+    setOpen(true)
+
+    // Clean up the URL so it doesn't keep re-opening when navigating back
+    const { openChat, ...rest } = router.query || {}
+    router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true })
+  }, [router])
 
   const startDrag = (e) => {
     dragRef.current.dragging = false
