@@ -2,7 +2,7 @@
 
 import { createPortal } from 'react-dom'
 import { useState, useEffect, useRef, Fragment } from 'react'
-import { Minus, ArrowUpRight, Loader2 } from 'lucide-react'
+import { Minus, ArrowUpRight, Loader2, CheckCircle2 } from 'lucide-react'
 import Image from 'next/image'
 import { supabase } from '../supabase/supabaseClient'
 import { useRouter } from 'next/router'
@@ -102,6 +102,16 @@ function renderStepLine(stepEvent = {}) {
   if (!title && !note) return ''
   const label = title || 'Step'
   return note ? `${label}: ${note}` : label
+}
+
+/** Normalize a structured ThinkingStep payload for display */
+function normalizeStepEvent(stepEvent = {}) {
+  return {
+    step: Number.isInteger(stepEvent.step) ? stepEvent.step : null,
+    title: stepEvent.title || null,
+    note: stepEvent.note || null,
+    label: renderStepLine(stepEvent),
+  }
 }
 
 /** Pull the assistant text from prepare-response or legacy payloads */
@@ -374,7 +384,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
     // create placeholder assistant message
     const assistantId = generateUUID()
-    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
+    setMessages((prev) => [
+      ...prev,
+      { id: assistantId, role: 'assistant', content: '', streaming: true, steps: [] },
+    ])
 
     let buffer = ''
     let finalPayload = null
@@ -395,13 +408,19 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
     es.addEventListener('step-event', (ev) => {
       try {
-        const data = JSON.parse(ev.data || '{}')
-        const stepLine = renderStepLine(data)
+        const data = normalizeStepEvent(JSON.parse(ev.data || '{}'))
+        const stepLine = data.label
         if (!stepLine) return
         buffer += buffer ? `\n${stepLine}` : stepLine
-        setMessages((prev) => prev.map((m) => (
-          m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
-        )))
+        setMessages((prev) => prev.map((m) => {
+          if (m.id !== assistantId) return m
+          const existingSteps = Array.isArray(m.steps) ? m.steps : []
+          const idx = data.step !== null ? existingSteps.findIndex((s) => s.step === data.step) : -1
+          const updatedSteps = idx >= 0
+            ? existingSteps.map((s, i) => (i === idx ? { ...s, ...data } : s))
+            : [...existingSteps, data]
+          return { ...m, content: buffer, streaming: true, steps: updatedSteps }
+        }))
       } catch (err) {
         logger.warn('Failed to parse step-event', err)
       }
@@ -449,7 +468,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
       try { es.close() } catch {}
       if (esRef.current === es) esRef.current = null
       setMessages((prev) => prev.map((m) => (
-        m.id === assistantId ? { ...m, content: errorText, streaming: false } : m
+        m.id === assistantId
+          ? { ...m, content: errorText, streaming: false }
+          : m
       )))
     })
 
@@ -481,7 +502,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
       const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(processed)
       const finalContent = looksHtml ? sanitizeHtml(processed) : processed
       setMessages((prev) => prev.map((m) => (
-        m.id === assistantId ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false } : m
+        m.id === assistantId
+          ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false }
+          : m
       )))
       onFinal?.(finalContent)
     } catch (err) {
@@ -531,7 +554,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
       logger.error('Failed to start SSE:', err)
       // Fallback to JSON POST immediately
       const assistantId = generateUUID()
-      setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
+      setMessages((prev) => [
+        ...prev,
+        { id: assistantId, role: 'assistant', content: '', streaming: true, steps: [] },
+      ])
       await fallbackJson({ text, assistantId, onFinal: finalizeAndPersist })
     }
   }
@@ -572,6 +598,30 @@ function ChatWindow({ onMinimize, onDragStart }) {
                     : 'bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 shadow dark:bg-gray-800 dark:text-gray-100'
                 }
               >
+                {m.role === 'assistant' && Array.isArray(m.steps) && m.steps.length > 0 && (
+                  <div className="mb-2 space-y-1 text-xs text-gray-600 dark:text-gray-300">
+                    <div className="flex items-center gap-1 font-medium text-gray-700 dark:text-gray-100">
+                      {m.streaming ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                      )}
+                      <span>Thinking steps</span>
+                    </div>
+                    <ol className="list-decimal space-y-1 pl-5">
+                      {m.steps.map((step, idx) => (
+                        <li key={step.step ?? idx} className="leading-snug">
+                          <span className="font-semibold text-gray-800 dark:text-gray-100">
+                            {step.title || (step.step !== null ? `Step ${step.step}` : `Step ${idx + 1}`)}
+                          </span>
+                          {step.note && (
+                            <span className="text-gray-600 dark:text-gray-300"> — {step.note}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
                 {m.streaming
                   ? m.content === ''
                     ? <TypingIndicator />
