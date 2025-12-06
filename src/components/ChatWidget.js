@@ -94,6 +94,45 @@ async function fetchWithTimeout(resource, options = {}, timeoutMs = 20000) {
   }
 }
 
+/** Render a readable line from a StepEvent payload */
+function renderStepLine(stepEvent = {}) {
+  const step = Number.isInteger(stepEvent.step) ? stepEvent.step : null
+  const title = stepEvent.title || (step !== null ? `Step ${step}` : '')
+  const note = stepEvent.note ? String(stepEvent.note) : ''
+  if (!title && !note) return ''
+  const label = title || 'Step'
+  return note ? `${label}: ${note}` : label
+}
+
+/** Pull the assistant text from prepare-response or legacy payloads */
+function extractFinalText(payload) {
+  if (!payload) return ''
+  if (typeof payload === 'string') return payload
+  if (typeof payload.answer === 'string') return payload.answer
+  if (payload.response) {
+    if (typeof payload.response === 'string') return payload.response
+    if (typeof payload.response?.answer === 'string') return payload.response.answer
+    if (typeof payload.response?.content === 'string') return payload.response.content
+  }
+  if (typeof payload.message === 'string') return payload.message
+  if (typeof payload.content === 'string') return payload.content
+  try {
+    return JSON.stringify(payload)
+  } catch {
+    return ''
+  }
+}
+
+/** Extract an error message from structured error response */
+function extractErrorMessage(payload) {
+  if (!payload) return ''
+  if (typeof payload === 'string') return payload
+  if (typeof payload.error === 'string') return payload.error
+  if (payload.error?.message) return payload.error.message
+  if (payload.message) return payload.message
+  return ''
+}
+
 /** Normalize to /api/chat if caller passed an origin or arbitrary path */
 function normalizeChatUrl(raw) {
   if (!raw) return ''
@@ -237,9 +276,12 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [endpoint, setEndpoint] = useState('')
+  const [healthFailed, setHealthFailed] = useState(false)
   const scrollRef = useRef(null)
   const chatEndpointRef = useRef(null)
   const esRef = useRef(null) // active EventSource
+
+  const unavailableText = 'The chat agent bot is currently not available. Please try again later.'
 
   // Smaller latency path: let backend decide caching (false means allow cache)
   const SKIP_CACHE_DEFAULT = false
@@ -282,9 +324,27 @@ function ChatWindow({ onMinimize, onDragStart }) {
       try {
         const u = new URL(ep, window.location.origin)
         const res = await fetchWithTimeout(new URL('/health', u.origin), { method: 'GET' }, 3000)
-        if (!res.ok) logger.warn('Health check non-OK:', res.status, res.statusText)
+        if (!res.ok) {
+          logger.warn('Health check non-OK:', res.status, res.statusText)
+          setHealthFailed(true)
+          setMessages((prev) => {
+            if (prev.some((m) => m.meta === 'health-error')) return prev
+            return [
+              ...prev,
+              { id: generateUUID(), role: 'assistant', content: unavailableText, meta: 'health-error' },
+            ]
+          })
+        }
       } catch (e) {
         logger.warn('Health check error:', e?.message || e)
+        setHealthFailed(true)
+        setMessages((prev) => {
+          if (prev.some((m) => m.meta === 'health-error')) return prev
+          return [
+            ...prev,
+            { id: generateUUID(), role: 'assistant', content: unavailableText, meta: 'health-error' },
+          ]
+        })
       }
     })()
     return () => {
@@ -317,9 +377,13 @@ function ChatWindow({ onMinimize, onDragStart }) {
     setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
 
     let buffer = ''
+    let finalPayload = null
+    let encounteredError = false
 
     const finalize = () => {
-      buffer = formatGuideText(buffer)
+      if (encounteredError) return
+      const finalText = buffer || extractFinalText(finalPayload)
+      buffer = formatGuideText(finalText)
       // decide if buffer looks like HTML
       const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(buffer)
       const finalContent = looksHtml ? sanitizeHtml(buffer) : buffer
@@ -329,18 +393,42 @@ function ChatWindow({ onMinimize, onDragStart }) {
       onFinal?.(finalContent)
     }
 
-    es.addEventListener('meta', (ev) => {
+    es.addEventListener('step-event', (ev) => {
       try {
         const data = JSON.parse(ev.data || '{}')
-      } catch {}
+        const stepLine = renderStepLine(data)
+        if (!stepLine) return
+        buffer += buffer ? `\n${stepLine}` : stepLine
+        setMessages((prev) => prev.map((m) => (
+          m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
+        )))
+      } catch (err) {
+        logger.warn('Failed to parse step-event', err)
+      }
+    })
+
+    es.addEventListener('prepare-response', (ev) => {
+      try {
+        const data = JSON.parse(ev.data || '{}')
+        finalPayload = data
+        const finalText = extractFinalText(data)
+        if (finalText) {
+          buffer += buffer ? `\n\n${finalText}` : finalText
+          setMessages((prev) => prev.map((m) => (
+            m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
+          )))
+        }
+      } catch (err) {
+        logger.warn('Failed to parse prepare-response', err)
+      }
     })
 
     es.addEventListener('message', (ev) => {
-      // data should be a JSON like { delta: '...' } but also accept raw text
+      // Fallback handler if upstream still sends legacy "message" deltas
       let delta = ''
       try {
         const d = JSON.parse(ev.data)
-        delta = d?.delta ?? ''
+        delta = d?.delta ?? extractFinalText(d)
       } catch {
         delta = ev.data || ''
       }
@@ -348,6 +436,20 @@ function ChatWindow({ onMinimize, onDragStart }) {
       buffer += delta
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
+      )))
+    })
+
+    es.addEventListener('error', (ev) => {
+      let errorText = '⚠️ Failed to contact assistant.'
+      try {
+        const data = JSON.parse(ev.data || '{}')
+        errorText = extractErrorMessage(data) || errorText
+      } catch {}
+      encounteredError = true
+      try { es.close() } catch {}
+      if (esRef.current === es) esRef.current = null
+      setMessages((prev) => prev.map((m) => (
+        m.id === assistantId ? { ...m, content: errorText, streaming: false } : m
       )))
     })
 
@@ -360,11 +462,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
     es.onerror = (err) => {
       try { es.close() } catch {}
       if (esRef.current === es) esRef.current = null
-      // Mark streaming bubble as failed and fallback
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, streaming: false } : m
       )))
-      // Fallback to non-streaming POST
       fallbackJson({ text, assistantId, onFinal })
     }
   }
@@ -396,6 +496,14 @@ function ChatWindow({ onMinimize, onDragStart }) {
     e.preventDefault()
     const text = input.trim()
     if (!text || loading) return
+
+    if (healthFailed) {
+      setMessages((prev) => {
+        if (prev.some((m) => m.meta === 'health-error')) return prev
+        return [...prev, { id: generateUUID(), role: 'assistant', content: unavailableText, meta: 'health-error' }]
+      })
+      return
+    }
 
     // If a previous stream is open, close it
     if (esRef.current) {
@@ -485,7 +593,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           />
           <button
             type="submit"
-            disabled={!input.trim() || loading}
+            disabled={!input.trim() || loading || healthFailed}
             className="send-button rounded-md bg-blue-600 p-2 text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : <ArrowUpRight className="h-4 w-4"/>}
