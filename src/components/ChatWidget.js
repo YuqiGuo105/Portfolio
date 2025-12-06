@@ -96,8 +96,8 @@ async function fetchWithTimeout(resource, options = {}, timeoutMs = 20000) {
 
 /** Render a readable line from a StepEvent payload */
 function renderStepLine(stepEvent = {}) {
-  const step = Number.isInteger(stepEvent.step) ? stepEvent.step : null
-  const title = stepEvent.title || (step !== null ? `Step ${step}` : '')
+  const stepNumber = Number.isInteger(stepEvent.step) ? stepEvent.step : null
+  const title = stepEvent.title || stepEvent.name || (stepNumber !== null ? `Step ${stepNumber}` : '')
   const note = stepEvent.note ? String(stepEvent.note) : ''
   if (!title && !note) return ''
   const label = title || 'Step'
@@ -105,13 +105,27 @@ function renderStepLine(stepEvent = {}) {
 }
 
 /** Normalize a structured ThinkingStep payload for display */
-function normalizeStepEvent(stepEvent = {}) {
-  return {
-    step: Number.isInteger(stepEvent.step) ? stepEvent.step : null,
+function normalizeStepEvent(stepEvent = {}, eventId) {
+  const stepNumber = Number.isInteger(stepEvent.step)
+    ? stepEvent.step
+    : Number.isInteger(Number(eventId))
+      ? Number(eventId)
+      : null
+
+  const id =
+    eventId
+    || (typeof stepEvent.step === 'string' ? stepEvent.step : null)
+    || (stepNumber !== null ? String(stepNumber) : null)
+
+  const normalized = {
+    id,
+    step: stepNumber,
+    name: typeof stepEvent.step === 'string' ? stepEvent.step : null,
     title: stepEvent.title || null,
     note: stepEvent.note || null,
-    label: renderStepLine(stepEvent),
   }
+
+  return { ...normalized, label: renderStepLine(normalized) }
 }
 
 /** Pull the assistant text from prepare-response or legacy payloads */
@@ -143,51 +157,34 @@ function extractErrorMessage(payload) {
   return ''
 }
 
-/** Normalize to /api/chat if caller passed an origin or arbitrary path */
-function normalizeChatUrl(raw) {
-  if (!raw) return ''
-  const u = new URL(raw, typeof window !== 'undefined' ? window.location.origin : 'http://localhost')
-  if (!/\/api\/chat\/?$/.test(u.pathname)) {
-    u.pathname = u.pathname.replace(/\/$/, '') + '/api/chat'
-  }
-  return u.toString().replace(/\/$/, '')
-}
-
-/** Build the streaming GET URL from a base /api/chat URL */
-function toStreamUrl(chatUrl, query) {
-  const base = new URL(chatUrl, window.location.origin)
-  base.pathname = base.pathname.replace(/\/api\/chat\/?$/, '/api/chat/stream')
-  const url = new URL(base.toString())
+/** Build the streaming GET URL from the backend base */
+function toPromptStreamUrl(apiBase, query) {
+  const base = new URL(apiBase, window.location.origin)
+  const url = new URL('/v1/prompt/stream', base.origin)
   for (const [k, v] of Object.entries(query || {})) {
     if (v !== undefined && v !== null) url.searchParams.set(k, String(v))
   }
   return url.toString()
 }
 
-/** Resolve the chat endpoint based on env + health check.
- *  - If NEXT_PUBLIC_ASSIST_API is set, normalize to /api/chat and probe ORIGIN:/health
- *  - Fallback to relative '/api/chat'
- */
+/** Resolve the chat backend base (origin) with health check */
 async function resolveChatEndpoint() {
-  const primaryRaw = process.env.NEXT_PUBLIC_ASSIST_API || ''
-  const primary = primaryRaw ? normalizeChatUrl(primaryRaw) : ''
-  const fallback = '/api/chat'
+  const primary = process.env.NEXT_PUBLIC_ASSIST_API || ''
+  const fallback = typeof window !== 'undefined' ? window.location.origin : ''
 
-  const candidates = []
-  if (primary) candidates.push(primary)
-  candidates.push(fallback)
+  const candidates = [primary, fallback].filter(Boolean)
 
   for (const ep of candidates) {
     try {
       const u = new URL(ep, window.location.origin)
-      const healthUrl = new URL('/health', u.origin).toString() // updated: /health
+      const healthUrl = new URL('/health', u.origin).toString()
       const res = await fetchWithTimeout(healthUrl, { method: 'GET' }, 3000)
-      if (res.ok) return u.toString().replace(/\/$/, '')
+      if (res.ok) return u.origin
     } catch (e) {
       logger.warn('Health probe failed:', e?.message || e)
     }
   }
-  return candidates[0]
+  return candidates[0] || window.location.origin
 }
 
 /** UUID generator */
@@ -285,16 +282,12 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [endpoint, setEndpoint] = useState('')
   const [healthFailed, setHealthFailed] = useState(false)
   const scrollRef = useRef(null)
   const chatEndpointRef = useRef(null)
   const esRef = useRef(null) // active EventSource
 
   const unavailableText = 'The chat agent bot is currently not available. Please try again later.'
-
-  // Smaller latency path: let backend decide caching (false means allow cache)
-  const SKIP_CACHE_DEFAULT = false
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -329,11 +322,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
       const ep = await resolveChatEndpoint()
       if (!mounted) return
       chatEndpointRef.current = ep
-      setEndpoint(ep)
 
       try {
-        const u = new URL(ep, window.location.origin)
-        const res = await fetchWithTimeout(new URL('/health', u.origin), { method: 'GET' }, 3000)
+        const res = await fetchWithTimeout(new URL('/health', ep), { method: 'GET' }, 3000)
         if (!res.ok) {
           logger.warn('Health check non-OK:', res.status, res.statusText)
           setHealthFailed(true)
@@ -371,12 +362,12 @@ function ChatWindow({ onMinimize, onDragStart }) {
   }, [])
 
   const startSSE = ({ text, onFinal }) => {
-    // Build GET /api/chat/stream?message=...&skip_cache=...
-    const base = chatEndpointRef.current || '/api/chat'
-    const streamUrl = toStreamUrl(base, {
-      message: text,
-      skip_cache: SKIP_CACHE_DEFAULT ? 'true' : 'false',
-      // Note: GET version on server ignores session_id; caching is cross-user
+    // Build GET /v1/prompt/stream?q=...&sessionId=...
+    const base = chatEndpointRef.current || window.location.origin
+    const streamUrl = toPromptStreamUrl(base, {
+      q: text,
+      userId: sessionId,
+      sessionId,
     })
 
     const es = new EventSource(streamUrl)
@@ -408,18 +399,20 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
     es.addEventListener('step-event', (ev) => {
       try {
-        const data = normalizeStepEvent(JSON.parse(ev.data || '{}'))
+        const data = normalizeStepEvent(JSON.parse(ev.data || '{}'), ev.lastEventId)
         const stepLine = data.label
         if (!stepLine) return
-        buffer += buffer ? `\n${stepLine}` : stepLine
         setMessages((prev) => prev.map((m) => {
           if (m.id !== assistantId) return m
           const existingSteps = Array.isArray(m.steps) ? m.steps : []
-          const idx = data.step !== null ? existingSteps.findIndex((s) => s.step === data.step) : -1
+          const targetKey = data.id ?? data.step ?? data.name
+          const idx = targetKey !== null
+            ? existingSteps.findIndex((s) => (s.id ?? s.step ?? s.name) === targetKey)
+            : -1
           const updatedSteps = idx >= 0
             ? existingSteps.map((s, i) => (i === idx ? { ...s, ...data } : s))
             : [...existingSteps, data]
-          return { ...m, content: buffer, streaming: true, steps: updatedSteps }
+          return { ...m, streaming: true, steps: updatedSteps }
         }))
       } catch (err) {
         logger.warn('Failed to parse step-event', err)
@@ -491,11 +484,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
   }
 
   const fallbackJson = async ({ text, assistantId, onFinal }) => {
-    // POST /api/chat
+    // POST /v1/prompt/prepare
     const base = chatEndpointRef.current || (await resolveChatEndpoint())
-    const url = new URL(base, window.location.origin).toString()
+    const url = new URL('/v1/prompt/prepare', base).toString()
     try {
-      const payload = { message: text, session_id: sessionId, skip_cache: SKIP_CACHE_DEFAULT }
+      const payload = { query: text, sessionId, userId: sessionId }
       const json = await postOnce(url, payload)
       const raw = json?.answer ?? ''
       const processed = formatGuideText(raw)
@@ -610,9 +603,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
                     </div>
                     <ol className="list-decimal space-y-1 pl-5">
                       {m.steps.map((step, idx) => (
-                        <li key={step.step ?? idx} className="leading-snug">
+                        <li key={step.id ?? step.step ?? step.name ?? idx} className="leading-snug">
                           <span className="font-semibold text-gray-800 dark:text-gray-100">
-                            {step.title || (step.step !== null ? `Step ${step.step}` : `Step ${idx + 1}`)}
+                            {step.title
+                              || step.name
+                              || (step.step !== null ? `Step ${step.step}` : `Step ${idx + 1}`)}
                           </span>
                           {step.note && (
                             <span className="text-gray-600 dark:text-gray-300"> — {step.note}</span>
