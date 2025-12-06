@@ -592,7 +592,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
                 }
               >
                 {m.role === 'assistant' && Array.isArray(m.steps) && m.steps.length > 0 && (
-                  <div className="mb-2 space-y-1 text-xs text-gray-600 dark:text-gray-300">
+                  <div className="mb-2 space-y-2 text-xs text-gray-600 dark:text-gray-300">
                     <div className="flex items-center gap-1 font-medium text-gray-700 dark:text-gray-100">
                       {m.streaming ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
@@ -601,19 +601,29 @@ function ChatWindow({ onMinimize, onDragStart }) {
                       )}
                       <span>Thinking steps</span>
                     </div>
-                    <ol className="list-decimal space-y-1 pl-5">
-                      {m.steps.map((step, idx) => (
-                        <li key={step.id ?? step.step ?? step.name ?? idx} className="leading-snug">
-                          <span className="font-semibold text-gray-800 dark:text-gray-100">
-                            {step.title
-                              || step.name
-                              || (step.step !== null ? `Step ${step.step}` : `Step ${idx + 1}`)}
-                          </span>
-                          {step.note && (
-                            <span className="text-gray-600 dark:text-gray-300"> — {step.note}</span>
-                          )}
-                        </li>
-                      ))}
+                    <ol className="space-y-1">
+                      {m.steps.map((step, idx) => {
+                        const isActive = m.streaming && idx === m.steps.length - 1
+                        const title = step.title
+                          || step.name
+                          || (step.step !== null ? `Step ${step.step}` : `Step ${idx + 1}`)
+
+                        return (
+                          <li key={step.id ?? step.step ?? step.name ?? idx} className="flex items-start gap-2 leading-snug">
+                            {isActive ? (
+                              <Loader2 className="mt-0.5 h-3 w-3 animate-spin text-blue-600" />
+                            ) : (
+                              <CheckCircle2 className="mt-0.5 h-3 w-3 text-emerald-500" />
+                            )}
+                            <div>
+                              <div className="font-semibold text-gray-800 dark:text-gray-100">{title}</div>
+                              {step.note && (
+                                <div className="text-gray-600 dark:text-gray-300">{step.note}</div>
+                              )}
+                            </div>
+                          </li>
+                        )
+                      })}
                     </ol>
                   </div>
                 )}
