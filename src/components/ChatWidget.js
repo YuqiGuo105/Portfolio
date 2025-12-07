@@ -214,6 +214,8 @@ function Overlay({ onClick }) {
 
 /** Chat window UI */
 function ChatWindow({ onMinimize, onDragStart, onResizeStart, size }) {
+  const containerRef = useRef(null)
+  const [cursor, setCursor] = useState('')
   const [messages, setMessages] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('chatMessages')
@@ -428,10 +430,42 @@ function ChatWindow({ onMinimize, onDragStart, onResizeStart, size }) {
     }
   }
 
+  const edgeResizeCheck = (clientX, clientY) => {
+    const el = containerRef.current
+    if (!el) return { nearCorner: false }
+    const rect = el.getBoundingClientRect()
+    const threshold = 10
+    const nearRight = rect.right - clientX <= threshold
+    const nearBottom = rect.bottom - clientY <= threshold
+    return { nearCorner: nearRight && nearBottom }
+  }
+
+  const handleMouseMove = (e) => {
+    const { nearCorner } = edgeResizeCheck(e.clientX, e.clientY)
+    setCursor(nearCorner ? 'nwse-resize' : '')
+  }
+
+  const handleMouseDown = (e) => {
+    const point = e.touches ? e.touches[0] : e
+    const { nearCorner } = edgeResizeCheck(point.clientX, point.clientY)
+    if (nearCorner) {
+      onResizeStart(e)
+    }
+  }
+
   return (
     <div
+      ref={containerRef}
       className="bot-container relative mb-6 flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700"
-      style={{ width: size?.width || '100%', height: size?.height || '80vh' }}
+      style={{
+        width: size?.width || '100%',
+        height: size?.height || '80vh',
+        cursor: cursor || undefined,
+      }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setCursor('')}
+      onMouseDown={handleMouseDown}
+      onTouchStart={handleMouseDown}
     >
       <header
         className="bot-header flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700"
@@ -496,13 +530,6 @@ function ChatWindow({ onMinimize, onDragStart, onResizeStart, size }) {
         </div>
       </form>
 
-      <div
-        className="resize-handle"
-        role="presentation"
-        onMouseDown={onResizeStart}
-        onTouchStart={onResizeStart}
-        aria-label="Resize chat window"
-      />
     </div>
   )
 }

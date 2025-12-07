@@ -256,15 +256,3 @@
     100% { transform: rotate(0deg); }
   }
 
-  .resize-handle {
-    position: absolute;
-    right: 6px;
-    bottom: 6px;
-    width: 18px;
-    height: 18px;
-    border-radius: 4px;
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.35));
-    border: 1px solid rgba(59, 130, 246, 0.35);
-    cursor: nwse-resize;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8);
-  }
