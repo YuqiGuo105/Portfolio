@@ -195,15 +195,20 @@
 
   /* Dark mode overrides for body.dark-skin */
   body.dark-skin .bot-container {
-    background-color: #111827;
-    border-color: #374151;
+    background-color: #0b1220;
+    border-color: #1f2937;
+    color: #e5e7eb;
+    box-shadow: 0 15px 60px rgba(0, 0, 0, 0.45);
   }
   body.dark-skin .bot-header {
-    border-color: #374151;
+    background-color: #0f172a;
+    border-color: #1f2937;
+    color: #e5e7eb;
   }
   body.dark-skin .bot-message {
-    background-color: #1f2937;
-    color: #f3f4f6;
+    background-color: #111827;
+    color: #e5e7eb;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   }
   body.dark-skin .bot-input {
     color: #f3f4f6 !important;
@@ -212,12 +217,14 @@
     color: #9ca3af !important;
   }
   body.dark-skin .launch-button {
-    background: #111827;
-    border-color: #374151;
+    background: #0f172a;
+    border-color: #1f2937;
+    color: #e5e7eb;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
   }
   body.dark-skin .launch-button:hover {
-    background: #374151;
-    border-color: #374151;
+    background: #1f2937;
+    border-color: #1f2937;
   }
   body.dark-skin .bot-actions .send-button {
     background-color: #2563eb;
@@ -229,8 +236,11 @@
     background-color: #d1d5db;
   }
   body.dark-skin .bot-container form {
-    background-color: #1f2937;
-    border-color: #374151;
+    background-color: #0f172a;
+    border-color: #1f2937;
+  }
+  body.dark-skin .bot-messages {
+    background: linear-gradient(180deg, #0b1220 0%, #0f172a 100%);
   }
 
   .pot-image.shake {
