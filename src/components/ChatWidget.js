@@ -213,7 +213,7 @@ function Overlay({ onClick }) {
 }
 
 /** Chat window UI */
-function ChatWindow({ onMinimize, onDragStart }) {
+function ChatWindow({ onMinimize, onDragStart, onResizeStart, size }) {
   const [messages, setMessages] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('chatMessages')
@@ -429,7 +429,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
   }
 
   return (
-    <div className="bot-container relative mb-6 flex flex-col h-[80vh] w-screen md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700">
+    <div
+      className="bot-container relative mb-6 flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700"
+      style={{ width: size?.width || '100%', height: size?.height || '80vh' }}
+    >
       <header
         className="bot-header flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700"
         onMouseDown={onDragStart}
@@ -492,6 +495,14 @@ function ChatWindow({ onMinimize, onDragStart }) {
           </button>
         </div>
       </form>
+
+      <div
+        className="resize-handle"
+        role="presentation"
+        onMouseDown={onResizeStart}
+        onTouchStart={onResizeStart}
+        aria-label="Resize chat window"
+      />
     </div>
   )
 }
@@ -527,6 +538,16 @@ function LauncherButton({onOpen, onDragStart}) {
 export default function ChatWidget() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [size, setSize] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chatWidgetSize')
+      if (saved) return JSON.parse(saved)
+      const defaultWidth = Math.max(320, Math.min(520, window.innerWidth - 24))
+      const defaultHeight = Math.max(360, Math.round(window.innerHeight * 0.8))
+      return { width: defaultWidth, height: defaultHeight }
+    }
+    return { width: 520, height: 640 }
+  })
   const [offset, setOffset] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('chatWidgetOffset')
@@ -537,6 +558,7 @@ export default function ChatWidget() {
 
   const rootRef = useRef(null)
   const offsetRef = useRef(offset)
+  const sizeRef = useRef(size)
   const dragRef = useRef({ dragging: false })
 
   useEffect(() => {
@@ -553,6 +575,13 @@ export default function ChatWidget() {
       localStorage.setItem('chatWidgetOffset', JSON.stringify(offset))
     }
   }, [offset])
+
+  useEffect(() => {
+    sizeRef.current = size
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('chatWidgetSize', JSON.stringify(size))
+    }
+  }, [size])
 
   // Auto-open the widget when the URL contains ?openChat=1 (or any truthy value)
   useEffect(() => {
@@ -606,6 +635,37 @@ export default function ChatWidget() {
     setOpen(true)
   }
 
+  const startResize = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const point = e.touches ? e.touches[0] : e
+    const startX = point.clientX
+    const startY = point.clientY
+    const { width, height } = sizeRef.current
+    const moveEvent = e.touches ? 'touchmove' : 'mousemove'
+    const upEvent = e.touches ? 'touchend' : 'mouseup'
+
+    const onMove = (ev) => {
+      const mp = ev.touches ? ev.touches[0] : ev
+      const dx = mp.clientX - startX
+      const dy = mp.clientY - startY
+      const maxWidth = typeof window !== 'undefined' ? Math.max(340, window.innerWidth - 24) : 900
+      const maxHeight = typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 64) : 900
+      setSize({
+        width: Math.min(Math.max(320, width + dx), maxWidth),
+        height: Math.min(Math.max(360, height + dy), maxHeight),
+      })
+    }
+
+    const onUp = () => {
+      window.removeEventListener(moveEvent, onMove)
+      window.removeEventListener(upEvent, onUp)
+    }
+
+    window.addEventListener(moveEvent, onMove)
+    window.addEventListener(upEvent, onUp)
+  }
+
   // Ensure container exists
   const container = rootRef.current || ensureRoot()
   rootRef.current = container
@@ -615,7 +675,12 @@ export default function ChatWidget() {
     open ? (
       <Fragment>
         <Overlay onClick={() => setOpen(false)} />
-        <ChatWindow onMinimize={() => setOpen(false)} onDragStart={startDrag} />
+        <ChatWindow
+          onMinimize={() => setOpen(false)}
+          onDragStart={startDrag}
+          onResizeStart={startResize}
+          size={size}
+        />
       </Fragment>
     ) : (
       <LauncherButton onOpen={handleOpen} onDragStart={startDrag} />
