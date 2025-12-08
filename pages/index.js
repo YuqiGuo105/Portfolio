@@ -945,14 +945,6 @@ const Index = () => {
             </Slider>
           </div>
 
-          <div className="blog-more-link">
-            <Link href="/blog" legacyBehavior>
-              <a className="btn">
-                <span>View Blogs</span>
-              </a>
-            </Link>
-          </div>
-
           {/* Gap Between Sections */}
           <section className="section section-parallax section-parallax-5">
             <div className="container"></div>
@@ -1039,9 +1031,9 @@ const Index = () => {
           </div>
 
           <div className="blog-more-link">
-            <Link href="#" legacyBehavior>
+            <Link href="https://www.yuqi.site/blog" legacyBehavior>
               <a className="btn">
-                <span>View Blog</span>
+                <span>View Blogs</span>
               </a>
             </Link>
           </div>
