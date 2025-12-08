@@ -330,6 +330,10 @@ export default function LogInDialog({
           box-shadow: 0 16px 30px rgba(14, 165, 233, 0.25);
         }
 
+        .login-button:before {
+          display: none;
+        }
+
         .login-button:focus-visible {
           outline: none;
           box-shadow: 0 0 0 3px var(--button-bg-focus);
@@ -346,6 +350,10 @@ export default function LogInDialog({
         }
 
         .signup-button {
+          display: flex;
+          height: 30px;
+          align-items: center;
+          justify-content: center;
           border-radius: 999px;
           border: 1px solid var(--outline-button);
           background: transparent;
