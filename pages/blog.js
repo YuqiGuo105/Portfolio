@@ -56,6 +56,7 @@ const Pagination = ({totalItems, itemsPerPage, currentPage, onPageChange}) => {
 
 const Blog = () => {
     const [allBlogs, setAllBlogs] = useState([]);
+    const [lifeBlogs, setLifeBlogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(5); // Adjust as per your requirement
@@ -80,15 +81,27 @@ const Blog = () => {
 
     useEffect(() => {
         const fetchBlogs = async () => {
-            let {data, error} = await supabase
-                .from('Blogs')
-                .select('*')
-                .order('date', {ascending: false});
+            const [{data: techBlogs, error: techError}, {data: lifestyleBlogs, error: lifeError}] = await Promise.all([
+                supabase
+                    .from('Blogs')
+                    .select('*')
+                    .order('date', {ascending: false}),
+                supabase
+                    .from('life_blogs')
+                    .select('id, title, image_url, category, published_at, description, require_login')
+                    .order('created_at', {ascending: false}),
+            ]);
 
-            if (error) {
-                console.error('Error fetching blogs:', error);
+            if (techError) {
+                console.error('Error fetching blogs:', techError);
             } else {
-                setAllBlogs(data ?? []);
+                setAllBlogs(techBlogs ?? []);
+            }
+
+            if (lifeError) {
+                console.error('Error fetching life blogs:', lifeError);
+            } else {
+                setLifeBlogs(lifestyleBlogs ?? []);
             }
             setLoading(false);
         };
@@ -144,7 +157,7 @@ const Blog = () => {
                                 <h1
                                     className="h-title"
                                 >
-                                    My Technical Blogs
+                                    My Blog Posts
                                 </h1>
                             </div>
                         </div>
@@ -152,7 +165,7 @@ const Blog = () => {
                 </div>
             </section>
             <section className="section section-inner m-archive">
-                {/* Blog */}
+                {/* Technical Blogs */}
                 <div className="tag-filter">
                     <label className="tag-filter__label">Filter by tags</label>
                     <div className="tag-filter__controls">
@@ -193,6 +206,7 @@ const Blog = () => {
                     )}
                 </div>
 
+                <h2 className="section-title">Technical Blogs</h2>
                 <div className="blog-items">
                     {paginatedBlogs.length === 0 && (
                         <p>No blogs match the selected tags yet.</p>
@@ -244,6 +258,52 @@ const Blog = () => {
                     currentPage={currentPage}
                     onPageChange={handlePageChange}
                 />
+
+                <h2 className="section-title">Life Blogs</h2>
+                <div className="blog-items">
+                    {lifeBlogs.length === 0 && (
+                        <p>No life blogs have been published yet.</p>
+                    )}
+                    {lifeBlogs.map((blog) => (
+                        <div className="archive-item" key={blog.id}>
+                            <div className="image">
+                                <Link href={`/life-blog/${blog.id}`}>
+                                    <a>
+                                        <img src={blog.image_url} alt={blog.title}/>
+                                    </a>
+                                </Link>
+                            </div>
+                            <div className="desc">
+                                <div
+                                    className="category"
+                                >
+                                    {blog.category}
+                                    <br/>
+                                    <span>{blog.published_at}</span>
+                                </div>
+                                <h3
+                                    className="title"
+                                >
+                                    <Link href={`/life-blog/${blog.id}`}>
+                                        <a>{blog.title}</a>
+                                    </Link>
+                                </h3>
+                                <div
+                                    className="text"
+                                >
+                                    <p>
+                                        {blog.description}
+                                    </p>
+                                    <div className="readmore">
+                                        <Link href={`/life-blog/${blog.id}`}>
+                                            <a className="lnk">Read more</a>
+                                        </Link>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
 
                 <style jsx>{`
                     .tag-filter {
@@ -303,6 +363,12 @@ const Blog = () => {
                         text-decoration: underline;
                         cursor: pointer;
                         padding: 0 4px;
+                    }
+
+                    .section-title {
+                        margin: 32px 0 16px;
+                        font-size: 24px;
+                        font-weight: 700;
                     }
                 `}</style>
 
