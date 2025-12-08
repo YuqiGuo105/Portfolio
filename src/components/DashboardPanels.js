@@ -73,65 +73,91 @@ const DashboardPanels = () => {
   const [isWeatherLoading, setIsWeatherLoading] = useState(true)
 
   useEffect(() => {
+    let isActive = true;
+
     const fetchMarket = async () => {
       try {
-        const response = await fetch("/api/market-data")
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const json = await response.json()
+        const response = await fetch("/api/market-data");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const json = await response.json();
+        if (!isActive) return;
         if (json?.data) {
-          setMarketData(json.data)
+          setMarketData(json.data);
         }
-        setMarketFallback(Boolean(json?.fallback))
-        setMarketMeta(json?.meta ?? null)
+        setMarketFallback(Boolean(json?.fallback));
+        setMarketMeta(json?.meta ?? null);
       } catch (error) {
-        console.error("Failed to load market data", error)
+        if (isActive) {
+          console.error("Failed to load market data", error);
+        }
       }
-    }
+    };
 
-    fetchMarket()
-  }, [])
+    fetchMarket();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
+    let isActive = true;
+
     const fetchCurrency = async () => {
       try {
         const params = new URLSearchParams({
           base: baseCurrency,
           target: targetCurrency,
           amount: amount || "1",
-        })
-        const response = await fetch(`/api/currency?${params.toString()}`)
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const json = await response.json()
-        if (json?.rate) {
-          setCurrency(json)
+        });
+        const response = await fetch(`/api/currency?${params.toString()}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const json = await response.json();
+        if (isActive && json?.rate) {
+          setCurrency(json);
         }
       } catch (error) {
-        console.error("Failed to load currency data", error)
+        if (isActive) {
+          console.error("Failed to load currency data", error);
+        }
       }
-    }
+    };
 
-    fetchCurrency()
-  }, [baseCurrency, targetCurrency, amount])
+    fetchCurrency();
+
+    return () => {
+      isActive = false;
+    };
+  }, [baseCurrency, targetCurrency, amount]);
 
   useEffect(() => {
+    let isActive = true;
     const fetchWeather = async () => {
-      setIsWeatherLoading(true)
+      setIsWeatherLoading(true);
       try {
-        const response = await fetch("/api/weather")
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const json = await response.json()
-        if (json) {
-          setWeather(json)
+        const response = await fetch("/api/weather");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const json = await response.json();
+        if (isActive && json) {
+          setWeather(json);
         }
       } catch (error) {
-        console.error("Failed to load weather data", error)
+        if (isActive) {
+          console.error("Failed to load weather data", error);
+        }
       } finally {
-        setIsWeatherLoading(false)
+        if (isActive) {
+          setIsWeatherLoading(false);
+        }
       }
-    }
+    };
 
-    fetchWeather()
-  }, [])
+    fetchWeather();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const convertedAmount = useMemo(() => {
     const amt = Number.parseFloat(amount)

@@ -121,6 +121,20 @@ const Header = () => {
             </div>
           </div>
           <div className="col-xs-8 col-sm-8 col-md-8 col-lg-8 align-right">
+            <button
+              type="button"
+              aria-label="Open search"
+              className="hidden-xs"
+              style={{
+                background: "transparent",
+                border: "none",
+                marginRight: "18px",
+                color: "inherit",
+                cursor: "pointer",
+              }}
+            >
+              <i className="fa fa-search" aria-hidden="true"></i>
+            </button>
             {/* switcher btn */}
             <a
               className={`switcher-btn ${day ? "active" : ""}`}
