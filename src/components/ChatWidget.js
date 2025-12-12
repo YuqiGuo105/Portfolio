@@ -8,32 +8,24 @@ import { supabase } from '../supabase/supabaseClient'
 import { useRouter } from 'next/router'
 
 /* ============================================================
-   ChatWidget — streaming-ready for new backend API (Aug 2025)
-   - English comments only
-   - Uses SSE streaming via GET /api/chat/stream (EventSource)
-   - Falls back to JSON POST /api/chat on failure
-   - Health check against /health (updated; was /healthz)
-   - Structured logger + retries for non-streaming fallback
-   - Stores final Q&A to Supabase chat_history
+   ChatWidget — POST SSE for /api/rag/answer/stream
+   - ChatGPT-like thinking stage (only current stage, fixed height)
+   - Stage text is clamped (no bubble explosion)
+   - Stage has smoother animation + indeterminate loading bar
+   - When final answer arrives: hide thinking immediately, keep answer
    ============================================================ */
 
-/* ───────── structured logger ───────── */
 const logger = {
   info: (...a) => console.log('[ChatWidget]', ...a),
   warn: (...a) => console.warn('[ChatWidget]', ...a),
   error: (...a) => console.error('[ChatWidget]', ...a),
-  time: (label) => console.time(`[ChatWidget] ${label}`),
-  timeEnd: (label) => console.timeEnd(`[ChatWidget] ${label}`),
 }
 
 /* ───────── minimal sanitizer ───────── */
 const sanitizeHtml = (html) =>
   html
-    // strip <script>
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    // strip inline handlers like onclick="..."
     .replace(/\s(on\w+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    // neutralize javascript: URLs
     .replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"')
     .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'")
 
@@ -79,9 +71,6 @@ const ensureRoot = () => {
   return el
 }
 
-/** Small helper: sleep */
-const delay = (ms) => new Promise((r) => setTimeout(r, ms))
-
 /** Fetch with timeout */
 async function fetchWithTimeout(resource, options = {}, timeoutMs = 20000) {
   const controller = new AbortController()
@@ -94,35 +83,40 @@ async function fetchWithTimeout(resource, options = {}, timeoutMs = 20000) {
   }
 }
 
-/** Normalize to /api/chat if caller passed an origin or arbitrary path */
-function normalizeChatUrl(raw) {
+/** UUID generator */
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
+    (
+      c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))
+    ).toString(16)
+  )
+}
+
+/* ---------- RAG endpoint helpers ---------- */
+
+function normalizeRagBaseUrl(raw) {
   if (!raw) return ''
   const u = new URL(raw, typeof window !== 'undefined' ? window.location.origin : 'http://localhost')
-  if (!/\/api\/chat\/?$/.test(u.pathname)) {
-    u.pathname = u.pathname.replace(/\/$/, '') + '/api/chat'
+  u.hash = ''
+  u.search = ''
+  u.pathname = u.pathname.replace(/\/api\/rag\/answer\/stream\/?$/, '/api/rag/answer')
+  if (!/\/api\/rag\/answer\/?$/.test(u.pathname)) {
+    u.pathname = u.pathname.replace(/\/$/, '') + '/api/rag/answer'
   }
   return u.toString().replace(/\/$/, '')
 }
 
-/** Build the streaming GET URL from a base /api/chat URL */
-function toStreamUrl(chatUrl, query) {
-  const base = new URL(chatUrl, window.location.origin)
-  base.pathname = base.pathname.replace(/\/api\/chat\/?$/, '/api/chat/stream')
-  const url = new URL(base.toString())
-  for (const [k, v] of Object.entries(query || {})) {
-    if (v !== undefined && v !== null) url.searchParams.set(k, String(v))
-  }
-  return url.toString()
+function ragStreamUrl(ragBaseUrl) {
+  const u = new URL(ragBaseUrl, window.location.origin)
+  u.pathname = u.pathname.replace(/\/api\/rag\/answer\/?$/, '/api/rag/answer/stream')
+  return u.toString()
 }
 
-/** Resolve the chat endpoint based on env + health check.
- *  - If NEXT_PUBLIC_ASSIST_API is set, normalize to /api/chat and probe ORIGIN:/health
- *  - Fallback to relative '/api/chat'
- */
-async function resolveChatEndpoint() {
-  const primaryRaw = process.env.NEXT_PUBLIC_ASSIST_API || ''
-  const primary = primaryRaw ? normalizeChatUrl(primaryRaw) : ''
-  const fallback = '/api/chat'
+async function resolveRagEndpoint() {
+  const primaryRaw = process.env.NEXT_PUBLIC_ASSIST_API || process.env.NEXT_PUBLIC_RAG_API || ''
+  const primary = primaryRaw ? normalizeRagBaseUrl(primaryRaw) : ''
+  const fallback = '/api/rag/answer'
 
   const candidates = []
   if (primary) candidates.push(primary)
@@ -131,7 +125,7 @@ async function resolveChatEndpoint() {
   for (const ep of candidates) {
     try {
       const u = new URL(ep, window.location.origin)
-      const healthUrl = new URL('/health', u.origin).toString() // updated: /health
+      const healthUrl = new URL('/health', u.origin).toString()
       const res = await fetchWithTimeout(healthUrl, { method: 'GET' }, 3000)
       if (res.ok) return u.toString().replace(/\/$/, '')
     } catch (e) {
@@ -141,68 +135,148 @@ async function resolveChatEndpoint() {
   return candidates[0]
 }
 
-/** UUID generator */
-function generateUUID() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID()
+/* ---------- SSE parsing (POST fetch stream) ---------- */
+
+function parseSSEBlock(block) {
+  const lines = block.split(/\r?\n/)
+  let event = 'message'
+  const dataLines = []
+  for (const line of lines) {
+    if (!line) continue
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
   }
-  return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
-    (
-      c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))
-    ).toString(16)
-  )
+  return { event, data: dataLines.join('\n') }
 }
 
-/** Non-streaming POST with tiny retry */
-async function postOnce(url, body, maxRetries = 1) {
-  let attempt = 0
-  while (attempt <= maxRetries) {
-    try {
-      const res = await fetchWithTimeout(
-        url,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify(body),
-          mode: 'cors',
-        },
-        30000
-      )
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '')
-        throw new Error(`HTTP ${res.status} ${res.statusText}${txt ? ' — ' + txt.slice(0, 200) : ''}`)
-      }
-      const ct = res.headers.get('content-type') || ''
-      if (!/application\/json/i.test(ct)) {
-        const txt = await res.text().catch(() => '')
-        throw new Error(`Expected JSON, got ${ct || 'unknown'}${txt ? ' — ' + txt.slice(0, 120) : ''}`)
-      }
-      return await res.json()
-    } catch (e) {
-      if (attempt === maxRetries) throw e
-      await delay(600 * (attempt + 1))
-      attempt++
+function safeJsonParse(s) {
+  try { return JSON.parse(s) } catch { return null }
+}
+
+function compactText(s, max = 220) {
+  if (!s) return ''
+  const t = String(s)
+  return t.length > max ? t.slice(0, max) + '…' : t
+}
+
+function summarizeStageDetail(stage, dataObj) {
+  const msg = dataObj?.message ? String(dataObj.message) : ''
+  const payload = dataObj?.payload
+
+  if (stage === 'start') {
+    const ts = payload?.ts ? `ts=${payload.ts}` : ''
+    return compactText([msg, ts].filter(Boolean).join(' '))
+  }
+
+  if (stage === 'redis') {
+    const n = Array.isArray(payload) ? payload.length : 0
+    return compactText(`${msg}${msg ? ' — ' : ''}messages=${n}`)
+  }
+
+  if (stage === 'rag') {
+    if (Array.isArray(payload) && payload.length) {
+      const top = payload[0]
+      const preview = top?.preview ? compactText(top.preview, 240) : ''
+      const score = typeof top?.score === 'number' ? top.score.toFixed(3) : ''
+      return compactText(`${msg}${msg ? ' — ' : ''}top1 score=${score}\n${preview}`, 280)
+    }
+    return compactText(msg || 'Retrieval')
+  }
+
+  if (stage === 'answer_delta') return 'Generating…'
+  return compactText(msg || stage)
+}
+
+async function postSSE(url, body, { onEvent, signal }) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    },
+    body: JSON.stringify(body),
+    mode: 'cors',
+    signal,
+  })
+
+  if (!res.ok) {
+    const t = await res.text().catch(() => '')
+    throw new Error(`SSE HTTP ${res.status} ${res.statusText}${t ? ' — ' + t.slice(0, 160) : ''}`)
+  }
+  if (!res.body) throw new Error('ReadableStream not supported')
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buf = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+
+    let idx
+    while ((idx = buf.search(/\r?\n\r?\n/)) !== -1) {
+      const raw = buf.slice(0, idx)
+      buf = buf.slice(idx).replace(/^\r?\n\r?\n/, '')
+      const evt = parseSSEBlock(raw)
+      if (evt?.data != null) onEvent?.(evt)
     }
   }
 }
 
-/** Typing animation component */
+/* ---------- UI bits ---------- */
+
 function TypingIndicator() {
   return (
     <div className="typing">
       <span className="dot" />
       <span className="dot" />
       <span className="dot" />
+      <style jsx>{`
+        .typing { display:flex; gap:6px; align-items:center; padding: 2px 0; }
+        .dot {
+          width:6px; height:6px; border-radius:999px;
+          background: rgba(107,114,128,0.85);
+          animation: bounce 1s infinite;
+        }
+        .dot:nth-child(2){ animation-delay: .15s }
+        .dot:nth-child(3){ animation-delay: .3s }
+        @keyframes bounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: .55 }
+          40% { transform: translateY(-4px); opacity: 1 }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .dot { animation: none; }
+        }
+      `}</style>
     </div>
   )
 }
 
-/** Blinking cursor shown during streaming */
 function StreamingCursor() {
-  return <span className="blinking-cursor" />
+  return (
+    <span className="blinking-cursor">
+      <style jsx>{`
+        .blinking-cursor {
+          display:inline-block;
+          width: 8px;
+          height: 14px;
+          margin-left: 3px;
+          background: currentColor;
+          opacity: .45;
+          animation: blink 1s step-end infinite;
+          transform: translateY(2px);
+          border-radius: 2px;
+        }
+        @keyframes blink { 50% { opacity: 0 } }
+        @media (prefers-reduced-motion: reduce) {
+          .blinking-cursor { animation: none; opacity: .35; }
+        }
+      `}</style>
+    </span>
+  )
 }
 
-/** Dark backdrop overlay */
 function Overlay({ onClick }) {
   return (
     <div
@@ -212,7 +286,116 @@ function Overlay({ onClick }) {
   )
 }
 
-/** Chat window UI */
+/**
+ * ChatGPT-like thinking stage
+ * - Only current stage is shown (previous disappears)
+ * - Fixed height
+ * - Title 1 line ellipsis, detail clamped
+ * - Smoother animation + indeterminate bar
+ */
+function StageToast({ step }) {
+  if (!step) return null
+
+  return (
+    <div key={step.id} className="stage-toast mb-2">
+      <div className="stage-inner flex items-start gap-2 rounded-xl border border-gray-200/70 bg-white/70 px-3 py-2 shadow-sm dark:border-gray-700/70 dark:bg-gray-900/40">
+        <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-gray-500" />
+
+        <div className="min-w-0 flex-1">
+          <div className="stage-title text-[13px] font-medium text-gray-800 dark:text-gray-100">
+            {step.title}
+          </div>
+          {step.detail ? (
+            <div className="stage-detail mt-0.5 text-[13px] text-gray-600/70 dark:text-gray-300/70">
+              {step.detail}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="stage-bar" aria-hidden="true" />
+      </div>
+
+      <style jsx>{`
+        .stage-toast {
+          animation: stageIn 180ms ease-out;
+        }
+
+        .stage-inner {
+          position: relative;
+          max-height: 76px;          /* fixed length container */
+          overflow: hidden;
+        }
+
+        /* title: 1-line ellipsis */
+        .stage-title {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          animation: textIn 180ms ease-out;
+        }
+
+        /* detail: clamp lines, keep newlines */
+        .stage-detail {
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;     /* max lines shown */
+          overflow: hidden;
+          white-space: pre-wrap;
+          word-break: break-word;
+          animation: textIn 220ms ease-out;
+        }
+
+        /* indeterminate loading bar */
+        .stage-bar {
+          position: absolute;
+          left: 12px;
+          right: 12px;
+          bottom: 8px;
+          height: 2px;
+          overflow: hidden;
+          border-radius: 999px;
+          opacity: 0.55;
+          background: rgba(148,163,184,0.25);
+        }
+        .stage-bar::before {
+          content: '';
+          position: absolute;
+          left: -40%;
+          top: 0;
+          height: 100%;
+          width: 40%;
+          border-radius: 999px;
+          background: rgba(100,116,139,0.7);
+          animation: indeterminate 1.2s ease-in-out infinite;
+        }
+
+        @keyframes stageIn {
+          from { opacity: 0; transform: translateY(6px) scale(0.99); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes textIn {
+          from { opacity: 0; transform: translateY(2px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes indeterminate {
+          0%   { transform: translateX(0); left: -40%; }
+          50%  { transform: translateX(0); left: 60%;  }
+          100% { transform: translateX(0); left: 120%; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .stage-toast, .stage-title, .stage-detail { animation: none; }
+          .stage-bar::before { animation: none; left: 0; width: 35%; opacity: 0.5; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+/* ---------- Chat window ---------- */
+
 function ChatWindow({ onMinimize, onDragStart }) {
   const [messages, setMessages] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -236,28 +419,22 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [endpoint, setEndpoint] = useState('')
-  const scrollRef = useRef(null)
-  const chatEndpointRef = useRef(null)
-  const esRef = useRef(null) // active EventSource
+  const [endpoint, setEndpoint] = useState('') // optional debug
 
-  // Smaller latency path: let backend decide caching (false means allow cache)
-  const SKIP_CACHE_DEFAULT = false
+  const scrollRef = useRef(null)
+  const ragEndpointRef = useRef(null)
+  const abortRef = useRef(null)
 
   useEffect(() => {
     if (messages.length === 0) {
-      setMessages([
-        { id: generateUUID(), role: 'assistant', content: 'Hi! How can I help you today?' },
-      ])
+      setMessages([{ id: generateUUID(), role: 'assistant', content: 'Hi! How can I help you today?' }])
     }
   }, [])
 
   useEffect(() => {
     const root = ensureRoot()
     root.style.pointerEvents = 'auto'
-    return () => {
-      root.style.pointerEvents = 'none'
-    }
+    return () => { root.style.pointerEvents = 'none' }
   }, [])
 
   useEffect(() => {
@@ -265,18 +442,15 @@ function ChatWindow({ onMinimize, onDragStart }) {
   }, [messages])
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages, loading])
 
-  // Resolve endpoint and check health on mount
   useEffect(() => {
     let mounted = true
     ;(async () => {
-      const ep = await resolveChatEndpoint()
+      const ep = await resolveRagEndpoint()
       if (!mounted) return
-      chatEndpointRef.current = ep
+      ragEndpointRef.current = ep
       setEndpoint(ep)
 
       try {
@@ -287,108 +461,116 @@ function ChatWindow({ onMinimize, onDragStart }) {
         logger.warn('Health check error:', e?.message || e)
       }
     })()
-    return () => {
-      mounted = false
-    }
+    return () => { mounted = false }
   }, [])
 
-  // Clean up the active stream when minimizing/unmounting
   useEffect(() => () => {
-    if (esRef.current) {
-      try { esRef.current.close() } catch {}
-      esRef.current = null
+    if (abortRef.current) {
+      try { abortRef.current.abort() } catch {}
+      abortRef.current = null
     }
   }, [])
 
-  const startSSE = ({ text, onFinal }) => {
-    // Build GET /api/chat/stream?message=...&skip_cache=...
-    const base = chatEndpointRef.current || '/api/chat'
-    const streamUrl = toStreamUrl(base, {
-      message: text,
-      skip_cache: SKIP_CACHE_DEFAULT ? 'true' : 'false',
-      // Note: GET version on server ignores session_id; caching is cross-user
-    })
-
-    const es = new EventSource(streamUrl)
-    esRef.current = es
-
-    // create placeholder assistant message
-    const assistantId = generateUUID()
-    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
-
-    let buffer = ''
-
-    const finalize = () => {
-      buffer = formatGuideText(buffer)
-      // decide if buffer looks like HTML
-      const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(buffer)
-      const finalContent = looksHtml ? sanitizeHtml(buffer) : buffer
-      setMessages((prev) => prev.map((m) => (
-        m.id === assistantId ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false } : m
-      )))
-      onFinal?.(finalContent)
+  const setStage = (assistantId, stage, obj) => {
+    const stageTitleMap = {
+      start: 'Init',
+      redis: 'History',
+      rag: 'Retrieval',
+      answer_delta: 'Generating',
     }
+    const title = stageTitleMap[stage] || stage
+    const detail = summarizeStageDetail(stage, obj)
 
-    es.addEventListener('meta', (ev) => {
-      try {
-        const data = JSON.parse(ev.data || '{}')
-      } catch {}
-    })
-
-    es.addEventListener('message', (ev) => {
-      // data should be a JSON like { delta: '...' } but also accept raw text
-      let delta = ''
-      try {
-        const d = JSON.parse(ev.data)
-        delta = d?.delta ?? ''
-      } catch {
-        delta = ev.data || ''
-      }
-      if (!delta) return
-      buffer += delta
-      setMessages((prev) => prev.map((m) => (
-        m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
-      )))
-    })
-
-    es.addEventListener('done', () => {
-      try { es.close() } catch {}
-      if (esRef.current === es) esRef.current = null
-      finalize()
-    })
-
-    es.onerror = (err) => {
-      try { es.close() } catch {}
-      if (esRef.current === es) esRef.current = null
-      // Mark streaming bubble as failed and fallback
-      setMessages((prev) => prev.map((m) => (
-        m.id === assistantId ? { ...m, streaming: false } : m
-      )))
-      // Fallback to non-streaming POST
-      fallbackJson({ text, assistantId, onFinal })
-    }
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === assistantId
+          ? {
+            ...m,
+            thinkingNow: {
+              id: `${stage}-${Date.now()}`, // stage change triggers remount animation
+              stage,
+              title,
+              detail,
+              ts: Date.now(),
+            },
+          }
+          : m
+      )
+    )
   }
 
-  const fallbackJson = async ({ text, assistantId, onFinal }) => {
-    // POST /api/chat
-    const base = chatEndpointRef.current || (await resolveChatEndpoint())
-    const url = new URL(base, window.location.origin).toString()
-    try {
-      const payload = { message: text, session_id: sessionId, skip_cache: SKIP_CACHE_DEFAULT }
-      const json = await postOnce(url, payload)
-      const raw = json?.answer ?? ''
-      const processed = formatGuideText(raw)
-      const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(processed)
-      const finalContent = looksHtml ? sanitizeHtml(processed) : processed
-      setMessages((prev) => prev.map((m) => (
-        m.id === assistantId ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false } : m
-      )))
-      onFinal?.(finalContent)
-    } catch (err) {
-      logger.error('Fallback POST failed:', err)
-      setMessages((prev) => prev.map((m) => (
-        m.id === assistantId ? { ...m, content: '⚠️ Failed to contact assistant.', streaming: false } : m
-      )))
+  const clearStage = (assistantId) => {
+    setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, thinkingNow: null } : m)))
+  }
+
+  const finalizeAssistant = (assistantId, rawFinal, onFinal) => {
+    const processed = formatGuideText(rawFinal || '')
+    const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(processed)
+    const finalContent = looksHtml ? sanitizeHtml(processed) : processed
+
+    // Final: show answer only (no logic chain)
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === assistantId
+          ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false, thinkingNow: null }
+          : m
+      )
+    )
+
+    onFinal?.(finalContent)
+  }
+
+  const startRagSSE = async ({ text, assistantId, onFinal }) => {
+    const base = ragEndpointRef.current || (await resolveRagEndpoint())
+    const streamUrl = ragStreamUrl(base)
+
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    let answerBuf = ''
+    let finalized = false
+
+    setStage(assistantId, 'start', { message: 'Init', payload: { ts: Date.now() } })
+
+    await postSSE(
+      streamUrl,
+      { question: text, sessionId },
+      {
+        signal: controller.signal,
+        onEvent: (evt) => {
+          const obj = safeJsonParse(evt.data) || {}
+          const stage = obj.stage || evt.event || 'message'
+
+          if (stage === 'answer_delta') {
+            setStage(assistantId, 'answer_delta', obj)
+            const delta = typeof obj.payload === 'string' ? obj.payload : ''
+            if (delta) {
+              answerBuf += delta
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantId ? { ...m, content: answerBuf, streaming: true } : m))
+              )
+            }
+            return
+          }
+
+          if (stage === 'answer_final') {
+            finalized = true
+            clearStage(assistantId)
+            finalizeAssistant(assistantId, typeof obj.payload === 'string' ? obj.payload : answerBuf, onFinal)
+            return
+          }
+
+          if (stage === 'start' || stage === 'redis' || stage === 'rag') {
+            setStage(assistantId, stage, obj)
+          }
+        },
+      }
+    )
+
+    // If stream ends without answer_final, best-effort finalize
+    if (!finalized && answerBuf) {
+      clearStage(assistantId)
+      finalizeAssistant(assistantId, answerBuf, onFinal)
     }
   }
 
@@ -397,15 +579,21 @@ function ChatWindow({ onMinimize, onDragStart }) {
     const text = input.trim()
     if (!text || loading) return
 
-    // If a previous stream is open, close it
-    if (esRef.current) {
-      try { esRef.current.close() } catch {}
-      esRef.current = null
+    // abort previous stream
+    if (abortRef.current) {
+      try { abortRef.current.abort() } catch {}
+      abortRef.current = null
     }
 
     setLoading(true)
     setMessages((prev) => [...prev, { id: generateUUID(), role: 'user', content: text }])
     setInput('')
+
+    const assistantId = generateUUID()
+    setMessages((prev) => [
+      ...prev,
+      { id: assistantId, role: 'assistant', content: '', streaming: true, thinkingNow: null },
+    ])
 
     const finalizeAndPersist = async (finalAnswer) => {
       try {
@@ -416,15 +604,18 @@ function ChatWindow({ onMinimize, onDragStart }) {
       setLoading(false)
     }
 
-    // Prefer streaming via EventSource
     try {
-      startSSE({ text, onFinal: finalizeAndPersist })
+      await startRagSSE({ text, assistantId, onFinal: finalizeAndPersist })
     } catch (err) {
-      logger.error('Failed to start SSE:', err)
-      // Fallback to JSON POST immediately
-      const assistantId = generateUUID()
-      setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
-      await fallbackJson({ text, assistantId, onFinal: finalizeAndPersist })
+      logger.error('SSE failed:', err)
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? { ...m, content: '⚠️ Failed to contact assistant.', streaming: false, thinkingNow: null }
+            : m
+        )
+      )
+      setLoading(false)
     }
   }
 
@@ -435,7 +626,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
         onMouseDown={onDragStart}
       >
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-100">
-          <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" className="w-6 h-6"/>
+          <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" className="w-6 h-6" />
           Mr.Pot
         </div>
         <button
@@ -444,7 +635,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           className="shrink-button rounded-md p-1 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
           onClick={onMinimize}
         >
-          <Minus className="h-4 w-4"/>
+          <Minus className="h-4 w-4" />
         </button>
       </header>
 
@@ -464,6 +655,12 @@ function ChatWindow({ onMinimize, onDragStart }) {
                     : 'bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-900 shadow border border-gray-200/80 dark:border-gray-700 dark:bg-gray-800/90 dark:text-gray-100'
                 }
               >
+                {/* Thinking stage: fixed height + clamped text */}
+                {m.role === 'assistant' && m.streaming && m.thinkingNow ? (
+                  <StageToast step={m.thinkingNow} />
+                ) : null}
+
+                {/* Answer stream */}
                 {m.streaming
                   ? m.content === ''
                     ? <TypingIndicator />
@@ -488,7 +685,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
             disabled={!input.trim() || loading}
             className="send-button rounded-md bg-blue-600 p-2 text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : <ArrowUpRight className="h-4 w-4"/>}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
           </button>
         </div>
       </form>
@@ -497,14 +694,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
 }
 
 /** Minimized launcher button */
-function LauncherButton({onOpen, onDragStart}) {
-  const [animating, setAnimating] = useState(true)
-
+function LauncherButton({ onOpen, onDragStart }) {
   useEffect(() => {
     const root = ensureRoot()
     root.style.pointerEvents = 'auto'
-    const timer = setTimeout(() => setAnimating(false), 3000)
-    return () => clearTimeout(timer)
   }, [])
 
   return (
@@ -554,14 +747,12 @@ export default function ChatWidget() {
     }
   }, [offset])
 
-  // Auto-open the widget when the URL contains ?openChat=1 (or any truthy value)
+  // Auto-open when URL has ?openChat=1
   useEffect(() => {
     if (!router?.isReady) return
-
     const openChatParam = router.query?.openChat
     if (!openChatParam) return
 
-    // Ensure we land on the homepage with the param preserved during the redirect
     if (router.pathname !== '/') {
       router.replace({ pathname: '/', query: { openChat: openChatParam } }, undefined, { shallow: true })
       return
@@ -569,7 +760,6 @@ export default function ChatWidget() {
 
     setOpen(true)
 
-    // Clean up the URL so it doesn't keep re-opening when navigating back
     const { openChat, ...rest } = router.query || {}
     router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true })
   }, [router])
@@ -606,7 +796,6 @@ export default function ChatWidget() {
     setOpen(true)
   }
 
-  // Ensure container exists
   const container = rootRef.current || ensureRoot()
   rootRef.current = container
   if (!container) return null
