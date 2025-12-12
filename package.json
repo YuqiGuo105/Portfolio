@@ -15,7 +15,7 @@
     "isotope-layout": "^3.0.6",
     "jarallax": "^2.0.4",
     "lucide-react": "^0.512.0",
-    "next": "12.3.1",
+    "next": "^12.3.1",
     "nodemailer": "^6.9.11",
     "prop-types": "^15.8.1",
     "react": "18.2.0",

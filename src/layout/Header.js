@@ -1,21 +1,21 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const GITHUB_URL = process.env.REACT_APP_GITHUB_URL || "https://github.com/YuqiGuo105";
-const INSTAGRAM_URL = process.env.REACT_APP_INSTAGRAM_URL || "https://www.instagram.com/yuqi_guo17/";
+const GITHUB_URL =
+  process.env.REACT_APP_GITHUB_URL || "https://github.com/YuqiGuo105";
+const INSTAGRAM_URL =
+  process.env.REACT_APP_INSTAGRAM_URL ||
+  "https://www.instagram.com/yuqi_guo17/";
 
-const Header = () => {
-
-  const openMenu = event => {
+const Header = ({ onOpenSearch }) => {
+  const openMenu = (event) => {
     event.preventDefault();
     const menu = document.querySelector(".menu-btn");
     if (menu.classList.contains("active")) {
       menu.classList.remove("active");
       menu.classList.add("no-touch");
       document.body.classList.remove("no-scroll");
-      document
-        .querySelector(".menu-full-overlay")
-        .classList.remove("is-open");
+      document.querySelector(".menu-full-overlay").classList.remove("is-open");
       document
         .querySelector(".menu-full-overlay")
         .classList.remove("has-scroll");
@@ -59,16 +59,27 @@ const Header = () => {
   useEffect(() => {
     if (day) {
       localStorage.setItem("ober-mood", "day");
-      document.querySelector("body").classList.add("home", "page", "light-skin");
+      document
+        .querySelector("body")
+        .classList.add("home", "page", "light-skin");
       document.querySelector("body").classList.remove("dark-skin");
     } else {
       localStorage.setItem("ober-mood", "night");
-      document.querySelector("body").classList.remove("home", "page", "light-skin");
+      document
+        .querySelector("body")
+        .classList.remove("home", "page", "light-skin");
       document.querySelector("body").classList.add("dark-skin");
     }
   }, [day]);
 
   const [pageToggle, setPageToggle] = useState(false);
+
+  const handleOpenSearch = (event) => {
+    event.preventDefault();
+    if (onOpenSearch) {
+      onOpenSearch();
+    }
+  };
 
   const linkClick = () => {
     const menu = document.querySelector(".menu-btn");
@@ -115,12 +126,23 @@ const Header = () => {
             <div className="logo">
               <Link href="/">
                 <a>
-                  <img src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/YuqiLogo.png" alt="" />
+                  <img
+                    src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/YuqiLogo.png"
+                    alt=""
+                  />
                 </a>
               </Link>
             </div>
           </div>
-          <div className="col-xs-8 col-sm-8 col-md-8 col-lg-8 align-right">
+          <div className="header-btns flex items-center col-xs-8 col-sm-8 col-md-8 col-lg-8 align-right">
+            <button
+              type="button"
+              onClick={handleOpenSearch}
+              className="header-search-btn mr-5 hidden-xs flex h-10 w-10 items-center justify-center rounded-full transition"
+              aria-label="Open search"
+            >
+              <i className="fa fa-search" aria-hidden="true"></i>
+            </button>
             {/* switcher btn */}
             <a
               className={`switcher-btn ${day ? "active" : ""}`}
@@ -156,11 +178,7 @@ const Header = () => {
               </span>
             </a>
             {/* menu btn */}
-            <a
-            href="#"
-            className="menu-btn"
-            onClick={() => openMenu(event)}
-            >
+            <a href="#" className="menu-btn" onClick={() => openMenu(event)}>
               <span />
             </a>
           </div>
@@ -176,103 +194,67 @@ const Header = () => {
                 <div className="menu-full">
                   <ul className="menu-full">
                     <li className="menu-item">
-                      <a
-                          href="/#about-section"
-                          onClick={() => linkClick()}
-                      >
+                      <a href="/#about-section" onClick={() => linkClick()}>
                         About
                       </a>
                     </li>
                     <li className="menu-item">
-                      <a
-                          href="/#resume-section"
-                          onClick={() => linkClick()}
-                      >
+                      <a href="/#resume-section" onClick={() => linkClick()}>
                         Resume
                       </a>
                     </li>
                     <li className="menu-item">
-                      <a
-                          href="/#works-section"
-                          onClick={() => linkClick()}
-                      >
+                      <a href="/#works-section" onClick={() => linkClick()}>
                         Works
                       </a>
                     </li>
 
                     <li className="menu-item">
-                      <a
-                          href="/#Blog-section"
-                          onClick={() => linkClick()}
-                      >
+                      <a href="/#Blog-section" onClick={() => linkClick()}>
                         Blog
                       </a>
                     </li>
 
                     <li className="menu-item">
-                      <a
-                          href="/#contact-section"
-                          onClick={() => linkClick()}
-                      >
+                      <a href="/#contact-section" onClick={() => linkClick()}>
                         Contact
                       </a>
                     </li>
                     <li className="menu-item menu-item-has-children has-children">
                       <a
-                          className="position-relative"
-                          onClick={() => setPageToggle(!pageToggle)}
-                      >
-                      </a>
+                        className="position-relative"
+                        onClick={() => setPageToggle(!pageToggle)}
+                      ></a>
                       <ul
-                          className="sub-menu"
-                          style={{
-                            marginTop: "1rem",
-                            display: `${pageToggle ? "block" : "none"}`,
-                          }}
+                        className="sub-menu"
+                        style={{
+                          marginTop: "1rem",
+                          display: `${pageToggle ? "block" : "none"}`,
+                        }}
                       >
                         <li className="menu-item">
                           <Link href="/works">
-                            <a
-                                onClick={() => linkClick()}
-                            >
-                              Works (grid)
-                            </a>
+                            <a onClick={() => linkClick()}>Works (grid)</a>
                           </Link>
                         </li>
                         <li className="menu-item">
                           <Link href="/works-list">
-                            <a
-                                onClick={() => linkClick()}
-                            >
-                              Works (list)
-                            </a>
+                            <a onClick={() => linkClick()}>Works (list)</a>
                           </Link>
                         </li>
                         <li className="menu-item">
                           <Link href="/work-single">
-                            <a
-                                onClick={() => linkClick()}
-                            >
-                              Work Single Page
-                            </a>
+                            <a onClick={() => linkClick()}>Work Single Page</a>
                           </Link>
                         </li>
                         <li className="menu-item">
                           <Link href="/blog">
-                            <a
-                                onClick={() => linkClick()}
-                            >
-                              Blog Posts
-                            </a>
+                            <a onClick={() => linkClick()}>Blog Posts</a>
                           </Link>
                         </li>
                         <li className="menu-item">
                           <Link href="/blog-single">
-                            <a
-                                onClick={() => linkClick()}
-                            >
-                              Blog Single Post
-                            </a>
+                            <a onClick={() => linkClick()}>Blog Single Post</a>
                           </Link>
                         </li>
                       </ul>
@@ -285,18 +267,10 @@ const Header = () => {
         </div>
         {/* social */}
         <div className="menu-social-links">
-          <a
-            href={GITHUB_URL}
-            target="blank"
-            title="twitter"
-          >
+          <a href={GITHUB_URL} target="blank" title="twitter">
             <i className="fab fa-github" />
           </a>
-          <a
-            href={INSTAGRAM_URL}
-            target="blank"
-            title="behance"
-          >
+          <a href={INSTAGRAM_URL} target="blank" title="behance">
             <i className="fab fa-instagram" />
           </a>
         </div>

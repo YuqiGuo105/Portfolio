@@ -1,4 +1,4 @@
-import { Fragment, useEffect } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   animation,
   initCursor,
@@ -10,10 +10,14 @@ import Footer from "./Footer";
 import Header from "./Header";
 import PreLoader from "./PreLoader";
 import dynamic from "next/dynamic";
+import SearchOverlay from "../components/SearchOverlay";
 
-const ChatWidget = dynamic(() => import("../../src/components/ChatWidget"), { ssr: false });
+const ChatWidget = dynamic(() => import("../../src/components/ChatWidget"), {
+  ssr: false,
+});
 
 const Layout = ({ children, extraWrapClass }) => {
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   useEffect(() => {
     initCursor();
     animation();
@@ -42,13 +46,17 @@ const Layout = ({ children, extraWrapClass }) => {
         {/* Preloader */}
         <PreLoader />
         {/* Header */}
-        <Header />
+        <Header onOpenSearch={() => setIsSearchOpen(true)} />
         {/* Wrapper */}
         <div className={`wrapper ${extraWrapClass}`}>{children}</div>
         {/* Footer */}
         <Footer />
       </div>
       <ChatWidget />
+      <SearchOverlay
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+      />
       <div className="cursor"></div>
     </Fragment>
   );
