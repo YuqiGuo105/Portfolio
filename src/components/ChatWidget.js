@@ -9,10 +9,13 @@ import { useRouter } from 'next/router'
 
 /* ============================================================
    ChatWidget — POST SSE for /api/rag/answer/stream
-   - ChatGPT-like thinking stage (only current stage, fixed height)
-   - Stage text is clamped (no bubble explosion)
-   - Stage has smoother animation + indeterminate loading bar
-   - When final answer arrives: hide thinking immediately, keep answer
+   (Keep previous chat message structure/layout)
+
+   ✅ Key change (per your last requirement):
+   - key info ONLY displays the "content" inside payload
+     - redis payload: show message contents (no role / no tags)
+     - rag payload: show preview (or content-like field if present)
+     - answer_delta payload: show the delta text itself
    ============================================================ */
 
 const logger = {
@@ -23,7 +26,7 @@ const logger = {
 
 /* ───────── minimal sanitizer ───────── */
 const sanitizeHtml = (html) =>
-  html
+  String(html || '')
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
     .replace(/\s(on\w+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"')
@@ -93,6 +96,20 @@ function generateUUID() {
   )
 }
 
+function safeJsonParse(s) {
+  try { return JSON.parse(s) } catch { return null }
+}
+
+function compactText(s, max = 220) {
+  if (s == null) return ''
+  const t = String(s)
+  return t.length > max ? t.slice(0, max) + '…' : t
+}
+
+function safeShort(s, max) {
+  return compactText(String(s ?? ''), max).replace(/\s+/g, ' ').trim()
+}
+
 /* ---------- RAG endpoint helpers ---------- */
 
 function normalizeRagBaseUrl(raw) {
@@ -149,44 +166,6 @@ function parseSSEBlock(block) {
   return { event, data: dataLines.join('\n') }
 }
 
-function safeJsonParse(s) {
-  try { return JSON.parse(s) } catch { return null }
-}
-
-function compactText(s, max = 220) {
-  if (!s) return ''
-  const t = String(s)
-  return t.length > max ? t.slice(0, max) + '…' : t
-}
-
-function summarizeStageDetail(stage, dataObj) {
-  const msg = dataObj?.message ? String(dataObj.message) : ''
-  const payload = dataObj?.payload
-
-  if (stage === 'start') {
-    const ts = payload?.ts ? `ts=${payload.ts}` : ''
-    return compactText([msg, ts].filter(Boolean).join(' '))
-  }
-
-  if (stage === 'redis') {
-    const n = Array.isArray(payload) ? payload.length : 0
-    return compactText(`${msg}${msg ? ' — ' : ''}messages=${n}`)
-  }
-
-  if (stage === 'rag') {
-    if (Array.isArray(payload) && payload.length) {
-      const top = payload[0]
-      const preview = top?.preview ? compactText(top.preview, 240) : ''
-      const score = typeof top?.score === 'number' ? top.score.toFixed(3) : ''
-      return compactText(`${msg}${msg ? ' — ' : ''}top1 score=${score}\n${preview}`, 280)
-    }
-    return compactText(msg || 'Retrieval')
-  }
-
-  if (stage === 'answer_delta') return 'Generating…'
-  return compactText(msg || stage)
-}
-
 async function postSSE(url, body, { onEvent, signal }) {
   const res = await fetch(url, {
     method: 'POST',
@@ -224,6 +203,57 @@ async function postSSE(url, body, { onEvent, signal }) {
   }
 }
 
+/* ============================================================
+   ✅ Key info = ONLY payload "content" (or content-like field)
+   - redis: payload is [{content, role}, ...] -> show content only
+   - rag: payload is [{preview, ...}, ...] -> show preview (content-like)
+   - answer_delta: payload is string delta -> show delta
+   - start: no content -> show ts only (small)
+   ============================================================ */
+function summarizePayloadContentOnly(stage, payload, meta) {
+  if (stage === 'start') {
+    const ts = payload?.ts
+    return ts ? `ts=${ts}` : ''
+  }
+
+  if (stage === 'redis') {
+    const arr = Array.isArray(payload) ? payload : []
+    // show last few messages' content (most relevant)
+    const last = arr.slice(-4).map((m) => safeShort(m?.content, 50)).filter(Boolean)
+    return last.join('  ·  ')
+  }
+
+  if (stage === 'rag') {
+    const arr = Array.isArray(payload) ? payload : []
+    if (!arr.length) return ''
+    // show top hit preview as "content"
+    const top = arr[0] || {}
+    const preview = top?.preview
+    const contentLike = top?.content
+    const text = preview ?? contentLike ?? ''
+    return safeShort(text, 160)
+  }
+
+  if (stage === 'answer_delta') {
+    const delta = typeof payload === 'string' ? payload : ''
+    // show a little rolling delta (or fallback to buf len)
+    if (delta) return safeShort(delta, 80)
+    const bufLen = typeof meta?.answerLen === 'number' ? meta.answerLen : null
+    return bufLen != null ? `bufLen=${bufLen}` : ''
+  }
+
+  // generic fallback: try to pick "content"/"preview", else stringify short
+  if (payload && typeof payload === 'object') {
+    const maybe = payload?.content ?? payload?.preview
+    if (maybe) return safeShort(maybe, 160)
+  }
+  try {
+    return safeShort(JSON.stringify(payload), 160)
+  } catch {
+    return safeShort(String(payload), 160)
+  }
+}
+
 /* ---------- UI bits ---------- */
 
 function TypingIndicator() {
@@ -245,9 +275,7 @@ function TypingIndicator() {
           0%, 80%, 100% { transform: translateY(0); opacity: .55 }
           40% { transform: translateY(-4px); opacity: 1 }
         }
-        @media (prefers-reduced-motion: reduce) {
-          .dot { animation: none; }
-        }
+        @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
       `}</style>
     </div>
   )
@@ -287,107 +315,212 @@ function Overlay({ onClick }) {
 }
 
 /**
- * ChatGPT-like thinking stage
- * - Only current stage is shown (previous disappears)
- * - Fixed height
- * - Title 1 line ellipsis, detail clamped
- * - Smoother animation + indeterminate bar
+ * StageToast
+ * - Row1: spinner + stage (horizontal)
+ * - Row2: key info shows payload "content" only (clamped)
+ * - Spinner: rotate + subtle pulse
+ * - Payload content: gradient wave animation
  */
 function StageToast({ step }) {
   if (!step) return null
 
   return (
     <div key={step.id} className="stage-toast mb-2">
-      <div className="stage-inner flex items-start gap-2 rounded-xl border border-gray-200/70 bg-white/70 px-3 py-2 shadow-sm dark:border-gray-700/70 dark:bg-gray-900/40">
-        <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-gray-500" />
-
-        <div className="min-w-0 flex-1">
-          <div className="stage-title text-[13px] font-medium text-gray-800 dark:text-gray-100">
-            {step.title}
-          </div>
-          {step.detail ? (
-            <div className="stage-detail mt-0.5 text-[13px] text-gray-600/70 dark:text-gray-300/70">
-              {step.detail}
-            </div>
-          ) : null}
+      <div className="stage-card">
+        <div className="row1">
+          <span className="spinnerWrap" aria-hidden="true">
+            <Loader2 className="spinnerIcon" />
+          </span>
+          <div className="stage-text">{step.title}</div>
         </div>
 
-        <div className="stage-bar" aria-hidden="true" />
+        <div className="row2">
+          <span className="key-label">key info:</span>
+          <span className="key-value">{step.keyInfo}</span>
+        </div>
+
+        <div className="bar" aria-hidden="true" />
       </div>
 
       <style jsx>{`
-        .stage-toast {
-          animation: stageIn 180ms ease-out;
-        }
+        .stage-toast { animation: stageIn 180ms ease-out; }
 
-        .stage-inner {
+        .stage-card{
           position: relative;
-          max-height: 76px;          /* fixed length container */
+          border-radius: 12px;
+          border: 1px solid rgba(229,231,235,0.9);
+          background: rgba(248,250,252,0.92);
+          box-shadow: 0 6px 18px rgba(15,23,42,0.06);
+          padding: 12px 14px 14px;
+          max-height: 92px;
           overflow: hidden;
         }
+        :global(.dark) .stage-card{
+          border-color: rgba(55,65,81,0.7);
+          background: rgba(15,23,42,0.55);
+          box-shadow: 0 8px 22px rgba(0,0,0,0.25);
+        }
 
-        /* title: 1-line ellipsis */
-        .stage-title {
+        .row1{
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+        }
+
+        .spinnerWrap{
+          width: 18px;
+          height: 18px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          filter: drop-shadow(0 2px 6px rgba(15,23,42,0.16));
+          animation: pulseSoft 1.2s ease-in-out infinite;
+        }
+        .spinnerIcon{
+          width: 18px;
+          height: 18px;
+          color: rgba(75,85,99,0.95);
+          animation: spinFast 0.75s linear infinite;
+        }
+        :global(.dark) .spinnerIcon{
+          color: rgba(226,232,240,0.85);
+          filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35));
+        }
+
+        .stage-text{
+          font-size: 18px;
+          font-weight: 500;
+          color: rgba(17,24,39,0.95);
+          line-height: 1.1;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          animation: textIn 180ms ease-out;
+        }
+        :global(.dark) .stage-text{
+          color: rgba(248,250,252,0.92);
         }
 
-        /* detail: clamp lines, keep newlines */
-        .stage-detail {
+        .row2{
+          margin-top: 8px;
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          min-width: 0;
+        }
+        .key-label{
+          font-size: 12px;
+          color: rgba(100,116,139,0.9);
+          flex-shrink: 0;
+          line-height: 1.2;
+        }
+        :global(.dark) .key-label{
+          color: rgba(226,232,240,0.7);
+        }
+
+        .key-value{
+          font-size: 12px;
+          line-height: 1.25;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+          min-width: 0;
+
           display: -webkit-box;
           -webkit-box-orient: vertical;
-          -webkit-line-clamp: 2;     /* max lines shown */
+          -webkit-line-clamp: 2;
           overflow: hidden;
           white-space: pre-wrap;
           word-break: break-word;
-          animation: textIn 220ms ease-out;
+
+          /* animated gradient wave */
+          color: transparent;
+          background-image: linear-gradient(
+            90deg,
+            rgba(30,41,59,0.35) 0%,
+            rgba(59,130,246,0.95) 35%,
+            rgba(236,72,153,0.85) 55%,
+            rgba(16,185,129,0.85) 75%,
+            rgba(30,41,59,0.35) 100%
+          );
+          background-size: 220% 100%;
+          background-position: 0% 50%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          animation: waveText 1.6s ease-in-out infinite;
+        }
+        :global(.dark) .key-value{
+          background-image: linear-gradient(
+            90deg,
+            rgba(226,232,240,0.35) 0%,
+            rgba(96,165,250,0.95) 35%,
+            rgba(244,114,182,0.9) 55%,
+            rgba(52,211,153,0.85) 75%,
+            rgba(226,232,240,0.35) 100%
+          );
         }
 
-        /* indeterminate loading bar */
-        .stage-bar {
+        .bar{
           position: absolute;
-          left: 12px;
-          right: 12px;
-          bottom: 8px;
+          left: 14px;
+          right: 14px;
+          bottom: 10px;
           height: 2px;
-          overflow: hidden;
           border-radius: 999px;
+          overflow: hidden;
           opacity: 0.55;
           background: rgba(148,163,184,0.25);
         }
-        .stage-bar::before {
-          content: '';
-          position: absolute;
-          left: -40%;
-          top: 0;
-          height: 100%;
-          width: 40%;
+        .bar::before{
+          content:'';
+          position:absolute;
+          left:-40%;
+          top:0;
+          height:100%;
+          width:40%;
           border-radius: 999px;
           background: rgba(100,116,139,0.7);
           animation: indeterminate 1.2s ease-in-out infinite;
         }
 
-        @keyframes stageIn {
+        @keyframes stageIn{
           from { opacity: 0; transform: translateY(6px) scale(0.99); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
 
-        @keyframes textIn {
-          from { opacity: 0; transform: translateY(2px); }
-          to   { opacity: 1; transform: translateY(0); }
+        @keyframes spinFast{
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes pulseSoft{
+          0%,100% { transform: scale(1); opacity: 0.95; }
+          50%     { transform: scale(1.06); opacity: 1; }
         }
 
-        @keyframes indeterminate {
-          0%   { transform: translateX(0); left: -40%; }
-          50%  { transform: translateX(0); left: 60%;  }
-          100% { transform: translateX(0); left: 120%; }
+        @keyframes waveText{
+          0%   { background-position: 0% 50%; }
+          50%  { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
         }
 
-        @media (prefers-reduced-motion: reduce) {
-          .stage-toast, .stage-title, .stage-detail { animation: none; }
-          .stage-bar::before { animation: none; left: 0; width: 35%; opacity: 0.5; }
+        @keyframes indeterminate{
+          0%   { left: -40%; }
+          50%  { left: 60%; }
+          100% { left: 120%; }
+        }
+
+        @media (prefers-reduced-motion: reduce){
+          .stage-toast{ animation:none; }
+          .spinnerWrap{ animation:none; }
+          .spinnerIcon{ animation:none; }
+          .key-value{
+            animation:none;
+            color: rgba(30,41,59,0.85);
+            background: none;
+            -webkit-background-clip: initial;
+            background-clip: initial;
+          }
+          :global(.dark) .key-value{ color: rgba(226,232,240,0.8); }
+          .bar::before{ animation:none; left:0; width:35%; opacity:0.5; }
         }
       `}</style>
     </div>
@@ -471,7 +604,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
   }, [])
 
-  const setStage = (assistantId, stage, obj) => {
+  const setStage = (assistantId, stage, obj, meta) => {
     const stageTitleMap = {
       start: 'Init',
       redis: 'History',
@@ -479,7 +612,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
       answer_delta: 'Generating',
     }
     const title = stageTitleMap[stage] || stage
-    const detail = summarizeStageDetail(stage, obj)
+    const keyInfo = summarizePayloadContentOnly(stage, obj?.payload, meta)
 
     setMessages((prev) =>
       prev.map((m) =>
@@ -487,10 +620,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
           ? {
             ...m,
             thinkingNow: {
-              id: `${stage}-${Date.now()}`, // stage change triggers remount animation
+              id: `${stage}-${Date.now()}`,
               stage,
               title,
-              detail,
+              keyInfo, // ✅ content-only
               ts: Date.now(),
             },
           }
@@ -508,7 +641,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
     const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(processed)
     const finalContent = looksHtml ? sanitizeHtml(processed) : processed
 
-    // Final: show answer only (no logic chain)
     setMessages((prev) =>
       prev.map((m) =>
         m.id === assistantId
@@ -530,7 +662,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
     let answerBuf = ''
     let finalized = false
 
-    setStage(assistantId, 'start', { message: 'Init', payload: { ts: Date.now() } })
+    setStage(assistantId, 'start', { payload: { ts: Date.now() } })
 
     await postSSE(
       streamUrl,
@@ -542,7 +674,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
           const stage = obj.stage || evt.event || 'message'
 
           if (stage === 'answer_delta') {
-            setStage(assistantId, 'answer_delta', obj)
             const delta = typeof obj.payload === 'string' ? obj.payload : ''
             if (delta) {
               answerBuf += delta
@@ -550,6 +681,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
                 prev.map((m) => (m.id === assistantId ? { ...m, content: answerBuf, streaming: true } : m))
               )
             }
+            setStage(assistantId, 'answer_delta', obj, { answerLen: answerBuf.length })
             return
           }
 
@@ -567,7 +699,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
       }
     )
 
-    // If stream ends without answer_final, best-effort finalize
     if (!finalized && answerBuf) {
       clearStage(assistantId)
       finalizeAssistant(assistantId, answerBuf, onFinal)
@@ -579,7 +710,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
     const text = input.trim()
     if (!text || loading) return
 
-    // abort previous stream
     if (abortRef.current) {
       try { abortRef.current.abort() } catch {}
       abortRef.current = null
@@ -655,12 +785,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
                     : 'bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-900 shadow border border-gray-200/80 dark:border-gray-700 dark:bg-gray-800/90 dark:text-gray-100'
                 }
               >
-                {/* Thinking stage: fixed height + clamped text */}
                 {m.role === 'assistant' && m.streaming && m.thinkingNow ? (
                   <StageToast step={m.thinkingNow} />
                 ) : null}
 
-                {/* Answer stream */}
                 {m.streaming
                   ? m.content === ''
                     ? <TypingIndicator />
@@ -689,6 +817,51 @@ function ChatWindow({ onMinimize, onDragStart }) {
           </button>
         </div>
       </form>
+
+      <style jsx global>{`
+        .bot-message, .user-message {
+          overflow-wrap: anywhere;
+          word-break: break-word;
+          white-space: pre-wrap;
+        }
+
+        .bot-message h1,
+        .bot-message h2,
+        .bot-message h3 {
+          font-size: 14px !important;
+          line-height: 1.35 !important;
+          font-weight: 650 !important;
+          margin: 8px 0 6px !important;
+        }
+        .bot-message h4,
+        .bot-message h5,
+        .bot-message h6 {
+          font-size: 13px !important;
+          line-height: 1.35 !important;
+          font-weight: 650 !important;
+          margin: 6px 0 5px !important;
+        }
+        .bot-message p { margin: 6px 0 !important; }
+        .bot-message ul, .bot-message ol { margin: 6px 0 !important; padding-left: 18px !important; }
+        .bot-message li { margin: 4px 0 !important; }
+        .bot-message a { word-break: break-all; }
+        .bot-message pre, .bot-message code {
+          white-space: pre-wrap !important;
+          overflow-wrap: anywhere !important;
+          word-break: break-word !important;
+        }
+        .bot-message img, .bot-message video {
+          max-width: 100% !important;
+          height: auto !important;
+        }
+        .bot-message table {
+          width: 100% !important;
+          max-width: 100% !important;
+          display: block !important;
+          overflow-x: auto !important;
+          border-collapse: collapse !important;
+        }
+      `}</style>
     </div>
   )
 }
@@ -747,7 +920,6 @@ export default function ChatWidget() {
     }
   }, [offset])
 
-  // Auto-open when URL has ?openChat=1
   useEffect(() => {
     if (!router?.isReady) return
     const openChatParam = router.query?.openChat
