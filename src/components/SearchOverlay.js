@@ -27,12 +27,12 @@ const ResultRow = ({ item, onNavigate }) => {
       onClick={onNavigate}
       className="block border-b border-slate-800/60 bg-slate-900/60 p-4 transition hover:bg-slate-800/70 search-result-row"
     >
-      <div className="flex items-start justify-between gap-3 search-result-row__top">
-        <div>
-          <p className="text-sm uppercase tracking-wide text-slate-400 search-result-row__source">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3 search-result-row__top">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-wide text-slate-400 search-result-row__source sm:text-sm">
             {item.source}
           </p>
-          <h3 className="text-lg font-semibold text-white search-result-row__title">
+          <h3 className="text-base font-semibold text-white search-result-row__title sm:text-lg">
             {item.title || "Untitled"}
           </h3>
         </div>
@@ -42,9 +42,9 @@ const ResultRow = ({ item, onNavigate }) => {
           </span>
         )}
       </div>
-      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400 search-result-row__meta">
+      <div className="mt-3 flex flex-col items-start gap-2 text-xs text-slate-400 search-result-row__meta sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <span
-          className="font-medium truncate max-w-[70%] search-result-row__url"
+          className="font-medium truncate max-w-full search-result-row__url sm:max-w-[70%]"
           title={item.url || undefined}
         >
           {item.url}
@@ -148,10 +148,10 @@ const SearchOverlay = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/70 backdrop-blur-sm search-overlay">
-      <div className="mt-14 w-full max-w-4xl rounded-2xl border border-slate-800 bg-slate-900/95 shadow-2xl search-overlay__panel">
-        <div className="flex items-center gap-3 border-b border-slate-800 px-5 py-4 search-overlay__header">
-          <div className="flex flex-1 items-center gap-3 rounded-xl bg-slate-800 px-3 search-overlay__input-wrap">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/70 px-4 py-4 backdrop-blur-sm search-overlay sm:px-0 sm:py-0">
+      <div className="mt-2 flex w-full max-w-4xl flex-col rounded-2xl border border-slate-800 bg-slate-900/95 shadow-2xl search-overlay__panel sm:mt-14">
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-3 search-overlay__header sm:flex-nowrap sm:gap-3 sm:px-5 sm:py-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3 rounded-xl bg-slate-800 px-3 search-overlay__input-wrap">
             <span className="text-slate-300 search-overlay__icon">
               <i className="fa fa-search" aria-hidden="true"></i>
             </span>
@@ -159,7 +159,7 @@ const SearchOverlay = ({ isOpen, onClose }) => {
               ref={inputRef}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              className="flex-1 h-10 bg-transparent py-3 text-lg text-white placeholder:text-slate-400 focus:outline-none search-overlay__input"
+              className="flex-1 h-10 bg-transparent py-2 text-base text-white placeholder:text-slate-400 focus:outline-none search-overlay__input sm:py-3 sm:text-lg"
               placeholder="Search posts, projects, tags..."
               aria-label="Search"
             />
@@ -167,7 +167,7 @@ const SearchOverlay = ({ isOpen, onClose }) => {
           <select
             value={source}
             onChange={(event) => setSource(event.target.value)}
-            className="search-select search-overlay__select"
+            className="search-select search-overlay__select w-full text-sm sm:w-auto sm:text-base"
           >
             {SOURCE_OPTIONS.map((option) => (
               <option key={option.value || "all"} value={option.value}>
@@ -178,14 +178,14 @@ const SearchOverlay = ({ isOpen, onClose }) => {
           <button
             type="button"
             onClick={onClose}
-            className="search-close search-overlay__close"
+            className="search-close search-overlay__close ml-auto h-10 w-10 sm:ml-0"
             aria-label="Close search"
           >
             ×
           </button>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto search-overlay__body">
+        <div className="max-h-[60vh] overflow-y-auto search-overlay__body sm:max-h-[70vh]">
           {loading && (
             <div className="px-5 py-6 text-sm text-slate-300 search-overlay__section">
               Searching...
