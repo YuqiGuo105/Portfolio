@@ -2,7 +2,7 @@
 
 import { createPortal } from 'react-dom'
 import { useState, useEffect, useRef, Fragment } from 'react'
-import { Minus, ArrowUpRight, Loader2 } from 'lucide-react'
+import { Minus, ArrowUpRight, Loader2, Sparkles, CheckCircle2, Circle } from 'lucide-react'
 import Image from 'next/image'
 import { supabase } from '../supabase/supabaseClient'
 import { useRouter } from 'next/router'
@@ -36,6 +36,9 @@ const sanitizeHtml = (html) =>
     // neutralize javascript: URLs
     .replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"')
     .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'")
+
+const STREAM_URL =
+  process.env.NEXT_PUBLIC_RAG_STREAM_URL || 'https://mrpot-production.up.railway.app/api/rag/answer/stream'
 
 /* Convert plain guideline text into clickable links */
 function formatGuideText(text) {
@@ -236,10 +239,20 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [endpoint, setEndpoint] = useState('')
   const scrollRef = useRef(null)
   const chatEndpointRef = useRef(null)
-  const esRef = useRef(null) // active EventSource
+  const esRef = useRef(null) // legacy EventSource
+  const streamAbortRef = useRef(null)
+
+  const defaultStages = [
+    { key: 'start', label: 'Initializing', detail: 'Booting up Mr.Pot', status: 'pending' },
+    { key: 'redis', label: 'History', detail: 'Loading conversation memory', status: 'pending' },
+    { key: 'rag', label: 'Retrieving', detail: 'Collecting related knowledge', status: 'pending' },
+    { key: 'answer', label: 'Generating', detail: 'Drafting the reply', status: 'pending' },
+    { key: 'final', label: 'Complete', detail: 'Ready', status: 'pending' },
+  ]
+
+  const [stages, setStages] = useState(defaultStages)
 
   // Smaller latency path: let backend decide caching (false means allow cache)
   const SKIP_CACHE_DEFAULT = false
@@ -277,7 +290,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
       const ep = await resolveChatEndpoint()
       if (!mounted) return
       chatEndpointRef.current = ep
-      setEndpoint(ep)
 
       try {
         const u = new URL(ep, window.location.origin)
@@ -298,74 +310,151 @@ function ChatWindow({ onMinimize, onDragStart }) {
       try { esRef.current.close() } catch {}
       esRef.current = null
     }
+    if (streamAbortRef.current) {
+      try { streamAbortRef.current.abort('unmount') } catch {}
+      streamAbortRef.current = null
+    }
   }, [])
 
-  const startSSE = ({ text, onFinal }) => {
-    // Build GET /api/chat/stream?message=...&skip_cache=...
-    const base = chatEndpointRef.current || '/api/chat'
-    const streamUrl = toStreamUrl(base, {
-      message: text,
-      skip_cache: SKIP_CACHE_DEFAULT ? 'true' : 'false',
-      // Note: GET version on server ignores session_id; caching is cross-user
+  const setStageStatus = (stageKey, status, detail) => {
+    setStages((prev) => {
+      const order = ['start', 'redis', 'rag', 'answer', 'final']
+      const stageIndex = order.indexOf(stageKey)
+      return prev.map((stage) => {
+        const idx = order.indexOf(stage.key)
+        if (stage.key === stageKey) {
+          return { ...stage, status, detail: detail || stage.detail }
+        }
+        if (idx < stageIndex && status === 'active') {
+          return { ...stage, status: stage.status === 'error' ? 'error' : 'done' }
+        }
+        if (idx > stageIndex && stage.status !== 'error') {
+          return { ...stage, status: stage.status === 'done' ? 'done' : 'pending' }
+        }
+        return stage
+      })
     })
+  }
 
-    const es = new EventSource(streamUrl)
-    esRef.current = es
+  const parseSseBlock = (block, onEvent) => {
+    const lines = block.split('\n')
+    let event = 'message'
+    const dataLines = []
+    for (const line of lines) {
+      if (line.startsWith('event:')) {
+        event = line.slice(6).trim()
+      } else if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).trim())
+      }
+    }
+    const payloadText = dataLines.join('\n')
+    onEvent(event, payloadText)
+  }
 
-    // create placeholder assistant message
+  const startSSE = async ({ text, onFinal }) => {
     const assistantId = generateUUID()
     setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
+    setStages(defaultStages.map((s, idx) => ({ ...s, status: idx === 0 ? 'active' : 'pending' })))
+
+    const controller = new AbortController()
+    streamAbortRef.current = controller
 
     let buffer = ''
+    let finished = false
 
     const finalize = () => {
+      if (finished) return
+      finished = true
       buffer = formatGuideText(buffer)
-      // decide if buffer looks like HTML
       const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(buffer)
       const finalContent = looksHtml ? sanitizeHtml(buffer) : buffer
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false } : m
       )))
+      setStageStatus('answer', 'done', 'Reply ready')
+      setStageStatus('final', 'done', 'Complete')
       onFinal?.(finalContent)
     }
 
-    es.addEventListener('meta', (ev) => {
-      try {
-        const data = JSON.parse(ev.data || '{}')
-      } catch {}
-    })
+    try {
+      const res = await fetch(STREAM_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify({ question: text, sessionId }),
+        signal: controller.signal,
+      })
 
-    es.addEventListener('message', (ev) => {
-      // data should be a JSON like { delta: '...' } but also accept raw text
-      let delta = ''
-      try {
-        const d = JSON.parse(ev.data)
-        delta = d?.delta ?? ''
-      } catch {
-        delta = ev.data || ''
+      if (!res.ok || !res.body) {
+        throw new Error(`Stream failed: HTTP ${res.status}`)
       }
-      if (!delta) return
-      buffer += delta
-      setMessages((prev) => prev.map((m) => (
-        m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
-      )))
-    })
 
-    es.addEventListener('done', () => {
-      try { es.close() } catch {}
-      if (esRef.current === es) esRef.current = null
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let pending = ''
+
+      const handleEvent = (eventName, payloadText) => {
+        let parsed = null
+        try {
+          parsed = payloadText ? JSON.parse(payloadText) : null
+        } catch {
+          parsed = payloadText
+        }
+
+        const stage = parsed?.stage || eventName
+        const detail = typeof parsed === 'object' && parsed?.message ? parsed.message : undefined
+
+        if (['start', 'redis', 'rag'].includes(stage)) {
+          setStageStatus(stage, 'active', detail)
+        }
+        if (stage === 'answer_delta') {
+          setStageStatus('answer', 'active', detail || 'Generating response...')
+          const delta = (typeof parsed === 'object' ? parsed?.payload : null) ?? payloadText
+          if (!delta) return
+          buffer += delta
+          setMessages((prev) => prev.map((m) => (
+            m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
+          )))
+          return
+        }
+        if (stage === 'answer_final') {
+          const finalText =
+            (typeof parsed === 'object' ? parsed?.payload : null) ?? buffer || payloadText || ''
+          if (finalText && finalText !== buffer) buffer = finalText
+          finalize()
+          return
+        }
+      }
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        pending += decoder.decode(value, { stream: true })
+        const parts = pending.split(/\n\n+/)
+        pending = parts.pop() || ''
+        for (const part of parts) {
+          if (!part.trim()) continue
+          parseSseBlock(part.trim(), handleEvent)
+        }
+      }
+
+      if (pending.trim()) parseSseBlock(pending.trim(), handleEvent)
       finalize()
-    })
-
-    es.onerror = (err) => {
-      try { es.close() } catch {}
-      if (esRef.current === es) esRef.current = null
-      // Mark streaming bubble as failed and fallback
+    } catch (err) {
+      logger.error('Streaming failed:', err)
+      setStageStatus('answer', 'error', 'Connection failed')
       setMessages((prev) => prev.map((m) => (
-        m.id === assistantId ? { ...m, streaming: false } : m
+        m.id === assistantId
+          ? { ...m, content: '⚠️ Failed to contact assistant.', streaming: false }
+          : m
       )))
-      // Fallback to non-streaming POST
-      fallbackJson({ text, assistantId, onFinal })
+      onFinal?.('')
+    } finally {
+      if (streamAbortRef.current === controller) {
+        streamAbortRef.current = null
+      }
     }
   }
 
@@ -383,9 +472,12 @@ function ChatWindow({ onMinimize, onDragStart }) {
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false } : m
       )))
+      setStageStatus('answer', 'done', 'Reply ready (fallback)')
+      setStageStatus('final', 'done', 'Complete')
       onFinal?.(finalContent)
     } catch (err) {
       logger.error('Fallback POST failed:', err)
+      setStageStatus('answer', 'error', 'Fallback failed')
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, content: '⚠️ Failed to contact assistant.', streaming: false } : m
       )))
@@ -402,6 +494,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
       try { esRef.current.close() } catch {}
       esRef.current = null
     }
+    if (streamAbortRef.current) {
+      try { streamAbortRef.current.abort('new prompt') } catch {}
+      streamAbortRef.current = null
+    }
 
     setLoading(true)
     setMessages((prev) => [...prev, { id: generateUUID(), role: 'user', content: text }])
@@ -416,9 +512,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
       setLoading(false)
     }
 
-    // Prefer streaming via EventSource
+    // Prefer streaming via SSE fetch
     try {
-      startSSE({ text, onFinal: finalizeAndPersist })
+      await startSSE({ text, onFinal: finalizeAndPersist })
     } catch (err) {
       logger.error('Failed to start SSE:', err)
       // Fallback to JSON POST immediately
@@ -447,6 +543,34 @@ function ChatWindow({ onMinimize, onDragStart }) {
           <Minus className="h-4 w-4"/>
         </button>
       </header>
+
+      <div className="logic-chain rounded-xl border border-gray-200/70 bg-gray-50 px-3 py-2 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
+        <div className="flex items-center gap-2 text-[13px] font-semibold text-gray-800 dark:text-gray-100">
+          <Sparkles className="h-4 w-4 text-blue-500" />
+          <span>Analyzing Query</span>
+        </div>
+        <div className="mt-2 space-y-2">
+          {stages.map((stage) => (
+            <div key={stage.key} className="flex items-start gap-2 text-[12px] text-gray-600 dark:text-gray-300/80">
+              <div className="mt-[2px]">
+                {stage.status === 'done' ? (
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                ) : stage.status === 'active' ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                ) : stage.status === 'error' ? (
+                  <Circle className="h-4 w-4 text-red-500" />
+                ) : (
+                  <Circle className="h-4 w-4 text-gray-400" />
+                )}
+              </div>
+              <div className="leading-tight">
+                <div className="font-medium text-gray-800 dark:text-gray-100/90">{stage.label}</div>
+                <div className="text-[11px] text-gray-500 dark:text-gray-400">{stage.detail}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div ref={scrollRef} className="bot-messages flex-1 space-y-2 overflow-y-auto px-3 py-3">
         {messages.map((m) => (
