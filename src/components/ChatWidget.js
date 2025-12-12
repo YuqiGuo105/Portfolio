@@ -202,6 +202,59 @@ function StreamingCursor() {
   return <span className="blinking-cursor" />
 }
 
+const stageBlueprint = [
+  { key: 'start', label: 'Start' },
+  { key: 'redis', label: 'History' },
+  { key: 'rag', label: 'Retrieval' },
+  { key: 'answer', label: 'Answer' },
+]
+
+function StageTimeline({ stages }) {
+  return (
+    <div className="mb-3 text-[11px] text-gray-400">
+      <div className="mb-1 flex items-center gap-1 font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+        <span className="relative inline-flex h-3 w-3 items-center justify-center">
+          <span className="absolute inline-flex h-3 w-3 animate-spin rounded-full border border-gray-300 border-t-transparent" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-gray-400" />
+        </span>
+        Logic chain
+      </div>
+      <div className="flex flex-col gap-1 pl-4">
+        {stages.map((s) => (
+          <div key={s.key} className="flex items-center gap-2">
+            <div className="relative h-2.5 w-2.5">
+              {s.status === 'active' && (
+                <span className="absolute inset-[-6px] animate-ping rounded-full border border-blue-300/70" />
+              )}
+              <span
+                className={`relative block h-2.5 w-2.5 rounded-full border transition-colors ${
+                  s.status === 'done'
+                    ? 'border-emerald-500 bg-emerald-500'
+                    : s.status === 'active'
+                      ? 'border-blue-500 bg-blue-500'
+                      : 'border-gray-300 bg-gray-200'
+                }`}
+              />
+            </div>
+            <div
+              className={`flex items-center gap-2 text-[11px] transition-colors ${
+                s.status === 'done'
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : s.status === 'active'
+                    ? 'text-blue-600 dark:text-blue-300'
+                    : 'text-gray-400'
+              }`}
+            >
+              <span className="font-medium">{s.label}</span>
+              {s.detail ? <span className="text-[10px] text-gray-400">{s.detail}</span> : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** Dark backdrop overlay */
 function Overlay({ onClick }) {
   return (
@@ -221,6 +274,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
     return []
   })
+
+  const [stages, setStages] = useState(() => stageBlueprint.map((s) => ({ ...s, status: 'idle', detail: '' })))
 
   const [sessionId] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -243,6 +298,20 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   // Smaller latency path: let backend decide caching (false means allow cache)
   const SKIP_CACHE_DEFAULT = false
+
+  const resetTimeline = () => setStages(stageBlueprint.map((s) => ({ ...s, status: 'idle', detail: '' })))
+  const markStage = (key, detail) => {
+    const index = stageBlueprint.findIndex((s) => s.key === key)
+    if (index === -1) return
+    setStages((prev) =>
+      prev.map((s, i) => ({
+        ...s,
+        status: i < index ? 'done' : i === index ? 'active' : 'idle',
+        detail: s.key === key && detail ? detail : s.detail,
+      }))
+    )
+  }
+  const completeTimeline = () => setStages((prev) => prev.map((s) => ({ ...s, status: s.status === 'idle' ? 'idle' : 'done' })))
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -300,6 +369,15 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
   }, [])
 
+  const parseEventData = (ev) => {
+    if (!ev?.data) return {}
+    try {
+      return JSON.parse(ev.data)
+    } catch {
+      return { payload: ev.data }
+    }
+  }
+
   const startSSE = ({ text, onFinal }) => {
     // Build GET /api/chat/stream?message=...&skip_cache=...
     const base = chatEndpointRef.current || '/api/chat'
@@ -311,6 +389,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
     const es = new EventSource(streamUrl)
     esRef.current = es
+
+    resetTimeline()
+    markStage('start', 'Init')
 
     // create placeholder assistant message
     const assistantId = generateUUID()
@@ -335,6 +416,42 @@ function ChatWindow({ onMinimize, onDragStart }) {
       } catch {}
     })
 
+    es.addEventListener('start', (ev) => {
+      const data = parseEventData(ev)
+      markStage('start', data?.message || 'Init')
+    })
+
+    es.addEventListener('redis', (ev) => {
+      const data = parseEventData(ev)
+      markStage('redis', data?.message || 'History')
+    })
+
+    es.addEventListener('rag', (ev) => {
+      const data = parseEventData(ev)
+      markStage('rag', data?.message || 'Retrieval')
+    })
+
+    es.addEventListener('answer_final', (ev) => {
+      const data = parseEventData(ev)
+      const finalPayload = data?.payload ?? data?.delta ?? ''
+      buffer = finalPayload || buffer
+      completeTimeline()
+      try { es.close() } catch {}
+      if (esRef.current === es) esRef.current = null
+      finalize()
+    })
+
+    es.addEventListener('answer_delta', (ev) => {
+      const data = parseEventData(ev)
+      const delta = data?.payload ?? data?.delta ?? ''
+      if (!delta) return
+      markStage('answer', data?.message || 'Generating')
+      buffer += delta
+      setMessages((prev) => prev.map((m) => (
+        m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
+      )))
+    })
+
     es.addEventListener('message', (ev) => {
       // data should be a JSON like { delta: '...' } but also accept raw text
       let delta = ''
@@ -345,6 +462,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
         delta = ev.data || ''
       }
       if (!delta) return
+      markStage('answer', 'Generating')
       buffer += delta
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
@@ -354,6 +472,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
     es.addEventListener('done', () => {
       try { es.close() } catch {}
       if (esRef.current === es) esRef.current = null
+      completeTimeline()
       finalize()
     })
 
@@ -383,12 +502,14 @@ function ChatWindow({ onMinimize, onDragStart }) {
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false } : m
       )))
+      completeTimeline()
       onFinal?.(finalContent)
     } catch (err) {
       logger.error('Fallback POST failed:', err)
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, content: '⚠️ Failed to contact assistant.', streaming: false } : m
       )))
+      completeTimeline()
     }
   }
 
@@ -402,6 +523,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
       try { esRef.current.close() } catch {}
       esRef.current = null
     }
+
+    resetTimeline()
 
     setLoading(true)
     setMessages((prev) => [...prev, { id: generateUUID(), role: 'user', content: text }])
@@ -448,7 +571,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
         </button>
       </header>
 
-      <div ref={scrollRef} className="bot-messages flex-1 space-y-2 overflow-y-auto px-3 py-3">
+      <div className="px-3 pt-3">
+        <StageTimeline stages={stages} />
+      </div>
+
+      <div ref={scrollRef} className="bot-messages flex-1 space-y-2 overflow-y-auto px-3 pb-3">
         {messages.map((m) => (
           <div key={m.id} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
             {m.role === 'assistant' && m.isHtml ? (
