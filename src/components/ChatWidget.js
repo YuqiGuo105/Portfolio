@@ -294,7 +294,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const [endpoint, setEndpoint] = useState('')
   const scrollRef = useRef(null)
   const chatEndpointRef = useRef(null)
-  const esRef = useRef(null) // active EventSource
+  const esRef = useRef(null) // active stream controller
 
   // Smaller latency path: let backend decide caching (false means allow cache)
   const SKIP_CACHE_DEFAULT = false
@@ -363,10 +363,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   // Clean up the active stream when minimizing/unmounting
   useEffect(() => () => {
-    if (esRef.current) {
-      try { esRef.current.close() } catch {}
-      esRef.current = null
-    }
+    closeActiveStream()
   }, [])
 
   const parseEventData = (ev) => {
@@ -378,28 +375,30 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
   }
 
-  const startSSE = ({ text, onFinal }) => {
-    // Build GET /api/chat/stream?message=...&skip_cache=...
-    const base = chatEndpointRef.current || '/api/chat'
-    const streamUrl = toStreamUrl(base, {
-      message: text,
-      skip_cache: SKIP_CACHE_DEFAULT ? 'true' : 'false',
-      // Note: GET version on server ignores session_id; caching is cross-user
-    })
+  const closeActiveStream = () => {
+    if (!esRef.current) return
+    try {
+      if (esRef.current.abort) esRef.current.abort()
+      if (esRef.current.close) esRef.current.close()
+    } catch {}
+    esRef.current = null
+  }
 
-    const es = new EventSource(streamUrl)
-    esRef.current = es
+  const STREAM_ENDPOINT =
+    process.env.NEXT_PUBLIC_RAG_STREAM || 'https://mrpot-production.up.railway.app/api/rag/answer/stream'
 
-    resetTimeline()
-    markStage('start', 'Init')
-
-    // create placeholder assistant message
-    const assistantId = generateUUID()
-    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
+  const startSSE = async ({ text, assistantId, onFinal }) => {
+    const controller = new AbortController()
+    esRef.current = { abort: () => controller.abort() }
 
     let buffer = ''
+    let finalized = false
+
+    markStage('start', 'Init')
 
     const finalize = () => {
+      if (finalized) return
+      finalized = true
       buffer = formatGuideText(buffer)
       // decide if buffer looks like HTML
       const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(buffer)
@@ -410,81 +409,109 @@ function ChatWindow({ onMinimize, onDragStart }) {
       onFinal?.(finalContent)
     }
 
-    es.addEventListener('meta', (ev) => {
-      try {
-        const data = JSON.parse(ev.data || '{}')
-      } catch {}
-    })
-
-    es.addEventListener('start', (ev) => {
-      const data = parseEventData(ev)
-      markStage('start', data?.message || 'Init')
-    })
-
-    es.addEventListener('redis', (ev) => {
-      const data = parseEventData(ev)
-      markStage('redis', data?.message || 'History')
-    })
-
-    es.addEventListener('rag', (ev) => {
-      const data = parseEventData(ev)
-      markStage('rag', data?.message || 'Retrieval')
-    })
-
-    es.addEventListener('answer_final', (ev) => {
-      const data = parseEventData(ev)
-      const finalPayload = data?.payload ?? data?.delta ?? ''
-      buffer = finalPayload || buffer
-      completeTimeline()
-      try { es.close() } catch {}
-      if (esRef.current === es) esRef.current = null
-      finalize()
-    })
-
-    es.addEventListener('answer_delta', (ev) => {
-      const data = parseEventData(ev)
-      const delta = data?.payload ?? data?.delta ?? ''
-      if (!delta) return
-      markStage('answer', data?.message || 'Generating')
-      buffer += delta
-      setMessages((prev) => prev.map((m) => (
-        m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
-      )))
-    })
-
-    es.addEventListener('message', (ev) => {
-      // data should be a JSON like { delta: '...' } but also accept raw text
-      let delta = ''
-      try {
-        const d = JSON.parse(ev.data)
-        delta = d?.delta ?? ''
-      } catch {
-        delta = ev.data || ''
+    const handleEvent = (eventName, rawData = '') => {
+      const fakeEvent = { data: rawData }
+      if (eventName === 'start') {
+        const data = parseEventData(fakeEvent)
+        markStage('start', data?.message || 'Init')
+        return
       }
-      if (!delta) return
-      markStage('answer', 'Generating')
-      buffer += delta
-      setMessages((prev) => prev.map((m) => (
-        m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
-      )))
-    })
+      if (eventName === 'redis') {
+        const data = parseEventData(fakeEvent)
+        markStage('redis', data?.message || 'History')
+        return
+      }
+      if (eventName === 'rag') {
+        const data = parseEventData(fakeEvent)
+        markStage('rag', data?.message || 'Retrieval')
+        return
+      }
+      if (eventName === 'answer_delta' || eventName === 'message') {
+        const data = parseEventData(fakeEvent)
+        const delta = data?.payload ?? data?.delta ?? ''
+        if (!delta) return
+        markStage('answer', data?.message || 'Generating')
+        buffer += delta
+        setMessages((prev) => prev.map((m) => (
+          m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
+        )))
+        return
+      }
+      if (eventName === 'answer_final' || eventName === 'done') {
+        const data = parseEventData(fakeEvent)
+        const finalPayload = data?.payload ?? data?.delta ?? ''
+        buffer = finalPayload || buffer
+        completeTimeline()
+        finalize()
+        closeActiveStream()
+        return
+      }
+    }
 
-    es.addEventListener('done', () => {
-      try { es.close() } catch {}
-      if (esRef.current === es) esRef.current = null
+    try {
+      const res = await fetch(STREAM_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify({ question: text, sessionId }),
+        signal: controller.signal,
+      })
+
+      if (!res.ok || !res.body) {
+        throw new Error(`Stream HTTP ${res.status}`)
+      }
+
+      const decoder = new TextDecoder('utf-8')
+      const reader = res.body.getReader()
+      let sseBuffer = ''
+      let currentEvent = 'message'
+      let dataBuffer = ''
+
+      const flush = () => {
+        if (dataBuffer === '' && currentEvent === 'message') return
+        handleEvent(currentEvent || 'message', dataBuffer.replace(/\n$/, ''))
+        currentEvent = 'message'
+        dataBuffer = ''
+      }
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        sseBuffer += decoder.decode(value, { stream: true })
+
+        const parts = sseBuffer.split(/\r?\n/)
+        sseBuffer = parts.pop() || ''
+
+        for (const line of parts) {
+          if (line.startsWith('event:')) {
+            currentEvent = line.slice(6).trim() || 'message'
+          } else if (line.startsWith('data:')) {
+            dataBuffer += `${line.slice(5).trimStart()}\n`
+          } else if (line.trim() === '') {
+            flush()
+          }
+        }
+      }
+
+      if (sseBuffer) {
+        dataBuffer += sseBuffer
+      }
+      flush()
       completeTimeline()
       finalize()
-    })
-
-    es.onerror = (err) => {
-      try { es.close() } catch {}
-      if (esRef.current === es) esRef.current = null
+    } catch (err) {
+      if (controller.signal.aborted) {
+        return
+      }
+      logger.error('SSE stream failed:', err?.message || err)
+      closeActiveStream()
       // Mark streaming bubble as failed and fallback
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, streaming: false } : m
       )))
-      // Fallback to non-streaming POST
-      fallbackJson({ text, assistantId, onFinal })
+      await fallbackJson({ text, assistantId, onFinal })
     }
   }
 
@@ -510,6 +537,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
         m.id === assistantId ? { ...m, content: '⚠️ Failed to contact assistant.', streaming: false } : m
       )))
       completeTimeline()
+      setLoading(false)
     }
   }
 
@@ -519,16 +547,16 @@ function ChatWindow({ onMinimize, onDragStart }) {
     if (!text || loading) return
 
     // If a previous stream is open, close it
-    if (esRef.current) {
-      try { esRef.current.close() } catch {}
-      esRef.current = null
-    }
+    closeActiveStream()
 
     resetTimeline()
 
     setLoading(true)
     setMessages((prev) => [...prev, { id: generateUUID(), role: 'user', content: text }])
     setInput('')
+
+    const assistantId = generateUUID()
+    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
 
     const finalizeAndPersist = async (finalAnswer) => {
       try {
@@ -539,16 +567,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
       setLoading(false)
     }
 
-    // Prefer streaming via EventSource
-    try {
-      startSSE({ text, onFinal: finalizeAndPersist })
-    } catch (err) {
-      logger.error('Failed to start SSE:', err)
-      // Fallback to JSON POST immediately
-      const assistantId = generateUUID()
-      setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
-      await fallbackJson({ text, assistantId, onFinal: finalizeAndPersist })
-    }
+    // Prefer streaming via the new SSE endpoint
+    await startSSE({ text, assistantId, onFinal: finalizeAndPersist })
   }
 
   return (
