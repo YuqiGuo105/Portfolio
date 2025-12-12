@@ -202,6 +202,59 @@ function StreamingCursor() {
   return <span className="blinking-cursor" />
 }
 
+const stageBlueprint = [
+  { key: 'start', label: 'Start' },
+  { key: 'redis', label: 'History' },
+  { key: 'rag', label: 'Retrieval' },
+  { key: 'answer', label: 'Answer' },
+]
+
+function StageTimeline({ stages }) {
+  return (
+    <div className="mb-3 text-[11px] text-gray-400">
+      <div className="mb-1 flex items-center gap-1 font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+        <span className="relative inline-flex h-3 w-3 items-center justify-center">
+          <span className="absolute inline-flex h-3 w-3 animate-spin rounded-full border border-gray-300 border-t-transparent" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-gray-400" />
+        </span>
+        Logic chain
+      </div>
+      <div className="flex flex-col gap-1 pl-4">
+        {stages.map((s) => (
+          <div key={s.key} className="flex items-center gap-2">
+            <div className="relative h-2.5 w-2.5">
+              {s.status === 'active' && (
+                <span className="absolute inset-[-6px] animate-ping rounded-full border border-blue-300/70" />
+              )}
+              <span
+                className={`relative block h-2.5 w-2.5 rounded-full border transition-colors ${
+                  s.status === 'done'
+                    ? 'border-emerald-500 bg-emerald-500'
+                    : s.status === 'active'
+                      ? 'border-blue-500 bg-blue-500'
+                      : 'border-gray-300 bg-gray-200'
+                }`}
+              />
+            </div>
+            <div
+              className={`flex items-center gap-2 text-[11px] transition-colors ${
+                s.status === 'done'
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : s.status === 'active'
+                    ? 'text-blue-600 dark:text-blue-300'
+                    : 'text-gray-400'
+              }`}
+            >
+              <span className="font-medium">{s.label}</span>
+              {s.detail ? <span className="text-[10px] text-gray-400">{s.detail}</span> : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** Dark backdrop overlay */
 function Overlay({ onClick }) {
   return (
@@ -222,6 +275,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
     return []
   })
 
+  const [stages, setStages] = useState(() => stageBlueprint.map((s) => ({ ...s, status: 'idle', detail: '' })))
+
   const [sessionId] = useState(() => {
     if (typeof window !== 'undefined') {
       let id = sessionStorage.getItem('chatSessionId')
@@ -239,10 +294,24 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const [endpoint, setEndpoint] = useState('')
   const scrollRef = useRef(null)
   const chatEndpointRef = useRef(null)
-  const esRef = useRef(null) // active EventSource
+  const esRef = useRef(null) // active stream controller
 
   // Smaller latency path: let backend decide caching (false means allow cache)
   const SKIP_CACHE_DEFAULT = false
+
+  const resetTimeline = () => setStages(stageBlueprint.map((s) => ({ ...s, status: 'idle', detail: '' })))
+  const markStage = (key, detail) => {
+    const index = stageBlueprint.findIndex((s) => s.key === key)
+    if (index === -1) return
+    setStages((prev) =>
+      prev.map((s, i) => ({
+        ...s,
+        status: i < index ? 'done' : i === index ? 'active' : 'idle',
+        detail: s.key === key && detail ? detail : s.detail,
+      }))
+    )
+  }
+  const completeTimeline = () => setStages((prev) => prev.map((s) => ({ ...s, status: s.status === 'idle' ? 'idle' : 'done' })))
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -294,31 +363,42 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   // Clean up the active stream when minimizing/unmounting
   useEffect(() => () => {
-    if (esRef.current) {
-      try { esRef.current.close() } catch {}
-      esRef.current = null
-    }
+    closeActiveStream()
   }, [])
 
-  const startSSE = ({ text, onFinal }) => {
-    // Build GET /api/chat/stream?message=...&skip_cache=...
-    const base = chatEndpointRef.current || '/api/chat'
-    const streamUrl = toStreamUrl(base, {
-      message: text,
-      skip_cache: SKIP_CACHE_DEFAULT ? 'true' : 'false',
-      // Note: GET version on server ignores session_id; caching is cross-user
-    })
+  const parseEventData = (ev) => {
+    if (!ev?.data) return {}
+    try {
+      return JSON.parse(ev.data)
+    } catch {
+      return { payload: ev.data }
+    }
+  }
 
-    const es = new EventSource(streamUrl)
-    esRef.current = es
+  const closeActiveStream = () => {
+    if (!esRef.current) return
+    try {
+      if (esRef.current.abort) esRef.current.abort()
+      if (esRef.current.close) esRef.current.close()
+    } catch {}
+    esRef.current = null
+  }
 
-    // create placeholder assistant message
-    const assistantId = generateUUID()
-    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
+  const STREAM_ENDPOINT =
+    process.env.NEXT_PUBLIC_RAG_STREAM || 'https://mrpot-production.up.railway.app/api/rag/answer/stream'
+
+  const startSSE = async ({ text, assistantId, onFinal }) => {
+    const controller = new AbortController()
+    esRef.current = { abort: () => controller.abort() }
 
     let buffer = ''
+    let finalized = false
+
+    markStage('start', 'Init')
 
     const finalize = () => {
+      if (finalized) return
+      finalized = true
       buffer = formatGuideText(buffer)
       // decide if buffer looks like HTML
       const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(buffer)
@@ -329,43 +409,109 @@ function ChatWindow({ onMinimize, onDragStart }) {
       onFinal?.(finalContent)
     }
 
-    es.addEventListener('meta', (ev) => {
-      try {
-        const data = JSON.parse(ev.data || '{}')
-      } catch {}
-    })
-
-    es.addEventListener('message', (ev) => {
-      // data should be a JSON like { delta: '...' } but also accept raw text
-      let delta = ''
-      try {
-        const d = JSON.parse(ev.data)
-        delta = d?.delta ?? ''
-      } catch {
-        delta = ev.data || ''
+    const handleEvent = (eventName, rawData = '') => {
+      const fakeEvent = { data: rawData }
+      if (eventName === 'start') {
+        const data = parseEventData(fakeEvent)
+        markStage('start', data?.message || 'Init')
+        return
       }
-      if (!delta) return
-      buffer += delta
-      setMessages((prev) => prev.map((m) => (
-        m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
-      )))
-    })
+      if (eventName === 'redis') {
+        const data = parseEventData(fakeEvent)
+        markStage('redis', data?.message || 'History')
+        return
+      }
+      if (eventName === 'rag') {
+        const data = parseEventData(fakeEvent)
+        markStage('rag', data?.message || 'Retrieval')
+        return
+      }
+      if (eventName === 'answer_delta' || eventName === 'message') {
+        const data = parseEventData(fakeEvent)
+        const delta = data?.payload ?? data?.delta ?? ''
+        if (!delta) return
+        markStage('answer', data?.message || 'Generating')
+        buffer += delta
+        setMessages((prev) => prev.map((m) => (
+          m.id === assistantId ? { ...m, content: buffer, streaming: true } : m
+        )))
+        return
+      }
+      if (eventName === 'answer_final' || eventName === 'done') {
+        const data = parseEventData(fakeEvent)
+        const finalPayload = data?.payload ?? data?.delta ?? ''
+        buffer = finalPayload || buffer
+        completeTimeline()
+        finalize()
+        closeActiveStream()
+        return
+      }
+    }
 
-    es.addEventListener('done', () => {
-      try { es.close() } catch {}
-      if (esRef.current === es) esRef.current = null
+    try {
+      const res = await fetch(STREAM_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify({ question: text, sessionId }),
+        signal: controller.signal,
+      })
+
+      if (!res.ok || !res.body) {
+        throw new Error(`Stream HTTP ${res.status}`)
+      }
+
+      const decoder = new TextDecoder('utf-8')
+      const reader = res.body.getReader()
+      let sseBuffer = ''
+      let currentEvent = 'message'
+      let dataBuffer = ''
+
+      const flush = () => {
+        if (dataBuffer === '' && currentEvent === 'message') return
+        handleEvent(currentEvent || 'message', dataBuffer.replace(/\n$/, ''))
+        currentEvent = 'message'
+        dataBuffer = ''
+      }
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        sseBuffer += decoder.decode(value, { stream: true })
+
+        const parts = sseBuffer.split(/\r?\n/)
+        sseBuffer = parts.pop() || ''
+
+        for (const line of parts) {
+          if (line.startsWith('event:')) {
+            currentEvent = line.slice(6).trim() || 'message'
+          } else if (line.startsWith('data:')) {
+            dataBuffer += `${line.slice(5).trimStart()}\n`
+          } else if (line.trim() === '') {
+            flush()
+          }
+        }
+      }
+
+      if (sseBuffer) {
+        dataBuffer += sseBuffer
+      }
+      flush()
+      completeTimeline()
       finalize()
-    })
-
-    es.onerror = (err) => {
-      try { es.close() } catch {}
-      if (esRef.current === es) esRef.current = null
+    } catch (err) {
+      if (controller.signal.aborted) {
+        return
+      }
+      logger.error('SSE stream failed:', err?.message || err)
+      closeActiveStream()
       // Mark streaming bubble as failed and fallback
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, streaming: false } : m
       )))
-      // Fallback to non-streaming POST
-      fallbackJson({ text, assistantId, onFinal })
+      await fallbackJson({ text, assistantId, onFinal })
     }
   }
 
@@ -383,12 +529,15 @@ function ChatWindow({ onMinimize, onDragStart }) {
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false } : m
       )))
+      completeTimeline()
       onFinal?.(finalContent)
     } catch (err) {
       logger.error('Fallback POST failed:', err)
       setMessages((prev) => prev.map((m) => (
         m.id === assistantId ? { ...m, content: '⚠️ Failed to contact assistant.', streaming: false } : m
       )))
+      completeTimeline()
+      setLoading(false)
     }
   }
 
@@ -398,14 +547,16 @@ function ChatWindow({ onMinimize, onDragStart }) {
     if (!text || loading) return
 
     // If a previous stream is open, close it
-    if (esRef.current) {
-      try { esRef.current.close() } catch {}
-      esRef.current = null
-    }
+    closeActiveStream()
+
+    resetTimeline()
 
     setLoading(true)
     setMessages((prev) => [...prev, { id: generateUUID(), role: 'user', content: text }])
     setInput('')
+
+    const assistantId = generateUUID()
+    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
 
     const finalizeAndPersist = async (finalAnswer) => {
       try {
@@ -416,16 +567,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
       setLoading(false)
     }
 
-    // Prefer streaming via EventSource
-    try {
-      startSSE({ text, onFinal: finalizeAndPersist })
-    } catch (err) {
-      logger.error('Failed to start SSE:', err)
-      // Fallback to JSON POST immediately
-      const assistantId = generateUUID()
-      setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }])
-      await fallbackJson({ text, assistantId, onFinal: finalizeAndPersist })
-    }
+    // Prefer streaming via the new SSE endpoint
+    await startSSE({ text, assistantId, onFinal: finalizeAndPersist })
   }
 
   return (
@@ -448,7 +591,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
         </button>
       </header>
 
-      <div ref={scrollRef} className="bot-messages flex-1 space-y-2 overflow-y-auto px-3 py-3">
+      <div className="px-3 pt-3">
+        <StageTimeline stages={stages} />
+      </div>
+
+      <div ref={scrollRef} className="bot-messages flex-1 space-y-2 overflow-y-auto px-3 pb-3">
         {messages.map((m) => (
           <div key={m.id} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
             {m.role === 'assistant' && m.isHtml ? (
