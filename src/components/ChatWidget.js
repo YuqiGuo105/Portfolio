@@ -32,6 +32,13 @@ const sanitizeHtml = (html) =>
     .replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"')
     .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'")
 
+const SESSION_TTL_MS = 15 * 60 * 1000
+const isSessionFresh = () => {
+  if (typeof window === 'undefined') return false
+  const lastActive = Number(sessionStorage.getItem('chatSessionLastActive') || 0)
+  return Number.isFinite(lastActive) && Date.now() - lastActive < SESSION_TTL_MS
+}
+
 /* Convert plain guideline text into clickable links */
 function formatGuideText(text) {
   if (text.startsWith('Need a hand?')) {
