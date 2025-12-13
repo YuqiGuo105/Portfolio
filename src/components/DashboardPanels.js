@@ -13,7 +13,7 @@ const formatCurrency = (value, currency) => {
       maximumFractionDigits: currency === "JPY" ? 0 : 2,
     }).format(value);
   } catch (error) {
-    return `${value.toFixed(2)} ${currency}`;
+    return `${Number(value).toFixed(2)} ${currency}`;
   }
 };
 
@@ -22,6 +22,18 @@ const getHoursSince = (timestamp) => {
   const diffMs = Date.now() - timestamp;
   const hours = diffMs / (1000 * 60 * 60);
   return Math.max(hours, 0);
+};
+
+// Debounce hook to reduce request spam & perceived latency.
+const useDebouncedValue = (value, delayMs) => {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+
+  return debounced;
 };
 
 const weatherIcon = (
@@ -64,6 +76,8 @@ const DashboardPanels = () => {
   const [marketData, setMarketData] = useState([]);
   const [marketFallback, setMarketFallback] = useState(false);
   const [marketMeta, setMarketMeta] = useState(null);
+  const [isMarketLoading, setIsMarketLoading] = useState(true);
+
   const [currency, setCurrency] = useState({
     amount: 1,
     base: "USD",
@@ -71,10 +85,18 @@ const DashboardPanels = () => {
     rate: 0.8589,
     timestamp: Date.now(),
     fallback: true,
+    meta: { source: "init" },
   });
+  const [isCurrencyLoading, setIsCurrencyLoading] = useState(true);
+
   const [amount, setAmount] = useState("1");
   const [baseCurrency, setBaseCurrency] = useState("USD");
   const [targetCurrency, setTargetCurrency] = useState("EUR");
+
+  const debouncedAmount = useDebouncedValue(amount, 300);
+  const debouncedBase = useDebouncedValue(baseCurrency, 150);
+  const debouncedTarget = useDebouncedValue(targetCurrency, 150);
+
   const [weather, setWeather] = useState({
     temperature: 49,
     weatherDescription: "Partly cloudy",
@@ -83,68 +105,115 @@ const DashboardPanels = () => {
     location: null,
     fetchedAt: Date.now(),
     fallback: true,
+    meta: { provider: "init" },
   });
   const [isWeatherLoading, setIsWeatherLoading] = useState(true);
 
+  // Market (with abort + timeout)
   useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4500);
+
     const fetchMarket = async () => {
+      setIsMarketLoading(true);
       try {
-        const response = await fetch("/api/market-data");
+        const response = await fetch("/api/market-data", { signal: controller.signal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const json = await response.json();
-        if (json?.data) {
-          setMarketData(json.data);
-        }
+
+        if (!mounted) return;
+
+        if (json?.data) setMarketData(json.data);
         setMarketFallback(Boolean(json?.fallback));
         setMarketMeta(json?.meta ?? null);
       } catch (error) {
+        // Keep previous data (better UX) instead of blanking out.
         console.error("Failed to load market data", error);
+      } finally {
+        if (mounted) setIsMarketLoading(false);
       }
     };
 
     fetchMarket();
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, []);
 
+  // Currency (debounced + abort previous request)
   useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4500);
+
     const fetchCurrency = async () => {
+      setIsCurrencyLoading(true);
       try {
         const params = new URLSearchParams({
-          base: baseCurrency,
-          target: targetCurrency,
-          amount: amount || "1",
+          base: debouncedBase,
+          target: debouncedTarget,
+          amount: (debouncedAmount || "1").toString(),
         });
-        const response = await fetch(`/api/currency?${params.toString()}`);
+
+        const response = await fetch(`/api/currency?${params.toString()}`, {
+          signal: controller.signal,
+        });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const json = await response.json();
-        if (json?.rate) {
-          setCurrency(json);
-        }
+
+        if (!mounted) return;
+
+        if (json?.rate) setCurrency(json);
       } catch (error) {
         console.error("Failed to load currency data", error);
+      } finally {
+        if (mounted) setIsCurrencyLoading(false);
       }
     };
 
     fetchCurrency();
-  }, [baseCurrency, targetCurrency, amount]);
 
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [debouncedBase, debouncedTarget, debouncedAmount]);
+
+  // Weather (abort + timeout)
   useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
     const fetchWeather = async () => {
       setIsWeatherLoading(true);
       try {
-        const response = await fetch("/api/weather");
+        const response = await fetch("/api/weather", { signal: controller.signal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const json = await response.json();
-        if (json) {
-          setWeather(json);
-        }
+
+        if (!mounted) return;
+
+        if (json) setWeather(json);
       } catch (error) {
         console.error("Failed to load weather data", error);
       } finally {
-        setIsWeatherLoading(false);
+        if (mounted) setIsWeatherLoading(false);
       }
     };
 
     fetchWeather();
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, []);
 
   const convertedAmount = useMemo(() => {
@@ -168,6 +237,7 @@ const DashboardPanels = () => {
       return "--";
     }
 
+    // API returns Fahrenheit (we requested temperature_unit=fahrenheit)
     if (temperatureUnit === "C") {
       const celsius = ((weather.temperature - 32) * 5) / 9;
       return `${Math.round(celsius)}°C`;
@@ -177,21 +247,30 @@ const DashboardPanels = () => {
   }, [isWeatherLoading, weather.temperature, temperatureUnit]);
 
   const { marketBadgeText, marketBadgeClassName } = useMemo(() => {
-    if (marketMeta?.source && marketMeta.source !== "live") {
+    if (isMarketLoading) {
+      return { marketBadgeText: "loading…", marketBadgeClassName: "badge badge-warning" };
+    }
+
+    if (marketMeta?.source && marketMeta.source !== "stooq") {
       const text =
         marketMeta.source === "simulated"
           ? "live feed unavailable · showing simulated snapshot"
           : `cached snapshot · source: ${marketMeta.source}`;
-
-      return { text, className: "badge badge-warning" };
+      return { marketBadgeText: text, marketBadgeClassName: "badge badge-warning" };
     }
 
     if (marketFallback) {
-      return { text: "live feed unavailable", className: "badge" };
+      return { marketBadgeText: "partial / fallback data", marketBadgeClassName: "badge" };
     }
 
-    return { text: null, className: "badge" };
-  }, [marketFallback, marketMeta]);
+    // For stooq, you may want to display "delayed" explicitly.
+    if (marketMeta?.source === "stooq") {
+      const partial = marketMeta?.partial?.length ? ` · partial: ${marketMeta.partial.join(", ")}` : "";
+      return { marketBadgeText: `delayed quotes (stooq)${partial}`, marketBadgeClassName: "badge" };
+    }
+
+    return { marketBadgeText: null, marketBadgeClassName: "badge" };
+  }, [isMarketLoading, marketFallback, marketMeta]);
 
   const hoursAgoLabel = (timestamp) => {
     const hours = getHoursSince(timestamp);
@@ -220,6 +299,7 @@ const DashboardPanels = () => {
               <span className={marketBadgeClassName}>{marketBadgeText}</span>
             )}
           </header>
+
           <div className="market-rows">
             {marketData.map((item) => {
               const changeValue =
@@ -231,38 +311,26 @@ const DashboardPanels = () => {
                 !Number.isNaN(item.changePercent)
                   ? item.changePercent
                   : null;
-              const changeSign =
-                changeValue !== null ? (changeValue >= 0 ? "+" : "") : "";
+              const changeSign = changeValue !== null ? (changeValue >= 0 ? "+" : "") : "";
               const changeColor =
-                changeValue === null
-                  ? "neutral"
-                  : changeValue >= 0
-                  ? "positive"
-                  : "negative";
+                changeValue === null ? "neutral" : changeValue >= 0 ? "positive" : "negative";
+
               return (
                 <div className="market-row" key={item.label}>
                   <div className="row-main">
                     <span className="symbol">{item.label}</span>
-                    <span className="price">
-                      {formatCurrency(item.price, item.currency)}
-                    </span>
+                    <span className="price">{formatCurrency(item.price, item.currency)}</span>
                     <span className="currency">{item.currency}</span>
                     <span className={`change ${changeColor}`}>
-                      {changeValue !== null
-                        ? `${changeSign}${changeValue.toFixed(2)}`
-                        : "—"}
+                      {changeValue !== null ? `${changeSign}${changeValue.toFixed(2)}` : "—"}
                       {", "}
                       <span className="percent">
-                        {changePercent !== null
-                          ? `${changeSign}${changePercent.toFixed(2)}%`
-                          : "—"}
+                        {changePercent !== null ? `${changeSign}${changePercent.toFixed(2)}%` : "—"}
                       </span>
                     </span>
                   </div>
                   <div className="row-sub">
-                    <span className="timestamp">
-                      {hoursAgoLabel(item.timestamp)}
-                    </span>
+                    <span className="timestamp">{hoursAgoLabel(item.timestamp)}</span>
                   </div>
                 </div>
               );
@@ -275,17 +343,18 @@ const DashboardPanels = () => {
             <header>
               <h3>Currency Converter</h3>
             </header>
+
             <div className="output-container">
               <div className="conversion-output">
                 {convertedAmount !== null ? (
                   <span>
-                    {amount || 1} {baseCurrency} ≈ {convertedAmount.toFixed(4)}{" "}
-                    {targetCurrency}
+                    {amount || 1} {baseCurrency} ≈ {convertedAmount.toFixed(4)} {targetCurrency}
                   </span>
                 ) : (
                   <span>Enter an amount to convert</span>
                 )}
               </div>
+
               <div className="converter-form">
                 <label className="input-group">
                   <span>Amount</span>
@@ -296,6 +365,7 @@ const DashboardPanels = () => {
                     onChange={(event) => setAmount(event.target.value)}
                   />
                 </label>
+
                 <label className="input-group">
                   <span>From</span>
                   <select
@@ -309,6 +379,7 @@ const DashboardPanels = () => {
                     <option value="CNY">CNY</option>
                   </select>
                 </label>
+
                 <label className="input-group">
                   <span>To</span>
                   <select
@@ -323,14 +394,15 @@ const DashboardPanels = () => {
                   </select>
                 </label>
               </div>
+
               <div className="currency-rate">
                 <span className="timestamp">
-                  {hoursAgoLabel(currency.timestamp)}
+                  {isCurrencyLoading ? "Updating…" : hoursAgoLabel(currency.timestamp)}
                 </span>
               </div>
+
               <p className="disclaimer">
-                Data provided by IHS Markit and other public market data
-                sources. Rates are for informational purposes only.
+                Rates powered by ExchangeRate-API (open access). Market quotes powered by Stooq (may be delayed).
               </p>
             </div>
           </div>
@@ -339,11 +411,13 @@ const DashboardPanels = () => {
             <header>
               <h3>Weather</h3>
             </header>
+
             <div className="weather-container">
               <div className="weather-main">
                 <div className="icon-wrapper" aria-hidden="true">
                   {weatherIcon}
                 </div>
+
                 <div className="weather-info">
                   <div className="temperature-row">
                     <div className="temperature">{displayTemperature}</div>
@@ -351,35 +425,31 @@ const DashboardPanels = () => {
                       type="button"
                       className="unit-toggle"
                       onClick={toggleTemperatureUnit}
-                      aria-label={`Switch to ${
-                        temperatureUnit === "F" ? "Celsius" : "Fahrenheit"
-                      }`}
+                      aria-label={`Switch to ${temperatureUnit === "F" ? "Celsius" : "Fahrenheit"}`}
                     >
                       Show °{temperatureUnit === "F" ? "C" : "F"}
                     </button>
                   </div>
-                  <div className="description">
-                    Outlook: {weather.weatherDescription}
-                  </div>
+
+                  <div className="description">Outlook: {weather.weatherDescription}</div>
+
                   {weather.location && (
                     <div className="location">
-                      {weather.location.city
-                        ? `${weather.location.city}, `
-                        : ""}
+                      {weather.location.city ? `${weather.location.city}, ` : ""}
                       {weather.location.region || weather.location.country}
                     </div>
                   )}
+
                   <div className="sun-times">
                     <span>Sunrise: {formatTime(weather.sunrise)}</span>
                     <span>Sunset: {formatTime(weather.sunset)}</span>
-                    <span className="timestamp">
-                      {hoursAgoLabel(weather.fetchedAt)}
-                    </span>
+                    <span className="timestamp">{hoursAgoLabel(weather.fetchedAt)}</span>
                   </div>
                 </div>
               </div>
+
               <footer>
-                <span className="provider">Powered by AccuWeather</span>
+                <span className="provider">Powered by Open-Meteo</span>
               </footer>
             </div>
           </div>
@@ -411,11 +481,7 @@ const DashboardPanels = () => {
           --weather-accent: #f97316;
           --weather-accent-bg: rgba(249, 115, 22, 0.08);
           --unit-toggle-bg: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-          --unit-toggle-hover-bg: linear-gradient(
-            135deg,
-            #4f46e5 0%,
-            #4338ca 100%
-          );
+          --unit-toggle-hover-bg: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
           --provider-indicator: #f97316;
           background: var(--dashboard-bg);
           padding: 3rem 0;
@@ -446,11 +512,7 @@ const DashboardPanels = () => {
           --weather-accent: #f97316;
           --weather-accent-bg: rgba(249, 115, 22, 0.18);
           --unit-toggle-bg: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
-          --unit-toggle-hover-bg: linear-gradient(
-            135deg,
-            #4338ca 0%,
-            #312e81 100%
-          );
+          --unit-toggle-hover-bg: linear-gradient(135deg, #4338ca 0%, #312e81 100%);
           --provider-indicator: #f97316;
         }
 
@@ -501,11 +563,13 @@ const DashboardPanels = () => {
           margin: 0;
           color: var(--heading-color);
         }
+
         .column-container {
           display: flex;
           flex-direction: column;
           gap: 1.5rem;
         }
+
         .dashboard-card-2 {
           background: var(--card-bg);
           width: 800px;
@@ -544,6 +608,7 @@ const DashboardPanels = () => {
           margin: 0;
           color: var(--heading-color);
         }
+
         .output-container {
           display: flex;
           flex-direction: column;
@@ -619,11 +684,7 @@ const DashboardPanels = () => {
 
         .row-main {
           display: grid;
-          grid-template-columns:
-            40px
-            100px
-            40px
-            minmax(0, 1fr);
+          grid-template-columns: 40px 100px 40px minmax(0, 1fr);
           gap: 0.75rem;
           align-items: baseline;
           color: var(--text-primary);
@@ -680,12 +741,6 @@ const DashboardPanels = () => {
           gap: 0.35rem;
         }
 
-        .currency-card .rate {
-          font-size: 1.1rem;
-          font-weight: 600;
-          color: var(--text-primary);
-        }
-
         .currency-card .timestamp,
         .disclaimer {
           font-size: 0.75rem;
@@ -722,10 +777,6 @@ const DashboardPanels = () => {
         .converter-form .input-group input,
         .converter-form .input-group select {
           width: 100%;
-        }
-
-        .converter-form label {
-          padding-bottom: 0px;
         }
 
         input:focus,
@@ -825,8 +876,7 @@ const DashboardPanels = () => {
 
         .unit-toggle:focus {
           outline: none;
-          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4),
-            0 2px 4px rgba(79, 70, 229, 0.2);
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4), 0 2px 4px rgba(79, 70, 229, 0.2);
         }
 
         .description {
@@ -922,6 +972,7 @@ const DashboardPanels = () => {
             width: 100%;
             max-width: 100%;
           }
+
           .dashboard-card-2,
           .dashboard-card-3 {
             flex-direction: column;
