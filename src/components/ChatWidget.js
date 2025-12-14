@@ -888,52 +888,50 @@ function ChatWindow({ onMinimize, onDragStart }) {
       </div>
 
       <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-2">
-        <div className="bot-actions flex items-center gap-2">
-          <label className="flex h-10 w-10 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 cursor-pointer">
+        <div className="bot-actions flex items-center rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+          <label className="flex h-10 w-10 items-center justify-center border-r border-gray-200 text-gray-500 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 cursor-pointer">
             <input type="file" className="sr-only" />
             <Paperclip className="h-4 w-4" />
           </label>
 
-          <div className="relative flex flex-1 items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 dark:border-gray-700 dark:bg-gray-800">
+          <div className="relative flex flex-1 items-center">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Type your message..."
-              className="bot-input h-10 flex-1 border-transparent bg-transparent text-sm outline-none focus:border-blue-500"
+              className="bot-input h-10 w-full border-transparent bg-transparent px-3 pr-12 text-sm outline-none focus:border-blue-500"
             />
 
-            <div className="relative flex h-10 w-10 items-center justify-center">
-              <button
-                type="button"
-                onClick={() => setShowEmojiPicker((s) => !s)}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                aria-label="Add emoji"
-              >
-                <SmilePlus className="h-4 w-4" />
-              </button>
-              {showEmojiPicker && (
-                <div className="absolute bottom-full right-0 mb-2 w-40 rounded-md border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-                  <div className="grid grid-cols-6 gap-1 text-lg">
-                    {['😀', '😁', '😂', '😍', '👍', '🙏', '🎉', '🤔', '❤️', '🔥', '✨', '💯'].map((emo) => (
-                      <button
-                        key={emo}
-                        type="button"
-                        className="rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                        onClick={() => addEmoji(emo)}
-                      >
-                        {emo}
-                      </button>
-                    ))}
-                  </div>
+            <button
+              type="button"
+              onClick={() => setShowEmojiPicker((s) => !s)}
+              className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+              aria-label="Add emoji"
+            >
+              <SmilePlus className="h-4 w-4" />
+            </button>
+            {showEmojiPicker && (
+              <div className="absolute bottom-full right-0 mb-2 w-40 rounded-md border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                <div className="grid grid-cols-6 gap-1 text-lg">
+                  {['😀', '😁', '😂', '😍', '👍', '🙏', '🎉', '🤔', '❤️', '🔥', '✨', '💯'].map((emo) => (
+                    <button
+                      key={emo}
+                      type="button"
+                      className="rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                      onClick={() => addEmoji(emo)}
+                    >
+                      {emo}
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           <button
             type="submit"
             disabled={!input.trim() || loading}
-            className="send-button rounded-md bg-blue-600 p-2 text-white hover:bg-blue-700 disabled:opacity-50"
+            className="send-button flex h-10 items-center justify-center bg-blue-600 px-3 text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
           </button>
