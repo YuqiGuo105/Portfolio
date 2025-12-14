@@ -2,7 +2,7 @@
 
 import { createPortal } from 'react-dom'
 import { useState, useEffect, useRef, Fragment } from 'react'
-import { Minus, ArrowUpRight, Loader2 } from 'lucide-react'
+import { Minus, ArrowUpRight, Loader2, Paperclip, SmilePlus } from 'lucide-react'
 import Image from 'next/image'
 import { supabase } from '../supabase/supabaseClient'
 import { useRouter } from 'next/router'
@@ -630,6 +630,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [endpoint, setEndpoint] = useState('') // optional debug
 
   const scrollRef = useRef(null)
@@ -682,6 +683,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
       abortRef.current = null
     }
   }, [])
+
+  const addEmoji = (emoji) => {
+    setInput((prev) => prev + emoji)
+    setShowEmojiPicker(false)
+  }
 
   const setStage = (assistantId, stage, obj, meta) => {
     const stageTitleMap = {
@@ -789,6 +795,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
     const text = input.trim()
     if (!text || loading) return
 
+    setShowEmojiPicker(false)
+
     if (abortRef.current) {
       try { abortRef.current.abort() } catch {}
       abortRef.current = null
@@ -881,12 +889,47 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
       <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-2">
         <div className="bot-actions flex items-center gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            className="bot-input h-10 flex-1 rounded-md border-transparent bg-transparent px-2 text-sm outline-none focus:border-blue-500"
-          />
+          <label className="flex h-10 w-10 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 cursor-pointer">
+            <input type="file" className="sr-only" />
+            <Paperclip className="h-4 w-4" />
+          </label>
+
+          <div className="relative flex flex-1 items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 dark:border-gray-700 dark:bg-gray-800">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type your message..."
+              className="bot-input h-10 flex-1 border-transparent bg-transparent text-sm outline-none focus:border-blue-500"
+            />
+
+            <div className="relative flex h-10 w-10 items-center justify-center">
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker((s) => !s)}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                aria-label="Add emoji"
+              >
+                <SmilePlus className="h-4 w-4" />
+              </button>
+              {showEmojiPicker && (
+                <div className="absolute bottom-full right-0 mb-2 w-40 rounded-md border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                  <div className="grid grid-cols-6 gap-1 text-lg">
+                    {['😀', '😁', '😂', '😍', '👍', '🙏', '🎉', '🤔', '❤️', '🔥', '✨', '💯'].map((emo) => (
+                      <button
+                        key={emo}
+                        type="button"
+                        className="rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                        onClick={() => addEmoji(emo)}
+                      >
+                        {emo}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           <button
             type="submit"
             disabled={!input.trim() || loading}
