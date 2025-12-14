@@ -32,6 +32,47 @@ const sanitizeHtml = (html) =>
     .replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"')
     .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'")
 
+/* ───────── linkify plain URLs (for non-HTML answers) ───────── */
+const URL_RE = /\bhttps?:\/\/[^\s<]+/gi
+
+function splitTrailingPunct(url) {
+  // Avoid including trailing punctuation in the link
+  // Include both ASCII and common CJK punctuation
+  const m = url.match(/^(.*?)([)\].,!?:;。，“”，！？、》》】】]+)?$/)
+  return { href: m?.[1] || url, tail: m?.[2] || '' }
+}
+
+function renderTextWithLinks(text) {
+  const s = String(text || '')
+  const out = []
+  let last = 0
+
+  s.replace(URL_RE, (match, offset) => {
+    const idx = Number(offset)
+    if (idx > last) out.push(s.slice(last, idx))
+
+    const { href, tail } = splitTrailingPunct(match)
+    out.push(
+      <a
+        key={`${idx}-${href}`}
+        href={href}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="chat-link"
+      >
+        {href}
+      </a>
+    )
+    if (tail) out.push(tail)
+
+    last = idx + match.length
+    return match
+  })
+
+  if (last < s.length) out.push(s.slice(last))
+  return out
+}
+
 const SESSION_TTL_MS = 15 * 60 * 1000
 const storageSafeGet = (key) => {
   if (typeof window === 'undefined') return null
@@ -830,8 +871,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
                 {m.streaming
                   ? m.content === ''
                     ? <TypingIndicator />
-                    : <><span>{m.content}</span><StreamingCursor /></>
-                  : m.content}
+                    : <><span>{renderTextWithLinks(m.content)}</span><StreamingCursor /></>
+                  : renderTextWithLinks(m.content)}
               </div>
             )}
           </div>
@@ -883,6 +924,14 @@ function ChatWindow({ onMinimize, onDragStart }) {
         .bot-message ul, .bot-message ol { margin: 6px 0 !important; padding-left: 18px !important; }
         .bot-message li { margin: 4px 0 !important; }
         .bot-message a { word-break: break-all; }
+        .bot-message a.chat-link {
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+        .bot-message a.chat-link:hover {
+          opacity: 0.85;
+        }
+
         .bot-message pre, .bot-message code {
           white-space: pre-wrap !important;
           overflow-wrap: anywhere !important;
