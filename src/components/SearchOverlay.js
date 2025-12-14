@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const SOURCE_OPTIONS = [
@@ -57,7 +59,7 @@ const ResultRow = ({ item, onNavigate }) => {
   );
 };
 
-const SearchOverlay = ({ isOpen, onClose }) => {
+const SearchOverlay = ({ isOpen, onClose = () => {} }) => {
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("");
   const [loading, setLoading] = useState(false);
