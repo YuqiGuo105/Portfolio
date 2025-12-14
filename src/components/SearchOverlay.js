@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const SOURCE_OPTIONS = [
   { value: "", label: "All" },
@@ -59,6 +59,7 @@ const ResultRow = ({ item, onNavigate }) => {
 
 const SearchOverlay = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [source, setSource] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -67,18 +68,30 @@ const SearchOverlay = ({ isOpen, onClose }) => {
   const [hasTyped, setHasTyped] = useState(false);
   const inputRef = useRef(null);
 
-  const debouncedQuery = useMemo(() => query.trim(), [query]);
+  const trimmedQuery = useMemo(() => query.trim(), [query]);
+
+  const handleClose = useCallback(() => {
+    onClose();
+  }, [onClose]);
+
+  const handleInputChange = useCallback((event) => {
+    setQuery(event.target.value);
+  }, []);
+
+  const handleSourceChange = useCallback((event) => {
+    setSource(event.target.value);
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return undefined;
     const handler = (event) => {
       if (event.key === "Escape") {
-        onClose();
+        handleClose();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [isOpen, onClose]);
+  }, [handleClose, isOpen]);
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -97,49 +110,53 @@ const SearchOverlay = ({ isOpen, onClose }) => {
   }, [isOpen]);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(trimmedQuery), 250);
+    return () => clearTimeout(timer);
+  }, [trimmedQuery]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
     if (!debouncedQuery) {
       setResults([]);
       setTotal(0);
       setError(null);
-      return;
+      return undefined;
     }
 
     const controller = new AbortController();
     setLoading(true);
     setError(null);
 
-    const timer = setTimeout(() => {
-      const params = new URLSearchParams({ q: debouncedQuery, limit: "10" });
-      if (source) {
-        params.set("source", source);
-      }
+    const params = new URLSearchParams({ q: debouncedQuery, limit: "10" });
+    if (source) {
+      params.set("source", source);
+    }
 
-      fetch(`/api/search?${params.toString()}`, { signal: controller.signal })
-        .then(async (response) => {
-          if (!response.ok) {
-            const payload = await response.json().catch(() => ({}));
-            throw new Error(payload.error || "Unable to search right now");
-          }
-          return response.json();
-        })
-        .then((payload) => {
-          setResults(payload.results || []);
-          setTotal(payload.total || 0);
-        })
-        .catch((err) => {
-          if (err.name === "AbortError") return;
-          setError(err.message);
-          setResults([]);
-          setTotal(0);
-        })
-        .finally(() => setLoading(false));
-    }, 250);
+    fetch(`/api/search?${params.toString()}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || "Unable to search right now");
+        }
+        return response.json();
+      })
+      .then((payload) => {
+        setResults(payload.results || []);
+        setTotal(payload.total || 0);
+      })
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        setError(err.message);
+        setResults([]);
+        setTotal(0);
+      })
+      .finally(() => setLoading(false));
 
     return () => {
-      clearTimeout(timer);
       controller.abort();
     };
-  }, [debouncedQuery, source]);
+  }, [debouncedQuery, isOpen, source]);
 
   useEffect(() => {
     setHasTyped(Boolean(query));
@@ -147,9 +164,21 @@ const SearchOverlay = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
+  const handleBackdropClick = (event) => {
+    if (event.target === event.currentTarget) {
+      handleClose();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/70 px-4 py-4 backdrop-blur-sm search-overlay sm:px-0 sm:py-0">
-      <div className="mt-2 flex w-full max-w-4xl flex-col rounded-2xl border border-slate-800 bg-slate-900/95 shadow-2xl search-overlay__panel sm:mt-14">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/70 px-4 py-4 backdrop-blur-sm search-overlay sm:px-0 sm:py-0"
+      onClick={handleBackdropClick}
+    >
+      <div
+        className="mt-2 flex w-full max-w-4xl flex-col rounded-2xl border border-slate-800 bg-slate-900/95 shadow-2xl search-overlay__panel sm:mt-14"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-3 search-overlay__header sm:flex-nowrap sm:gap-3 sm:px-5 sm:py-4">
           <div className="flex min-w-0 flex-1 items-center gap-3 rounded-xl bg-slate-800 px-3 search-overlay__input-wrap">
             <span className="text-slate-300 search-overlay__icon">
@@ -158,7 +187,7 @@ const SearchOverlay = ({ isOpen, onClose }) => {
             <input
               ref={inputRef}
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={handleInputChange}
               className="flex-1 h-10 bg-transparent py-2 text-base text-white placeholder:text-slate-400 focus:outline-none search-overlay__input sm:py-3 sm:text-lg"
               placeholder="Search posts, projects, tags..."
               aria-label="Search"
@@ -166,7 +195,7 @@ const SearchOverlay = ({ isOpen, onClose }) => {
           </div>
           <select
             value={source}
-            onChange={(event) => setSource(event.target.value)}
+            onChange={handleSourceChange}
             className="search-select search-overlay__select w-full text-sm sm:w-auto sm:text-base"
           >
             {SOURCE_OPTIONS.map((option) => (
@@ -177,7 +206,7 @@ const SearchOverlay = ({ isOpen, onClose }) => {
           </select>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="search-close search-overlay__close ml-auto h-10 w-10 sm:ml-0"
             aria-label="Close search"
           >
@@ -221,7 +250,7 @@ const SearchOverlay = ({ isOpen, onClose }) => {
                   <ResultRow
                     key={`${item.source}-${item.id}`}
                     item={item}
-                    onNavigate={onClose}
+                    onNavigate={handleClose}
                   />
                 ))}
               </div>
