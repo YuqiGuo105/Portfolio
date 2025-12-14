@@ -33,9 +33,45 @@ const sanitizeHtml = (html) =>
     .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'")
 
 const SESSION_TTL_MS = 15 * 60 * 1000
+const storageSafeGet = (key) => {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.localStorage.getItem(key)
+  } catch (err) {
+    logger.warn('localStorage get failed', err)
+    return null
+  }
+}
+
+const storageSafeSet = (key, value) => {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(key, value)
+  } catch (err) {
+    logger.warn('localStorage set failed', err)
+  }
+}
+
+const migrateSessionStorageValue = (key) => {
+  if (typeof window === 'undefined') return null
+  try {
+    const legacy = window.sessionStorage.getItem(key)
+    if (legacy != null) storageSafeSet(key, legacy)
+    return legacy
+  } catch {
+    return null
+  }
+}
+
+const readPersistedJson = (key) => {
+  const raw = storageSafeGet(key)
+  if (raw != null) return safeJsonParse(raw)
+  const legacy = migrateSessionStorageValue(key)
+  return legacy != null ? safeJsonParse(legacy) : null
+}
+
 const isSessionFresh = () => {
-  if (typeof window === 'undefined') return false
-  const lastActive = Number(sessionStorage.getItem('chatSessionLastActive') || 0)
+  const lastActive = Number(storageSafeGet('chatSessionLastActive') || 0)
   return Number.isFinite(lastActive) && Date.now() - lastActive < SESSION_TTL_MS
 }
 
@@ -538,23 +574,17 @@ function StageToast({ step }) {
 
 function ChatWindow({ onMinimize, onDragStart }) {
   const [messages, setMessages] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = sessionStorage.getItem('chatMessages')
-      return saved ? JSON.parse(saved) : []
-    }
-    return []
+    const saved = readPersistedJson('chatMessages')
+    return Array.isArray(saved) ? saved : []
   })
 
   const [sessionId] = useState(() => {
-    if (typeof window !== 'undefined') {
-      let id = sessionStorage.getItem('chatSessionId')
-      if (!id) {
-        id = generateUUID()
-        sessionStorage.setItem('chatSessionId', id)
-      }
-      return id
+    let id = storageSafeGet('chatSessionId') || migrateSessionStorageValue('chatSessionId')
+    if (!id) {
+      id = generateUUID()
+      storageSafeSet('chatSessionId', id)
     }
-    return ''
+    return id
   })
 
   const [input, setInput] = useState('')
@@ -578,7 +608,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
   }, [])
 
   useEffect(() => {
-    sessionStorage.setItem('chatMessages', JSON.stringify(messages))
+    storageSafeSet('chatMessages', JSON.stringify(messages))
+    storageSafeSet('chatSessionLastActive', String(Date.now()))
   }, [messages])
 
   useEffect(() => {
