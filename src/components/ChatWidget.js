@@ -2,7 +2,7 @@
 
 import { createPortal } from 'react-dom'
 import { useState, useEffect, useRef, Fragment } from 'react'
-import { Minus, ArrowUpRight, Loader2 } from 'lucide-react'
+import { Minus, ArrowUpRight, Loader2, Paperclip, SmilePlus } from 'lucide-react'
 import Image from 'next/image'
 import { supabase } from '../supabase/supabaseClient'
 import { useRouter } from 'next/router'
@@ -74,6 +74,8 @@ function renderTextWithLinks(text) {
 }
 
 const SESSION_TTL_MS = 15 * 60 * 1000
+const CHAT_UPLOAD_BUCKET = process.env.NEXT_PUBLIC_SUPABASE_UPLOAD_BUCKET || 'chat-uploads'
+const UPLOAD_META_KEY = 'chatUploads'
 const storageSafeGet = (key) => {
   if (typeof window === 'undefined') return null
   try {
@@ -114,6 +116,16 @@ const readPersistedJson = (key) => {
 const isSessionFresh = () => {
   const lastActive = Number(storageSafeGet('chatSessionLastActive') || 0)
   return Number.isFinite(lastActive) && Date.now() - lastActive < SESSION_TTL_MS
+}
+
+const readUploadRecords = () => {
+  const raw = storageSafeGet(UPLOAD_META_KEY)
+  const parsed = raw ? safeJsonParse(raw) : []
+  return Array.isArray(parsed) ? parsed : []
+}
+
+const persistUploadRecords = (records) => {
+  storageSafeSet(UPLOAD_META_KEY, JSON.stringify(records))
 }
 
 /* Convert plain guideline text into clickable links */
@@ -630,6 +642,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [uploads, setUploads] = useState(() => readUploadRecords())
   const [endpoint, setEndpoint] = useState('') // optional debug
 
   const scrollRef = useRef(null)
@@ -652,6 +667,34 @@ function ChatWindow({ onMinimize, onDragStart }) {
     storageSafeSet('chatMessages', JSON.stringify(messages))
     storageSafeSet('chatSessionLastActive', String(Date.now()))
   }, [messages])
+
+  useEffect(() => {
+    const cleanupExpiredUploads = async () => {
+      const now = Date.now()
+      const records = readUploadRecords()
+      const fresh = []
+
+      for (const rec of records) {
+        if (rec?.expiresAt && rec.expiresAt <= now) {
+          try {
+            const { error: removeErr } = await supabase.storage.from(rec.bucket || CHAT_UPLOAD_BUCKET).remove([rec.path])
+            if (removeErr) throw removeErr
+          } catch (err) {
+            logger.warn('Failed to cleanup upload', err)
+          }
+        } else if (rec?.path) {
+          fresh.push(rec)
+        }
+      }
+
+      persistUploadRecords(fresh)
+      setUploads(fresh)
+    }
+
+    cleanupExpiredUploads()
+    const id = setInterval(cleanupExpiredUploads, 60 * 1000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -784,10 +827,79 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
   }
 
+  const addEmoji = (emoji) => {
+    setInput((prev) => prev + emoji)
+    setShowEmojiPicker(false)
+  }
+
+  const recordUpload = (rec) => {
+    setUploads((prev) => {
+      const next = [...prev, rec]
+      persistUploadRecords(next)
+      return next
+    })
+  }
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || uploading) return
+
+    setUploading(true)
+    const ext = file.name.includes('.') ? `.${file.name.split('.').pop()}` : ''
+    const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const filePath = `${sessionId}/${uniqueName}${ext}`
+
+    try {
+      const { error } = await supabase.storage.from(CHAT_UPLOAD_BUCKET).upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      })
+
+      if (error) throw error
+
+      const { data: publicData } = supabase.storage.from(CHAT_UPLOAD_BUCKET).getPublicUrl(filePath)
+      const publicUrl = publicData?.publicUrl || ''
+
+      recordUpload({
+        bucket: CHAT_UPLOAD_BUCKET,
+        path: filePath,
+        sessionId,
+        expiresAt: Date.now() + SESSION_TTL_MS,
+      })
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateUUID(),
+          role: 'user',
+          content: publicUrl ? `Uploaded file: ${file.name}\n${publicUrl}` : `Uploaded file: ${file.name}`,
+        },
+      ])
+    } catch (err) {
+      logger.error('Upload failed', err)
+      setMessages((prev) => [
+        ...prev,
+        { id: generateUUID(), role: 'assistant', content: '⚠️ Upload failed. Please try again.' },
+      ])
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
+  }
+
   const sendMessage = async (e) => {
-    e.preventDefault()
+    e?.preventDefault?.()
     const text = input.trim()
-    if (!text || loading) return
+    if (!text || loading || uploading) return
+
+    setShowEmojiPicker(false)
 
     if (abortRef.current) {
       try { abortRef.current.abort() } catch {}
@@ -880,21 +992,66 @@ function ChatWindow({ onMinimize, onDragStart }) {
       </div>
 
       <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-2">
-        <div className="bot-actions flex items-center gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            className="bot-input h-10 flex-1 rounded-md border-transparent bg-transparent px-2 text-sm outline-none focus:border-blue-500"
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || loading}
-            className="send-button rounded-md bg-blue-600 p-2 text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
-          </button>
+        <div className="bot-actions flex items-end gap-2">
+          <div className="flex flex-1 items-end gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1 shadow-sm dark:border-gray-700 dark:bg-gray-800/70">
+            <label className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700" title="Upload a file">
+              <input type="file" className="hidden" onChange={handleFileChange} />
+              <Paperclip className="h-5 w-5" />
+            </label>
+
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={2}
+              placeholder="Type your message..."
+              className="bot-input max-h-[72px] min-h-[44px] flex-1 resize-none overflow-y-auto rounded-md border-transparent bg-transparent px-2 py-2 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-blue-500 dark:text-gray-100"
+            />
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker((s) => !s)}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                aria-label="Add emoji"
+              >
+                <SmilePlus className="h-5 w-5" />
+              </button>
+              {showEmojiPicker && (
+                <div className="absolute bottom-12 right-0 z-20 grid grid-cols-4 gap-2 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                  {['😀', '😁', '😂', '😍', '👍', '🙏', '🎉', '🤔'].map((emo) => (
+                    <button
+                      key={emo}
+                      type="button"
+                      className="text-lg"
+                      onClick={() => addEmoji(emo)}
+                    >
+                      {emo}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center gap-1">
+            <button
+              type="submit"
+              disabled={!input.trim() || loading || uploading}
+              className="send-button flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
+            </button>
+            {(uploading || loading) && (
+              <span className="text-[10px] text-gray-500 dark:text-gray-400">{uploading ? 'Uploading…' : 'Sending…'}</span>
+            )}
+          </div>
         </div>
+        {uploads.some((u) => u.sessionId === sessionId) && (
+          <p className="px-2 pt-2 text-[11px] text-gray-500 dark:text-gray-400">
+            Session uploads are stored temporarily and will be removed automatically after 15 minutes.
+          </p>
+        )}
       </form>
 
       <style jsx global>{`
