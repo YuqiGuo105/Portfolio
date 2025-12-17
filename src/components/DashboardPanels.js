@@ -525,9 +525,6 @@ const DashboardPanels = () => {
                 </span>
               </div>
 
-              <p className="disclaimer">
-                Rates powered by ExchangeRate-API (open access). Market quotes powered by Stooq (may be delayed).
-              </p>
             </div>
           </div>
 
@@ -572,9 +569,6 @@ const DashboardPanels = () => {
                 </div>
               </div>
 
-              <footer>
-                <span className="provider">Powered by Open-Meteo</span>
-              </footer>
             </div>
           </div>
         </div>

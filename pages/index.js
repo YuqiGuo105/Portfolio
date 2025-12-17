@@ -802,7 +802,6 @@ const Index = () => {
                     className="history-item"
                   >
                     <div className="date">2022 - 2024</div>
-                    Syracuse University
                     <div className="name">Syracuse University</div>
                     <div className="subname">Master Of Science, Computer Science</div>
                     {/*<div className="subname"><br></br>*/}
