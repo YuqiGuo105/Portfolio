@@ -215,6 +215,12 @@ const Header = ({ onOpenSearch }) => {
                       </a>
                     </li>
 
+                    <li>
+                      <a href="/#market-weather-dashboard" onClick={() => linkClick()}>
+                        Dashboard
+                      </a>
+                    </li>
+
                     <li className="menu-item">
                       <a href="/#contact-section" onClick={() => linkClick()}>
                         Contact
