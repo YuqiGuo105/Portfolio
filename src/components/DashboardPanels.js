@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { supabase } from "../supabase/supabaseClient";
+import RotatingGlobe from "./RotatingGlobe";
 
 const formatCurrency = (value, currency) => {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return "—";
-  }
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
   try {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -24,7 +24,6 @@ const getHoursSince = (timestamp) => {
   return Math.max(hours, 0);
 };
 
-// Debounce hook to reduce request spam & perceived latency.
 const useDebouncedValue = (value, delayMs) => {
   const [debounced, setDebounced] = useState(value);
 
@@ -34,6 +33,21 @@ const useDebouncedValue = (value, delayMs) => {
   }, [value, delayMs]);
 
   return debounced;
+};
+
+const roundTo = (num, decimals = 1) => {
+  const p = Math.pow(10, decimals);
+  return Math.round(num * p) / p;
+};
+
+const buildLocationLabel = (r) => {
+  const city = r?.city ? String(r.city).trim() : "";
+  const region = r?.region ? String(r.region).trim() : "";
+  const country = r?.country ? String(r.country).trim() : "";
+  if (city && region) return `${city}, ${region}`;
+  if (city && country) return `${city}, ${country}`;
+  if (region && country) return `${region}, ${country}`;
+  return country || "Unknown";
 };
 
 const weatherIcon = (
@@ -109,7 +123,35 @@ const DashboardPanels = () => {
   });
   const [isWeatherLoading, setIsWeatherLoading] = useState(true);
 
-  // Market (with abort + timeout)
+  // Visitors (Supabase direct)
+  const [visitors, setVisitors] = useState({
+    last30: 0,
+    today: 0,
+    unknownLocation: 0,
+    pins: [],
+    topSources: [],
+    fetchedAt: Date.now(),
+  });
+  const [isVisitorsLoading, setIsVisitorsLoading] = useState(true);
+
+  const hoursAgoLabel = (timestamp) => {
+    const hours = getHoursSince(timestamp);
+    if (hours === null) return "Updated just now";
+    if (hours < 1) {
+      const minutes = Math.max(Math.round(hours * 60), 1);
+      return `Updated > ${minutes} min ago`;
+    }
+    return `Updated > ${Math.round(hours)} hr ago`;
+  };
+
+  const formatTime = (value) => {
+    if (!value) return "—";
+    const date = typeof value === "number" ? new Date(value) : new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  };
+
+  // Market
   useEffect(() => {
     let mounted = true;
     const controller = new AbortController();
@@ -123,12 +165,10 @@ const DashboardPanels = () => {
         const json = await response.json();
 
         if (!mounted) return;
-
         if (json?.data) setMarketData(json.data);
         setMarketFallback(Boolean(json?.fallback));
         setMarketMeta(json?.meta ?? null);
       } catch (error) {
-        // Keep previous data (better UX) instead of blanking out.
         console.error("Failed to load market data", error);
       } finally {
         if (mounted) setIsMarketLoading(false);
@@ -144,7 +184,7 @@ const DashboardPanels = () => {
     };
   }, []);
 
-  // Currency (debounced + abort previous request)
+  // Currency
   useEffect(() => {
     let mounted = true;
     const controller = new AbortController();
@@ -166,7 +206,6 @@ const DashboardPanels = () => {
         const json = await response.json();
 
         if (!mounted) return;
-
         if (json?.rate) setCurrency(json);
       } catch (error) {
         console.error("Failed to load currency data", error);
@@ -184,7 +223,7 @@ const DashboardPanels = () => {
     };
   }, [debouncedBase, debouncedTarget, debouncedAmount]);
 
-  // Weather (abort + timeout)
+  // Weather
   useEffect(() => {
     let mounted = true;
     const controller = new AbortController();
@@ -198,7 +237,6 @@ const DashboardPanels = () => {
         const json = await response.json();
 
         if (!mounted) return;
-
         if (json) setWeather(json);
       } catch (error) {
         console.error("Failed to load weather data", error);
@@ -216,6 +254,127 @@ const DashboardPanels = () => {
     };
   }, []);
 
+  // Visitors (Supabase, no backend)
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchVisitors = async () => {
+      setIsVisitorsLoading(true);
+      try {
+        const now = new Date();
+        const start30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const startTodayLocal = new Date(now);
+        startTodayLocal.setHours(0, 0, 0, 0);
+
+        const start30Iso = start30.toISOString();
+        const startTodayIso = startTodayLocal.toISOString();
+
+        // total counts (records)
+        const [total30Res, totalTodayRes] = await Promise.all([
+          supabase
+            .from("visitor_logs")
+            .select("id", { count: "exact", head: true })
+            .gte("created_at", start30Iso),
+          supabase
+            .from("visitor_logs")
+            .select("id", { count: "exact", head: true })
+            .gte("created_at", startTodayIso),
+        ]);
+
+        if (total30Res.error) throw total30Res.error;
+        if (totalTodayRes.error) throw totalTodayRes.error;
+
+        const total30 = Number(total30Res.count || 0);
+        const totalToday = Number(totalTodayRes.count || 0);
+
+        // located count (exact)
+        const located30Res = await supabase
+          .from("visitor_logs")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", start30Iso)
+          .not("latitude", "is", null)
+          .not("longitude", "is", null);
+
+        if (located30Res.error) throw located30Res.error;
+
+        const located30 = Number(located30Res.count || 0);
+        const unknownLocation = Math.max(total30 - located30, 0);
+
+        // sample rows for pins + top sources
+        const { data: rows, error: rowsErr } = await supabase
+          .from("visitor_logs")
+          .select("latitude, longitude, country, region, city, created_at")
+          .gte("created_at", start30Iso)
+          .not("latitude", "is", null)
+          .not("longitude", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(900);
+
+        if (rowsErr) throw rowsErr;
+
+        const safeRows = Array.isArray(rows) ? rows : [];
+
+        // cluster
+        const clusters = new Map(); // key -> {lat, lng, count, label}
+        for (const r of safeRows) {
+          const lat = Number(r.latitude);
+          const lng = Number(r.longitude);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+          const clat = roundTo(lat, 1);
+          const clng = roundTo(lng, 1);
+          const key = `${clat}|${clng}`;
+          const label = buildLocationLabel(r);
+
+          const prev = clusters.get(key);
+          if (!prev) clusters.set(key, { lat: clat, lng: clng, count: 1, label });
+          else prev.count += 1;
+        }
+
+        const pins = Array.from(clusters.values())
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 28)
+          .map((c) => ({
+            lat: c.lat,
+            lng: c.lng,
+            weight: c.count,
+            label: `${c.label} · ${c.count}`,
+          }));
+
+        const sourceCounts = new Map();
+        for (const r of safeRows) {
+          const label = buildLocationLabel(r);
+          sourceCounts.set(label, (sourceCounts.get(label) || 0) + 1);
+        }
+
+        const topSources = Array.from(sourceCounts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 6)
+          .map(([label, count]) => ({ label, count }));
+
+        if (!mounted) return;
+
+        setVisitors({
+          last30: total30,
+          today: totalToday,
+          unknownLocation,
+          pins,
+          topSources,
+          fetchedAt: Date.now(),
+        });
+      } catch (e) {
+        console.error("Failed to load visitors from Supabase", e);
+      } finally {
+        if (mounted) setIsVisitorsLoading(false);
+      }
+    };
+
+    fetchVisitors();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const convertedAmount = useMemo(() => {
     const amt = Number.parseFloat(amount);
     if (Number.isNaN(amt) || !currency?.rate) return null;
@@ -223,26 +382,18 @@ const DashboardPanels = () => {
   }, [amount, currency]);
 
   const [temperatureUnit, setTemperatureUnit] = useState("C");
-
   const toggleTemperatureUnit = () => {
     setTemperatureUnit((current) => (current === "F" ? "C" : "F"));
   };
 
   const displayTemperature = useMemo(() => {
-    if (
-      isWeatherLoading ||
-      weather.temperature === null ||
-      weather.temperature === undefined
-    ) {
+    if (isWeatherLoading || weather.temperature === null || weather.temperature === undefined) {
       return "--";
     }
-
-    // API returns Fahrenheit (we requested temperature_unit=fahrenheit)
     if (temperatureUnit === "C") {
       const celsius = ((weather.temperature - 32) * 5) / 9;
       return `${Math.round(celsius)}°C`;
     }
-
     return `${Math.round(weather.temperature)}°F`;
   }, [isWeatherLoading, weather.temperature, temperatureUnit]);
 
@@ -263,31 +414,15 @@ const DashboardPanels = () => {
       return { marketBadgeText: "partial / fallback data", marketBadgeClassName: "badge" };
     }
 
-    // For stooq, you may want to display "delayed" explicitly.
     if (marketMeta?.source === "stooq") {
-      const partial = marketMeta?.partial?.length ? ` · partial: ${marketMeta.partial.join(", ")}` : "";
+      const partial = marketMeta?.partial?.length
+        ? ` · partial: ${marketMeta.partial.join(", ")}`
+        : "";
       return { marketBadgeText: `delayed quotes (stooq)${partial}`, marketBadgeClassName: "badge" };
     }
 
     return { marketBadgeText: null, marketBadgeClassName: "badge" };
   }, [isMarketLoading, marketFallback, marketMeta]);
-
-  const hoursAgoLabel = (timestamp) => {
-    const hours = getHoursSince(timestamp);
-    if (hours === null) return "Updated just now";
-    if (hours < 1) {
-      const minutes = Math.max(Math.round(hours * 60), 1);
-      return `Updated > ${minutes} min ago`;
-    }
-    return `Updated > ${Math.round(hours)} hr ago`;
-  };
-
-  const formatTime = (value) => {
-    if (!value) return "—";
-    const date = typeof value === "number" ? new Date(value) : new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
-    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  };
 
   return (
     <section className="dashboard-wrapper" id="market-weather-dashboard">
@@ -295,20 +430,15 @@ const DashboardPanels = () => {
         <div className="dashboard-card-1 market-card">
           <header>
             <h3>Market Data</h3>
-            {marketBadgeText && (
-              <span className={marketBadgeClassName}>{marketBadgeText}</span>
-            )}
+            {marketBadgeText && <span className={marketBadgeClassName}>{marketBadgeText}</span>}
           </header>
 
           <div className="market-rows">
             {marketData.map((item) => {
               const changeValue =
-                typeof item.change === "number" && !Number.isNaN(item.change)
-                  ? item.change
-                  : null;
+                typeof item.change === "number" && !Number.isNaN(item.change) ? item.change : null;
               const changePercent =
-                typeof item.changePercent === "number" &&
-                !Number.isNaN(item.changePercent)
+                typeof item.changePercent === "number" && !Number.isNaN(item.changePercent)
                   ? item.changePercent
                   : null;
               const changeSign = changeValue !== null ? (changeValue >= 0 ? "+" : "") : "";
@@ -368,10 +498,7 @@ const DashboardPanels = () => {
 
                 <label className="input-group">
                   <span>From</span>
-                  <select
-                    value={baseCurrency}
-                    onChange={(event) => setBaseCurrency(event.target.value)}
-                  >
+                  <select value={baseCurrency} onChange={(e) => setBaseCurrency(e.target.value)}>
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
                     <option value="GBP">GBP</option>
@@ -382,10 +509,7 @@ const DashboardPanels = () => {
 
                 <label className="input-group">
                   <span>To</span>
-                  <select
-                    value={targetCurrency}
-                    onChange={(event) => setTargetCurrency(event.target.value)}
-                  >
+                  <select value={targetCurrency} onChange={(e) => setTargetCurrency(e.target.value)}>
                     <option value="EUR">EUR</option>
                     <option value="USD">USD</option>
                     <option value="GBP">GBP</option>
@@ -454,6 +578,59 @@ const DashboardPanels = () => {
             </div>
           </div>
         </div>
+
+        {/* Visitors (NEW LINE) */}
+        <div className="dashboard-card-4 visitors-card">
+          <header>
+            <h3>Visitors</h3>
+            <span className={`badge ${isVisitorsLoading ? "badge-warning" : ""}`}>
+              {isVisitorsLoading ? "loading…" : "last 30 days"}
+            </span>
+          </header>
+
+          <div className="visitors-body">
+            <div className="visitors-globe-pane">
+              <div className="globe-frame" aria-hidden="true">
+                {/* globe is split into its own component file */}
+                <RotatingGlobe pins={visitors.pins} />
+              </div>
+
+              <div className="visitors-stats">
+                <div className="stat">
+                  <span className="stat-label">LAST 30 DAYS</span>
+                  <span className="stat-value">{visitors.last30}</span>
+                </div>
+
+                <div className="stat">
+                  <span className="stat-label">TODAY</span>
+                  <span className="stat-value">{visitors.today}</span>
+                </div>
+
+                <div className="stat-sub">
+                  {`Unknown location: ${visitors.unknownLocation}`}
+                  <span className="timestamp">
+                    {isVisitorsLoading ? "Updating…" : hoursAgoLabel(visitors.fetchedAt)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <aside className="visitors-side">
+              <div className="side-title">Top sources</div>
+              <div className="side-list">
+                {(visitors.topSources || []).map((s) => (
+                  <div className="side-item" key={s.label}>
+                    <span className="side-label">{s.label}</span>
+                    <span className="side-count">{s.count}</span>
+                  </div>
+                ))}
+                {!visitors.topSources?.length && <div className="side-empty">No data yet</div>}
+              </div>
+
+              <div className="side-footnote">MapReduce by Hadoop</div>
+            </aside>
+          </div>
+        </div>
       </div>
 
       <style jsx>{`
@@ -483,6 +660,7 @@ const DashboardPanels = () => {
           --unit-toggle-bg: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
           --unit-toggle-hover-bg: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
           --provider-indicator: #f97316;
+
           background: var(--dashboard-bg);
           padding: 3rem 0;
           font-family: "Inter", "Segoe UI", "Roboto", sans-serif;
@@ -557,7 +735,10 @@ const DashboardPanels = () => {
             #353636;
         }
 
-        .dashboard-card-1 h3 {
+        .dashboard-card-1 h3,
+        .dashboard-card-2 h3,
+        .dashboard-card-3 h3,
+        .dashboard-card-4 h3 {
           font-size: 1.35rem;
           font-weight: 600;
           margin: 0;
@@ -602,13 +783,6 @@ const DashboardPanels = () => {
             #353636;
         }
 
-        .dashboard-card-2 h3 {
-          font-size: 1.35rem;
-          font-weight: 600;
-          margin: 0;
-          color: var(--heading-color);
-        }
-
         .output-container {
           display: flex;
           flex-direction: column;
@@ -645,13 +819,6 @@ const DashboardPanels = () => {
               rgba(53, 100, 194, 0) 75%
             ),
             #353636;
-        }
-
-        .dashboard-card-3 h3 {
-          font-size: 1.35rem;
-          font-weight: 600;
-          margin: 0;
-          color: var(--heading-color);
         }
 
         .badge {
@@ -735,12 +902,6 @@ const DashboardPanels = () => {
           letter-spacing: 0.04em;
         }
 
-        .currency-card .currency-rate {
-          display: flex;
-          flex-direction: column;
-          gap: 0.35rem;
-        }
-
         .currency-card .timestamp,
         .disclaimer {
           font-size: 0.75rem;
@@ -774,11 +935,6 @@ const DashboardPanels = () => {
           font-family: inherit;
         }
 
-        .converter-form .input-group input,
-        .converter-form .input-group select {
-          width: 100%;
-        }
-
         input:focus,
         select:focus {
           outline: none;
@@ -796,10 +952,6 @@ const DashboardPanels = () => {
           margin: 0;
           margin-top: 50px;
           line-height: 1.4;
-        }
-
-        .weather-card {
-          position: relative;
         }
 
         .weather-container {
@@ -869,16 +1021,6 @@ const DashboardPanels = () => {
           transform: translateY(-1px);
         }
 
-        .unit-toggle:active {
-          transform: translateY(0);
-          box-shadow: 0 1px 2px rgba(79, 70, 229, 0.3);
-        }
-
-        .unit-toggle:focus {
-          outline: none;
-          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4), 0 2px 4px rgba(79, 70, 229, 0.2);
-        }
-
         .description {
           font-size: 0.95rem;
           color: var(--text-secondary);
@@ -895,15 +1037,6 @@ const DashboardPanels = () => {
           font-size: 0.78rem;
           color: var(--text-muted);
           letter-spacing: 0.04em;
-        }
-
-        .weather-card footer {
-          margin-top: auto;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          font-size: 0.75rem;
-          color: var(--text-subtle);
         }
 
         .provider {
@@ -924,6 +1057,166 @@ const DashboardPanels = () => {
           border: 1.5px solid var(--provider-indicator);
         }
 
+        /* Visitors */
+        .dashboard-card-4 {
+          flex: 1 1 100%;
+          width: 100%;
+          max-width: 1500px;
+          background: var(--card-bg);
+          border: 1px solid var(--card-border);
+          border-radius: 18px;
+          padding: 20px;
+          box-shadow: var(--card-shadow);
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          color: var(--text-primary);
+        }
+
+        .dashboard-card-4 header {
+          display: flex;
+          height: 110px;
+          border-radius: 30px;
+          align-items: center;
+          justify-content: center;
+          gap: 1rem;
+          background: radial-gradient(
+              ellipse 120% 150% at 20% 135%,
+              #3564c2 0%,
+              #3564c2 22%,
+              rgba(53, 100, 194, 0.4) 45%,
+              rgba(53, 100, 194, 0) 75%
+            ),
+            #353636;
+        }
+
+        .visitors-body {
+          display: grid;
+          grid-template-columns: 3fr 1fr;
+          gap: 1rem;
+          align-items: stretch;
+        }
+
+        .globe-frame {
+          width: 100%;
+          min-height: 360px;
+          border-radius: 18px;
+          border: 1px solid var(--card-border);
+          background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0) 55%),
+            radial-gradient(circle at 70% 80%, rgba(79, 70, 229, 0.1), rgba(0, 0, 0, 0) 60%),
+            rgba(15, 23, 42, 0.35);
+          display: grid;
+          place-items: center;
+          overflow: hidden;
+          position: relative;
+        }
+
+        .visitors-globe-pane {
+          display: flex;
+          flex-direction: column;
+          gap: 0.85rem;
+        }
+
+        .visitors-stats {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 1rem;
+          flex-wrap: wrap;
+        }
+
+        .stat {
+          display: flex;
+          flex-direction: column;
+          gap: 0.15rem;
+        }
+
+        .stat-label {
+          font-size: 0.7rem;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--text-muted);
+        }
+
+        .stat-value {
+          font-size: 1.9rem;
+          font-weight: 650;
+          font-variant-numeric: tabular-nums;
+          color: var(--text-primary);
+        }
+
+        .stat-sub {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+          font-size: 0.78rem;
+          color: var(--text-muted);
+        }
+
+        .visitors-side {
+          border-radius: 18px;
+          border: 1px solid var(--card-border);
+          background: rgba(15, 23, 42, 0.08);
+          padding: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          min-height: 360px;
+        }
+
+        :global(body.dark-skin) .visitors-side {
+          background: rgba(15, 23, 42, 0.55);
+        }
+
+        .side-title {
+          font-size: 0.8rem;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--text-muted);
+          font-weight: 650;
+        }
+
+        .side-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0.55rem;
+        }
+
+        .side-item {
+          display: flex;
+          justify-content: space-between;
+          gap: 0.75rem;
+          font-size: 0.9rem;
+          color: var(--text-primary);
+        }
+
+        .side-label {
+          max-width: 75%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          color: var(--text-secondary);
+        }
+
+        .side-count {
+          font-variant-numeric: tabular-nums;
+          font-weight: 650;
+        }
+
+        .side-empty {
+          font-size: 0.9rem;
+          color: var(--text-muted);
+        }
+
+        .side-footnote {
+          margin-top: auto;
+          font-size: 0.75rem;
+          color: var(--text-subtle);
+          letter-spacing: 0.03em;
+          display: flex;
+          justify-content: center;
+        }
+
         @media (max-width: 1024px) {
           .dashboard-wrapper {
             padding: 2rem 0;
@@ -937,21 +1230,18 @@ const DashboardPanels = () => {
           .dashboard-card-1,
           .dashboard-card-2,
           .dashboard-card-3,
-          .column-container {
+          .column-container,
+          .dashboard-card-4 {
             width: 100%;
             max-width: 100%;
           }
 
-          .weather-main,
-          .provider {
-            width: 100%;
-            max-width: 100%;
+          .visitors-body {
+            grid-template-columns: 1fr;
           }
 
-          .dashboard-card-2 header,
-          .dashboard-card-3 header {
-            width: 100%;
-            max-width: 100%;
+          .visitors-side {
+            min-height: auto;
           }
         }
 
@@ -964,13 +1254,6 @@ const DashboardPanels = () => {
             flex-direction: column;
             align-items: stretch;
             gap: 1rem;
-          }
-
-          .dashboard-card-1,
-          .dashboard-card-2,
-          .dashboard-card-3 {
-            width: 100%;
-            max-width: 100%;
           }
 
           .dashboard-card-2,
@@ -1000,6 +1283,10 @@ const DashboardPanels = () => {
             flex-direction: row;
             gap: 0.75rem;
             flex-wrap: wrap;
+          }
+
+          .globe-frame {
+            min-height: 320px;
           }
 
           .row-main {
