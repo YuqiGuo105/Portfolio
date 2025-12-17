@@ -210,6 +210,12 @@ const Header = ({ onOpenSearch }) => {
                     </li>
 
                     <li className="menu-item">
+                      <a href="/#market-weather-dashboard" onClick={() => linkClick()}>
+                        Dashboard
+                      </a>
+                    </li>
+
+                    <li className="menu-item">
                       <a href="/#Blog-section" onClick={() => linkClick()}>
                         Blog
                       </a>

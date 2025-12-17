@@ -426,6 +426,15 @@ const DashboardPanels = () => {
 
   return (
     <section className="dashboard-wrapper" id="market-weather-dashboard">
+      <div className="section-heading">
+        <div className="overtitle">Interactive dashboards</div>
+        <h2>Market, Weather &amp; Visitors</h2>
+        <p>
+          Live market snapshots, quick currency conversions, current weather, and visitor
+          insights — refreshed automatically so you can skim the latest signals at a glance.
+        </p>
+      </div>
+
       <div className="dashboard-container">
         <div className="dashboard-card-1 market-card">
           <header>
@@ -658,6 +667,33 @@ const DashboardPanels = () => {
           background: var(--dashboard-bg);
           padding: 3rem 0;
           font-family: "Inter", "Segoe UI", "Roboto", sans-serif;
+        }
+
+        .section-heading {
+          max-width: 840px;
+          margin: 0 auto 32px auto;
+          text-align: center;
+          color: var(--text-primary);
+        }
+
+        .section-heading .overtitle {
+          letter-spacing: 0.08em;
+          font-size: 12px;
+          text-transform: uppercase;
+          color: var(--text-muted);
+          font-weight: 600;
+        }
+
+        .section-heading h2 {
+          margin: 8px 0 12px;
+          font-size: 32px;
+          color: var(--heading-color);
+        }
+
+        .section-heading p {
+          margin: 0;
+          color: var(--text-secondary);
+          line-height: 1.6;
         }
 
         :global(body.dark-skin) #market-weather-dashboard {
