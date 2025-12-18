@@ -127,6 +127,7 @@ const DashboardPanels = () => {
   const [visitors, setVisitors] = useState({
     last30: 0,
     today: 0,
+    total: 0,
     unknownLocation: 0,
     pins: [],
     topSources: [],
@@ -270,7 +271,7 @@ const DashboardPanels = () => {
         const startTodayIso = startTodayLocal.toISOString();
 
         // total counts (records)
-        const [total30Res, totalTodayRes] = await Promise.all([
+        const [total30Res, totalTodayRes, totalAllTimeRes] = await Promise.all([
           supabase
             .from("visitor_logs")
             .select("id", { count: "exact", head: true })
@@ -279,13 +280,16 @@ const DashboardPanels = () => {
             .from("visitor_logs")
             .select("id", { count: "exact", head: true })
             .gte("created_at", startTodayIso),
+          supabase.from("visitor_logs").select("id", { count: "exact", head: true }),
         ]);
 
         if (total30Res.error) throw total30Res.error;
         if (totalTodayRes.error) throw totalTodayRes.error;
+        if (totalAllTimeRes.error) throw totalAllTimeRes.error;
 
         const total30 = Number(total30Res.count || 0);
         const totalToday = Number(totalTodayRes.count || 0);
+        const totalAllTime = Number(totalAllTimeRes.count || 0);
 
         // located count (exact)
         const located30Res = await supabase
@@ -304,11 +308,10 @@ const DashboardPanels = () => {
         const { data: rows, error: rowsErr } = await supabase
           .from("visitor_logs")
           .select("latitude, longitude, country, region, city, created_at")
-          .gte("created_at", start30Iso)
           .not("latitude", "is", null)
           .not("longitude", "is", null)
           .order("created_at", { ascending: false })
-          .limit(900);
+          .limit(5000);
 
         if (rowsErr) throw rowsErr;
 
@@ -357,6 +360,7 @@ const DashboardPanels = () => {
         setVisitors({
           last30: total30,
           today: totalToday,
+          total: totalAllTime,
           unknownLocation,
           pins,
           topSources,
@@ -602,18 +606,17 @@ const DashboardPanels = () => {
                     <span className="stat-label">TODAY</span>
                     <span className="stat-value">{visitors.today}</span>
                   </div>
-
                   <div className="stat-sub">
-                    {`Unknown location: ${visitors.unknownLocation}`}
                     <span className="timestamp">
-                    {isVisitorsLoading ? "Updating…" : hoursAgoLabel(visitors.fetchedAt)}
-                  </span>
+                      {isVisitorsLoading ? "Updating…" : hoursAgoLabel(visitors.fetchedAt)}
+                    </span>
                   </div>
                 </div>
               </div>
 
               <aside className="visitors-side">
                 <div className="side-title">Top sources</div>
+                <div className="side-total">Total visitors: {visitors.total}</div>
                 <div className="side-list">
                   {(visitors.topSources || []).map((s) => (
                     <div className="side-item" key={s.label}>
@@ -1198,6 +1201,12 @@ const DashboardPanels = () => {
             text-transform: uppercase;
             color: var(--text-muted);
             font-weight: 650;
+          }
+
+          .side-total {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-primary);
           }
 
           .side-list {
