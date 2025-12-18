@@ -205,7 +205,11 @@ export default function RotatingGlobe({ pins = [] }) {
     if (controls) {
       controls.autoRotate = true;
       controls.autoRotateSpeed = 0.7;
+      controls.enableZoom = true;
       controls.enablePan = false;
+      controls.minDistance = 170;
+      controls.maxDistance = 820;
+      controls.zoomSpeed = 0.6;
       // optional: keep user interaction smooth
       if (typeof controls.update === "function") controls.update();
     }
