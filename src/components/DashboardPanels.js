@@ -313,10 +313,14 @@ const DashboardPanels = () => {
         if (rowsErr) throw rowsErr;
 
         const safeRows = Array.isArray(rows) ? rows : [];
+        const filteredRows = safeRows.filter((r) => {
+          const region = (r?.region || "").toString().trim().toUpperCase();
+          return region !== "UT";
+        });
 
         // cluster
         const clusters = new Map(); // key -> {lat, lng, count, label}
-        for (const r of safeRows) {
+        for (const r of filteredRows) {
           const lat = Number(r.latitude);
           const lng = Number(r.longitude);
           if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
@@ -342,7 +346,7 @@ const DashboardPanels = () => {
           }));
 
         const sourceCounts = new Map();
-        for (const r of safeRows) {
+        for (const r of filteredRows) {
           const label = buildLocationLabel(r);
           sourceCounts.set(label, (sourceCounts.get(label) || 0) + 1);
         }
@@ -396,6 +400,11 @@ const DashboardPanels = () => {
     }
     return `${Math.round(weather.temperature)}°F`;
   }, [isWeatherLoading, weather.temperature, temperatureUnit]);
+
+  const topSourcesTotal = useMemo(
+    () => (visitors.topSources || []).reduce((sum, source) => sum + Number(source.count || 0), 0),
+    [visitors.topSources]
+  );
 
   const { marketBadgeText, marketBadgeClassName } = useMemo(() => {
     if (isMarketLoading) {
@@ -604,10 +613,9 @@ const DashboardPanels = () => {
                   </div>
 
                   <div className="stat-sub">
-                    {`Unknown location: ${visitors.unknownLocation}`}
                     <span className="timestamp">
-                    {isVisitorsLoading ? "Updating…" : hoursAgoLabel(visitors.fetchedAt)}
-                  </span>
+                      {isVisitorsLoading ? "Updating…" : hoursAgoLabel(visitors.fetchedAt)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -622,6 +630,11 @@ const DashboardPanels = () => {
                     </div>
                   ))}
                   {!visitors.topSources?.length && <div className="side-empty">No data yet</div>}
+                </div>
+
+                <div className="side-total">
+                  <span>Total</span>
+                  <span className="side-count">{topSourcesTotal}</span>
                 </div>
 
                 <div className="side-footnote">MapReduce by Hadoop</div>
@@ -1230,6 +1243,18 @@ const DashboardPanels = () => {
           .side-empty {
             font-size: 0.9rem;
             color: var(--text-muted);
+          }
+
+          .side-total {
+            margin-top: 0.25rem;
+            padding-top: 0.6rem;
+            border-top: 1px dashed var(--card-border);
+            display: flex;
+            justify-content: space-between;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            font-weight: 650;
           }
 
           .side-footnote {
