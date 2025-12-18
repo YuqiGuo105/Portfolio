@@ -50,6 +50,13 @@ const buildLocationLabel = (r) => {
   return country || "Unknown";
 };
 
+const buildPinLabel = (r) => {
+  const region = r?.region ? String(r.region).trim() : "";
+  const country = r?.country ? String(r.country).trim() : "";
+  if (region) return region;
+  return country || "Unknown";
+};
+
 const weatherIcon = (
   <svg
     width="42"
@@ -314,32 +321,64 @@ const DashboardPanels = () => {
 
         const safeRows = Array.isArray(rows) ? rows : [];
 
-        // cluster
+        // cluster pins for the globe (ALL TIME)
+        // - keep "Top sources" based on last 30 days (safeRows)
+        // - pins: aggregate every located row; prefer region from JSON for labels
         const clusters = new Map(); // key -> {lat, lng, count, label}
-        for (const r of safeRows) {
-          const lat = Number(r.latitude);
-          const lng = Number(r.longitude);
-          if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        const PAGE_SIZE = 1000;
+        let from = 0;
 
-          const clat = roundTo(lat, 1);
-          const clng = roundTo(lng, 1);
-          const key = `${clat}|${clng}`;
-          const label = buildLocationLabel(r);
+        while (true) {
+          const { data: page, error: pageErr } = await supabase
+            .from("visitor_logs")
+            .select("latitude, longitude, country, region, created_at")
+            .not("latitude", "is", null)
+            .not("longitude", "is", null)
+            .order("created_at", { ascending: false })
+            .range(from, from + PAGE_SIZE - 1);
 
-          const prev = clusters.get(key);
-          if (!prev) clusters.set(key, { lat: clat, lng: clng, count: 1, label });
-          else prev.count += 1;
+          if (pageErr) throw pageErr;
+
+          const safePage = Array.isArray(page) ? page : [];
+          for (const r of safePage) {
+            const lat = Number(r.latitude);
+            const lng = Number(r.longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+            // One pin per "region" (minimum unit). If region is missing, fall back to country.
+            // Note: keep country in the key to avoid merging same-named regions across countries.
+            const region = r?.region ? String(r.region).trim() : "";
+            const country = r?.country ? String(r.country).trim() : "";
+            const label = buildPinLabel(r);
+            const key = region ? `r:${region}|${country || ""}` : `c:${country || "Unknown"}`;
+
+            const prev = clusters.get(key);
+            if (!prev) {
+              clusters.set(key, { latSum: lat, lngSum: lng, count: 1, label });
+            } else {
+              prev.latSum += lat;
+              prev.lngSum += lng;
+              prev.count += 1;
+            }
+          }
+
+          if (safePage.length < PAGE_SIZE) break;
+          from += PAGE_SIZE;
         }
 
         const pins = Array.from(clusters.values())
           .sort((a, b) => b.count - a.count)
           .slice(0, 28)
-          .map((c) => ({
-            lat: c.lat,
-            lng: c.lng,
-            weight: c.count,
-            label: `${c.label} · ${c.count}`,
-          }));
+          .map((c) => {
+            const lat = roundTo(c.latSum / c.count, 1);
+            const lng = roundTo(c.lngSum / c.count, 1);
+            return {
+              lat,
+              lng,
+              weight: c.count,
+              label: `${c.label} · ${c.count}`,
+            };
+          });
 
         const sourceCounts = new Map();
         for (const r of safeRows) {
@@ -429,208 +468,207 @@ const DashboardPanels = () => {
       <div className="section-heading">
         <div className="overtitle"><h3>Real-Time Data</h3></div>
       </div>
-        <div className="dashboard-container">
-          <div className="dashboard-card-1 market-card">
-            <header>
-              <h3>Market Data</h3>
-              {marketBadgeText && <span className={marketBadgeClassName}>{marketBadgeText}</span>}
-            </header>
+      <div className="dashboard-container">
+        <div className="dashboard-card-1 market-card">
+          <header>
+            <h3>Market Data</h3>
+            {marketBadgeText && <span className={marketBadgeClassName}>{marketBadgeText}</span>}
+          </header>
 
-            <div className="market-rows">
-              {marketData.map((item) => {
-                const changeValue =
-                  typeof item.change === "number" && !Number.isNaN(item.change) ? item.change : null;
-                const changePercent =
-                  typeof item.changePercent === "number" && !Number.isNaN(item.changePercent)
-                    ? item.changePercent
-                    : null;
-                const changeSign = changeValue !== null ? (changeValue >= 0 ? "+" : "") : "";
-                const changeColor =
-                  changeValue === null ? "neutral" : changeValue >= 0 ? "positive" : "negative";
+          <div className="market-rows">
+            {marketData.map((item) => {
+              const changeValue =
+                typeof item.change === "number" && !Number.isNaN(item.change) ? item.change : null;
+              const changePercent =
+                typeof item.changePercent === "number" && !Number.isNaN(item.changePercent)
+                  ? item.changePercent
+                  : null;
+              const changeSign = changeValue !== null ? (changeValue >= 0 ? "+" : "") : "";
+              const changeColor =
+                changeValue === null ? "neutral" : changeValue >= 0 ? "positive" : "negative";
 
-                return (
-                  <div className="market-row" key={item.label}>
-                    <div className="row-main">
-                      <span className="symbol">{item.label}</span>
-                      <span className="price">{formatCurrency(item.price, item.currency)}</span>
-                      <span className="currency">{item.currency}</span>
-                      <span className={`change ${changeColor}`}>
+              return (
+                <div className="market-row" key={item.label}>
+                  <div className="row-main">
+                    <span className="symbol">{item.label}</span>
+                    <span className="price">{formatCurrency(item.price, item.currency)}</span>
+                    <span className="currency">{item.currency}</span>
+                    <span className={`change ${changeColor}`}>
                       {changeValue !== null ? `${changeSign}${changeValue.toFixed(2)}` : "—"}
-                        {", "}
-                        <span className="percent">
+                      {", "}
+                      <span className="percent">
                         {changePercent !== null ? `${changeSign}${changePercent.toFixed(2)}%` : "—"}
                       </span>
                     </span>
-                    </div>
-                    <div className="row-sub">
-                      <span className="timestamp">{hoursAgoLabel(item.timestamp)}</span>
-                    </div>
                   </div>
-                );
-              })}
-            </div>
+                  <div className="row-sub">
+                    <span className="timestamp">{hoursAgoLabel(item.timestamp)}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
+        </div>
 
-          <div className="column-container">
-            <div className="dashboard-card-2 currency-card">
-              <header>
-                <h3>Currency Converter</h3>
-              </header>
+        <div className="column-container">
+          <div className="dashboard-card-2 currency-card">
+            <header>
+              <h3>Currency Converter</h3>
+            </header>
 
-              <div className="output-container">
-                <div className="conversion-output">
-                  {convertedAmount !== null ? (
-                    <span>
+            <div className="output-container">
+              <div className="conversion-output">
+                {convertedAmount !== null ? (
+                  <span>
                     {amount || 1} {baseCurrency} ≈ {convertedAmount.toFixed(4)} {targetCurrency}
                   </span>
-                  ) : (
-                    <span>Enter an amount to convert</span>
-                  )}
-                </div>
+                ) : (
+                  <span>Enter an amount to convert</span>
+                )}
+              </div>
 
-                <div className="converter-form">
-                  <label className="input-group">
-                    <span>Amount</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                    />
-                  </label>
+              <div className="converter-form">
+                <label className="input-group">
+                  <span>Amount</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={amount}
+                    onChange={(event) => setAmount(event.target.value)}
+                  />
+                </label>
 
-                  <label className="input-group">
-                    <span>From</span>
-                    <select value={baseCurrency} onChange={(e) => setBaseCurrency(e.target.value)}>
-                      <option value="USD">USD</option>
-                      <option value="EUR">EUR</option>
-                      <option value="GBP">GBP</option>
-                      <option value="JPY">JPY</option>
-                      <option value="CNY">CNY</option>
-                    </select>
-                  </label>
+                <label className="input-group">
+                  <span>From</span>
+                  <select value={baseCurrency} onChange={(e) => setBaseCurrency(e.target.value)}>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                    <option value="JPY">JPY</option>
+                    <option value="CNY">CNY</option>
+                  </select>
+                </label>
 
-                  <label className="input-group">
-                    <span>To</span>
-                    <select value={targetCurrency} onChange={(e) => setTargetCurrency(e.target.value)}>
-                      <option value="EUR">EUR</option>
-                      <option value="USD">USD</option>
-                      <option value="GBP">GBP</option>
-                      <option value="JPY">JPY</option>
-                      <option value="CNY">CNY</option>
-                    </select>
-                  </label>
-                </div>
+                <label className="input-group">
+                  <span>To</span>
+                  <select value={targetCurrency} onChange={(e) => setTargetCurrency(e.target.value)}>
+                    <option value="EUR">EUR</option>
+                    <option value="USD">USD</option>
+                    <option value="GBP">GBP</option>
+                    <option value="JPY">JPY</option>
+                    <option value="CNY">CNY</option>
+                  </select>
+                </label>
+              </div>
 
-                <div className="currency-rate">
+              <div className="currency-rate">
                 <span className="timestamp">
                   {isCurrencyLoading ? "Updating…" : hoursAgoLabel(currency.timestamp)}
                 </span>
-                </div>
-
               </div>
-            </div>
 
-            <div className="dashboard-card-3 weather-card">
-              <header>
-                <h3>Weather</h3>
-              </header>
-
-              <div className="weather-container">
-                <div className="weather-main">
-                  <div className="icon-wrapper" aria-hidden="true">
-                    {weatherIcon}
-                  </div>
-
-                  <div className="weather-info">
-                    <div className="temperature-row">
-                      <div className="temperature">{displayTemperature}</div>
-                      <button
-                        type="button"
-                        className="unit-toggle"
-                        onClick={toggleTemperatureUnit}
-                        aria-label={`Switch to ${temperatureUnit === "F" ? "Celsius" : "Fahrenheit"}`}
-                      >
-                        Show °{temperatureUnit === "F" ? "C" : "F"}
-                      </button>
-                    </div>
-
-                    <div className="description">Outlook: {weather.weatherDescription}</div>
-
-                    {weather.location && (
-                      <div className="location">
-                        {weather.location.city ? `${weather.location.city}, ` : ""}
-                        {weather.location.region || weather.location.country}
-                      </div>
-                    )}
-
-                    <div className="sun-times">
-                      <span>Sunrise: {formatTime(weather.sunrise)}</span>
-                      <span>Sunset: {formatTime(weather.sunset)}</span>
-                      <span className="timestamp">{hoursAgoLabel(weather.fetchedAt)}</span>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
             </div>
           </div>
 
-          {/* Visitors (NEW LINE) */}
-          <div className="dashboard-card-4 visitors-card">
+          <div className="dashboard-card-3 weather-card">
             <header>
-              <h3>Visitors</h3>
-              <span className={`badge ${isVisitorsLoading ? "badge-warning" : ""}`}>
-              {isVisitorsLoading ? "loading…" : "last 30 days"}
-            </span>
+              <h3>Weather</h3>
             </header>
 
-            <div className="visitors-body">
-              <div className="visitors-globe-pane">
-                <div className="globe-frame" aria-hidden="true">
-                  {/* globe is split into its own component file */}
-                  <RotatingGlobe pins={visitors.pins}/>
+            <div className="weather-container">
+              <div className="weather-main">
+                <div className="icon-wrapper" aria-hidden="true">
+                  {weatherIcon}
                 </div>
 
-                <div className="visitors-stats">
-                  <div className="stat">
-                    <span className="stat-label">LAST 30 DAYS</span>
-                    <span className="stat-value">{visitors.last30}</span>
+                <div className="weather-info">
+                  <div className="temperature-row">
+                    <div className="temperature">{displayTemperature}</div>
+                    <button
+                      type="button"
+                      className="unit-toggle"
+                      onClick={toggleTemperatureUnit}
+                      aria-label={`Switch to ${temperatureUnit === "F" ? "Celsius" : "Fahrenheit"}`}
+                    >
+                      Show °{temperatureUnit === "F" ? "C" : "F"}
+                    </button>
                   </div>
 
-                  <div className="stat">
-                    <span className="stat-label">TODAY</span>
-                    <span className="stat-value">{visitors.today}</span>
-                  </div>
+                  <div className="description">Outlook: {weather.weatherDescription}</div>
 
-                  <div className="stat-sub">
-                    {`Unknown location: ${visitors.unknownLocation}`}
-                    <span className="timestamp">
-                    {isVisitorsLoading ? "Updating…" : hoursAgoLabel(visitors.fetchedAt)}
-                  </span>
+                  {weather.location && (
+                    <div className="location">
+                      {weather.location.city ? `${weather.location.city}, ` : ""}
+                      {weather.location.region || weather.location.country}
+                    </div>
+                  )}
+
+                  <div className="sun-times">
+                    <span>Sunrise: {formatTime(weather.sunrise)}</span>
+                    <span>Sunset: {formatTime(weather.sunset)}</span>
+                    <span className="timestamp">{hoursAgoLabel(weather.fetchedAt)}</span>
                   </div>
                 </div>
               </div>
 
-              <aside className="visitors-side">
-                <div className="side-title">Top sources</div>
-                <div className="side-list">
-                  {(visitors.topSources || []).map((s) => (
-                    <div className="side-item" key={s.label}>
-                      <span className="side-label">{s.label}</span>
-                      <span className="side-count">{s.count}</span>
-                    </div>
-                  ))}
-                  {!visitors.topSources?.length && <div className="side-empty">No data yet</div>}
-                </div>
-
-                <div className="side-footnote">MapReduce by Hadoop</div>
-              </aside>
             </div>
           </div>
         </div>
 
-        <style jsx>{`
+        {/* Visitors (NEW LINE) */}
+        <div className="dashboard-card-4 visitors-card">
+          <header>
+            <h3>Visitors</h3>
+            <span className={`badge ${isVisitorsLoading ? "badge-warning" : ""}`}>
+              {isVisitorsLoading ? "loading…" : "last 30 days"}
+            </span>
+          </header>
+
+          <div className="visitors-body">
+            <div className="visitors-globe-pane">
+              <div className="globe-frame" aria-hidden="true">
+                {/* globe is split into its own component file */}
+                <RotatingGlobe pins={visitors.pins}/>
+              </div>
+
+              <div className="visitors-stats">
+                <div className="stat">
+                  <span className="stat-label">LAST 30 DAYS</span>
+                  <span className="stat-value">{visitors.last30}</span>
+                </div>
+
+                <div className="stat">
+                  <span className="stat-label">TODAY</span>
+                  <span className="stat-value">{visitors.today}</span>
+                </div>
+
+                <div className="stat-sub">
+                  <span className="timestamp">
+                    {isVisitorsLoading ? "Updating…" : hoursAgoLabel(visitors.fetchedAt)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <aside className="visitors-side">
+              <div className="side-title">Top sources</div>
+              <div className="side-list">
+                {(visitors.topSources || []).map((s) => (
+                  <div className="side-item" key={s.label}>
+                    <span className="side-label">{s.label}</span>
+                    <span className="side-count">{s.count}</span>
+                  </div>
+                ))}
+                {!visitors.topSources?.length && <div className="side-empty">No data yet</div>}
+              </div>
+
+              <div className="side-footnote">MapReduce by Hadoop</div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
           .dashboard-wrapper {
             --dashboard-bg: #f8f8fb;
             --card-bg: #e6ebee;
@@ -1340,7 +1378,7 @@ const DashboardPanels = () => {
           }
         `}</style>
     </section>
-);
+  );
 };
 
 export default DashboardPanels;
