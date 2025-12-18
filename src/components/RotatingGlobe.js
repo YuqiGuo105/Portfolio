@@ -162,10 +162,15 @@ function CssGlobeFallback() {
   );
 }
 
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
 export default function RotatingGlobe({ pins = [] }) {
   const wrapRef = useRef(null);
   const globeRef = useRef(null);
   const [size, setSize] = useState({ w: 420, h: 420 });
+
+  // Keep our own POV state (do NOT rely on pointOfView getter)
+  const povRef = useRef({ lat: 20, lng: -30, altitude: 2.2 });
 
   const safePins = useMemo(() => {
     const arr = Array.isArray(pins) ? pins : [];
@@ -186,9 +191,10 @@ export default function RotatingGlobe({ pins = [] }) {
     const ro = new ResizeObserver((entries) => {
       const r = entries?.[0]?.contentRect;
       if (!r) return;
-      const w = Math.max(260, Math.floor(r.width));
-      const h = Math.max(260, Math.floor(r.height));
-      setSize({ w, h });
+      setSize({
+        w: Math.max(260, Math.floor(r.width)),
+        h: Math.max(260, Math.floor(r.height)),
+      });
     });
     ro.observe(wrapRef.current);
     return () => ro.disconnect();
@@ -198,30 +204,144 @@ export default function RotatingGlobe({ pins = [] }) {
     const g = globeRef.current;
     if (!g) return;
 
-    // ✅ Compatibility: controls can be a function OR an object (depends on react-globe.gl version)
     const controls =
       typeof g.controls === "function" ? g.controls() : g.controls;
-
     if (controls) {
-      controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.7;
-      controls.enablePan = false;
-      // optional: keep user interaction smooth
+      if ("autoRotate" in controls) controls.autoRotate = true;
+      if ("autoRotateSpeed" in controls) controls.autoRotateSpeed = 0.7;
+
+      if ("enablePan" in controls) controls.enablePan = false;
+      if ("noPan" in controls) controls.noPan = true;
+
+      // keep mouse wheel zoom on desktop
+      if ("enableZoom" in controls) controls.enableZoom = true;
+      if ("noZoom" in controls) controls.noZoom = false;
+
+      if ("minDistance" in controls) controls.minDistance = 180;
+      if ("maxDistance" in controls) controls.maxDistance = 900;
+
+      if ("enableDamping" in controls) {
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+      }
+      if ("zoomSpeed" in controls) controls.zoomSpeed = 0.8;
+
       if (typeof controls.update === "function") controls.update();
     }
 
-    // pointOfView also may not exist immediately in some builds
+    // set initial POV
+    povRef.current = { lat: 20, lng: -30, altitude: 2.2 };
     if (typeof g.pointOfView === "function") {
-      g.pointOfView({ lat: 20, lng: -30, altitude: 2.2 }, 0);
+      g.pointOfView({ ...povRef.current }, 0);
     }
+
+    // make sure canvas consumes gestures
+    try {
+      const renderer = typeof g.renderer === "function" ? g.renderer() : null;
+      const canvas = renderer?.domElement;
+      if (canvas) canvas.style.touchAction = "none";
+    } catch (_) {}
   }, []);
 
-  // run after render/resize
   useEffect(() => {
     configureGlobe();
   }, [size.w, size.h, configureGlobe]);
 
-  // Apple-map-ish pin DOM element
+  // ✅ HARD-RELIABLE pinch-to-zoom:
+  // Attach pointer events directly to the canvas (renderer.domElement).
+  useEffect(() => {
+    const g = globeRef.current;
+    if (!g) return;
+    let el = null;
+    try {
+      const renderer = typeof g.renderer === "function" ? g.renderer() : null;
+      el = renderer?.domElement || null;
+    } catch (_) {}
+    if (!el && wrapRef.current) el = wrapRef.current.querySelector("canvas");
+    if (!el) return;
+    el.style.touchAction = "none";
+    const controls =
+      typeof g.controls === "function" ? g.controls() : g.controls;
+    let pinching = false;
+    let startDist = 0;
+    let startAlt = povRef.current.altitude;
+
+    const saved = {
+      enabled: controls?.enabled,
+      autoRotate: controls?.autoRotate,
+    };
+    let rafId = 0;
+    let pendingAlt = null;
+    const dist = (t0, t1) => {
+      const dx = t1.clientX - t0.clientX;
+      const dy = t1.clientY - t0.clientY;
+      return Math.hypot(dx, dy);
+    };
+
+    const applyAlt = () => {
+      rafId = 0;
+      if (pendingAlt == null) return;
+      const cur = povRef.current.altitude;
+      const next = cur + (pendingAlt - cur) * 0.35;
+      povRef.current = { ...povRef.current, altitude: next };
+      g.pointOfView?.({ ...povRef.current }, 0);
+
+      pendingAlt = null;
+    };
+
+    const onTouchStart = (e) => {
+      if (e.touches.length !== 2) return;
+      pinching = true;
+      startDist = dist(e.touches[0], e.touches[1]);
+      startAlt = povRef.current.altitude;
+      if (controls) {
+        if ("enabled" in controls) controls.enabled = false;
+        if ("autoRotate" in controls) controls.autoRotate = false;
+        if (typeof controls.update === "function") controls.update();
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const onTouchMove = (e) => {
+      if (!pinching || e.touches.length !== 2) return;
+      const d = dist(e.touches[0], e.touches[1]);
+      if (!d || !startDist) return;
+      const scale = d / startDist;
+      const nextAlt = clamp(startAlt / scale, 0.8, 4.5);
+      pendingAlt = nextAlt;
+      if (!rafId) rafId = requestAnimationFrame(applyAlt);
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const endPinchIfNeeded = (e) => {
+      if (e.touches.length >= 2) return;
+      pinching = false;
+      if (controls) {
+        if ("enabled" in controls) controls.enabled = saved.enabled ?? true;
+        if ("autoRotate" in controls)
+          controls.autoRotate = saved.autoRotate ?? true;
+        if (typeof controls.update === "function") controls.update();
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", endPinchIfNeeded, { passive: false });
+    el.addEventListener("touchcancel", endPinchIfNeeded, { passive: false });
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", endPinchIfNeeded);
+      el.removeEventListener("touchcancel", endPinchIfNeeded);
+    };
+  }, [size.w, size.h]);
+
   const makePinEl = (d) => {
     const el = document.createElement("div");
     el.className = "globePin";
@@ -246,7 +366,6 @@ export default function RotatingGlobe({ pins = [] }) {
         htmlLng={(d) => d.lng}
         htmlAltitude={() => 0.02}
         htmlElement={makePinEl}
-        // ✅ IMPORTANT: set controls only when globe is ready
         onGlobeReady={configureGlobe}
       />
 
@@ -256,10 +375,15 @@ export default function RotatingGlobe({ pins = [] }) {
           height: 100%;
           display: grid;
           place-items: center;
+          touch-action: none;
         }
       `}</style>
 
       <style jsx global>{`
+        .globeWrap canvas {
+          touch-action: none !important;
+        }
+
         .globePin {
           transform: translate(-50%, -100%);
           filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.35));
