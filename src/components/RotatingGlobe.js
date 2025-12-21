@@ -265,6 +265,8 @@ export default function RotatingGlobe({ pins = [] }) {
     let pinching = false;
     let startDist = 0;
     let startAlt = povRef.current.altitude;
+    let gestureStartScale = 1;
+    let gestureStartAlt = povRef.current.altitude;
 
     const saved = {
       enabled: controls?.enabled,
@@ -328,10 +330,48 @@ export default function RotatingGlobe({ pins = [] }) {
       e.stopPropagation();
     };
 
+    const onGestureStart = (e) => {
+      pinching = true;
+      gestureStartScale = e.scale || 1;
+      gestureStartAlt = povRef.current.altitude;
+      if (controls) {
+        if ("enabled" in controls) controls.enabled = false;
+        if ("autoRotate" in controls) controls.autoRotate = false;
+        if (typeof controls.update === "function") controls.update();
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const onGestureChange = (e) => {
+      if (!pinching) return;
+      const scale = (e.scale || 1) / (gestureStartScale || 1);
+      const nextAlt = clamp(gestureStartAlt / scale, 0.8, 4.5);
+      pendingAlt = nextAlt;
+      if (!rafId) rafId = requestAnimationFrame(applyAlt);
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const onGestureEnd = (e) => {
+      pinching = false;
+      if (controls) {
+        if ("enabled" in controls) controls.enabled = saved.enabled ?? true;
+        if ("autoRotate" in controls)
+          controls.autoRotate = saved.autoRotate ?? true;
+        if (typeof controls.update === "function") controls.update();
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
     el.addEventListener("touchstart", onTouchStart, { passive: false });
     el.addEventListener("touchmove", onTouchMove, { passive: false });
     el.addEventListener("touchend", endPinchIfNeeded, { passive: false });
     el.addEventListener("touchcancel", endPinchIfNeeded, { passive: false });
+    el.addEventListener("gesturestart", onGestureStart, { passive: false });
+    el.addEventListener("gesturechange", onGestureChange, { passive: false });
+    el.addEventListener("gestureend", onGestureEnd, { passive: false });
 
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
@@ -339,6 +379,9 @@ export default function RotatingGlobe({ pins = [] }) {
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("touchend", endPinchIfNeeded);
       el.removeEventListener("touchcancel", endPinchIfNeeded);
+      el.removeEventListener("gesturestart", onGestureStart);
+      el.removeEventListener("gesturechange", onGestureChange);
+      el.removeEventListener("gestureend", onGestureEnd);
     };
   }, [size.w, size.h]);
 
