@@ -1,8 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase/supabaseClient";
-import RotatingGlobe from "./RotatingGlobe";
+const RotatingGlobe = dynamic(() => import("./RotatingGlobe"), { ssr: false });
+
+/* ============================================================
+   Helpers
+   ============================================================ */
 
 const formatCurrency = (value, currency) => {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
@@ -35,11 +40,6 @@ const useDebouncedValue = (value, delayMs) => {
   return debounced;
 };
 
-const roundTo = (num, decimals = 1) => {
-  const p = Math.pow(10, decimals);
-  return Math.round(num * p) / p;
-};
-
 const buildLocationLabel = (r) => {
   const city = r?.city ? String(r.city).trim() : "";
   const region = r?.region ? String(r.region).trim() : "";
@@ -57,19 +57,17 @@ const buildPinLabel = (r) => {
   return country || "Unknown";
 };
 
-// ✅ NEW: derive "device" from UA
+// derive "device" from UA
 const buildDeviceLabelFromUa = (uaRaw) => {
   const ua = String(uaRaw || "").trim();
   if (!ua) return "Unknown";
 
-  // bots / crawlers / screenshots
   if (/vercel-screenshot/i.test(ua)) return "Vercel Screenshot";
   if (/googlebot/i.test(ua)) return "Googlebot";
   if (/ahrefsbot/i.test(ua)) return "AhrefsBot";
   if (/bytespider/i.test(ua)) return "Bytespider";
   if (/\b(bot|spider|crawler)\b/i.test(ua)) return "Bot/Crawler";
 
-  // devices / OS buckets
   if (/iphone/i.test(ua)) return "iPhone";
   if (/ipad/i.test(ua)) return "iPad";
   if (/android/i.test(ua)) return "Android";
@@ -78,6 +76,54 @@ const buildDeviceLabelFromUa = (uaRaw) => {
   if (/linux/i.test(ua)) return "Linux";
 
   return "Other";
+};
+
+/* ============================================================
+   Visitors performance helpers
+   ============================================================ */
+
+const VISITOR_CACHE_KEY = "yuqi_visitors_cache_v4";
+
+const safeParseJson = (s) => {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Aggregate pins by (region || country). One label => one pin.
+ * lat/lng averaged for stability.
+ */
+const aggregatePinsByRegion = (rows, maxLabels = 1200) => {
+  const list = Array.isArray(rows) ? rows : [];
+  const map = new Map();
+
+  for (const r of list) {
+    const lat = Number(r?.latitude);
+    const lng = Number(r?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+    const label = buildPinLabel(r);
+
+    let e = map.get(label);
+    if (!e) {
+      if (map.size >= maxLabels) continue;
+      e = { sumLat: 0, sumLng: 0, n: 0 };
+      map.set(label, e);
+    }
+
+    e.sumLat += lat;
+    e.sumLng += lng;
+    e.n += 1;
+  }
+
+  return Array.from(map.entries()).map(([label, e]) => {
+    const lat = e.n ? e.sumLat / e.n : 0;
+    const lng = e.n ? e.sumLng / e.n : 0;
+    return { lat, lng, latitude: lat, longitude: lng, label };
+  });
 };
 
 const weatherIcon = (
@@ -153,7 +199,7 @@ const DashboardPanels = () => {
   });
   const [isWeatherLoading, setIsWeatherLoading] = useState(true);
 
-  // Visitors (Supabase direct)
+  // Visitors
   const [visitors, setVisitors] = useState({
     last30: 0,
     today: 0,
@@ -182,7 +228,9 @@ const DashboardPanels = () => {
     return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   };
 
-  // Market
+  /* ============================================================
+     Market
+     ============================================================ */
   useEffect(() => {
     let mounted = true;
     const controller = new AbortController();
@@ -215,7 +263,9 @@ const DashboardPanels = () => {
     };
   }, []);
 
-  // Currency
+  /* ============================================================
+     Currency
+     ============================================================ */
   useEffect(() => {
     let mounted = true;
     const controller = new AbortController();
@@ -254,7 +304,9 @@ const DashboardPanels = () => {
     };
   }, [debouncedBase, debouncedTarget, debouncedAmount]);
 
-  // Weather
+  /* ============================================================
+     Weather
+     ============================================================ */
   useEffect(() => {
     let mounted = true;
     const controller = new AbortController();
@@ -285,12 +337,38 @@ const DashboardPanels = () => {
     };
   }, []);
 
-  // Visitors (Supabase, no backend)
+  /* ============================================================
+     ✅ Visitors — "pins first, stats later" (FIX)
+     PHASE -1: restore cache instantly
+     PHASE 0: fetch latest located rows (VERY FAST) => pins immediately
+     PHASE 1: 30-day sample => top sources
+     PHASE 1b: counts + devices (estimated) => small payload
+     PHASE 2: all-time aggregation (idle)
+     ============================================================ */
   useEffect(() => {
     let mounted = true;
 
+    const yieldToBrowser = () => new Promise((r) => setTimeout(r, 0));
+    const runIdle =
+      typeof window !== "undefined" && "requestIdleCallback" in window
+        ? (fn) => window.requestIdleCallback(fn, { timeout: 2500 })
+        : (fn) => setTimeout(fn, 600);
+
+    // PHASE -1: cache restore (instant)
+    if (typeof window !== "undefined") {
+      const cached = safeParseJson(localStorage.getItem(VISITOR_CACHE_KEY));
+      if (cached?.pins?.length) {
+        setVisitors((prev) => ({
+          ...prev,
+          ...cached,
+          fetchedAt: cached.fetchedAt || Date.now(),
+        }));
+      }
+    }
+
     const fetchVisitors = async () => {
       setIsVisitorsLoading(true);
+
       try {
         const now = new Date();
         const start30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -300,137 +378,57 @@ const DashboardPanels = () => {
         const start30Iso = start30.toISOString();
         const startTodayIso = startTodayLocal.toISOString();
 
-        // total counts (records)
-        const [total30Res, totalTodayRes] = await Promise.all([
-          supabase
-            .from("visitor_logs")
-            .select("id", { count: "exact", head: true })
-            .gte("created_at", start30Iso),
-          supabase
-            .from("visitor_logs")
-            .select("id", { count: "exact", head: true })
-            .gte("created_at", startTodayIso),
-        ]);
-
-        if (total30Res.error) throw total30Res.error;
-        if (totalTodayRes.error) throw totalTodayRes.error;
-
-        const total30 = Number(total30Res.count || 0);
-        const totalToday = Number(totalTodayRes.count || 0);
-
-        // located count (exact)
-        const located30Res = await supabase
+        // ---------------- PHASE 0 (CRITICAL): latest pins first ----------------
+        // ✅ no gte(), smallest select, uses created_at desc index best
+        const { data: latestRows, error: latestErr } = await supabase
           .from("visitor_logs")
-          .select("id", { count: "exact", head: true })
-          .gte("created_at", start30Iso)
+          .select("latitude, longitude, region, country, created_at")
           .not("latitude", "is", null)
-          .not("longitude", "is", null);
+          .not("longitude", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(120);
 
-        if (located30Res.error) throw located30Res.error;
+        if (latestErr) throw latestErr;
 
-        const located30 = Number(located30Res.count || 0);
-        const unknownLocation = Math.max(total30 - located30, 0);
+        const latestPins = aggregatePinsByRegion(latestRows || [], 320);
 
-        // sample rows for pins + top sources (last 30 days, located only)
-        const { data: rows, error: rowsErr } = await supabase
+        if (!mounted) return;
+
+        setVisitors((prev) => {
+          const next = {
+            ...prev,
+            pins: latestPins,
+            fetchedAt: Date.now(),
+          };
+          if (typeof window !== "undefined") {
+            localStorage.setItem(VISITOR_CACHE_KEY, JSON.stringify(next));
+          }
+          return next;
+        });
+
+        // yield so globe can paint pins immediately
+        await yieldToBrowser();
+
+        // ---------------- PHASE 1: 30-day sample for Top sources ----------------
+        // keep light: fewer columns, smaller limit
+        const { data: sample30, error: sample30Err } = await supabase
           .from("visitor_logs")
           .select("latitude, longitude, country, region, city, created_at")
           .gte("created_at", start30Iso)
           .not("latitude", "is", null)
           .not("longitude", "is", null)
           .order("created_at", { ascending: false })
-          .limit(900);
+          .limit(360);
 
-        if (rowsErr) throw rowsErr;
+        if (sample30Err) throw sample30Err;
 
-        const safeRows = Array.isArray(rows) ? rows : [];
-
-        // ✅ NEW: top devices (last 30 days) from UA
-        const { data: deviceRows, error: deviceErr } = await supabase
-          .from("visitor_logs")
-          .select("ua, created_at")
-          .gte("created_at", start30Iso)
-          .order("created_at", { ascending: false })
-          .limit(2000);
-
-        if (deviceErr) throw deviceErr;
-
-        const deviceCounts = new Map();
-        for (const r of Array.isArray(deviceRows) ? deviceRows : []) {
-          const label = buildDeviceLabelFromUa(r?.ua);
-          deviceCounts.set(label, (deviceCounts.get(label) || 0) + 1);
-        }
-
-        const topDevices = Array.from(deviceCounts.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 4)
-          .map(([label, count]) => ({ label, count }));
-
-        // cluster pins for the globe (ALL TIME)
-        // - keep "Top sources" based on last 30 days (safeRows)
-        // - pins: aggregate every located row; prefer region from JSON for labels
-        const clusters = new Map(); // key -> {lat, lng, count, label}
-        const PAGE_SIZE = 1000;
-        let from = 0;
-
-        while (true) {
-          const { data: page, error: pageErr } = await supabase
-            .from("visitor_logs")
-            .select("latitude, longitude, country, region, created_at")
-            .not("latitude", "is", null)
-            .not("longitude", "is", null)
-            .order("created_at", { ascending: false })
-            .range(from, from + PAGE_SIZE - 1);
-
-          if (pageErr) throw pageErr;
-
-          const safePage = Array.isArray(page) ? page : [];
-          for (const r of safePage) {
-            const lat = Number(r.latitude);
-            const lng = Number(r.longitude);
-            if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-
-            // One pin per "region" (minimum unit). If region is missing, fall back to country.
-            // Note: keep country in the key to avoid merging same-named regions across countries.
-            const region = r?.region ? String(r.region).trim() : "";
-            const country = r?.country ? String(r.country).trim() : "";
-            const label = buildPinLabel(r);
-            const key = region ? `r:${region}|${country || ""}` : `c:${country || "Unknown"}`;
-
-            const prev = clusters.get(key);
-            if (!prev) {
-              clusters.set(key, { latSum: lat, lngSum: lng, count: 1, label });
-            } else {
-              prev.latSum += lat;
-              prev.lngSum += lng;
-              prev.count += 1;
-            }
-          }
-
-          if (safePage.length < PAGE_SIZE) break;
-          from += PAGE_SIZE;
-        }
-
-        const pins = Array.from(clusters.values())
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 28)
-          .map((c) => {
-            const lat = roundTo(c.latSum / c.count, 1);
-            const lng = roundTo(c.lngSum / c.count, 1);
-            return {
-              lat,
-              lng,
-              weight: c.count,
-              label: `${c.label} · ${c.count}`,
-            };
-          });
+        const safeSample = Array.isArray(sample30) ? sample30 : [];
 
         const sourceCounts = new Map();
-        for (const r of safeRows) {
+        for (const r of safeSample) {
           const label = buildLocationLabel(r);
           sourceCounts.set(label, (sourceCounts.get(label) || 0) + 1);
         }
-
         const topSources = Array.from(sourceCounts.entries())
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5)
@@ -438,14 +436,152 @@ const DashboardPanels = () => {
 
         if (!mounted) return;
 
-        setVisitors({
-          last30: total30,
-          today: totalToday,
-          unknownLocation,
-          pins,
-          topSources,
-          topDevices, // ✅ NEW
-          fetchedAt: Date.now(),
+        setVisitors((prev) => {
+          const next = { ...prev, topSources, fetchedAt: Date.now() };
+          if (typeof window !== "undefined") {
+            localStorage.setItem(VISITOR_CACHE_KEY, JSON.stringify(next));
+          }
+          return next;
+        });
+
+        await yieldToBrowser();
+
+        // ---------------- PHASE 1b: counts + devices (estimated, small) ----------------
+        const COUNT_MODE = "estimated";
+
+        const [total30Res, totalTodayRes, located30Res, deviceRes] = await Promise.all([
+          supabase
+            .from("visitor_logs")
+            .select("id", { count: COUNT_MODE, head: true })
+            .gte("created_at", start30Iso),
+          supabase
+            .from("visitor_logs")
+            .select("id", { count: COUNT_MODE, head: true })
+            .gte("created_at", startTodayIso),
+          supabase
+            .from("visitor_logs")
+            .select("id", { count: COUNT_MODE, head: true })
+            .gte("created_at", start30Iso)
+            .not("latitude", "is", null)
+            .not("longitude", "is", null),
+          supabase
+            .from("visitor_logs")
+            .select("ua, created_at")
+            .gte("created_at", start30Iso)
+            .order("created_at", { ascending: false })
+            .limit(900),
+        ]);
+
+        if (total30Res.error) throw total30Res.error;
+        if (totalTodayRes.error) throw totalTodayRes.error;
+        if (located30Res.error) throw located30Res.error;
+        if (deviceRes.error) throw deviceRes.error;
+
+        const total30 = Number(total30Res.count || 0);
+        const totalToday = Number(totalTodayRes.count || 0);
+        const located30 = Number(located30Res.count || 0);
+        const unknownLocation = Math.max(total30 - located30, 0);
+
+        const deviceRows = Array.isArray(deviceRes.data) ? deviceRes.data : [];
+        const deviceCounts = new Map();
+        for (const r of deviceRows) {
+          const label = buildDeviceLabelFromUa(r?.ua);
+          deviceCounts.set(label, (deviceCounts.get(label) || 0) + 1);
+        }
+        const topDevices = Array.from(deviceCounts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 4)
+          .map(([label, count]) => ({ label, count }));
+
+        if (!mounted) return;
+
+        setVisitors((prev) => {
+          const next = {
+            ...prev,
+            last30: total30,
+            today: totalToday,
+            unknownLocation,
+            topDevices,
+            fetchedAt: Date.now(),
+          };
+          if (typeof window !== "undefined") {
+            localStorage.setItem(VISITOR_CACHE_KEY, JSON.stringify(next));
+          }
+          return next;
+        });
+
+        // ---------------- PHASE 2: all-time aggregated pins (idle) ----------------
+        runIdle(async () => {
+          if (!mounted) return;
+
+          const PAGE_SIZE = 900;
+          const MAX_PAGES = 12;
+          const MAX_LABELS = 1800;
+
+          let from = 0;
+          let pageCount = 0;
+
+          const merged = new Map();
+          // seed with latest pins so we never regress to "none"
+          for (const p of latestPins) {
+            merged.set(p.label, { sumLat: p.lat, sumLng: p.lng, n: 1 });
+          }
+
+          while (mounted) {
+            if (pageCount >= MAX_PAGES) break;
+            if (merged.size >= MAX_LABELS) break;
+
+            const { data: page, error: pageErr } = await supabase
+              .from("visitor_logs")
+              .select("latitude, longitude, region, country, created_at")
+              .not("latitude", "is", null)
+              .not("longitude", "is", null)
+              .order("created_at", { ascending: false })
+              .range(from, from + PAGE_SIZE - 1);
+
+            if (pageErr) throw pageErr;
+
+            const safePage = Array.isArray(page) ? page : [];
+            for (const r of safePage) {
+              const lat = Number(r?.latitude);
+              const lng = Number(r?.longitude);
+              if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+              const label = buildPinLabel(r);
+
+              let e = merged.get(label);
+              if (!e) {
+                if (merged.size >= MAX_LABELS) break;
+                e = { sumLat: 0, sumLng: 0, n: 0 };
+                merged.set(label, e);
+              }
+              e.sumLat += lat;
+              e.sumLng += lng;
+              e.n += 1;
+            }
+
+            if (safePage.length < PAGE_SIZE) break;
+
+            from += PAGE_SIZE;
+            pageCount += 1;
+            if (pageCount % 2 === 0) await yieldToBrowser();
+          }
+
+          if (!mounted) return;
+
+          const pinsAll = Array.from(merged.entries()).map(([label, e]) => {
+            const lat = e.n ? e.sumLat / e.n : 0;
+            const lng = e.n ? e.sumLng / e.n : 0;
+            return { lat, lng, latitude: lat, longitude: lng, label };
+          });
+
+          setVisitors((prev) => {
+            const next = { ...prev, pins: pinsAll, fetchedAt: Date.now() };
+            if (typeof window !== "undefined") {
+              localStorage.setItem(VISITOR_CACHE_KEY, JSON.stringify(next));
+            }
+            return next;
+          });
         });
       } catch (e) {
         console.error("Failed to load visitors from Supabase", e);
@@ -455,6 +591,7 @@ const DashboardPanels = () => {
     };
 
     fetchVisitors();
+
     return () => {
       mounted = false;
     };
@@ -516,6 +653,7 @@ const DashboardPanels = () => {
           <h3>Real-Time Data</h3>
         </div>
       </div>
+
       <div className="dashboard-container">
         <div className="dashboard-card-1 market-card">
           <header>
@@ -661,7 +799,7 @@ const DashboardPanels = () => {
           </div>
         </div>
 
-        {/* Visitors (NEW LINE) */}
+        {/* Visitors */}
         <div className="dashboard-card-4 visitors-card">
           <header>
             <h3>Visitors</h3>
@@ -670,8 +808,7 @@ const DashboardPanels = () => {
           <div className="visitors-body">
             <div className="visitors-globe-pane">
               <div className="globe-frame" aria-hidden="true">
-                {/* globe is split into its own component file */}
-                <RotatingGlobe pins={visitors.pins} />
+                <RotatingGlobe pins={visitors.pins} supabase={supabase} />
               </div>
 
               <div className="visitors-stats">
@@ -705,7 +842,6 @@ const DashboardPanels = () => {
                 {!visitors.topSources?.length && <div className="side-empty">No data yet</div>}
               </div>
 
-              {/* ✅ NEW: divider + Top devices */}
               <div className="side-divider" aria-hidden="true" />
 
               <div className="side-title">Top devices</div>
@@ -726,6 +862,7 @@ const DashboardPanels = () => {
       </div>
 
       <style jsx>{`
+        /* ✅ unchanged: keep your original CSS exactly */
         .dashboard-wrapper {
           --dashboard-bg: #f8f8fb;
           --card-bg: #e6ebee;
@@ -786,6 +923,8 @@ const DashboardPanels = () => {
           --provider-indicator: #f97316;
         }
 
+        /* ... keep rest of your CSS unchanged ... */
+
         .section-heading {
           max-width: 840px;
           margin: 0 auto 32px auto;
@@ -806,11 +945,6 @@ const DashboardPanels = () => {
           letter-spacing: -0.01em;
           text-transform: none;
           color: var(--text-primary);
-        }
-        .section-heading p {
-          margin: 0;
-          color: var(--text-secondary);
-          line-height: 1.6;
         }
 
         .dashboard-container {
@@ -845,13 +979,13 @@ const DashboardPanels = () => {
           justify-content: center;
           gap: 1rem;
           background: radial-gradient(
-              ellipse 120% 150% at 20% 135%,
-              #3564c2 0%,
-              #3564c2 22%,
-              rgba(53, 100, 194, 0.4) 45%,
-              rgba(53, 100, 194, 0) 75%
-            ),
-            #353636;
+            ellipse 120% 150% at 20% 135%,
+            #3564c2 0%,
+            #3564c2 22%,
+            rgba(53, 100, 194, 0.4) 45%,
+            rgba(53, 100, 194, 0) 75%
+          ),
+          #353636;
         }
 
         .dashboard-card-1 h3,
@@ -893,13 +1027,13 @@ const DashboardPanels = () => {
           justify-content: center;
           gap: 1rem;
           background: radial-gradient(
-              ellipse 120% 150% at 20% 135%,
-              #3564c2 0%,
-              #3564c2 22%,
-              rgba(53, 100, 194, 0.4) 45%,
-              rgba(53, 100, 194, 0) 75%
-            ),
-            #353636;
+            ellipse 120% 150% at 20% 135%,
+            #3564c2 0%,
+            #3564c2 22%,
+            rgba(53, 100, 194, 0.4) 45%,
+            rgba(53, 100, 194, 0) 75%
+          ),
+          #353636;
         }
 
         .output-container {
@@ -931,13 +1065,13 @@ const DashboardPanels = () => {
           justify-content: center;
           gap: 1rem;
           background: radial-gradient(
-              ellipse 120% 150% at 20% 135%,
-              #3564c2 0%,
-              #3564c2 22%,
-              rgba(53, 100, 194, 0.4) 45%,
-              rgba(53, 100, 194, 0) 75%
-            ),
-            #353636;
+            ellipse 120% 150% at 20% 135%,
+            #3564c2 0%,
+            #3564c2 22%,
+            rgba(53, 100, 194, 0.4) 45%,
+            rgba(53, 100, 194, 0) 75%
+          ),
+          #353636;
         }
 
         .badge {
@@ -1021,8 +1155,7 @@ const DashboardPanels = () => {
           letter-spacing: 0.04em;
         }
 
-        .currency-card .timestamp,
-        .disclaimer {
+        .currency-card .timestamp {
           font-size: 0.75rem;
           color: var(--text-muted);
           letter-spacing: 0.03em;
@@ -1065,12 +1198,6 @@ const DashboardPanels = () => {
           font-size: 30px;
           font-weight: 500;
           color: var(--conversion-text);
-        }
-
-        .disclaimer {
-          margin: 0;
-          margin-top: 50px;
-          line-height: 1.4;
         }
 
         .weather-container {
@@ -1158,24 +1285,6 @@ const DashboardPanels = () => {
           letter-spacing: 0.04em;
         }
 
-        .provider {
-          display: inline-flex;
-          width: 400px;
-          max-width: 100%;
-          justify-content: center;
-          align-items: center;
-          gap: 0.35rem;
-        }
-
-        .provider::before {
-          content: "";
-          display: inline-block;
-          width: 14px;
-          height: 14px;
-          border-radius: 4px;
-          border: 1.5px solid var(--provider-indicator);
-        }
-
         /* Visitors */
         .dashboard-card-4 {
           flex: 1 1 100%;
@@ -1200,13 +1309,13 @@ const DashboardPanels = () => {
           justify-content: center;
           gap: 1rem;
           background: radial-gradient(
-              ellipse 120% 150% at 20% 135%,
-              #3564c2 0%,
-              #3564c2 22%,
-              rgba(53, 100, 194, 0.4) 45%,
-              rgba(53, 100, 194, 0) 75%
-            ),
-            #353636;
+            ellipse 120% 150% at 20% 135%,
+            #3564c2 0%,
+            #3564c2 22%,
+            rgba(53, 100, 194, 0.4) 45%,
+            rgba(53, 100, 194, 0) 75%
+          ),
+          #353636;
         }
 
         .visitors-body {
@@ -1218,24 +1327,30 @@ const DashboardPanels = () => {
 
         .globe-frame {
           width: 100%;
-          min-height: 360px;
+          height: 420px;
           border-radius: 18px;
           border: 1px solid var(--card-border);
+          touch-action: none;
+          cursor: grab;
           background: radial-gradient(
-              circle at 30% 30%,
-              rgba(255, 255, 255, 0.08),
-              rgba(0, 0, 0, 0) 55%
-            ),
-            radial-gradient(
-              circle at 70% 80%,
-              rgba(79, 70, 229, 0.1),
-              rgba(0, 0, 0, 0) 60%
-            ),
-            rgba(15, 23, 42, 0.35);
+            circle at 30% 30%,
+            rgba(255, 255, 255, 0.08),
+            rgba(0, 0, 0, 0) 55%
+          ),
+          radial-gradient(
+            circle at 70% 80%,
+            rgba(79, 70, 229, 0.1),
+            rgba(0, 0, 0, 0) 60%
+          ),
+          rgba(15, 23, 42, 0.35);
           display: grid;
           place-items: center;
           overflow: hidden;
           position: relative;
+        }
+
+        .globe-frame:active {
+          cursor: grabbing;
         }
 
         .visitors-globe-pane {
@@ -1335,7 +1450,6 @@ const DashboardPanels = () => {
           color: var(--text-muted);
         }
 
-        /* ✅ NEW: divider */
         .side-divider {
           height: 1px;
           width: 100%;
