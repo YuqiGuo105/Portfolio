@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import GlobeLib from "react-globe.gl";
+const GlobeLib = dynamic(() => import("react-globe.gl"), { ssr: false });
 import { supabase as supabaseClient } from "../supabase/supabaseClient";
+import dynamic from "next/dynamic";
 
 /* ============================================================
    RotatingGlobe

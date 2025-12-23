@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase/supabaseClient";
-import RotatingGlobe from "./RotatingGlobe";
+import dynamic from "next/dynamic";
+
+const RotatingGlobe = dynamic(() => import("./RotatingGlobe"), {
+  ssr: false,
+  loading: () => <div style={{ width: "100%", height: "100%" }} />,
+});
+
 
 /* ============================================================
    Helpers
