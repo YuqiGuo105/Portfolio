@@ -8,7 +8,7 @@ import dynamic from "next/dynamic";
 /* ============================================================
    RotatingGlobe
    ✅ Supabase-focused pins (no extra backend):
-   - Reads from (in order): visitor_pin_cells -> visitor_pins_grid_mv -> visitor_pin_region
+   - Reads from (in order): visitor_pin_cells -> visitor_pins_grid_mv -> visitor_pin_region -> visitor_logs (aggregated)
    - Uses current POV to fetch pins for focused area (debounced)
    - Robust column guessing (lat/lng/cnt/level)
    - Falls back to `pins` prop if server fetch fails / empty
@@ -245,10 +245,14 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
 
   const initialFetchDoneRef = useRef(false);
   const loadingDelayRef = useRef(null);
+  const loadingStartedAtRef = useRef(0);
   const pinSourceRef = useRef(null); // { table, cols }
   const fetchingRef = useRef(false);
   const fetchTimerRef = useRef(null);
   const lastFetchKeyRef = useRef("");
+  const autoResumeTimerRef = useRef(null);
+  const autoSampleTimerRef = useRef(null);
+  const isInteractingRef = useRef(false);
 
   // globe
   const globeRef = useRef(null);
@@ -388,13 +392,82 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
 
       const cols = { latKey, lngKey, cntKey, levelKey };
 
-      pinSourceRef.current = { table, cols };
+      pinSourceRef.current = { table, cols, kind: "bucket" };
       log("pin source selected:", table, cols);
+      return pinSourceRef.current;
+    }
+
+    // Fallback: raw visitor_logs table (aggregate client-side)
+    const { error: logError } = await sb.from("visitor_logs").select("id").limit(1);
+    if (!logError) {
+      pinSourceRef.current = {
+        table: "visitor_logs",
+        cols: { latKey: "latitude", lngKey: "longitude", cntKey: "cnt", levelKey: null },
+        kind: "logs",
+      };
+      log("pin source selected: visitor_logs (fallback)");
       return pinSourceRef.current;
     }
 
     pinSourceRef.current = null;
     return null;
+  };
+
+  const aggregateVisitorLogPins = (rows) => {
+    const buckets = new Map();
+    for (const r of rows || []) {
+      const lat = Number(r?.latitude);
+      const lng = normalizeLng(Number(r?.longitude));
+      if (!isFiniteNumber(lat) || !isFiniteNumber(lng)) continue;
+
+      const country = r?.country ? String(r.country) : "";
+      const region = r?.region ? String(r.region) : "";
+      const key = `${country}|${region}`;
+
+      const agg = buckets.get(key) || { latSum: 0, lngSum: 0, count: 0, country, region };
+      agg.latSum += lat;
+      agg.lngSum += lng;
+      agg.count += 1;
+      buckets.set(key, agg);
+    }
+
+    return Array.from(buckets.values())
+      .map((b) => ({
+        lat: b.latSum / b.count,
+        lng: normalizeLng(b.lngSum / b.count),
+        label: `${b.region ? `${b.region}, ` : ""}${b.country || "Unknown"} · ${b.count}`,
+        count: b.count,
+      }))
+      .filter((p) => isFiniteNumber(p.lat) && isFiniteNumber(p.lng));
+  };
+
+  const startLoading = () => {
+    if (loadingDelayRef.current) {
+      clearTimeout(loadingDelayRef.current);
+      loadingDelayRef.current = null;
+    }
+    const now =
+      typeof performance !== "undefined" && typeof performance.now === "function"
+        ? performance.now()
+        : Date.now();
+    loadingStartedAtRef.current = now;
+    setPinsLoading(true);
+  };
+
+  const finishLoading = () => {
+    const now =
+      typeof performance !== "undefined" && typeof performance.now === "function"
+        ? performance.now()
+        : Date.now();
+    const elapsed = now - (loadingStartedAtRef.current || 0);
+    const minVisible = 420;
+    const remaining = Math.max(minVisible - elapsed, 0);
+
+    if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
+    loadingDelayRef.current = setTimeout(() => {
+      setPinsLoading(false);
+      loadingDelayRef.current = null;
+    }, remaining);
   };
 
   const normalizeRowsToPins = (rows, preferCols = {}) => {
@@ -478,33 +551,49 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
 
     fetchingRef.current = true;
 
-    if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
-    loadingDelayRef.current = setTimeout(() => setPinsLoading(true), 120);
+    startLoading();
 
     try {
-      const limit = 6000; // pull enough to cover all buckets (table is already aggregated)
-      const baseSelectCols = "*";
+      let pinsFinal = [];
 
-      const runQuery = async (withLevel) => {
-        let q = sb.from(src.table).select(baseSelectCols);
-        if (withLevel && levelCol) q = q.eq(levelCol, "world");
+      if (src.kind === "logs") {
+        const limit = 6000;
+        const { data, error } = await sb
+          .from(src.table)
+          .select("country, region, latitude, longitude")
+          .not(latCol, "is", null)
+          .not(lngCol, "is", null)
+          .order("created_at", { ascending: false })
+          .limit(limit);
 
-        let res = await q.order(cntCol, { ascending: false }).limit(limit);
-        if (res?.error) res = await q.order("count", { ascending: false }).limit(limit);
-        if (res?.error) res = await q.limit(limit);
-        return res;
-      };
+        if (error) throw error;
+        pinsFinal = aggregateVisitorLogPins(data);
+      } else {
+        const limit = 6000; // pull enough to cover all buckets (table is already aggregated)
+        const baseSelectCols = "*";
 
-      let res = await runQuery(true);
-      if (res?.error) throw res.error;
+        const runQuery = async (withLevel) => {
+          let q = sb.from(src.table).select(baseSelectCols);
+          if (withLevel && levelCol) q = q.eq(levelCol, "world");
 
-      if (!res?.data?.length && levelCol) {
-        res = await runQuery(false);
+          let res = await q.order(cntCol, { ascending: false }).limit(limit);
+          if (res?.error) res = await q.order("count", { ascending: false }).limit(limit);
+          if (res?.error) res = await q.limit(limit);
+          return res;
+        };
+
+        let res = await runQuery(true);
         if (res?.error) throw res.error;
+
+        if (!res?.data?.length && levelCol) {
+          res = await runQuery(false);
+          if (res?.error) throw res.error;
+        }
+
+        const pinsAll = normalizeRowsToPins(res.data, { latKey: latCol, lngKey: lngCol, cntKey: cntCol });
+        pinsFinal = pinsAll.length ? pinsAll : normalizeRowsToPins(res.data, {});
       }
 
-      const pinsAll = normalizeRowsToPins(res.data, { latKey: latCol, lngKey: lngCol, cntKey: cntCol });
-      const pinsFinal = pinsAll.length ? pinsAll : normalizeRowsToPins(res.data, {});
       const balanced = balancedSamplePins(pinsFinal, 120);
 
       setServerPinsError(false);
@@ -515,11 +604,7 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
       setServerPins([]);
     } finally {
       fetchingRef.current = false;
-      if (loadingDelayRef.current) {
-        clearTimeout(loadingDelayRef.current);
-        loadingDelayRef.current = null;
-      }
-      setPinsLoading(false);
+      finishLoading();
       if (!initialFetchDoneRef.current) {
         initialFetchDoneRef.current = true;
         setInitialServerPinsReady(true);
@@ -544,9 +629,7 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
     if (!force && key === lastFetchKeyRef.current) return;
     lastFetchKeyRef.current = key;
 
-    // show loading if fetch takes >120ms (avoid flicker)
-    if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
-    loadingDelayRef.current = setTimeout(() => setPinsLoading(true), 120);
+    startLoading();
     setServerPinsError(false);
     fetchingRef.current = true;
 
@@ -564,39 +647,64 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
     const levelCol = cols.levelKey || null;
 
     try {
-      // lat filter
-      let q = sb.from(src.table).select("*").gte(latCol, latMin).lte(latCol, latMax);
+      let nextFinal = [];
+      let rowsCount = 0;
 
-      // lng range with antimeridian wrap
-      if (lngMin <= lngMax) {
-        q = q.gte(lngCol, lngMin).lte(lngCol, lngMax);
+      if (src.kind === "logs") {
+        let q = sb
+          .from(src.table)
+          .select("country, region, latitude, longitude")
+          .gte(latCol, latMin)
+          .lte(latCol, latMax)
+          .not(latCol, "is", null)
+          .not(lngCol, "is", null);
+
+        if (lngMin <= lngMax) {
+          q = q.gte(lngCol, lngMin).lte(lngCol, lngMax);
+        } else {
+          q = q.or(`${lngCol}.gte.${lngMin},${lngCol}.lte.${lngMax}`);
+        }
+
+        const { data, error } = await q.order("created_at", { ascending: false }).limit(limit);
+        if (error) throw error;
+        rowsCount = Array.isArray(data) ? data.length : 0;
+        nextFinal = aggregateVisitorLogPins(data);
       } else {
-        q = q.or(`${lngCol}.gte.${lngMin},${lngCol}.lte.${lngMax}`);
-      }
+        // lat filter
+        let q = sb.from(src.table).select("*").gte(latCol, latMin).lte(latCol, latMax);
 
-      const runQuery = async (withLevel) => {
-        let qq = q;
-        if (withLevel && levelCol) qq = qq.eq(levelCol, level);
+        // lng range with antimeridian wrap
+        if (lngMin <= lngMax) {
+          q = q.gte(lngCol, lngMin).lte(lngCol, lngMax);
+        } else {
+          q = q.or(`${lngCol}.gte.${lngMin},${lngCol}.lte.${lngMax}`);
+        }
 
-        // order by cnt -> fallback to count -> fallback to no order
-        let res = await qq.order(cntCol, { ascending: false }).limit(limit);
-        if (res?.error) res = await qq.order("count", { ascending: false }).limit(limit);
-        if (res?.error) res = await qq.limit(limit);
-        return res;
-      };
+        const runQuery = async (withLevel) => {
+          let qq = q;
+          if (withLevel && levelCol) qq = qq.eq(levelCol, level);
 
-      let res = await runQuery(true);
-      if (res?.error) throw res.error;
+          // order by cnt -> fallback to count -> fallback to no order
+          let res = await qq.order(cntCol, { ascending: false }).limit(limit);
+          if (res?.error) res = await qq.order("count", { ascending: false }).limit(limit);
+          if (res?.error) res = await qq.limit(limit);
+          return res;
+        };
 
-      if (!res?.data?.length && levelCol) {
-        res = await runQuery(false);
+        let res = await runQuery(true);
         if (res?.error) throw res.error;
+
+        if (!res?.data?.length && levelCol) {
+          res = await runQuery(false);
+          if (res?.error) throw res.error;
+        }
+
+        const nextPins = normalizeRowsToPins(res.data, { latKey: latCol, lngKey: lngCol, cntKey: cntCol });
+        nextFinal = nextPins.length ? nextPins : normalizeRowsToPins(res.data, {});
+        rowsCount = res?.data?.length || 0;
       }
 
-      const nextPins = normalizeRowsToPins(res.data, { latKey: latCol, lngKey: lngCol, cntKey: cntCol });
-      const nextFinal = nextPins.length ? nextPins : normalizeRowsToPins(res.data, {});
-
-      log("fetched pins:", src.table, "rows:", res.data?.length || 0, "pins:", nextFinal.length);
+      log("fetched pins:", src.table, "rows:", rowsCount, "pins:", nextFinal.length);
 
       // auto-fallback to another table if empty
       if (!nextFinal.length) {
@@ -604,11 +712,7 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
         if (fallback && fallback.table !== src.table) {
           // Cleanup current attempt before retry (prevents stuck Loading)
           fetchingRef.current = false;
-          if (loadingDelayRef.current) {
-            clearTimeout(loadingDelayRef.current);
-            loadingDelayRef.current = null;
-          }
-          setPinsLoading(false);
+          finishLoading();
           return fetchPinsForFocusedArea(true);
         }
       }
@@ -620,11 +724,7 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
       setServerPins([]); // will fall back to `pins` after init if needed
     } finally {
       fetchingRef.current = false;
-      if (loadingDelayRef.current) {
-        clearTimeout(loadingDelayRef.current);
-        loadingDelayRef.current = null;
-      }
-      setPinsLoading(false);
+      finishLoading();
       if (!initialFetchDoneRef.current) {
         initialFetchDoneRef.current = true;
         setInitialServerPinsReady(true);
@@ -822,42 +922,75 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
 
 
   // Enable auto-rotate once after initial server fetch (keeps init stable)
-  useEffect(() => {
-    if (!sb) return;
-    if (!initialFetchDoneRef.current) return;
-    if (userInteractedRef.current) return;
-
-    const g = globeRef.current;
-    const controls = getControls(g);
+  const stopAutoRotate = () => {
+    const controls = getControls(globeRef.current);
     if (!controls) return;
+    controls.autoRotate = false;
+    controls.autoRotateSpeed = 0;
+    if (autoSampleTimerRef.current) {
+      clearInterval(autoSampleTimerRef.current);
+      autoSampleTimerRef.current = null;
+    }
+  };
 
+  const startAutoRotate = () => {
+    const controls = getControls(globeRef.current);
+    if (!controls) return false;
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.55;
-  }, [serverPins, sb]);
-  // Stop auto-rotate once user interacts, and sample on change
+
+    if (autoSampleTimerRef.current) clearInterval(autoSampleTimerRef.current);
+    autoSampleTimerRef.current = setInterval(() => sampleCameraToRefs(false), 220);
+    return true;
+  };
+
+  const scheduleAutoResume = () => {
+    if (autoResumeTimerRef.current) clearTimeout(autoResumeTimerRef.current);
+    autoResumeTimerRef.current = setTimeout(() => {
+      if (isInteractingRef.current) return;
+      startAutoRotate();
+    }, 2000);
+  };
+
+  useEffect(() => {
+    if (isInteractingRef.current) return;
+
+    let tries = 0;
+    const tick = () => {
+      if (isInteractingRef.current) return;
+      if (startAutoRotate()) return;
+      if (tries++ < 18) setTimeout(tick, 80);
+    };
+
+    tick();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!initialFetchDoneRef.current && normalizedPins.length) {
+      initialFetchDoneRef.current = true;
+    }
+
+    if (!normalizedPins.length) return;
+    if (isInteractingRef.current) return;
+
+    startAutoRotate();
+  }, [normalizedPins]);
+
   useEffect(() => {
     const g = globeRef.current;
     const controls = getControls(g);
     if (!controls) return;
 
-    let autoTimer = null;
-
-    if (!userInteractedRef.current) {
-      autoTimer = setInterval(() => sampleCameraToRefs(false), 220);
-    }
-
     const onStart = () => {
-      if (userInteractedRef.current) return;
-      userInteractedRef.current = true;
-
-      controls.autoRotate = false;
-      controls.autoRotateSpeed = 0;
-
-      if (autoTimer) {
-        clearInterval(autoTimer);
-        autoTimer = null;
+      isInteractingRef.current = true;
+      if (!userInteractedRef.current) userInteractedRef.current = true;
+      if (autoResumeTimerRef.current) {
+        clearTimeout(autoResumeTimerRef.current);
+        autoResumeTimerRef.current = null;
       }
 
+      stopAutoRotate();
       sampleCameraToRefs(true);
     };
 
@@ -873,13 +1006,19 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
       scheduleFetchPins(false);
     };
 
+    const onEnd = () => {
+      isInteractingRef.current = false;
+      scheduleAutoResume();
+    };
+
     controls.addEventListener("start", onStart);
     controls.addEventListener("change", onChange);
+    controls.addEventListener("end", onEnd);
 
     return () => {
       controls.removeEventListener("start", onStart);
       controls.removeEventListener("change", onChange);
-      if (autoTimer) clearInterval(autoTimer);
+      controls.removeEventListener("end", onEnd);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sb]);
@@ -981,6 +1120,8 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
       if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
+      if (autoResumeTimerRef.current) clearTimeout(autoResumeTimerRef.current);
+      if (autoSampleTimerRef.current) clearInterval(autoSampleTimerRef.current);
     };
   }, []);
 
