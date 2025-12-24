@@ -338,6 +338,15 @@ function summarizePayloadContentOnly(stage, payload, meta) {
   }
 }
 
+function formatStageTitle(stage, message) {
+  const msg = typeof message === 'string' ? message.trim() : ''
+  if (msg) return msg
+
+  const label = typeof stage === 'string' ? stage.replace(/_/g, ' ').trim() : ''
+  if (!label) return 'Stage'
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
 /* ---------- UI bits ---------- */
 
 function TypingIndicator() {
@@ -683,14 +692,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
   }, [])
 
-  const setStage = (assistantId, stage, obj, meta) => {
-    const stageTitleMap = {
-      start: 'Init',
-      redis: 'History',
-      rag: 'Retrieval',
-      answer_delta: 'Generating',
-    }
-    const title = stageTitleMap[stage] || stage
+  const setStage = (assistantId, stage, obj = {}, meta) => {
+    const title = formatStageTitle(stage, obj?.message)
     const keyInfo = summarizePayloadContentOnly(stage, obj?.payload, meta)
 
     setMessages((prev) =>
@@ -771,7 +774,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
             return
           }
 
-          if (stage === 'start' || stage === 'redis' || stage === 'rag') {
+          if (stage !== 'answer_delta' && stage !== 'answer_final') {
             setStage(assistantId, stage, obj)
           }
         },
