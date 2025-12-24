@@ -892,7 +892,7 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
         controls.enableDamping = true;
         controls.dampingFactor = 0.08;
 
-        // Start auto-rotate after initial pins fetch to avoid “random init POV”
+        // Start auto-rotate after a brief delay so the initial POV feels stable
         controls.autoRotate = false;
         controls.autoRotateSpeed = 0.55;
 
@@ -902,7 +902,7 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
       }
     } catch {}
 
-    // initial sample
+    // initial sample + start auto-rotate once controls exist
     setTimeout(() => {
       sampleCameraToRefs(true);
 
@@ -916,6 +916,15 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
       debounceTimerRef.current = setTimeout(() => {
         setStableZoomT(liveZoomRef.current);
       }, 0);
+
+      // Try a few times to start auto-rotation even if Supabase fetches fail
+      let tries = 0;
+      const kick = () => {
+        if (isInteractingRef.current) return;
+        if (startAutoRotate()) return;
+        if (tries++ < 20) setTimeout(kick, 120);
+      };
+      kick();
     }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1164,7 +1173,7 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
         height={size.h}
         backgroundColor="rgba(0,0,0,0)"
         globeImageUrl="/textures/earth_day_8k.jpg"
-        bumpImageUrl="/textures/earth_bump_8k.png"
+        bumpImageUrl="/textures/earth_day_8k.jpg"
         htmlElementsData={displayPins}
         htmlLat={(d) => d.lat}
         htmlLng={(d) => d.lng}
