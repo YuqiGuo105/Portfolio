@@ -821,9 +821,17 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
   }, []);
 
 
+  // Mark initial fetch as done when Supabase is unavailable so local pins can render/animate
+  useEffect(() => {
+    if (sb) return;
+    if (initialFetchDoneRef.current) return;
+
+    initialFetchDoneRef.current = true;
+    setInitialServerPinsReady(true);
+  }, [sb]);
+
   // Enable auto-rotate once after initial server fetch (keeps init stable)
   useEffect(() => {
-    if (!sb) return;
     if (!initialFetchDoneRef.current) return;
     if (userInteractedRef.current) return;
 
@@ -833,7 +841,7 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
 
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.55;
-  }, [serverPins, sb]);
+  }, [serverPins, sb, pinsSig]);
   // Stop auto-rotate once user interacts, and sample on change
   useEffect(() => {
     const g = globeRef.current;
