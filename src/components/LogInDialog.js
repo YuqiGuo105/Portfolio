@@ -10,14 +10,16 @@ export default function LogInDialog({
                                       onClose,
                                       onConfirm,
                                       onRegister,
-                                      registerHref = '/register',
+                                      registerHref = '#contact-section',
                                       children,
                                     }) {
   const ref = useRef(null);
+  const registerToastTimer = useRef(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [registerToast, setRegisterToast] = useState('');
 
   // sync open -> <dialog> with graceful transitions
   useEffect(() => {
@@ -67,6 +69,12 @@ export default function LogInDialog({
     return () => el.removeEventListener('close', handler);
   }, [onClose]);
 
+  useEffect(() => () => {
+    if (registerToastTimer.current) {
+      clearTimeout(registerToastTimer.current);
+    }
+  }, []);
+
   const onBackdropClick = (e) => {
     if (e.target === ref.current) onClose && onClose();
   };
@@ -100,73 +108,99 @@ export default function LogInDialog({
   };
 
   const handleRegister = () => {
+    const toastMessage = 'Connect Yuqi to register a new account';
+    const scrollToConnect = () => {
+      if (typeof window === 'undefined') return false;
+
+      const connectSection =
+        document.querySelector('#contact-section') ||
+        document.querySelector('#connect-section');
+
+      if (connectSection?.scrollIntoView) {
+        connectSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return true;
+      }
+
+      if (registerHref && registerHref.startsWith('#')) {
+        window.location.hash = registerHref;
+        return true;
+      }
+
+      return false;
+    };
+
     if (onRegister) {
       onRegister();
-    } else if (registerHref && typeof window !== 'undefined') {
-      window.location.href = registerHref;
+    } else {
+      scrollToConnect();
     }
+
+    setRegisterToast(toastMessage);
+    if (registerToastTimer.current) clearTimeout(registerToastTimer.current);
+    registerToastTimer.current = setTimeout(() => setRegisterToast(''), 3400);
     if (onClose) onClose();
   };
 
   return (
-    <dialog
-      ref={ref}
-      onClick={onBackdropClick}
-      aria-labelledby="login-dialog-title"
-      className="login-dialog"
-    >
-      <div className="login-card" role="document">
-        <button
-          onClick={onClose}
-          type="button"
-          aria-label="Close dialog"
-          className="close-button"
-        >
-          ×
-        </button>
-        <header className="login-header">
-          <h2 id="login-dialog-title">{title}</h2>
-          <p>{children ?? 'Please log in to continue.'}</p>
-        </header>
-
-        <form onSubmit={handleSubmit} className="login-form">
-          <label className="field">
-            <span>Username</span>
-            <input
-              type="text"
-              name="username"
-              autoComplete="username"
-              placeholder="Enter your username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Password</span>
-            <input
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </label>
-          {errorMessage && <p className="error-text">{errorMessage}</p>}
-          <button type="submit" className="login-button" disabled={submitting}>
-            {submitting ? 'LOGGING IN…' : 'LOG IN'}
+    <>
+      <dialog
+        ref={ref}
+        onClick={onBackdropClick}
+        aria-labelledby="login-dialog-title"
+        className="login-dialog"
+      >
+        <div className="login-card" role="document">
+          <button
+            onClick={onClose}
+            type="button"
+            aria-label="Close dialog"
+            className="close-button"
+          >
+            ×
           </button>
-        </form>
+          <header className="login-header">
+            <h2 id="login-dialog-title">{title}</h2>
+            <p>{children ?? 'Please log in to continue.'}</p>
+          </header>
 
-        <div className="signup-row">
-          <span>Don’t have an account?</span>
-          <button type="button" className="signup-button" onClick={handleRegister}>
-            Sign up
-          </button>
+          <form onSubmit={handleSubmit} className="login-form">
+            <label className="field">
+              <span>Username</span>
+              <input
+                type="text"
+                name="username"
+                autoComplete="username"
+                placeholder="Enter your username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>Password</span>
+              <input
+                type="password"
+                name="password"
+                autoComplete="current-password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+            {errorMessage && <p className="error-text">{errorMessage}</p>}
+            <button type="submit" className="login-button" disabled={submitting}>
+              {submitting ? 'LOGGING IN…' : 'LOG IN'}
+            </button>
+          </form>
+
+          <div className="signup-row">
+            <span>Don’t have an account?</span>
+            <button type="button" className="signup-button" onClick={handleRegister}>
+              Sign up
+            </button>
+          </div>
         </div>
-      </div>
 
-      <style jsx>{`
+        <style jsx>{`
         .login-dialog {
           --card-bg: #ffffff;
           --card-text: #0f172a;
@@ -430,7 +464,56 @@ export default function LogInDialog({
           background: rgba(15, 23, 42, 0.6);
         }
       `}</style>
-    </dialog>
+      </dialog>
+
+      {registerToast && (
+        <div className="register-toast" role="status" aria-live="polite">
+          {registerToast}
+        </div>
+      )}
+
+      <style jsx>{`
+        .register-toast {
+          position: fixed;
+          bottom: 24px;
+          right: 24px;
+          background: rgba(15, 23, 42, 0.94);
+          color: #f8fafc;
+          padding: 12px 14px;
+          border-radius: 14px;
+          box-shadow: 0 18px 38px rgba(15, 23, 42, 0.35);
+          font-size: 14px;
+          line-height: 1.4;
+          letter-spacing: 0.01em;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          z-index: 1050;
+          animation: toast-in 160ms ease-out;
+        }
+
+        @keyframes toast-in {
+          from {
+            opacity: 0;
+            transform: translateY(12px) scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @media (max-width: 640px) {
+          .register-toast {
+            left: 16px;
+            right: 16px;
+            bottom: 18px;
+            justify-content: center;
+            text-align: center;
+          }
+        }
+      `}</style>
+    </>
   );
 }
 
