@@ -715,6 +715,17 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const canvas = el.querySelector("canvas");
+    if (canvas) {
+      canvas.style.touchAction = "none";
+      canvas.style.WebkitUserSelect = "none";
+    }
+  }, [size]);
+
   const getCamera = (g) => {
     try {
       if (g && typeof g.camera === "function") return g.camera();
