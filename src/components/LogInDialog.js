@@ -10,7 +10,7 @@ export default function LogInDialog({
                                       onClose,
                                       onConfirm,
                                       onRegister,
-                                      registerHref = '/register',
+                                      registerHref = '#contact-section',
                                       children,
                                     }) {
   const ref = useRef(null);
@@ -103,7 +103,14 @@ export default function LogInDialog({
     if (onRegister) {
       onRegister();
     } else if (registerHref && typeof window !== 'undefined') {
-      window.location.href = registerHref;
+      if (registerHref.startsWith('#')) {
+        const target = document.querySelector(registerHref);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth' });
+        }
+      } else {
+        window.location.href = registerHref;
+      }
     }
     if (onClose) onClose();
   };
