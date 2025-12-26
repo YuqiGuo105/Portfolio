@@ -801,8 +801,15 @@ const DashboardPanels = () => {
 
         {/* Visitors */}
         <div className="dashboard-card-4 visitors-card">
-          <header>
-            <h3>Visitors</h3>
+          <header className="visitors-header">
+            <div className="visitors-title">
+              <div className="section-kicker">Visitor map</div>
+              <h3>See where people are checking in</h3>
+              <p className="visitors-description">
+                The globe plots the approximate location of recent visitors in near real
+                time.
+              </p>
+            </div>
           </header>
 
           <div className="visitors-body">
@@ -1316,6 +1323,39 @@ const DashboardPanels = () => {
             rgba(53, 100, 194, 0) 75%
           ),
           #353636;
+        }
+
+        .visitors-header {
+          justify-content: flex-start;
+          align-items: flex-start;
+          padding: 1.25rem 1.5rem;
+        }
+
+        .visitors-title {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+
+        .section-kicker {
+          font-size: 0.75rem;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.72);
+          font-weight: 650;
+        }
+
+        .visitors-title h3 {
+          margin: 0;
+          color: #fff;
+        }
+
+        .visitors-description {
+          margin: 0;
+          font-size: 0.95rem;
+          color: rgba(255, 255, 255, 0.88);
+          max-width: 560px;
+          line-height: 1.4;
         }
 
         .visitors-body {
