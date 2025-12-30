@@ -264,6 +264,7 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
   const userInteractedRef = useRef(false);
   const didAutoFocusRef = useRef(false);
   const lastSampleAtRef = useRef(0);
+  const inactivityTimerRef = useRef(null);
 
   const effectivePins = useMemo(() => {
     const hasSb = !!sb && typeof sb.from === "function";
@@ -852,16 +853,34 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
 
     let autoTimer = null;
 
+    const clearInactivityTimer = () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+      }
+    };
+
+    const scheduleAutoRotateResume = () => {
+      clearInactivityTimer();
+      inactivityTimerRef.current = setTimeout(() => {
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.55;
+      }, 5000);
+    };
+
     if (!userInteractedRef.current) {
       autoTimer = setInterval(() => sampleCameraToRefs(false), 220);
     }
 
     const onStart = () => {
-      if (userInteractedRef.current) return;
-      userInteractedRef.current = true;
+      if (!userInteractedRef.current) {
+        userInteractedRef.current = true;
+      }
 
       controls.autoRotate = false;
       controls.autoRotateSpeed = 0;
+
+      clearInactivityTimer();
 
       if (autoTimer) {
         clearInterval(autoTimer);
@@ -883,13 +902,21 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
       scheduleFetchPins(false);
     };
 
+    const onEnd = () => {
+      if (!userInteractedRef.current) return;
+      scheduleAutoRotateResume();
+    };
+
     controls.addEventListener("start", onStart);
     controls.addEventListener("change", onChange);
+    controls.addEventListener("end", onEnd);
 
     return () => {
       controls.removeEventListener("start", onStart);
       controls.removeEventListener("change", onChange);
+      controls.removeEventListener("end", onEnd);
       if (autoTimer) clearInterval(autoTimer);
+      clearInactivityTimer();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sb]);
