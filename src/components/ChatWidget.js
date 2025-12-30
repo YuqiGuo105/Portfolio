@@ -74,6 +74,8 @@ function renderTextWithLinks(text) {
 }
 
 const SESSION_TTL_MS = 15 * 60 * 1000
+const UPLOAD_BUCKET = 'chat-uploads'
+const UPLOAD_TTL_MS = 2 * 60 * 1000
 const storageSafeGet = (key) => {
   if (typeof window === 'undefined') return null
   try {
@@ -639,11 +641,16 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
   const [endpoint, setEndpoint] = useState('') // optional debug
 
   const scrollRef = useRef(null)
   const ragEndpointRef = useRef(null)
   const abortRef = useRef(null)
+  const bucketReadyRef = useRef(false)
+  const uploadTimersRef = useRef([])
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -690,7 +697,102 @@ function ChatWindow({ onMinimize, onDragStart }) {
       try { abortRef.current.abort() } catch {}
       abortRef.current = null
     }
+    uploadTimersRef.current.forEach((timerId) => clearTimeout(timerId))
   }, [])
+
+  const ensureBucketExists = async () => {
+    if (bucketReadyRef.current) return true
+
+    const { error, data } = await supabase.storage.getBucket(UPLOAD_BUCKET)
+
+    if (error && error?.message?.toLowerCase().includes('not found')) {
+      const { error: createError } = await supabase.storage.createBucket(UPLOAD_BUCKET, {
+        public: false,
+        fileSizeLimit: 20 * 1024 * 1024,
+      })
+
+      if (createError) {
+        logger.error('Failed to create bucket', createError)
+        return false
+      }
+    } else if (error) {
+      logger.error('Failed to fetch bucket', error)
+      return false
+    }
+
+    if (!data) {
+      const { error: createError } = await supabase.storage.createBucket(UPLOAD_BUCKET, {
+        public: false,
+        fileSizeLimit: 20 * 1024 * 1024,
+      })
+
+      if (createError) {
+        logger.error('Bucket creation failed', createError)
+        return false
+      }
+    }
+
+    bucketReadyRef.current = true
+    return true
+  }
+
+  const scheduleAutoDelete = (filePath) => {
+    const timerId = setTimeout(async () => {
+      const { error } = await supabase.storage.from(UPLOAD_BUCKET).remove([filePath])
+      if (error) logger.warn('Failed to auto-delete upload', error)
+    }, UPLOAD_TTL_MS)
+
+    uploadTimersRef.current.push(timerId)
+  }
+
+  const handleFileUpload = async (file) => {
+    if (!file) return
+    setUploadError('')
+    setUploading(true)
+
+    const bucketReady = await ensureBucketExists()
+    if (!bucketReady) {
+      setUploadError('Unable to access upload storage right now.')
+      setUploading(false)
+      return
+    }
+
+    const uniquePath = `${sessionId || generateUUID()}/${Date.now()}-${file.name}`
+
+    const { error: uploadErrorResp } = await supabase.storage
+      .from(UPLOAD_BUCKET)
+      .upload(uniquePath, file, { upsert: false })
+
+    if (uploadErrorResp) {
+      logger.error('Upload failed', uploadErrorResp)
+      setUploadError('Upload failed. Please try again.')
+      setUploading(false)
+      return
+    }
+
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      .from(UPLOAD_BUCKET)
+      .createSignedUrl(uniquePath, Math.floor(UPLOAD_TTL_MS / 1000))
+
+    if (signedUrlError || !signedUrlData?.signedUrl) {
+      logger.error('Signed URL creation failed', signedUrlError)
+      setUploadError('Could not create download link.')
+      setUploading(false)
+      return
+    }
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: generateUUID(),
+        role: 'user',
+        content: `Uploaded file: ${file.name}\n${signedUrlData.signedUrl}`,
+      },
+    ])
+
+    scheduleAutoDelete(uniquePath)
+    setUploading(false)
+  }
 
   const setStage = (assistantId, stage, obj = {}, meta) => {
     const title = formatStageTitle(stage, obj?.message)
@@ -882,22 +984,45 @@ function ChatWindow({ onMinimize, onDragStart }) {
         ))}
       </div>
 
-      <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-2">
-        <div className="bot-actions flex items-center gap-2">
-          <input
+      <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-3">
+        <div className="bot-actions flex items-center gap-3 rounded-lg border border-gray-300 bg-white px-3 py-2 shadow-sm">
+          <button
+            type="button"
+            aria-label="Upload file"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="upload-button h-10 w-10 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : '+'}
+          </button>
+
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message..."
-            className="bot-input h-10 flex-1 rounded-md border-transparent bg-transparent px-2 text-sm outline-none focus:border-blue-500"
+            rows={1}
+            className="bot-input flex-1 resize-none bg-transparent px-2 text-sm text-gray-900 outline-none"
           />
+
           <button
             type="submit"
             disabled={!input.trim() || loading}
-            className="send-button rounded-md bg-blue-600 p-2 text-white hover:bg-blue-700 disabled:opacity-50"
+            className="send-button h-10 w-10 flex items-center justify-center rounded-md border border-gray-300 text-gray-800 hover:bg-gray-50 disabled:opacity-50"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
           </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={(e) => {
+              handleFileUpload(e.target.files?.[0])
+              e.target.value = ''
+            }}
+            className="hidden"
+          />
         </div>
+        {uploadError ? <p className="mt-2 text-xs text-red-600">{uploadError}</p> : null}
       </form>
 
       <style jsx global>{`
