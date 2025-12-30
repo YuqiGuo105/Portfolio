@@ -2,7 +2,7 @@
 
 import { createPortal } from 'react-dom'
 import { useState, useEffect, useRef, Fragment } from 'react'
-import { Minus, ArrowUpRight, Loader2 } from 'lucide-react'
+import { Minus, ArrowUpRight, Loader2, Plus } from 'lucide-react'
 import Image from 'next/image'
 import { supabase } from '../supabase/supabaseClient'
 import { useRouter } from 'next/router'
@@ -74,6 +74,7 @@ function renderTextWithLinks(text) {
 }
 
 const SESSION_TTL_MS = 15 * 60 * 1000
+const CHAT_UPLOAD_BUCKET = 'chat-widget-uploads'
 const storageSafeGet = (key) => {
   if (typeof window === 'undefined') return null
   try {
@@ -640,10 +641,13 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [endpoint, setEndpoint] = useState('') // optional debug
+  const [uploading, setUploading] = useState(false)
+  const [uploadNote, setUploadNote] = useState('')
 
   const scrollRef = useRef(null)
   const ragEndpointRef = useRef(null)
   const abortRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -680,6 +684,19 @@ function ChatWindow({ onMinimize, onDragStart }) {
         if (!res.ok) logger.warn('Health check non-OK:', res.status, res.statusText)
       } catch (e) {
         logger.warn('Health check error:', e?.message || e)
+      }
+
+      try {
+        const { data: bucketInfo, error: bucketError } = await supabase.storage.getBucket(CHAT_UPLOAD_BUCKET)
+        if (!bucketInfo || bucketError) {
+          const { error: createError } = await supabase.storage.createBucket(CHAT_UPLOAD_BUCKET, {
+            public: false,
+            fileSizeLimit: '5242880', // 5MB
+          })
+          if (createError) logger.warn('Unable to create upload bucket', createError.message || createError)
+        }
+      } catch (e) {
+        logger.warn('Bucket check failed', e?.message || e)
       }
     })()
     return () => { mounted = false }
@@ -787,6 +804,56 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
   }
 
+  const handleUploadClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    setUploadNote('')
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_')
+    const path = `${sessionId}/${Date.now()}-${safeName}`
+
+    try {
+      const { error: uploadError } = await supabase.storage.from(CHAT_UPLOAD_BUCKET).upload(path, file, {
+        upsert: false,
+        cacheControl: '120',
+      })
+
+      if (uploadError) throw uploadError
+
+      const { data: signed, error: signedError } = await supabase.storage.from(CHAT_UPLOAD_BUCKET).createSignedUrl(path, 120)
+      if (signedError || !signed?.signedUrl) throw signedError || new Error('Unable to create signed URL')
+
+      const note = `Uploaded ${file.name}. Link expires when file auto-deletes in 2 minutes.`
+      setUploadNote(note)
+      setMessages((prev) => [
+        ...prev,
+        { id: generateUUID(), role: 'user', content: `${note}\n${signed.signedUrl}` },
+      ])
+      setInput((prev) => (prev ? `${prev}\n${signed.signedUrl}` : signed.signedUrl))
+
+      setTimeout(async () => {
+        try {
+          const { error: removeError } = await supabase.storage.from(CHAT_UPLOAD_BUCKET).remove([path])
+          if (removeError) logger.warn('Auto-delete failed', removeError.message || removeError)
+        } catch (e) {
+          logger.warn('Auto-delete threw', e?.message || e)
+        }
+      }, 2 * 60 * 1000)
+    } catch (e) {
+      logger.error('Upload failed', e?.message || e)
+      setUploadNote('Upload failed. Please try again.')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   const sendMessage = async (e) => {
     e.preventDefault()
     const text = input.trim()
@@ -882,22 +949,43 @@ function ChatWindow({ onMinimize, onDragStart }) {
         ))}
       </div>
 
-      <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-2">
-        <div className="bot-actions flex items-center gap-2">
-          <input
+      <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-3 py-3 space-y-2">
+        <div className="bot-actions flex items-center gap-3 rounded-lg border-2 border-gray-800 bg-white px-3 py-2 shadow-sm dark:border-gray-200 dark:bg-gray-900">
+          <button
+            type="button"
+            onClick={handleUploadClick}
+            className="upload-button flex h-12 w-12 items-center justify-center rounded-full border-2 border-gray-800 text-gray-900 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 dark:border-gray-200 dark:text-gray-100"
+            disabled={uploading}
+            aria-label="Upload a file"
+          >
+            {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-6 w-6" />}
+          </button>
+
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            className="bot-input h-10 flex-1 rounded-md border-transparent bg-transparent px-2 text-sm outline-none focus:border-blue-500"
+            placeholder="Type your message or paste the upload link..."
+            className="bot-textarea h-12 max-h-28 min-h-[48px] flex-1 resize-none overflow-y-auto border-none bg-transparent px-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100"
           />
+
           <button
             type="submit"
             disabled={!input.trim() || loading}
-            className="send-button rounded-md bg-blue-600 p-2 text-white hover:bg-blue-700 disabled:opacity-50"
+            className="send-button flex h-12 w-12 items-center justify-center rounded-md border-2 border-gray-800 bg-white text-gray-900 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 dark:border-gray-200 dark:text-gray-100"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-5 w-5" />}
           </button>
         </div>
+
+        {uploadNote ? <p className="text-xs text-gray-600 dark:text-gray-300">{uploadNote}</p> : null}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,.pdf,.doc,.docx,.txt"
+          className="hidden"
+          onChange={handleFileUpload}
+        />
       </form>
 
       <style jsx global>{`
