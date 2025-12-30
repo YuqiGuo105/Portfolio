@@ -984,8 +984,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
         ))}
       </div>
 
-      <form onSubmit={sendMessage} className="border-t border-gray-200 bg-gray-50/60 px-2 py-3">
-        <div className="bot-actions flex items-center gap-3 rounded-lg border border-gray-300 bg-white px-3 py-2 shadow-sm">
+      <form onSubmit={sendMessage} className="border-t border-gray-200 bg-white px-2 py-3">
+        <div className="bot-actions flex items-center gap-3 border border-gray-300 bg-white px-3 py-2">
           <button
             type="button"
             aria-label="Upload file"
@@ -999,9 +999,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
+            placeholder=""
             rows={1}
             className="bot-input flex-1 resize-none bg-transparent px-2 text-sm text-gray-900 outline-none"
+            aria-label="Message input"
           />
 
           <button
