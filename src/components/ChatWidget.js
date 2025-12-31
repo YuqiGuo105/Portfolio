@@ -1227,7 +1227,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
       <form
         onSubmit={sendMessage}
-        className="input-area shrink-0 border-t border-gray-200 bg-white px-3 py-1 dark:border-gray-700 dark:bg-gray-900"
+        className="input-area shrink-0 border-t border-gray-200 bg-white px-3 py-1 dark:border-slate-700 dark:bg-[#0f172a]"
       >
         {/* ✅ attachment tray above textarea (progress + chips) */}
         {composerFiles.length > 0 ? (
@@ -1396,6 +1396,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
         :global(.dark) #__chat_widget_root .bot-container {
           background-color: #0d1522;
           color: #e0e0e0;
+        }
+        :global(.dark) #__chat_widget_root .input-area {
+          background-color: #0e1827;
+          border-color: rgba(148, 163, 184, 0.45);
         }
         :global(.dark) #__chat_widget_root .bot-message {
           color: #e0e0e0;
