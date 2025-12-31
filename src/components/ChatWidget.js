@@ -1323,19 +1323,20 @@ function ChatWindow({ onMinimize, onDragStart }) {
             placeholder="Type your message..."
             aria-label="Message input"
             rows={1}
+            className="cw-textbox"
             style={{
               flex: "1 1 auto",
               minWidth: 0,
               width: "100%",
               minHeight: "40px",
               maxHeight: "72px",
-              backgroundColor: "transparent",
+              backgroundColor: "var(--cw-input-bg)",
               padding: "8px",
               fontSize: "16px",
               lineHeight: "24px",
               color: "var(--cw-input-text)",
-              border: "none",
-              borderRadius: "0",
+              border: "1px solid var(--cw-input-border)",
+              borderRadius: "10px",
               outline: "none",
               boxSizing: "border-box",
               resize: "none",
@@ -1438,19 +1439,23 @@ function ChatWindow({ onMinimize, onDragStart }) {
         :global(body) #__chat_widget_root {
           --cw-input-bg: #ffffff;
           --cw-input-border: #e5e7eb;
+          --cw-input-border-strong: #d1d5db;
           --cw-input-text: #111827;
           --cw-input-placeholder: #6b7280;
           --cw-attachment-border: rgba(229, 231, 235, 0.9);
+          --cw-attachment-border-strong: rgba(17, 24, 39, 0.18);
           --cw-attachment-bg: rgba(255, 255, 255, 0.6);
           --cw-progress-surface: rgba(248, 250, 252, 0.9);
           --cw-progress-track: rgba(229, 231, 235, 1);
         }
         :global(body.dark-skin) #__chat_widget_root {
           --cw-input-bg: #0f172a;
-          --cw-input-border: #1f2937;
+          --cw-input-border: rgba(255, 255, 255, 0.28);
+          --cw-input-border-strong: rgba(255, 255, 255, 0.72);
           --cw-input-text: #e5e7eb;
           --cw-input-placeholder: #9ca3af;
-          --cw-attachment-border: rgba(55, 65, 81, 0.7);
+          --cw-attachment-border: rgba(255, 255, 255, 0.42);
+          --cw-attachment-border-strong: rgba(255, 255, 255, 0.6);
           --cw-attachment-bg: rgba(15, 23, 42, 0.35);
           --cw-progress-surface: rgba(15, 23, 42, 0.45);
           --cw-progress-track: rgba(55, 65, 81, 0.9);
@@ -1487,7 +1492,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
         }
 
         .cw-prog {
-          border: 1px solid var(--cw-attachment-border);
+          border: 1px solid var(--cw-attachment-border-strong);
           background: var(--cw-progress-surface);
           border-radius: 12px;
           padding: 8px 10px;
@@ -1530,12 +1535,20 @@ function ChatWindow({ onMinimize, onDragStart }) {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          border: 1px solid var(--cw-attachment-border);
+          border: 1px solid var(--cw-attachment-border-strong);
           background: var(--cw-attachment-bg);
           border-radius: 999px;
           padding: 8px 10px;
           max-width: 100%;
           color: var(--cw-input-text);
+        }
+
+        #__chat_widget_root .cw-textbox {
+          transition: border-color 120ms ease, box-shadow 120ms ease;
+        }
+        #__chat_widget_root .cw-textbox:focus {
+          border-color: var(--cw-input-border-strong);
+          box-shadow: 0 0 0 1px var(--cw-input-border-strong);
         }
 
         .cw-chip-link {
