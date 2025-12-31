@@ -1144,7 +1144,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
   }
 
   return (
-    <div className="bot-container relative mb-6 flex flex-col w-screen md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700">
+    <div
+      className="bot-container relative mb-6 flex flex-col w-screen md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700"
+      style={{ height: "min(80vh, 680px)", maxHeight: "680px" }}
+    >
       <header
         className="bot-header shrink-0 flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700"
         onMouseDown={onDragStart}
@@ -1237,6 +1240,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           backgroundColor: "var(--cw-input-bg)",
           borderTop: "1px solid var(--cw-input-border)",
           color: "var(--cw-input-text)",
+          marginTop: "auto",
         }}
       >
         {composerFiles.length > 0 ? (
