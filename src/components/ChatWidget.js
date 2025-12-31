@@ -1170,7 +1170,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
       <div
         ref={scrollRef}
         className="bot-messages flex-1 min-h-0 space-y-2 overflow-y-auto px-3 py-3"
-        style={{ background: "var(--cw-messages-bg)" }}
       >
         {messages.map((m) => (
           <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
@@ -1414,6 +1413,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
         #__chat_widget_root .bot-messages {
           min-height: 0;
           overflow-y: auto;
+          background: var(--cw-messages-bg, linear-gradient(180deg, #ffffff 0%, #f8fafc 100%));
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .bot-messages {
+          background: var(--cw-messages-bg, linear-gradient(180deg, #0b1220 0%, #0f172a 100%));
         }
 
         .bot-message,
