@@ -498,7 +498,8 @@ function StageToast({ step }) {
           max-height: 92px;
           overflow: hidden;
         }
-        :global(.dark) .stage-card {
+        :global(.dark) .stage-card,
+        :global(body.dark-skin) .stage-card {
           border-color: rgba(55, 65, 81, 0.7);
           background: rgba(15, 23, 42, 0.55);
           box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
@@ -525,7 +526,8 @@ function StageToast({ step }) {
           color: rgba(75, 85, 99, 0.95);
           animation: spinFast 0.75s linear infinite;
         }
-        :global(.dark) .spinnerIcon {
+        :global(.dark) .spinnerIcon,
+        :global(body.dark-skin) .spinnerIcon {
           color: rgba(226, 232, 240, 0.85);
           filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
         }
@@ -538,7 +540,8 @@ function StageToast({ step }) {
           text-overflow: ellipsis;
           white-space: nowrap;
         }
-        :global(.dark) .stage-text {
+        :global(.dark) .stage-text,
+        :global(body.dark-skin) .stage-text {
           color: rgba(248, 250, 252, 0.92);
         }
         .row2 {
@@ -554,7 +557,8 @@ function StageToast({ step }) {
           flex-shrink: 0;
           line-height: 1.2;
         }
-        :global(.dark) .key-label {
+        :global(.dark) .key-label,
+        :global(body.dark-skin) .key-label {
           color: rgba(226, 232, 240, 0.7);
         }
         .key-value {
@@ -1228,7 +1232,12 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
       <form
         onSubmit={sendMessage}
-        className="input-area shrink-0 border-t border-gray-200 bg-white px-3 py-1 dark:border-gray-700 dark:bg-gray-900"
+        className="input-area shrink-0 px-3 py-1"
+        style={{
+          backgroundColor: "var(--cw-input-bg)",
+          borderTop: "1px solid var(--cw-input-border)",
+          color: "var(--cw-input-text)",
+        }}
       >
         {composerFiles.length > 0 ? (
           <div className="cw-tray">
@@ -1324,7 +1333,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
               padding: "8px",
               fontSize: "16px",
               lineHeight: "24px",
-              color: "#111",
+              color: "var(--cw-input-text)",
               border: "none",
               borderRadius: "0",
               outline: "none",
@@ -1425,6 +1434,32 @@ function ChatWindow({ onMinimize, onDragStart }) {
           border-collapse: collapse !important;
         }
 
+        /* ===== Theme tokens ===== */
+        :global(body) #__chat_widget_root {
+          --cw-input-bg: #ffffff;
+          --cw-input-border: #e5e7eb;
+          --cw-input-text: #111827;
+          --cw-input-placeholder: #6b7280;
+          --cw-attachment-border: rgba(229, 231, 235, 0.9);
+          --cw-attachment-bg: rgba(255, 255, 255, 0.6);
+          --cw-progress-surface: rgba(248, 250, 252, 0.9);
+          --cw-progress-track: rgba(229, 231, 235, 1);
+        }
+        :global(body.dark-skin) #__chat_widget_root {
+          --cw-input-bg: #0f172a;
+          --cw-input-border: #1f2937;
+          --cw-input-text: #e5e7eb;
+          --cw-input-placeholder: #9ca3af;
+          --cw-attachment-border: rgba(55, 65, 81, 0.7);
+          --cw-attachment-bg: rgba(15, 23, 42, 0.35);
+          --cw-progress-surface: rgba(15, 23, 42, 0.45);
+          --cw-progress-track: rgba(55, 65, 81, 0.9);
+        }
+
+        #__chat_widget_root .input-area textarea::placeholder {
+          color: var(--cw-input-placeholder);
+        }
+
         @keyframes toastIn {
           from {
             opacity: 0;
@@ -1452,14 +1487,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
         }
 
         .cw-prog {
-          border: 1px solid rgba(229, 231, 235, 0.9);
-          background: rgba(248, 250, 252, 0.9);
+          border: 1px solid var(--cw-attachment-border);
+          background: var(--cw-progress-surface);
           border-radius: 12px;
           padding: 8px 10px;
-        }
-        :global(.dark) .cw-prog {
-          border-color: rgba(55, 65, 81, 0.7);
-          background: rgba(15, 23, 42, 0.45);
+          color: var(--cw-input-text);
         }
         .cw-prog-top {
           display: flex;
@@ -1477,16 +1509,14 @@ function ChatWindow({ onMinimize, onDragStart }) {
         .cw-prog-pct {
           min-width: 32px;
           text-align: right;
+          color: var(--cw-input-placeholder);
         }
         .cw-prog-bar {
           height: 6px;
           border-radius: 999px;
-          background: rgba(229, 231, 235, 1);
+          background: var(--cw-progress-track);
           overflow: hidden;
           margin-top: 6px;
-        }
-        :global(.dark) .cw-prog-bar {
-          background: rgba(55, 65, 81, 0.9);
         }
         .cw-prog-fill {
           height: 100%;
@@ -1500,15 +1530,12 @@ function ChatWindow({ onMinimize, onDragStart }) {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          border: 1px solid rgba(229, 231, 235, 0.9);
-          background: rgba(255, 255, 255, 0.6);
+          border: 1px solid var(--cw-attachment-border);
+          background: var(--cw-attachment-bg);
           border-radius: 999px;
           padding: 8px 10px;
           max-width: 100%;
-        }
-        :global(.dark) .cw-chip {
-          border-color: rgba(55, 65, 81, 0.7);
-          background: rgba(15, 23, 42, 0.35);
+          color: var(--cw-input-text);
         }
 
         .cw-chip-link {
@@ -1548,6 +1575,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           font-size: 12px;
           opacity: 0.75;
           flex: 0 0 auto;
+          color: var(--cw-input-placeholder);
         }
         .cw-chip-err {
           color: #ef4444;
@@ -1569,7 +1597,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
           opacity: 1;
           background: rgba(243, 244, 246, 1);
         }
-        :global(.dark) .cw-chip-x:hover {
+        :global(.dark) .cw-chip-x:hover,
+        :global(body.dark-skin) .cw-chip-x:hover {
           background: rgba(31, 41, 55, 1);
         }
         .cw-chip-x-ico {
@@ -1611,7 +1640,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
           background: rgba(15, 23, 42, 0.06);
           border: 1px solid rgba(229, 231, 235, 0.9);
         }
-        :global(.dark) #__chat_widget_root .bot-message pre {
+        :global(.dark) #__chat_widget_root .bot-message pre,
+        :global(body.dark-skin) #__chat_widget_root .bot-message pre {
           background: rgba(0, 0, 0, 0.25);
           border-color: rgba(55, 65, 81, 0.7);
         }
@@ -1627,7 +1657,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
           background: rgba(15, 23, 42, 0.06);
           border: 1px solid rgba(229, 231, 235, 0.9);
         }
-        :global(.dark) #__chat_widget_root .bot-message :not(pre) > code {
+        :global(.dark) #__chat_widget_root .bot-message :not(pre) > code,
+        :global(body.dark-skin) #__chat_widget_root .bot-message :not(pre) > code {
           background: rgba(0, 0, 0, 0.2);
           border-color: rgba(55, 65, 81, 0.7);
         }
