@@ -1314,6 +1314,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
             placeholder="Type your message..."
             aria-label="Message input"
             rows={1}
+            className="cw-input"
             style={{
               flex: "1 1 auto",
               minWidth: 0,
@@ -1324,7 +1325,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
               padding: "8px",
               fontSize: "16px",
               lineHeight: "24px",
-              color: "#111",
+              color: "var(--chat-input-color, #111)",
               border: "none",
               borderRadius: "0",
               outline: "none",
@@ -1403,6 +1404,18 @@ function ChatWindow({ onMinimize, onDragStart }) {
           overflow-wrap: anywhere;
           word-break: break-word;
           white-space: pre-wrap;
+        }
+        /* Light & dark mode input colors */
+        #__chat_widget_root {
+          --chat-input-color: #111827;
+          --chat-placeholder-color: #6b7280;
+        }
+        #__chat_widget_root .cw-input::placeholder {
+          color: var(--chat-placeholder-color, #6b7280);
+        }
+        body.dark-skin #__chat_widget_root {
+          --chat-input-color: #f3f4f6;
+          --chat-placeholder-color: #9ca3af;
         }
         .bot-message a.chat-link {
           text-decoration: underline;
