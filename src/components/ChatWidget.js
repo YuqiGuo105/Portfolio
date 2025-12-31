@@ -1397,6 +1397,26 @@ function ChatWindow({ onMinimize, onDragStart }) {
           height: min(80vh, 680px);
           max-height: 680px;
         }
+        /* === Force the input bar to stay at the bottom === */
+        #__chat_widget_root .bot-container {
+          display: flex !important;
+          flex-direction: column !important;
+        }
+
+        #__chat_widget_root .bot-header {
+          flex: 0 0 auto !important;
+        }
+
+        #__chat_widget_root .bot-messages {
+          flex: 1 1 auto !important;
+          min-height: 0 !important;     /* critical for scroll area in flex layouts */
+          overflow-y: auto !important;
+        }
+
+        #__chat_widget_root .input-area {
+          flex: 0 0 auto !important;
+          margin-top: auto !important;  /* push input area to the bottom */
+        }
         @supports (height: 100dvh) {
           #__chat_widget_root .bot-container {
             height: min(80dvh, 680px);
