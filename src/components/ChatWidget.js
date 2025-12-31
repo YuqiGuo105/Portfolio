@@ -792,6 +792,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const [uploading, setUploading] = useState(false)
   const [endpoint, setEndpoint] = useState("")
   const [errorToast, setErrorToast] = useState("")
+  const [isDarkMode, setIsDarkMode] = useState(false)
 
   // composer attachments (max 2 per outgoing message)
   const [composerFiles, setComposerFiles] = useState([])
@@ -810,6 +811,27 @@ function ChatWindow({ onMinimize, onDragStart }) {
       return () => clearTimeout(timer)
     }
   }, [errorToast])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined
+
+    const root = document.documentElement
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)")
+
+    const computeDark = () => root.classList.contains("dark") || prefersDark.matches
+    setIsDarkMode(computeDark())
+
+    const mutationObserver = new MutationObserver(() => setIsDarkMode(computeDark()))
+    mutationObserver.observe(root, { attributes: true, attributeFilter: ["class"] })
+
+    const mediaListener = (event) => setIsDarkMode(root.classList.contains("dark") || event.matches)
+    prefersDark.addEventListener("change", mediaListener)
+
+    return () => {
+      mutationObserver.disconnect()
+      prefersDark.removeEventListener("change", mediaListener)
+    }
+  }, [])
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -1228,6 +1250,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
       <form
         onSubmit={sendMessage}
         className="input-area shrink-0 border-t border-gray-200 bg-white px-3 py-1 dark:border-slate-700 dark:bg-[#0f172a]"
+        data-dark-mode={isDarkMode ? "true" : "false"}
       >
         {/* ✅ attachment tray above textarea (progress + chips) */}
         {composerFiles.length > 0 ? (
@@ -1324,7 +1347,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
               padding: "8px",
               fontSize: "16px",
               lineHeight: "24px",
-              color: "#111",
+              color: isDarkMode ? "#e0e0e0" : "#111",
               border: "none",
               borderRadius: "0",
               outline: "none",
@@ -1397,7 +1420,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
           background-color: #0d1522;
           color: #e0e0e0;
         }
-        :global(.dark) #__chat_widget_root .input-area {
+        :global(.dark) #__chat_widget_root .input-area,
+        #__chat_widget_root .input-area[data-dark-mode="true"] {
           background-color: #0e1827;
           border-color: rgba(148, 163, 184, 0.45);
         }
@@ -1409,6 +1433,12 @@ function ChatWindow({ onMinimize, onDragStart }) {
         :global(.dark) #__chat_widget_root .cw-chip-name,
         :global(.dark) #__chat_widget_root .cw-chip-meta {
           color: #e0e0e0;
+        }
+        #__chat_widget_root .input-area[data-dark-mode="true"] textarea {
+          color: #e0e0e0;
+        }
+        #__chat_widget_root .input-area[data-dark-mode="true"] textarea::placeholder {
+          color: rgba(226, 232, 240, 0.65);
         }
 
         #__chat_widget_root .bot-messages {
