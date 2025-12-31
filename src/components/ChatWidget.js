@@ -1167,7 +1167,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
       </header>
 
       {/* ✅ only this area scrolls */}
-      <div ref={scrollRef} className="bot-messages flex-1 min-h-0 space-y-2 overflow-y-auto px-3 py-3">
+      <div
+        ref={scrollRef}
+        className="bot-messages flex-1 min-h-0 space-y-2 overflow-y-auto px-3 py-3"
+        style={{ background: "var(--cw-messages-bg)" }}
+      >
         {messages.map((m) => (
           <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
             {m.role === "assistant" && m.isHtml ? (
@@ -1446,6 +1450,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           --cw-input-border-strong: #d1d5db;
           --cw-input-text: #111827;
           --cw-input-placeholder: #6b7280;
+          --cw-messages-bg: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
           --cw-attachment-border: rgba(229, 231, 235, 0.9);
           --cw-attachment-border-strong: rgba(17, 24, 39, 0.18);
           --cw-attachment-bg: rgba(255, 255, 255, 0.6);
@@ -1458,6 +1463,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           --cw-input-border-strong: rgba(255, 255, 255, 0.72);
           --cw-input-text: #e5e7eb;
           --cw-input-placeholder: #9ca3af;
+          --cw-messages-bg: linear-gradient(180deg, #0b1220 0%, #0f172a 100%);
           --cw-attachment-border: rgba(255, 255, 255, 0.42);
           --cw-attachment-border-strong: rgba(255, 255, 255, 0.6);
           --cw-attachment-bg: rgba(15, 23, 42, 0.35);
