@@ -1393,6 +1393,20 @@ function ChatWindow({ onMinimize, onDragStart }) {
           }
         }
 
+        :global(.dark) #__chat_widget_root .bot-container {
+          background-color: #0d1522;
+          color: #e0e0e0;
+        }
+        :global(.dark) #__chat_widget_root .bot-message {
+          color: #e0e0e0;
+        }
+        :global(.dark) #__chat_widget_root textarea,
+        :global(.dark) #__chat_widget_root .cw-tray,
+        :global(.dark) #__chat_widget_root .cw-chip-name,
+        :global(.dark) #__chat_widget_root .cw-chip-meta {
+          color: #e0e0e0;
+        }
+
         #__chat_widget_root .bot-messages {
           min-height: 0;
           overflow-y: auto;
@@ -1457,8 +1471,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
           padding: 8px 10px;
         }
         :global(.dark) .cw-prog {
-          border-color: rgba(55, 65, 81, 0.7);
-          background: rgba(15, 23, 42, 0.45);
+          border-color: rgba(148, 163, 184, 0.35);
+          background: rgba(255, 255, 255, 0.05);
         }
         .cw-prog-top {
           display: flex;
@@ -1506,8 +1520,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
           max-width: 100%;
         }
         :global(.dark) .cw-chip {
-          border-color: rgba(55, 65, 81, 0.7);
-          background: rgba(15, 23, 42, 0.35);
+          border-color: rgba(148, 163, 184, 0.35);
+          background: rgba(255, 255, 255, 0.08);
         }
 
         .cw-chip-link {
@@ -1569,7 +1583,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           background: rgba(243, 244, 246, 1);
         }
         :global(.dark) .cw-chip-x:hover {
-          background: rgba(31, 41, 55, 1);
+          background: rgba(255, 255, 255, 0.12);
         }
         .cw-chip-x-ico {
           width: 16px;
