@@ -1627,6 +1627,20 @@ export default function ChatWidget() {
     rootRef.current = el
     el.style.pointerEvents = "auto"
     el.style.transform = `translate(${offset.x}px, ${offset.y}px)`
+
+    const applyTheme = () => {
+      const isDark =
+        document.body.classList.contains("dark-skin") ||
+        document.documentElement.classList.contains("dark")
+      el.classList.toggle("dark", isDark)
+    }
+
+    applyTheme()
+
+    const observer = new MutationObserver(applyTheme)
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] })
+
+    return () => observer.disconnect()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
