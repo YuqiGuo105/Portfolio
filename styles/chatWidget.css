@@ -239,6 +239,16 @@
     background-color: #0f172a;
     border-color: #1f2937;
   }
+  body.dark-skin #__chat_widget_root .input-area {
+    background-color: #0f172a;
+    border-color: #1f2937;
+  }
+  body.dark-skin #__chat_widget_root .input-area textarea {
+    color: #e5e7eb;
+  }
+  body.dark-skin #__chat_widget_root .input-area textarea::placeholder {
+    color: #9ca3af;
+  }
   body.dark-skin .bot-messages {
     background: linear-gradient(180deg, #0b1220 0%, #0f172a 100%);
   }
