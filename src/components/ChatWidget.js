@@ -9,7 +9,9 @@ import { useRouter } from "next/router"
 
 /* ============================================================
    ChatWidget — POST SSE for /api/rag/answer/stream
-   + ChatGPT-like attachments (2 max, progress bar, chips in msg)
+   + Attachments (2 max, progress bar, chips in msg)
+   ✅ NEW: send uploaded file URLs via request body: { fileUrls: [...] }
+   ✅ No hard-coded stage list: stages come from backend stream payload
    ============================================================ */
 
 const logger = {
@@ -18,13 +20,68 @@ const logger = {
   error: (...a) => console.error("[ChatWidget]", ...a),
 }
 
-/* ───────── minimal sanitizer ───────── */
-const sanitizeHtml = (html) =>
+/* ───────── WYSIWYG HTML sanitizer (DOMParser-first) ───────── */
+const sanitizeHtmlRegexFallback = (html) =>
   String(html || "")
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
     .replace(/\s(on\w+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
     .replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"')
     .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'")
+
+function sanitizeWysiwygHtml(html) {
+  const raw = String(html || "")
+  if (typeof window === "undefined" || typeof window.DOMParser === "undefined") {
+    return sanitizeHtmlRegexFallback(raw)
+  }
+
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(raw, "text/html")
+
+    doc.querySelectorAll("script, iframe, object, embed, link, meta").forEach((n) => n.remove())
+
+    const all = doc.body.querySelectorAll("*")
+    all.forEach((el) => {
+      ;[...el.attributes].forEach((attr) => {
+        const name = attr.name.toLowerCase()
+        const value = String(attr.value || "")
+
+        if (name.startsWith("on")) {
+          el.removeAttribute(attr.name)
+          return
+        }
+
+        if (name === "href" || name === "src" || name === "xlink:href") {
+          const v = value.trim().replace(/\s+/g, "")
+          if (/^javascript:/i.test(v) || /^data:text\/html/i.test(v)) {
+            el.removeAttribute(attr.name)
+            return
+          }
+        }
+
+        if (name === "style") {
+          if (/expression\s*\(|url\s*\(\s*['"]?\s*javascript:/i.test(value) || /behavior\s*:/i.test(value)) {
+            el.removeAttribute("style")
+            return
+          }
+        }
+      })
+
+      if (el.tagName === "A") {
+        const href = el.getAttribute("href") || ""
+        if (href && !href.startsWith("#")) {
+          el.setAttribute("target", "_blank")
+          el.setAttribute("rel", "noreferrer noopener")
+        }
+      }
+    })
+
+    return doc.body.innerHTML
+  } catch (e) {
+    logger.warn("DOMParser sanitize failed, fallback to regex:", e?.message || e)
+    return sanitizeHtmlRegexFallback(raw)
+  }
+}
 
 /* ───────── linkify plain URLs (for non-HTML answers) ───────── */
 const URL_RE = /\bhttps?:\/\/[^\s<]+/gi
@@ -45,13 +102,7 @@ function renderTextWithLinks(text) {
 
     const { href, tail } = splitTrailingPunct(match)
     out.push(
-      <a
-        key={`${idx}-${href}`}
-        href={href}
-        target="_blank"
-        rel="noreferrer noopener"
-        className="chat-link"
-      >
+      <a key={`${idx}-${href}`} href={href} target="_blank" rel="noreferrer noopener" className="chat-link">
         {href}
       </a>,
     )
@@ -114,31 +165,6 @@ const isSessionFresh = () => {
   return Number.isFinite(lastActive) && Date.now() - lastActive < SESSION_TTL_MS
 }
 
-/* Convert plain guideline text into clickable links */
-function formatGuideText(text) {
-  if (text.startsWith("Need a hand?")) {
-    return (
-      "Need a hand?<br />Sections → " +
-      '<a href="/#about-section">About Me</a> | ' +
-      '<a href="/#works-section">Projects</a> | ' +
-      '<a href="/blog">Tech Blogs</a> | ' +
-      '<a href="/#resume-section">Experience</a>'
-    )
-  }
-  if (text.startsWith("导航：")) {
-    return (
-      "导航：" +
-      '<a href="/#about-section">关于我</a>｜' +
-      '<a href="/#resume-section">经历</a>｜' +
-      '<a href="/#works-section">项目</a>｜' +
-      '<a href="/blog">技术博客</a>｜' +
-      '<a href="/#contact-section">联系我</a>｜' +
-      '<a href="/#contact-section">联系我</a>'
-    )
-  }
-  return text
-}
-
 /** Ensure there's a root container for the chat widget */
 const ensureRoot = () => {
   let el = document.getElementById("__chat_widget_root")
@@ -192,9 +218,11 @@ function compactText(s, max = 220) {
 }
 
 function safeShort(s, max) {
-  return compactText(String(s ?? ""), max)
-    .replace(/\s+/g, " ")
-    .trim()
+  return compactText(String(s ?? ""), max).replace(/\s+/g, " ").trim()
+}
+
+function looksLikeHtml(s) {
+  return /<\/?[a-z][\s\S]*>/i.test(String(s || ""))
 }
 
 /* ---------- RAG endpoint helpers ---------- */
@@ -291,55 +319,58 @@ async function postSSE(url, body, { onEvent, signal }) {
 }
 
 /* ============================================================
-   ✅ Key info = ONLY payload "content" (or content-like field)
+   ✅ No hard-coded stage list: use backend stream fields directly
    ============================================================ */
-function summarizePayloadContentOnly(stage, payload, meta) {
-  if (stage === "start") {
-    const ts = payload?.ts
-    return ts ? `ts=${ts}` : ""
-  }
 
-  if (stage === "redis") {
-    const arr = Array.isArray(payload) ? payload : []
-    const last = arr
-      .slice(-4)
-      .map((m) => safeShort(m?.content, 50))
+function extractPayloadText(payload) {
+  if (payload == null) return ""
+  if (typeof payload === "string") return payload
+
+  if (Array.isArray(payload)) {
+    const parts = payload
+      .slice(0, 4)
+      .map((it) => {
+        if (it == null) return ""
+        if (typeof it === "string") return it
+        if (typeof it === "object") {
+          const t = it.content ?? it.preview ?? it.text ?? it.message ?? it.title ?? it.name ?? it.url
+          if (t != null && String(t).trim()) return String(t)
+          try {
+            return JSON.stringify(it)
+          } catch {
+            return String(it)
+          }
+        }
+        return String(it)
+      })
       .filter(Boolean)
-    return last.join("  ·  ")
+    return parts.join("  ·  ")
   }
 
-  if (stage === "rag") {
-    const arr = Array.isArray(payload) ? payload : []
-    if (!arr.length) return ""
-    const top = arr[0] || {}
-    const text = top?.preview ?? top?.content ?? ""
-    return safeShort(text, 160)
+  if (typeof payload === "object") {
+    const t = payload.content ?? payload.preview ?? payload.text ?? payload.message ?? payload.title ?? payload.name
+    if (t != null && String(t).trim()) return String(t)
+    if (payload.ts != null) return `ts=${payload.ts}`
+    try {
+      return JSON.stringify(payload)
+    } catch {
+      return String(payload)
+    }
   }
 
-  if (stage === "answer_delta") {
-    const delta = typeof payload === "string" ? payload : ""
-    if (delta) return safeShort(delta, 80)
-    const bufLen = typeof meta?.answerLen === "number" ? meta.answerLen : null
-    return bufLen != null ? `bufLen=${bufLen}` : ""
-  }
+  return String(payload)
+}
 
-  if (payload && typeof payload === "object") {
-    const maybe = payload?.content ?? payload?.preview
-    if (maybe) return safeShort(maybe, 160)
-  }
-  try {
-    return safeShort(JSON.stringify(payload), 160)
-  } catch {
-    return safeShort(String(payload), 160)
-  }
+function summarizePayload(payload, max = 180) {
+  const t = extractPayloadText(payload)
+  return safeShort(t, max)
 }
 
 function formatStageTitle(stage, message) {
   const msg = typeof message === "string" ? message.trim() : ""
   if (msg) return msg
-  const label = typeof stage === "string" ? stage.replace(/_/g, " ").trim() : ""
-  if (!label) return "Stage"
-  return label.charAt(0).toUpperCase() + label.slice(1)
+  const s = typeof stage === "string" ? stage.trim() : ""
+  return s || "Stage"
 }
 
 /* ---------- UI bits ---------- */
@@ -635,14 +666,9 @@ function StageToast({ step }) {
 
 /* ----------------- upload helpers (FIXED InvalidKey) ----------------- */
 
-/**
- * Supabase Storage can reject object keys containing unicode/spaces/etc.
- * We keep the original name for UI, but store using ASCII-safe key.
- */
 function sanitizeFilenameForStorageKey(name) {
   const original = String(name || "upload").trim()
 
-  // keep extension
   const dot = original.lastIndexOf(".")
   const ext = dot >= 0 ? original.slice(dot) : ""
   const base = dot >= 0 ? original.slice(0, dot) : original
@@ -650,21 +676,17 @@ function sanitizeFilenameForStorageKey(name) {
   const safeBase =
     base
       .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "") // strip diacritics
-      .replace(/[^a-zA-Z0-9._-]+/g, "_") // unicode/spaces -> _
-      .replace(/^_+|_+$/g, "") // trim _
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
       .slice(0, 80) || "file"
 
-  const safeExt = ext
-    .normalize("NFKD")
-    .replace(/[^a-zA-Z0-9.]+/g, "") // keep ".pdf"
-    .slice(0, 10)
+  const safeExt = ext.normalize("NFKD").replace(/[^a-zA-Z0-9.]+/g, "").slice(0, 10)
 
   return safeBase + safeExt
 }
 
 function buildUploadPath({ sessionId, file }) {
-  // ✅ ASCII safe object key
   const safeName = sanitizeFilenameForStorageKey(file?.name)
   return {
     safeName,
@@ -695,7 +717,6 @@ async function uploadToSupabaseWithProgress({ bucket, path, file, onProgress }) 
   const { data } = await supabase.auth.getSession()
   const bearer = data?.session?.access_token || anonKey
 
-  // no "/" in key -> safe to encode whole
   const url = `${baseUrl}/storage/v1/object/${bucket}/${encodeURIComponent(path)}`
 
   return new Promise((resolve, reject) => {
@@ -719,6 +740,16 @@ async function uploadToSupabaseWithProgress({ bucket, path, file, onProgress }) 
     xhr.onerror = () => reject(new Error("Upload failed (network error)"))
     xhr.send(file)
   })
+}
+
+/**
+ * Build a PUBLIC URL for a public bucket.
+ * Example: https://xxx.supabase.co/storage/v1/object/public/chat/<path>
+ */
+function buildPublicFileUrl(bucket, objectPath) {
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!baseUrl) return ""
+  return `${baseUrl}/storage/v1/object/public/${bucket}/${encodeURIComponent(objectPath)}`
 }
 
 /* ---------- Attachment UI (CSS only) ---------- */
@@ -795,7 +826,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   // composer attachments (max 2 per outgoing message)
   const [composerFiles, setComposerFiles] = useState([])
-  // { id, file, name(original), status: "uploading"|"ready"|"error", progress, storagePath, signedUrl }
+  // { id, file, name(original), status: "uploading"|"ready"|"error", progress, storagePath, publicUrl }
 
   const scrollRef = useRef(null)
   const ragEndpointRef = useRef(null)
@@ -864,7 +895,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
   }, [])
 
-  // ✅ IMPORTANT: do NOT clear upload timers on unmount
   useEffect(
     () => () => {
       if (abortRef.current) {
@@ -900,21 +930,19 @@ function ChatWindow({ onMinimize, onDragStart }) {
     const chosen = incoming.slice(0, room)
     if (incoming.length > room) setErrorToast(`Only ${MAX_FILES_PER_MESSAGE} files per message.`)
 
-    // placeholders immediately (progress UI)
     const newItems = chosen.map((file) => ({
       id: generateUUID(),
       file,
-      name: file.name, // ✅ original name shown in UI
+      name: file.name,
       status: "uploading",
       progress: 0,
       storagePath: "",
-      signedUrl: "",
+      publicUrl: "",
     }))
 
     setComposerFiles((prev) => [...prev, ...newItems])
     setUploading(true)
 
-    // env guard
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       setErrorToast("Supabase env vars missing. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.")
       setComposerFiles((prev) =>
@@ -942,21 +970,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
           scheduleAutoDelete(uniquePath)
 
-          const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-            .from(UPLOAD_BUCKET)
-            .createSignedUrl(uniquePath, Math.floor(UPLOAD_TTL_MS / 1000))
-
-          if (signedUrlError || !signedUrlData?.signedUrl) {
-            await supabase.storage.from(UPLOAD_BUCKET).remove([uniquePath]).catch(() => {})
-            throw new Error("Could not create download link.")
-          }
+          const publicUrl = buildPublicFileUrl(UPLOAD_BUCKET, uniquePath)
+          if (!publicUrl) throw new Error("Could not build public URL. Check NEXT_PUBLIC_SUPABASE_URL.")
 
           setComposerFiles((prev) =>
-            prev.map((x) =>
-              x.id === item.id
-                ? { ...x, status: "ready", progress: 100, signedUrl: signedUrlData.signedUrl }
-                : x,
-            ),
+            prev.map((x) => (x.id === item.id ? { ...x, status: "ready", progress: 100, publicUrl } : x)),
           )
         } catch (e) {
           logger.error("Upload failed", e)
@@ -973,9 +991,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
     setComposerFiles((prev) => prev.filter((x) => x.id !== id))
   }
 
-  const setStage = (assistantId, stage, obj = {}, meta) => {
+  const setStage = (assistantId, stage, obj = {}) => {
     const title = formatStageTitle(stage, obj?.message)
-    const keyInfo = summarizePayloadContentOnly(stage, obj?.payload, meta)
+    const keyInfo = summarizePayload(obj?.payload, 180)
 
     setMessages((prev) =>
       prev.map((m) =>
@@ -983,7 +1001,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           ? {
             ...m,
             thinkingNow: {
-              id: `${stage}-${Date.now()}`,
+              id: `${String(stage || "stage")}-${Date.now()}`,
               stage,
               title,
               keyInfo,
@@ -1000,22 +1018,20 @@ function ChatWindow({ onMinimize, onDragStart }) {
   }
 
   const finalizeAssistant = (assistantId, rawFinal, onFinal) => {
-    const processed = formatGuideText(rawFinal || "")
-    const looksHtml = /<\w+[^>]*>|<\/\w+>/.test(processed)
-    const finalContent = looksHtml ? sanitizeHtml(processed) : processed
+    const finalRaw = String(rawFinal || "")
+    const html = looksLikeHtml(finalRaw)
+    const finalContent = html ? sanitizeWysiwygHtml(finalRaw) : finalRaw
 
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === assistantId
-          ? { ...m, content: finalContent, isHtml: looksHtml, streaming: false, thinkingNow: null }
-          : m,
+        m.id === assistantId ? { ...m, content: finalContent, isHtml: html, streaming: false, thinkingNow: null } : m,
       ),
     )
 
     onFinal?.(finalContent)
   }
 
-  const startRagSSE = async ({ text, assistantId, onFinal }) => {
+  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal }) => {
     const base = ragEndpointRef.current || (await resolveRagEndpoint())
     const streamUrl = ragStreamUrl(base)
 
@@ -1025,42 +1041,40 @@ function ChatWindow({ onMinimize, onDragStart }) {
     let answerBuf = ""
     let finalized = false
 
-    setStage(assistantId, "start", { payload: { ts: Date.now() } })
+    setStage(assistantId, "start", { message: "Init", payload: { ts: Date.now() } })
 
-    await postSSE(
-      streamUrl,
-      { question: text, sessionId },
-      {
-        signal: controller.signal,
-        onEvent: (evt) => {
-          const obj = safeJsonParse(evt.data) || {}
-          const stage = obj.stage || evt.event || "message"
+    const body = {
+      question,
+      sessionId,
+      ...(Array.isArray(fileUrls) && fileUrls.length > 0 ? { fileUrls } : {}),
+    }
 
-          if (stage === "answer_delta") {
-            const delta = typeof obj.payload === "string" ? obj.payload : ""
-            if (delta) {
-              answerBuf += delta
-              setMessages((prev) =>
-                prev.map((m) => (m.id === assistantId ? { ...m, content: answerBuf, streaming: true } : m)),
-              )
-            }
-            setStage(assistantId, "answer_delta", obj, { answerLen: answerBuf.length })
-            return
+    await postSSE(streamUrl, body, {
+      signal: controller.signal,
+      onEvent: (evt) => {
+        const obj = safeJsonParse(evt.data) || {}
+        const stage = obj.stage || evt.event || "message"
+
+        if (stage === "answer_delta") {
+          const delta = typeof obj.payload === "string" ? obj.payload : ""
+          if (delta) {
+            answerBuf += delta
+            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: answerBuf, streaming: true } : m)))
           }
+          setStage(assistantId, stage, obj)
+          return
+        }
 
-          if (stage === "answer_final") {
-            finalized = true
-            clearStage(assistantId)
-            finalizeAssistant(assistantId, typeof obj.payload === "string" ? obj.payload : answerBuf, onFinal)
-            return
-          }
+        if (stage === "answer_final") {
+          finalized = true
+          clearStage(assistantId)
+          finalizeAssistant(assistantId, typeof obj.payload === "string" ? obj.payload : answerBuf, onFinal)
+          return
+        }
 
-          if (stage !== "answer_delta" && stage !== "answer_final") {
-            setStage(assistantId, stage, obj)
-          }
-        },
+        setStage(assistantId, stage, obj)
       },
-    )
+    })
 
     if (!finalized && answerBuf) {
       clearStage(assistantId)
@@ -1068,7 +1082,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
   }
 
-  // ✅ JS-safe: event is optional
   const sendMessage = async (e) => {
     e?.preventDefault?.()
 
@@ -1082,8 +1095,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
 
     const readyFiles = composerFiles
-      .filter((f) => f.status === "ready" && f.signedUrl)
-      .map((f) => ({ name: f.name, url: f.signedUrl }))
+      .filter((f) => f.status === "ready" && f.publicUrl)
+      .map((f) => ({ name: f.name, url: f.publicUrl }))
 
     if (abortRef.current) {
       try {
@@ -1094,20 +1107,19 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
     setLoading(true)
 
-    // ✅ show chips in the conversation for the user message
-    setMessages((prev) => [
-      ...prev,
-      { id: generateUUID(), role: "user", content: visibleText, attachments: readyFiles },
-    ])
+    setMessages((prev) => [...prev, { id: generateUUID(), role: "user", content: visibleText, attachments: readyFiles }])
     setInput("")
     setComposerFiles([])
 
     const assistantId = generateUUID()
     setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", streaming: true, thinkingNow: null }])
 
+    const baseQuestion = visibleText || "Please use the attached file(s)."
+    const fileUrls = readyFiles.map((f) => f.url)
+
     const finalizeAndPersist = async (finalAnswer) => {
       try {
-        await supabase.from("Chat").insert([{ question: visibleText, answer: finalAnswer }])
+        await supabase.from("Chat").insert([{ question: baseQuestion, answer: finalAnswer }])
       } catch (dbErr) {
         logger.warn("Supabase insert failed", dbErr)
       }
@@ -1115,22 +1127,12 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
 
     try {
-      // ✅ Do NOT send file info as a chat message.
-      // But still pass file URLs to backend (invisible in UI) so RAG can use them.
-      const baseText = visibleText || "Please use the attached file(s)."
-      const textWithFiles =
-        readyFiles.length > 0
-          ? `${baseText}\n\n[files]\n${readyFiles.map((f) => `- ${f.name}: ${f.url}`).join("\n")}`
-          : baseText
-
-      await startRagSSE({ text: textWithFiles, assistantId, onFinal: finalizeAndPersist })
+      await startRagSSE({ question: baseQuestion, fileUrls, assistantId, onFinal: finalizeAndPersist })
     } catch (err) {
       logger.error("SSE failed:", err)
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantId
-            ? { ...m, content: "⚠️ Failed to contact assistant.", streaming: false, thinkingNow: null }
-            : m,
+          m.id === assistantId ? { ...m, content: "⚠️ Failed to contact assistant.", streaming: false, thinkingNow: null } : m,
         ),
       )
       setLoading(false)
@@ -1174,7 +1176,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
                     : "bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-900 shadow border border-gray-200/80 dark:border-gray-700 dark:bg-gray-800/90 dark:text-gray-100"
                 }
               >
-                {/* ✅ user attachments inside conversation bubble */}
                 {m.role === "user" && Array.isArray(m.attachments) && m.attachments.length > 0 ? (
                   <div className="cw-msg-files">
                     {m.attachments.map((f) => (
@@ -1229,7 +1230,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
         onSubmit={sendMessage}
         className="input-area shrink-0 border-t border-gray-200 bg-white px-3 py-1 dark:border-gray-700 dark:bg-gray-900"
       >
-        {/* ✅ attachment tray above textarea (progress + chips) */}
         {composerFiles.length > 0 ? (
           <div className="cw-tray">
             {composerFiles.map((f) =>
@@ -1239,7 +1239,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
                 <AttachmentChip
                   key={f.id}
                   name={f.name}
-                  href={f.status === "ready" ? f.signedUrl : undefined}
+                  href={f.status === "ready" ? f.publicUrl : undefined}
                   status={f.status}
                   progress={f.progress}
                   onRemove={() => removeComposerFile(f.id)}
@@ -1404,6 +1404,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           word-break: break-word;
           white-space: pre-wrap;
         }
+
         .bot-message a.chat-link {
           text-decoration: underline;
           text-underline-offset: 2px;
@@ -1435,7 +1436,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           }
         }
 
-        /* ===== Attachment UI (NEW, CSS only, keeps your theme) ===== */
+        /* ===== Attachment UI ===== */
         .cw-tray {
           padding: 6px 0 10px;
           display: flex;
@@ -1490,7 +1491,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
         .cw-prog-fill {
           height: 100%;
           border-radius: 999px;
-          background: #f97316; /* matches your buttons */
+          background: #f97316;
           width: 0%;
           transition: width 120ms linear;
         }
@@ -1574,6 +1575,61 @@ function ChatWindow({ onMinimize, onDragStart }) {
         .cw-chip-x-ico {
           width: 16px;
           height: 16px;
+        }
+
+        /* ============================================================
+           ✅ OPTIONAL WYSIWYG POLISH (CSS only; no Tailwind needed)
+           1) restore list bullets/margins inside .bot-message
+           2) override pre/code to avoid inherited white-space: pre-wrap
+           ============================================================ */
+
+        #__chat_widget_root .bot-message ul,
+        #__chat_widget_root .bot-message ol {
+          list-style-position: outside;
+          padding-left: 1.25rem;
+          margin: 0.5rem 0;
+        }
+        #__chat_widget_root .bot-message ul {
+          list-style-type: disc;
+        }
+        #__chat_widget_root .bot-message ol {
+          list-style-type: decimal;
+        }
+        #__chat_widget_root .bot-message li {
+          margin: 0.25rem 0;
+        }
+
+        #__chat_widget_root .bot-message pre {
+          white-space: pre;
+          word-break: normal;
+          overflow-x: auto;
+
+          padding: 10px 12px;
+          margin: 0.5rem 0;
+          border-radius: 10px;
+
+          background: rgba(15, 23, 42, 0.06);
+          border: 1px solid rgba(229, 231, 235, 0.9);
+        }
+        :global(.dark) #__chat_widget_root .bot-message pre {
+          background: rgba(0, 0, 0, 0.25);
+          border-color: rgba(55, 65, 81, 0.7);
+        }
+        #__chat_widget_root .bot-message pre code {
+          display: block;
+          white-space: inherit;
+        }
+
+        #__chat_widget_root .bot-message :not(pre) > code {
+          white-space: pre-wrap;
+          padding: 0.12em 0.35em;
+          border-radius: 6px;
+          background: rgba(15, 23, 42, 0.06);
+          border: 1px solid rgba(229, 231, 235, 0.9);
+        }
+        :global(.dark) #__chat_widget_root .bot-message :not(pre) > code {
+          background: rgba(0, 0, 0, 0.2);
+          border-color: rgba(55, 65, 81, 0.7);
         }
       `}</style>
     </div>
