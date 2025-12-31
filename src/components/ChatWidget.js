@@ -1315,22 +1315,15 @@ function ChatWindow({ onMinimize, onDragStart }) {
             placeholder="Type your message..."
             aria-label="Message input"
             rows={1}
+            className="bot-input flex-1 min-h-[40px] max-h-[96px] w-full resize-none bg-transparent px-2 text-base leading-6 text-gray-900 placeholder:text-gray-500 outline-none focus:outline-none dark:text-gray-100 dark:placeholder:text-gray-400"
             style={{
               flex: "1 1 auto",
               minWidth: 0,
               width: "100%",
-              minHeight: "40px",
-              maxHeight: "72px",
               backgroundColor: "transparent",
-              padding: "8px",
-              fontSize: "16px",
-              lineHeight: "24px",
-              color: "#111",
               border: "none",
               borderRadius: "0",
-              outline: "none",
               boxSizing: "border-box",
-              resize: "none",
               overflowY: "auto",
               fontFamily: "inherit",
             }}
@@ -1391,6 +1384,17 @@ function ChatWindow({ onMinimize, onDragStart }) {
         @supports (height: 100dvh) {
           #__chat_widget_root .bot-container {
             height: min(80dvh, 680px);
+          }
+        }
+
+        @media (max-width: 640px) {
+          #__chat_widget_root .bot-container {
+            height: min(90vh, 680px);
+            max-height: 680px;
+          }
+          #__chat_widget_root .input-area {
+            position: sticky;
+            bottom: 0;
           }
         }
 
