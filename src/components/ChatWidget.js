@@ -709,6 +709,18 @@ function prettyStorageError(err) {
   return msg || "Upload failed. Please try again."
 }
 
+function stripTrailingSlash(s) {
+  return String(s || "").replace(/\/+$/, "")
+}
+
+// keep "/" separators; encode each segment safely
+function encodeStoragePath(path) {
+  return String(path || "")
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/")
+}
+
 /**
  * Upload with progress (XHR) to Supabase Storage REST endpoint.
  * Uses user access_token if available, else anon key.
@@ -721,7 +733,7 @@ async function uploadToSupabaseWithProgress({ bucket, path, file, onProgress }) 
   const { data } = await supabase.auth.getSession()
   const bearer = data?.session?.access_token || anonKey
 
-  const url = `${baseUrl}/storage/v1/object/${bucket}/${encodeURIComponent(path)}`
+  const url = `${stripTrailingSlash(baseUrl)}/storage/v1/object/${bucket}/${encodeStoragePath(path)}`
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
@@ -753,7 +765,7 @@ async function uploadToSupabaseWithProgress({ bucket, path, file, onProgress }) 
 function buildPublicFileUrl(bucket, objectPath) {
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   if (!baseUrl) return ""
-  return `${baseUrl}/storage/v1/object/public/${bucket}/${encodeURIComponent(objectPath)}`
+  return `${stripTrailingSlash(baseUrl)}/storage/v1/object/public/${bucket}/${encodeStoragePath(objectPath)}`
 }
 
 /* ---------- Attachment UI (CSS only) ---------- */
@@ -1118,7 +1130,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
     const assistantId = generateUUID()
     setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", streaming: true, thinkingNow: null }])
 
-    const baseQuestion = visibleText || "Please use the attached file(s)."
+    const baseQuestion = visibleText
     const fileUrls = readyFiles.map((f) => f.url)
 
     const finalizeAndPersist = async (finalAnswer) => {
