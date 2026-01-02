@@ -13,6 +13,7 @@ import "slick-carousel/slick/slick-theme.css";
 import Modal from "react-modal";
 import { useRouter } from 'next/router';
 import LogInDialog from "../src/components/LogInDialog";
+import SiteTour from "../src/components/SiteTour";
 
 const GITHUB_URL =
   process.env.REACT_APP_GITHUB_URL || "https://github.com/YuqiGuo105";
@@ -752,7 +753,7 @@ const Index = () => {
           <div className="container">
             {/* Section Heading */}
             <div className="m-titles">
-              <h2 className="m-title">About Me</h2>
+              <h2 className="m-title" id="tour-about">About Me</h2>
             </div>
             <div className="row row-custom">
               <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3 align-right">
@@ -841,7 +842,7 @@ const Index = () => {
           <div className="container">
             {/* Section Heading */}
             <div className="m-titles">
-              <h2 className="m-title">My Background</h2>
+              <h2 className="m-title" id="tour-background">My Background</h2>
             </div>
             <div className="row row-custom">
               <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3"></div>
@@ -919,7 +920,7 @@ const Index = () => {
           <div className="container">
             {/* Section Heading */}
             <div className="m-titles">
-              <h2 className="m-title">My Projects</h2>
+              <h2 className="m-title" id="tour-projects">My Projects</h2>
             </div>
 
             <div className="text">
@@ -937,7 +938,7 @@ const Index = () => {
           <div className="container space-y-16">
             {/* My Technical Blogs */}
             <div className="m-titles">
-              <h2 className="m-title">My Technical Blogs</h2>
+              <h2 className="m-title" id="tour-techblogs">My Technical Blogs</h2>
             </div>
 
             <div className="blog-items">
@@ -996,7 +997,7 @@ const Index = () => {
 
             {/* My Life */}
             <div className="m-titles">
-              <h2 className="m-title">My Vibrant Life</h2>
+              <h2 className="m-title" id="tour-life">My Vibrant Life</h2>
             </div>
 
             <div className="row row-custom">
@@ -1138,8 +1139,8 @@ const Index = () => {
         )}
 
         <DashboardPanels />
-
-        <ContactForm />
+          <ContactForm />
+        <SiteTour />
       </Layout>
     </>
   );

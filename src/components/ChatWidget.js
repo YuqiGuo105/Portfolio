@@ -122,6 +122,7 @@ const SESSION_TTL_MS = 15 * 60 * 1000
 const UPLOAD_BUCKET = "chat"
 const UPLOAD_TTL_MS = 2 * 60 * 1000
 const MAX_FILES_PER_MESSAGE = 2
+let TOUR_CTA_SHOWN_THIS_PAGE_LOAD = false
 
 const storageSafeGet = (key) => {
   if (typeof window === "undefined") return null
@@ -850,6 +851,22 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const uploadTimersRef = useRef([])
   const fileInputRef = useRef(null)
   const textareaRef = useRef(null)
+  const [showTourCta, setShowTourCta] = useState(false)
+
+  useEffect(() => {
+    if (TOUR_CTA_SHOWN_THIS_PAGE_LOAD) return
+    setShowTourCta(true)
+    TOUR_CTA_SHOWN_THIS_PAGE_LOAD = true
+  }, [])
+
+
+  const triggerSiteTour = () => {
+    try {
+      window.dispatchEvent(new CustomEvent("cw:site-tour:start"))
+    } catch {}
+    setShowTourCta(false)
+  }
+
 
   useEffect(() => {
     if (errorToast) {
@@ -1109,7 +1126,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
       setErrorToast("Wait for uploads to finish.")
       return
     }
-
+    setShowTourCta(false)
     const readyFiles = composerFiles
       .filter((f) => f.status === "ready" && f.publicUrl)
       .map((f) => ({ name: f.name, url: f.publicUrl }))
@@ -1218,6 +1235,13 @@ function ChatWindow({ onMinimize, onDragStart }) {
             )}
           </div>
         ))}
+        {showTourCta && (
+            <div className="cw-tour-cta">
+              <button type="button" className="cw-tour-btn" onClick={triggerSiteTour}>
+                Site Tour
+              </button>
+            </div>
+        )}
       </div>
 
       {errorToast && (
@@ -1409,6 +1433,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           height: min(80vh, 680px);
           max-height: 680px;
         }
+
         /* === Force the input bar to stay at the bottom === */
         #__chat_widget_root .bot-container {
           display: flex !important;
@@ -1421,14 +1446,15 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
         #__chat_widget_root .bot-messages {
           flex: 1 1 auto !important;
-          min-height: 0 !important;     /* critical for scroll area in flex layouts */
+          min-height: 0 !important; /* critical for scroll area in flex layouts */
           overflow-y: auto !important;
         }
 
         #__chat_widget_root .input-area {
           flex: 0 0 auto !important;
-          margin-top: auto !important;  /* push input area to the bottom */
+          margin-top: auto !important; /* push input area to the bottom */
         }
+
         @supports (height: 100dvh) {
           #__chat_widget_root .bot-container {
             height: min(80dvh, 680px);
@@ -1451,14 +1477,17 @@ function ChatWindow({ onMinimize, onDragStart }) {
           text-decoration: underline;
           text-underline-offset: 2px;
         }
+
         .bot-message a.chat-link:hover {
           opacity: 0.85;
         }
+
         .bot-message img,
         .bot-message video {
           max-width: 100% !important;
           height: auto !important;
         }
+
         .bot-message table {
           width: 100% !important;
           max-width: 100% !important;
@@ -1480,6 +1509,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           --cw-progress-surface: rgba(248, 250, 252, 0.9);
           --cw-progress-track: rgba(229, 231, 235, 1);
         }
+
         :global(body.dark-skin) #__chat_widget_root {
           --cw-input-bg: #0f172a;
           --cw-input-border: rgba(255, 255, 255, 0.28);
@@ -1530,6 +1560,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           padding: 8px 10px;
           color: var(--cw-input-text);
         }
+
         .cw-prog-top {
           display: flex;
           justify-content: space-between;
@@ -1537,17 +1568,20 @@ function ChatWindow({ onMinimize, onDragStart }) {
           font-size: 12px;
           opacity: 0.9;
         }
+
         .cw-prog-name {
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
           max-width: 320px;
         }
+
         .cw-prog-pct {
           min-width: 32px;
           text-align: right;
           color: var(--cw-input-placeholder);
         }
+
         .cw-prog-bar {
           height: 6px;
           border-radius: 999px;
@@ -1555,6 +1589,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           overflow: hidden;
           margin-top: 6px;
         }
+
         .cw-prog-fill {
           height: 100%;
           border-radius: 999px;
@@ -1578,10 +1613,84 @@ function ChatWindow({ onMinimize, onDragStart }) {
         #__chat_widget_root .cw-textbox {
           transition: border-color 120ms ease, box-shadow 120ms ease;
         }
+
         #__chat_widget_root .cw-textbox:focus {
           border-color: var(--cw-input-border-strong);
           box-shadow: 0 0 0 1px var(--cw-input-border-strong);
         }
+
+        #__chat_widget_root .cw-tour-cta {
+          position: sticky;
+          top: 10px;
+          z-index: 50;
+          display: flex;
+          justify-content: flex-end;
+          pointer-events: none;
+        }
+
+        #__chat_widget_root .cw-tour-btn {
+          pointer-events: auto;
+          border: 1px solid rgba(229, 231, 235, 0.9);
+          background-color: rgb(243, 244, 246);
+          box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15) !important;
+          color: rgba(17, 24, 39, 0.95);
+          border-radius: 10px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-tour-btn {
+          background: rgba(15, 23, 42, 0.65);
+          border-color: rgba(255, 255, 255, 0.18);
+          color: rgba(248, 250, 252, 0.92);
+        }
+
+        #__chat_widget_root .cw-tour-btn {
+          transition: transform 500ms ease, box-shadow 500ms ease, background-color 500ms ease, border-color 500ms ease,
+          color 500ms ease;
+        }
+
+        #__chat_widget_root .cw-tour-btn:not(:hover) {
+          transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease, border-color 180ms ease,
+          color 180ms ease;
+        }
+
+
+        #__chat_widget_root .cw-tour-btn:hover {
+          background-color: rgb(249, 250, 251);
+          border-color: rgba(209, 213, 219, 0.95);
+          box-shadow: 0 0.75rem 1.4rem rgba(0, 0, 0, 0.18) !important;
+          transform: translateY(-1px);
+        }
+
+        #__chat_widget_root .cw-tour-btn:active {
+          transform: translateY(0px);
+          box-shadow: 0 0.55rem 1.1rem rgba(0, 0, 0, 0.16) !important;
+        }
+
+        #__chat_widget_root .cw-tour-btn:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35), 0 0.75rem 1.4rem rgba(0, 0, 0, 0.18) !important;
+        }
+        
+        :global(body.dark-skin) #__chat_widget_root .cw-tour-btn:hover {
+          background: rgba(30, 41, 59, 0.72);
+          border-color: rgba(255, 255, 255, 0.22);
+          box-shadow: 0 0.8rem 1.6rem rgba(0, 0, 0, 0.45) !important;
+          transform: translateY(-1px);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-tour-btn:active {
+          transform: translateY(0px);
+          box-shadow: 0 0.65rem 1.3rem rgba(0, 0, 0, 0.4) !important;
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-tour-btn:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.35), 0 0.8rem 1.6rem rgba(0, 0, 0, 0.45) !important;
+        }
+
 
         .cw-chip-link {
           display: inline-flex;
@@ -1622,6 +1731,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           flex: 0 0 auto;
           color: var(--cw-input-placeholder);
         }
+
         .cw-chip-err {
           color: #ef4444;
           opacity: 1;
@@ -1638,14 +1748,17 @@ function ChatWindow({ onMinimize, onDragStart }) {
           align-items: center;
           justify-content: center;
         }
+
         .cw-chip-x:hover {
           opacity: 1;
           background: rgba(243, 244, 246, 1);
         }
+
         :global(.dark) .cw-chip-x:hover,
         :global(body.dark-skin) .cw-chip-x:hover {
           background: rgba(31, 41, 55, 1);
         }
+
         .cw-chip-x-ico {
           width: 16px;
           height: 16px;
@@ -1663,12 +1776,15 @@ function ChatWindow({ onMinimize, onDragStart }) {
           padding-left: 1.25rem;
           margin: 0.5rem 0;
         }
+
         #__chat_widget_root .bot-message ul {
           list-style-type: disc;
         }
+
         #__chat_widget_root .bot-message ol {
           list-style-type: decimal;
         }
+
         #__chat_widget_root .bot-message li {
           margin: 0.25rem 0;
         }
@@ -1685,11 +1801,13 @@ function ChatWindow({ onMinimize, onDragStart }) {
           background: rgba(15, 23, 42, 0.06);
           border: 1px solid rgba(229, 231, 235, 0.9);
         }
+
         :global(.dark) #__chat_widget_root .bot-message pre,
         :global(body.dark-skin) #__chat_widget_root .bot-message pre {
           background: rgba(0, 0, 0, 0.25);
           border-color: rgba(55, 65, 81, 0.7);
         }
+
         #__chat_widget_root .bot-message pre code {
           display: block;
           white-space: inherit;
@@ -1702,6 +1820,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           background: rgba(15, 23, 42, 0.06);
           border: 1px solid rgba(229, 231, 235, 0.9);
         }
+
         :global(.dark) #__chat_widget_root .bot-message :not(pre) > code,
         :global(body.dark-skin) #__chat_widget_root .bot-message :not(pre) > code {
           background: rgba(0, 0, 0, 0.2);
