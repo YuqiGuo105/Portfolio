@@ -122,7 +122,6 @@ const SESSION_TTL_MS = 15 * 60 * 1000
 const UPLOAD_BUCKET = "chat"
 const UPLOAD_TTL_MS = 2 * 60 * 1000
 const MAX_FILES_PER_MESSAGE = 2
-let TOUR_CTA_SHOWN_THIS_PAGE_LOAD = false
 
 const storageSafeGet = (key) => {
   if (typeof window === "undefined") return null
@@ -851,20 +850,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const uploadTimersRef = useRef([])
   const fileInputRef = useRef(null)
   const textareaRef = useRef(null)
-  const [showTourCta, setShowTourCta] = useState(false)
-
-  useEffect(() => {
-    if (TOUR_CTA_SHOWN_THIS_PAGE_LOAD) return
-    setShowTourCta(true)
-    TOUR_CTA_SHOWN_THIS_PAGE_LOAD = true
-  }, [])
-
-
   const triggerSiteTour = () => {
     try {
       window.dispatchEvent(new CustomEvent("cw:site-tour:start"))
     } catch {}
-    setShowTourCta(false)
   }
 
 
@@ -886,7 +875,14 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   useEffect(() => {
     if (messages.length === 0) {
-      setMessages([{ id: generateUUID(), role: "assistant", content: "Hi! How can I help you today?" }])
+      setMessages([
+        {
+          id: generateUUID(),
+          role: "assistant",
+          content: "Welcome! I can start a quick web guide or answer any questions.",
+          showGuideCta: true,
+        },
+      ])
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1126,7 +1122,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
       setErrorToast("Wait for uploads to finish.")
       return
     }
-    setShowTourCta(false)
     const readyFiles = composerFiles
       .filter((f) => f.status === "ready" && f.publicUrl)
       .map((f) => ({ name: f.name, url: f.publicUrl }))
@@ -1219,7 +1214,20 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
                 {m.role === "assistant" && m.streaming && m.thinkingNow ? <StageToast step={m.thinkingNow} /> : null}
 
-                {m.streaming ? (
+                {m.showGuideCta ? (
+                  <div className="cw-guide-message">
+                    <p className="cw-guide-title">Hi! How can I help you today?</p>
+                    <p className="cw-guide-copy">
+                      I'm Mr. Pot, Yuqi's web AI agent.
+                    </p>
+                    <div className="cw-guide-actions">
+                      <button type="button" className="cw-guide-btn" onClick={triggerSiteTour}>
+                        Start web guide
+                        <ArrowUpRight className="cw-guide-ico" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                ) : m.streaming ? (
                   m.content === "" ? (
                     <TypingIndicator />
                   ) : (
@@ -1235,13 +1243,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
             )}
           </div>
         ))}
-        {showTourCta && (
-            <div className="cw-tour-cta">
-              <button type="button" className="cw-tour-btn" onClick={triggerSiteTour}>
-                Site Tour
-              </button>
-            </div>
-        )}
       </div>
 
       {errorToast && (
@@ -1494,6 +1495,80 @@ function ChatWindow({ onMinimize, onDragStart }) {
           display: block !important;
           overflow-x: auto !important;
           border-collapse: collapse !important;
+        }
+
+        .cw-guide-message {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .cw-guide-title {
+          margin: 0;
+          font-weight: 700;
+          font-size: 14px;
+          color: inherit;
+        }
+
+        .cw-guide-copy {
+          margin: 0;
+          font-size: 13px;
+          line-height: 1.4;
+          color: var(--cw-input-placeholder);
+        }
+
+        .cw-guide-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        #__chat_widget_root .cw-guide-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 14px;
+          border-radius: 12px;
+          background: linear-gradient(135deg, #2563eb, #22d3ee);
+          color: #f8fafc;
+          font-weight: 700;
+          font-size: 13px;
+          letter-spacing: 0.01em;
+          border: none;
+          cursor: pointer;
+          box-shadow: 0 10px 20px rgba(37, 99, 235, 0.25);
+          transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+        }
+
+        #__chat_widget_root .cw-guide-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 12px 22px rgba(34, 211, 238, 0.32);
+          filter: brightness(1.02);
+        }
+
+        #__chat_widget_root .cw-guide-btn:active {
+          transform: translateY(0);
+          box-shadow: 0 8px 16px rgba(37, 99, 235, 0.2);
+        }
+
+        #__chat_widget_root .cw-guide-btn:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35), 0 10px 20px rgba(34, 211, 238, 0.3);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-guide-btn {
+          background: linear-gradient(135deg, #38bdf8, #7c3aed);
+          color: #0b1224;
+          box-shadow: 0 10px 20px rgba(124, 58, 237, 0.25);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-guide-btn:hover {
+          box-shadow: 0 12px 22px rgba(56, 189, 248, 0.3);
+        }
+
+        .cw-guide-ico {
+          width: 16px;
+          height: 16px;
         }
 
         /* ===== Theme tokens ===== */
