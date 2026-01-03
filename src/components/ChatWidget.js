@@ -174,7 +174,7 @@ const ensureRoot = () => {
     document.body.appendChild(el)
     Object.assign(el.style, {
       position: "fixed",
-      bottom: "0",
+      bottom: "25px",
       right: "0",
       zIndex: "2147483647",
       pointerEvents: "auto",
