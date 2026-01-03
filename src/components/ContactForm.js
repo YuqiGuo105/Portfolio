@@ -44,7 +44,7 @@ const ContactForm = () => {
     <section className="section section-bg section-parallax section-parallax-2" id="contact-section">
       <div className="container">
         <div className="m-titles">
-          <h2 className="m-title">Contact Me</h2>
+          <h2 className="m-title" id="tour-contact">Contact Me</h2>
         </div>
         <div className="row row-custom">
           <div className="col-md-3 align-right">
