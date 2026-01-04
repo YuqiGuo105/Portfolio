@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 import GlobeLib from "react-globe.gl";
 import { supabase as supabaseClient } from "../supabase/supabaseClient";
 
@@ -716,6 +717,26 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
+  // iOS: keep pinch/drag gestures on the globe instead of the page
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const preventDefault = (e) => {
+      if (e.touches?.length) {
+        e.preventDefault();
+      }
+    };
+
+    el.addEventListener("touchstart", preventDefault, { passive: false });
+    el.addEventListener("touchmove", preventDefault, { passive: false });
+
+    return () => {
+      el.removeEventListener("touchstart", preventDefault);
+      el.removeEventListener("touchmove", preventDefault);
+    };
+  }, []);
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -799,6 +820,11 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
         controls.enableZoom = true;
         controls.enableRotate = true;
         controls.enablePan = false;
+
+        if (controls.touches) {
+          controls.touches.ONE = THREE.TOUCH.ROTATE;
+          controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
+        }
 
         controls.enableDamping = true;
         controls.dampingFactor = 0.08;
