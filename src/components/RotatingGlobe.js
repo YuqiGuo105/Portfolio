@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 import GlobeLib from "react-globe.gl";
 import { supabase as supabaseClient } from "../supabase/supabaseClient";
 
@@ -716,15 +717,52 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
+  // iOS: keep pinch/drag gestures on the globe instead of the page
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    const canvas = el.querySelector("canvas");
-    if (canvas) {
-      canvas.style.touchAction = "none";
-      canvas.style.WebkitUserSelect = "none";
-    }
+    const preventDefault = (e) => {
+      if (e.touches?.length) {
+        e.preventDefault();
+      }
+    };
+
+    el.addEventListener("touchstart", preventDefault, { passive: false });
+    el.addEventListener("touchmove", preventDefault, { passive: false });
+
+    return () => {
+      el.removeEventListener("touchstart", preventDefault);
+      el.removeEventListener("touchmove", preventDefault);
+    };
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const applyTouchLock = (node) => {
+      if (!node?.style) return;
+      node.style.touchAction = "none";
+      node.style.msTouchAction = "none";
+      node.style.WebkitUserSelect = "none";
+      node.style.userSelect = "none";
+    };
+
+    const updateNodes = () => {
+      applyTouchLock(el);
+      const nodes = el.querySelectorAll("canvas, div");
+      nodes.forEach(applyTouchLock);
+    };
+
+    updateNodes();
+
+    const mo = new MutationObserver(() => updateNodes());
+    mo.observe(el, { childList: true, subtree: true });
+
+    return () => {
+      mo.disconnect();
+    };
   }, [size]);
 
   const getCamera = (g) => {
@@ -799,6 +837,11 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
         controls.enableZoom = true;
         controls.enableRotate = true;
         controls.enablePan = false;
+
+        if (controls.touches) {
+          controls.touches.ONE = THREE.TOUCH.ROTATE;
+          controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
+        }
 
         controls.enableDamping = true;
         controls.dampingFactor = 0.08;
