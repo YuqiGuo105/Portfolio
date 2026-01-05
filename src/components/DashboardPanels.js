@@ -802,7 +802,8 @@ const DashboardPanels = () => {
         {/* Visitors */}
         <div className="dashboard-card-4 visitors-card">
           <header>
-            <h3>Visitors</h3>
+            <h3>Visitor Insights</h3>
+            <p className="card-subtitle">A quick snapshot of who’s dropping by.</p>
           </header>
 
           <div className="visitors-body">
@@ -1314,6 +1315,8 @@ const DashboardPanels = () => {
           border-radius: 30px;
           align-items: center;
           justify-content: center;
+          flex-direction: column;
+          text-align: center;
           gap: 1rem;
           background: radial-gradient(
             ellipse 120% 150% at 20% 135%,
@@ -1323,6 +1326,12 @@ const DashboardPanels = () => {
             rgba(53, 100, 194, 0) 75%
           ),
           #353636;
+        }
+
+        .dashboard-card-4 .card-subtitle {
+          margin: 0;
+          font-size: 0.9rem;
+          color: var(--text-muted);
         }
 
         .visitors-body {
