@@ -1331,7 +1331,8 @@ const DashboardPanels = () => {
         .dashboard-card-4 .card-subtitle {
           margin: 0;
           font-size: 0.9rem;
-          color: rgba(255, 255, 255, 0.82);
+          color: #fdfdfd;
+          text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
         }
 
         .visitors-body {
