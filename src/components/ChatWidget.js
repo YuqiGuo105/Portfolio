@@ -1955,6 +1955,17 @@ export default function ChatWidget() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    const collapseForMobile = () => {
+      if (typeof window === "undefined") return
+      const isMobile = window.matchMedia?.("(max-width: 767px)")?.matches ?? window.innerWidth < 768
+      if (isMobile) setOpen(false)
+    }
+
+    window.addEventListener("cw:site-tour:start", collapseForMobile)
+    return () => window.removeEventListener("cw:site-tour:start", collapseForMobile)
+  }, [])
+
+  useEffect(() => {
     offsetRef.current = offset
     if (rootRef.current) {
       rootRef.current.style.transform = `translate(${offset.x}px, ${offset.y}px)`
