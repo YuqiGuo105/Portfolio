@@ -650,8 +650,12 @@ const DashboardPanels = () => {
     <section className="dashboard-wrapper" id="market-weather-dashboard">
       <div className="section-heading">
         <div className="overtitle">
-          <h3>Real-Time Data</h3>
+          <h3 id="tour-real-time-data">Real-Time Data</h3>
         </div>
+        <p className="section-intro">
+          Watch the live dashboards that power my day-to-day: market movers, quick currency checks, and
+          the latest weather snapshot for wherever I'm working.
+        </p>
       </div>
 
       <div className="dashboard-container">
@@ -945,6 +949,13 @@ const DashboardPanels = () => {
           letter-spacing: -0.01em;
           text-transform: none;
           color: var(--text-primary);
+        }
+        .section-heading .section-intro {
+          margin: 0 auto;
+          max-width: 640px;
+          color: var(--text-secondary);
+          font-size: 15px;
+          line-height: 1.65;
         }
 
         .dashboard-container {
