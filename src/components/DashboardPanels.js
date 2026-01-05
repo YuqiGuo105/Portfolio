@@ -946,6 +946,13 @@ const DashboardPanels = () => {
           text-transform: none;
           color: var(--text-primary);
         }
+        .section-heading .section-intro {
+          margin: 0 auto;
+          max-width: 640px;
+          color: var(--text-secondary);
+          font-size: 15px;
+          line-height: 1.65;
+        }
 
         .dashboard-container {
           display: flex;

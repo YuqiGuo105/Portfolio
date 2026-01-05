@@ -35,12 +35,48 @@ function computePopover(anchorRect, popEl) {
 export default function SiteTour() {
     const steps = useMemo(
         () => [
-            { id: "about", targetId: "tour-about", title: "About Me", content: "About Me" },
-            { id: "background", targetId: "tour-background", title: "My Background", content: "My Background" },
-            { id: "projects", targetId: "tour-projects", title: "My Projects", content: "My Projects" },
-            { id: "techblogs", targetId: "tour-techblogs", title: "My Technical Blogs", content: "My Technical Blogs" },
-            { id: "life", targetId: "tour-life", title: "My Vibrant Life", content: "My Vibrant Life" },
-            { id: "contact", targetId: "tour-contact", title: "Contact Me", content: "Contact Me" },
+            {
+                id: "about",
+                targetId: "tour-about",
+                title: "About Me",
+                content: "Start with a quick snapshot of who I am, what I love building, and how to pronounce my name.",
+            },
+            {
+                id: "background",
+                targetId: "tour-background",
+                title: "My Background",
+                content: "See where I've studied, the teams I've contributed to, and the technical domains I've focused on.",
+            },
+            {
+                id: "projects",
+                targetId: "tour-projects",
+                title: "My Projects",
+                content: "Browse the flagship projects I've shipped, the problems they solve, and the stacks I used to build them.",
+            },
+            {
+                id: "techblogs",
+                targetId: "tour-techblogs",
+                title: "My Technical Blogs",
+                content: "Explore deep dives, system design notes, and hands-on write-ups that showcase how I approach new challenges.",
+            },
+            {
+                id: "realtime",
+                targetId: "tour-real-time-data",
+                title: "Real-Time Data",
+                content: "See live market moves, quick currency conversions, and a snapshot of the weather I'm tracking right now.",
+            },
+            {
+                id: "life",
+                targetId: "tour-life",
+                title: "My Vibrant Life",
+                content: "Get a glimpse of my hobbies, travels, and the moments outside of code that keep me inspired.",
+            },
+            {
+                id: "contact",
+                targetId: "tour-contact",
+                title: "Contact Me",
+                content: "Wrap up with the best ways to reach me, whether you want to collaborate, hire, or just say hello.",
+            },
         ],
         []
     )
