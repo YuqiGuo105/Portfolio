@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 import GlobeLib from "react-globe.gl";
 import { supabase as supabaseClient } from "../supabase/supabaseClient";
 
@@ -799,6 +800,15 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
         controls.enableZoom = true;
         controls.enableRotate = true;
         controls.enablePan = false;
+
+        // On iOS, OrbitControls defaults a two-finger gesture to `DOLLY_PAN`,
+        // which is ignored when panning is disabled. Force the gesture to
+        // perform a pure dolly/rotate combo so pinch zoom works on mobile.
+        controls.touches = {
+          ONE: THREE.TOUCH.ROTATE,
+          TWO: THREE.TOUCH.DOLLY_ROTATE,
+          THREE: THREE.TOUCH.PAN,
+        };
 
         controls.enableDamping = true;
         controls.dampingFactor = 0.08;
