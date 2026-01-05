@@ -650,7 +650,7 @@ const DashboardPanels = () => {
     <section className="dashboard-wrapper" id="market-weather-dashboard">
       <div className="section-heading">
         <div className="overtitle">
-          <h3>Real-Time Data</h3>
+          <h3 id="tour-real-time-data">Real-Time Data</h3>
         </div>
       </div>
 
