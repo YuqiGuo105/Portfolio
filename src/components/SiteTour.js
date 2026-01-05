@@ -60,16 +60,16 @@ export default function SiteTour() {
                 content: "Explore deep dives, system design notes, and hands-on write-ups that showcase how I approach new challenges.",
             },
             {
-                id: "realtime",
-                targetId: "tour-real-time-data",
-                title: "Real-Time Data",
-                content: "See live market moves, quick currency conversions, and a snapshot of the weather I'm tracking right now.",
-            },
-            {
                 id: "life",
                 targetId: "tour-life",
                 title: "My Vibrant Life",
                 content: "Get a glimpse of my hobbies, travels, and the moments outside of code that keep me inspired.",
+            },
+            {
+                id: "realtime",
+                targetId: "tour-real-time-data",
+                title: "Real-Time Data",
+                content: "See live market moves, quick currency conversions, and a snapshot of the weather I'm tracking right now.",
             },
             {
                 id: "contact",
