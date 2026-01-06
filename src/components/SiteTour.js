@@ -105,6 +105,9 @@ export default function SiteTour() {
         setOpen(false)
         setIdx(0)
         activeElRef.current = null
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("cw:site-tour:end"))
+        }
     }, [])
     const go = useCallback(
         (nextIdx) => {
