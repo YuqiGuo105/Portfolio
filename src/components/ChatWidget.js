@@ -1946,6 +1946,7 @@ export default function ChatWidget() {
   const rootRef = useRef(null)
   const offsetRef = useRef(offset)
   const dragRef = useRef({ dragging: false })
+  const tourCollapsedRef = useRef(false)
 
   useEffect(() => {
     const el = ensureRoot()
@@ -1958,11 +1959,27 @@ export default function ChatWidget() {
     const collapseForMobile = () => {
       if (typeof window === "undefined") return
       const isMobile = window.matchMedia?.("(max-width: 767px)")?.matches ?? window.innerWidth < 768
-      if (isMobile) setOpen(false)
+      if (!isMobile) return
+      setOpen((prev) => {
+        if (prev) tourCollapsedRef.current = true
+        return false
+      })
+    }
+
+    const reopenAfterTour = () => {
+      if (typeof window === "undefined") return
+      const isMobile = window.matchMedia?.("(max-width: 767px)")?.matches ?? window.innerWidth < 768
+      if (!isMobile || !tourCollapsedRef.current) return
+      tourCollapsedRef.current = false
+      setOpen(true)
     }
 
     window.addEventListener("cw:site-tour:start", collapseForMobile)
-    return () => window.removeEventListener("cw:site-tour:start", collapseForMobile)
+    window.addEventListener("cw:site-tour:end", reopenAfterTour)
+    return () => {
+      window.removeEventListener("cw:site-tour:start", collapseForMobile)
+      window.removeEventListener("cw:site-tour:end", reopenAfterTour)
+    }
   }, [])
 
   useEffect(() => {
