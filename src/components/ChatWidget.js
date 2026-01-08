@@ -1212,7 +1212,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           >
             <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" className="w-6 h-6" />
             <span className="cw-title">
-              Mr.Pot
+              Mr Pot
               {isThinking ? <span className="cw-title-fade"> Thinking</span> : null}
             </span>
             <ChevronDown className={"cw-chev " + (modeOpen ? "open" : "")} />
@@ -1230,7 +1230,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
               >
                 <span className="cw-mode-left">
                   <span className="cw-mode-name">Regular</span>
-                  <span className="cw-mode-desc">更快 / 更省资源</span>
+                  <span className="cw-mode-desc">Faster / fewer resources</span>
                 </span>
                 {mode === "regular" ? <Check className="cw-check" /> : null}
               </button>
@@ -1245,7 +1245,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
               >
                 <span className="cw-mode-left">
                   <span className="cw-mode-name">Thinking</span>
-                  <span className="cw-mode-desc">更充分推理 / 更多工具步骤</span>
+                  <span className="cw-mode-desc">Deeper reasoning / more tool steps</span>
                 </span>
                 {mode === "thinking" ? <Check className="cw-check" /> : null}
               </button>
@@ -1705,6 +1705,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
           color: inherit;
         }
 
+        #__chat_widget_root .cw-mode-btn img {
+          width: 28px;
+          height: 28px;
+        }
+
         #__chat_widget_root .cw-mode-btn:hover {
           background: rgba(243, 244, 246, 0.9);
         }
@@ -1717,7 +1722,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           display: inline-flex;
           align-items: baseline;
           gap: 6px;
-          font-size: 14px;
+          font-size: 16px;
           font-weight: 600;
         }
 
@@ -1727,9 +1732,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
         }
 
         #__chat_widget_root .cw-chev {
-          width: 16px;
-          height: 16px;
-          opacity: 0.7;
+          width: 18px;
+          height: 18px;
+          opacity: 0.9;
           transition: transform 160ms ease;
         }
 
