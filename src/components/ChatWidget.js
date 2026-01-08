@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom"
 import { useState, useEffect, useRef, Fragment } from "react"
-import { Minus, ArrowUpRight, Loader2, FileText, X } from "lucide-react"
+import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check } from "lucide-react"
 import Image from "next/image"
 import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
@@ -839,6 +839,13 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const [uploading, setUploading] = useState(false)
   const [endpoint, setEndpoint] = useState("")
   const [errorToast, setErrorToast] = useState("")
+  const MODE_KEY = "cw:mode"
+  const [mode, setMode] = useState(() => {
+    const saved = storageSafeGet(MODE_KEY)
+    return saved === "thinking" ? "thinking" : "regular"
+  })
+  const isThinking = mode === "thinking"
+  const [modeOpen, setModeOpen] = useState(false)
 
   // composer attachments (max 2 per outgoing message)
   const [composerFiles, setComposerFiles] = useState([])
@@ -850,12 +857,31 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const uploadTimersRef = useRef([])
   const fileInputRef = useRef(null)
   const textareaRef = useRef(null)
+  const modeWrapRef = useRef(null)
   const triggerSiteTour = () => {
     try {
       window.dispatchEvent(new CustomEvent("cw:site-tour:start"))
     } catch {}
   }
 
+
+  useEffect(() => {
+    storageSafeSet(MODE_KEY, mode)
+  }, [mode])
+
+  useEffect(() => {
+    const onDown = (e) => {
+      if (!modeOpen) return
+      const el = modeWrapRef.current
+      if (el && !el.contains(e.target)) setModeOpen(false)
+    }
+    window.addEventListener("mousedown", onDown)
+    window.addEventListener("touchstart", onDown)
+    return () => {
+      window.removeEventListener("mousedown", onDown)
+      window.removeEventListener("touchstart", onDown)
+    }
+  }, [modeOpen])
 
   useEffect(() => {
     if (errorToast) {
@@ -1075,6 +1101,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
     const body = {
       question,
       sessionId,
+      deepThinking: isThinking,
       ...(Array.isArray(fileUrls) && fileUrls.length > 0 ? { fileUrls } : {}),
     }
 
@@ -1173,9 +1200,57 @@ function ChatWindow({ onMinimize, onDragStart }) {
         className="bot-header shrink-0 flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700"
         onMouseDown={onDragStart}
       >
-        <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-100">
-          <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" className="w-6 h-6" />
-          Mr.Pot
+        <div ref={modeWrapRef} className="cw-mode-wrap">
+          <button
+            type="button"
+            className="cw-mode-btn"
+            onClick={() => setModeOpen((v) => !v)}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            aria-haspopup="menu"
+            aria-expanded={modeOpen ? "true" : "false"}
+          >
+            <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" className="w-6 h-6" />
+            <span className="cw-title">
+              Mr.Pot
+              {isThinking ? <span className="cw-title-fade"> Thinking</span> : null}
+            </span>
+            <ChevronDown className={"cw-chev " + (modeOpen ? "open" : "")} />
+          </button>
+          {modeOpen ? (
+            <div className="cw-mode-menu" role="menu">
+              <button
+                type="button"
+                className="cw-mode-item"
+                role="menuitem"
+                onClick={() => {
+                  setMode("regular")
+                  setModeOpen(false)
+                }}
+              >
+                <span className="cw-mode-left">
+                  <span className="cw-mode-name">Regular</span>
+                  <span className="cw-mode-desc">更快 / 更省资源</span>
+                </span>
+                {mode === "regular" ? <Check className="cw-check" /> : null}
+              </button>
+              <button
+                type="button"
+                className="cw-mode-item"
+                role="menuitem"
+                onClick={() => {
+                  setMode("thinking")
+                  setModeOpen(false)
+                }}
+              >
+                <span className="cw-mode-left">
+                  <span className="cw-mode-name">Thinking</span>
+                  <span className="cw-mode-desc">更充分推理 / 更多工具步骤</span>
+                </span>
+                {mode === "thinking" ? <Check className="cw-check" /> : null}
+              </button>
+            </div>
+          ) : null}
         </div>
         <button
           type="button"
@@ -1611,6 +1686,121 @@ function ChatWindow({ onMinimize, onDragStart }) {
             opacity: 1;
             transform: translateY(0);
           }
+        }
+
+        /* ===== Mode drawer ===== */
+        #__chat_widget_root .cw-mode-wrap {
+          position: relative;
+        }
+
+        #__chat_widget_root .cw-mode-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 8px;
+          border-radius: 10px;
+          border: 1px solid transparent;
+          background: transparent;
+          cursor: pointer;
+          color: inherit;
+        }
+
+        #__chat_widget_root .cw-mode-btn:hover {
+          background: rgba(243, 244, 246, 0.9);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-btn:hover {
+          background: rgba(31, 41, 55, 0.8);
+        }
+
+        #__chat_widget_root .cw-title {
+          display: inline-flex;
+          align-items: baseline;
+          gap: 6px;
+          font-size: 14px;
+          font-weight: 600;
+        }
+
+        #__chat_widget_root .cw-title-fade {
+          opacity: 0.55;
+          font-weight: 600;
+        }
+
+        #__chat_widget_root .cw-chev {
+          width: 16px;
+          height: 16px;
+          opacity: 0.7;
+          transition: transform 160ms ease;
+        }
+
+        #__chat_widget_root .cw-chev.open {
+          transform: rotate(180deg);
+        }
+
+        #__chat_widget_root .cw-mode-menu {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          width: 240px;
+          z-index: 200;
+          border-radius: 14px;
+          border: 1px solid rgba(229, 231, 235, 0.95);
+          background: rgba(255, 255, 255, 0.98);
+          box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+          overflow: hidden;
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-menu {
+          border-color: rgba(55, 65, 81, 0.7);
+          background: rgba(15, 23, 42, 0.95);
+          box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+        }
+
+        #__chat_widget_root .cw-mode-item {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 12px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          text-align: left;
+          color: inherit;
+        }
+
+        #__chat_widget_root .cw-mode-item:hover {
+          background: rgba(243, 244, 246, 0.9);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-item:hover {
+          background: rgba(31, 41, 55, 0.7);
+        }
+
+        #__chat_widget_root .cw-mode-left {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 0;
+        }
+
+        #__chat_widget_root .cw-mode-name {
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.1;
+        }
+
+        #__chat_widget_root .cw-mode-desc {
+          font-size: 12px;
+          opacity: 0.7;
+          line-height: 1.2;
+        }
+
+        #__chat_widget_root .cw-check {
+          width: 16px;
+          height: 16px;
+          opacity: 0.85;
         }
 
         /* ===== Attachment UI ===== */
