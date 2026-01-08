@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom"
 import { useState, useEffect, useRef, Fragment } from "react"
-import { Minus, ArrowUpRight, Loader2, FileText, X } from "lucide-react"
+import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown } from "lucide-react"
 import Image from "next/image"
 import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
@@ -839,6 +839,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const [uploading, setUploading] = useState(false)
   const [endpoint, setEndpoint] = useState("")
   const [errorToast, setErrorToast] = useState("")
+  const [thinkingMode, setThinkingMode] = useState(() => storageSafeGet("chatThinkingMode") || "regular")
+  const [modeDrawerOpen, setModeDrawerOpen] = useState(false)
 
   // composer attachments (max 2 per outgoing message)
   const [composerFiles, setComposerFiles] = useState([])
@@ -898,6 +900,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
     storageSafeSet("chatMessages", JSON.stringify(messages))
     storageSafeSet("chatSessionLastActive", String(Date.now()))
   }, [messages])
+
+  useEffect(() => {
+    storageSafeSet("chatThinkingMode", thinkingMode)
+  }, [thinkingMode])
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -1075,6 +1081,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
     const body = {
       question,
       sessionId,
+      deepThinking: thinkingMode === "thinking",
       ...(Array.isArray(fileUrls) && fileUrls.length > 0 ? { fileUrls } : {}),
     }
 
@@ -1276,6 +1283,34 @@ function ChatWindow({ onMinimize, onDragStart }) {
           color: "var(--cw-input-text)",
         }}
       >
+        <div className="cw-mode">
+          <button
+            type="button"
+            className={`cw-mode-toggle${modeDrawerOpen ? " is-open" : ""}`}
+            onClick={() => setModeDrawerOpen((prev) => !prev)}
+            aria-expanded={modeDrawerOpen}
+            aria-controls="cw-mode-drawer"
+          >
+            <span className="cw-mode-label">Deep thinking</span>
+            <span className="cw-mode-value">{thinkingMode === "thinking" ? "Thinking" : "Regular"}</span>
+            <ChevronDown className="cw-mode-icon" aria-hidden="true" />
+          </button>
+          <div id="cw-mode-drawer" className={`cw-mode-drawer${modeDrawerOpen ? " is-open" : ""}`}>
+            <label className="cw-mode-select-label" htmlFor="cw-thinking-mode">
+              Response style
+            </label>
+            <select
+              id="cw-thinking-mode"
+              className="cw-mode-select"
+              value={thinkingMode}
+              onChange={(e) => setThinkingMode(e.target.value)}
+            >
+              <option value="regular">Regular</option>
+              <option value="thinking">Thinking</option>
+            </select>
+          </div>
+        </div>
+
         {composerFiles.length > 0 ? (
           <div className="cw-tray">
             {composerFiles.map((f) =>
@@ -1454,6 +1489,101 @@ function ChatWindow({ onMinimize, onDragStart }) {
         #__chat_widget_root .input-area {
           flex: 0 0 auto !important;
           margin-top: auto !important; /* push input area to the bottom */
+        }
+
+        #__chat_widget_root .cw-mode {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          padding: 8px 0 4px;
+        }
+
+        #__chat_widget_root .cw-mode-toggle {
+          display: inline-flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          border: 1px solid var(--cw-input-border);
+          border-radius: 10px;
+          padding: 8px 12px;
+          background: var(--cw-input-bg);
+          color: var(--cw-input-text);
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: border-color 120ms ease, box-shadow 120ms ease;
+        }
+
+        #__chat_widget_root .cw-mode-toggle:hover {
+          border-color: var(--cw-input-border-strong);
+        }
+
+        #__chat_widget_root .cw-mode-toggle:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+        }
+
+        #__chat_widget_root .cw-mode-label {
+          color: var(--cw-input-placeholder);
+          font-weight: 600;
+        }
+
+        #__chat_widget_root .cw-mode-value {
+          margin-left: auto;
+          font-weight: 700;
+        }
+
+        #__chat_widget_root .cw-mode-icon {
+          width: 16px;
+          height: 16px;
+          margin-left: 4px;
+          transition: transform 120ms ease;
+        }
+
+        #__chat_widget_root .cw-mode-drawer {
+          max-height: 0;
+          overflow: hidden;
+          opacity: 0;
+          border: 1px solid transparent;
+          border-radius: 10px;
+          padding: 0 12px;
+          background: var(--cw-input-bg);
+          transition: max-height 160ms ease, opacity 160ms ease, border-color 160ms ease, padding 160ms ease;
+        }
+
+        #__chat_widget_root .cw-mode-drawer.is-open {
+          max-height: 140px;
+          opacity: 1;
+          padding: 10px 12px 12px;
+          border-color: var(--cw-input-border);
+        }
+
+        #__chat_widget_root .cw-mode-toggle.is-open .cw-mode-icon {
+          transform: rotate(180deg);
+        }
+
+        #__chat_widget_root .cw-mode-select-label {
+          display: block;
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--cw-input-placeholder);
+          margin-bottom: 6px;
+        }
+
+        #__chat_widget_root .cw-mode-select {
+          width: 100%;
+          border-radius: 10px;
+          border: 1px solid var(--cw-input-border);
+          background: transparent;
+          color: var(--cw-input-text);
+          padding: 8px 10px;
+          font-size: 13px;
+        }
+
+        #__chat_widget_root .cw-mode-select:focus {
+          outline: none;
+          border-color: var(--cw-input-border-strong);
+          box-shadow: 0 0 0 1px var(--cw-input-border-strong);
         }
 
         @supports (height: 100dvh) {
