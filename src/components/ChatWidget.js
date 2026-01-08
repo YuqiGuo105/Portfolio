@@ -851,6 +851,29 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const [composerFiles, setComposerFiles] = useState([])
   // { id, file, name(original), status: "uploading"|"ready"|"error", progress, storagePath, publicUrl }
 
+  // --- Desktop resize (PC only) ---
+  const SIZE_KEY = "cw:widgetSize"
+  const clamp = (n, min, max) => Math.min(max, Math.max(min, n))
+
+  const [desktopResizable, setDesktopResizable] = useState(false)
+  const [widgetSize, setWidgetSize] = useState(() => {
+    if (typeof window === "undefined") return { w: 520, h: 680 }
+    try {
+      const saved = JSON.parse(localStorage.getItem(SIZE_KEY) || "null")
+      if (saved && typeof saved.w === "number" && typeof saved.h === "number") return saved
+    } catch {}
+    return { w: 520, h: 680 }
+  })
+
+  const resizeRef = useRef({
+    active: false,
+    dir: "both",
+    startX: 0,
+    startY: 0,
+    startW: 520,
+    startH: 680,
+  })
+
   const scrollRef = useRef(null)
   const ragEndpointRef = useRef(null)
   const abortRef = useRef(null)
@@ -921,6 +944,30 @@ function ChatWindow({ onMinimize, onDragStart }) {
   }, [])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const mq = window.matchMedia("(min-width: 768px) and (hover: hover) and (pointer: fine)")
+
+    const sync = () => setDesktopResizable(!!mq.matches)
+    sync()
+
+    if (mq.addEventListener) mq.addEventListener("change", sync)
+    else mq.addListener(sync)
+
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener("change", sync)
+      else mq.removeListener(sync)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!desktopResizable) return
+    try {
+      localStorage.setItem(SIZE_KEY, JSON.stringify(widgetSize))
+    } catch {}
+  }, [widgetSize, desktopResizable])
+
+  useEffect(() => {
     storageSafeSet("chatMessages", JSON.stringify(messages))
     storageSafeSet("chatSessionLastActive", String(Date.now()))
   }, [messages])
@@ -970,6 +1017,58 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }, UPLOAD_TTL_MS)
 
     uploadTimersRef.current.push(timerId)
+  }
+
+  const startResize = (e, dir) => {
+    if (!desktopResizable) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    resizeRef.current = {
+      active: true,
+      dir,
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: widgetSize.w,
+      startH: widgetSize.h,
+    }
+
+    const prevUserSelect = document.body.style.userSelect
+    const prevCursor = document.body.style.cursor
+    document.body.style.userSelect = "none"
+    document.body.style.cursor = dir === "w" ? "ew-resize" : dir === "h" ? "ns-resize" : "nwse-resize"
+
+    const onMove = (ev) => {
+      const { startX, startY, startW, startH } = resizeRef.current
+      const dx = ev.clientX - startX
+      const dy = ev.clientY - startY
+
+      let nextW = startW
+      let nextH = startH
+
+      if (dir === "w" || dir === "both") nextW = startW - dx
+      if (dir === "h" || dir === "both") nextH = startH - dy
+
+      const maxW = Math.min(900, window.innerWidth - 24)
+      const maxH = Math.min(900, window.innerHeight - 40)
+
+      nextW = clamp(nextW, 360, maxW)
+      nextH = clamp(nextH, 420, maxH)
+
+      setWidgetSize({ w: nextW, h: nextH })
+    }
+
+    const onUp = () => {
+      resizeRef.current.active = false
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+
+      document.body.style.userSelect = prevUserSelect
+      document.body.style.cursor = prevCursor
+    }
+
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
   }
 
   const pickFiles = async (fileList) => {
@@ -1195,7 +1294,17 @@ function ChatWindow({ onMinimize, onDragStart }) {
   }
 
   return (
-    <div className="bot-container relative mb-6 flex flex-col w-screen md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700">
+    <div
+      className="bot-container relative mb-6 flex flex-col w-screen md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700"
+      style={desktopResizable ? { width: `${widgetSize.w}px`, height: `${widgetSize.h}px`, maxHeight: "none" } : undefined}
+    >
+      {desktopResizable ? (
+        <>
+          <div className="cw-resize-handle cw-resize-left" onMouseDown={(e) => startResize(e, "w")} />
+          <div className="cw-resize-handle cw-resize-top" onMouseDown={(e) => startResize(e, "h")} />
+          <div className="cw-resize-handle cw-resize-corner" onMouseDown={(e) => startResize(e, "both")} />
+        </>
+      ) : null}
       <header
         className="bot-header shrink-0 flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700"
         onMouseDown={onDragStart}
@@ -1508,6 +1617,50 @@ function ChatWindow({ onMinimize, onDragStart }) {
         #__chat_widget_root .bot-container {
           height: min(80vh, 680px);
           max-height: 680px;
+        }
+
+        /* ===== Desktop resize handles (show on hover only) ===== */
+        #__chat_widget_root .cw-resize-handle {
+          position: absolute;
+          z-index: 60;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 120ms ease;
+        }
+
+        #__chat_widget_root .bot-container:hover .cw-resize-handle {
+          opacity: 1;
+          pointer-events: auto;
+        }
+
+        #__chat_widget_root .cw-resize-left {
+          left: -6px;
+          top: 14px;
+          bottom: 14px;
+          width: 12px;
+          cursor: ew-resize;
+        }
+
+        #__chat_widget_root .cw-resize-top {
+          top: -6px;
+          left: 14px;
+          right: 14px;
+          height: 12px;
+          cursor: ns-resize;
+        }
+
+        #__chat_widget_root .cw-resize-corner {
+          top: -6px;
+          left: -6px;
+          width: 14px;
+          height: 14px;
+          cursor: nwse-resize;
+        }
+
+        @media (max-width: 767px), (hover: none), (pointer: coarse) {
+          #__chat_widget_root .cw-resize-handle {
+            display: none !important;
+          }
         }
 
         /* === Force the input bar to stay at the bottom === */
