@@ -872,6 +872,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
     startY: 0,
     startW: 520,
     startH: 680,
+    rafId: 0,
+    nextW: 520,
+    nextH: 680,
   })
 
   const scrollRef = useRef(null)
@@ -1031,12 +1034,16 @@ function ChatWindow({ onMinimize, onDragStart }) {
       startY: e.clientY,
       startW: widgetSize.w,
       startH: widgetSize.h,
+      rafId: 0,
+      nextW: widgetSize.w,
+      nextH: widgetSize.h,
     }
 
     const prevUserSelect = document.body.style.userSelect
     const prevCursor = document.body.style.cursor
     document.body.style.userSelect = "none"
-    document.body.style.cursor = dir === "w" ? "ew-resize" : dir === "h" ? "ns-resize" : "nwse-resize"
+    document.body.style.cursor =
+      dir === "w" || dir === "e" ? "ew-resize" : dir === "h" ? "ns-resize" : "nwse-resize"
 
     const onMove = (ev) => {
       const { startX, startY, startW, startH } = resizeRef.current
@@ -1047,6 +1054,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
       let nextH = startH
 
       if (dir === "w" || dir === "both") nextW = startW - dx
+      if (dir === "e") nextW = startW + dx
       if (dir === "h" || dir === "both") nextH = startH - dy
 
       const maxW = Math.min(900, window.innerWidth - 24)
@@ -1055,13 +1063,26 @@ function ChatWindow({ onMinimize, onDragStart }) {
       nextW = clamp(nextW, 360, maxW)
       nextH = clamp(nextH, 420, maxH)
 
-      setWidgetSize({ w: nextW, h: nextH })
+      resizeRef.current.nextW = nextW
+      resizeRef.current.nextH = nextH
+
+      if (!resizeRef.current.rafId) {
+        resizeRef.current.rafId = window.requestAnimationFrame(() => {
+          resizeRef.current.rafId = 0
+          setWidgetSize({ w: resizeRef.current.nextW, h: resizeRef.current.nextH })
+        })
+      }
     }
 
     const onUp = () => {
       resizeRef.current.active = false
       window.removeEventListener("mousemove", onMove)
       window.removeEventListener("mouseup", onUp)
+
+      if (resizeRef.current.rafId) {
+        window.cancelAnimationFrame(resizeRef.current.rafId)
+        resizeRef.current.rafId = 0
+      }
 
       document.body.style.userSelect = prevUserSelect
       document.body.style.cursor = prevCursor
@@ -1301,6 +1322,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
       {desktopResizable ? (
         <>
           <div className="cw-resize-handle cw-resize-left" onMouseDown={(e) => startResize(e, "w")} />
+          <div className="cw-resize-handle cw-resize-right" onMouseDown={(e) => startResize(e, "e")} />
           <div className="cw-resize-handle cw-resize-top" onMouseDown={(e) => startResize(e, "h")} />
           <div className="cw-resize-handle cw-resize-corner" onMouseDown={(e) => startResize(e, "both")} />
         </>
@@ -1635,6 +1657,14 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
         #__chat_widget_root .cw-resize-left {
           left: -6px;
+          top: 14px;
+          bottom: 14px;
+          width: 12px;
+          cursor: ew-resize;
+        }
+
+        #__chat_widget_root .cw-resize-right {
+          right: -6px;
           top: 14px;
           bottom: 14px;
           width: 12px;
