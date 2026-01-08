@@ -1174,7 +1174,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
     const finalizeAndPersist = async (finalAnswer) => {
       try {
-        await supabase.from("Chat").insert([{ question: baseQuestion, answer: finalAnswer }])
+        const dbMode = mode === "thinking" ? "deepthinking" : "regular"
+        await supabase.from("Chat").insert([{ question: baseQuestion, answer: finalAnswer, mode: dbMode }])
       } catch (dbErr) {
         logger.warn("Supabase insert failed", dbErr)
       }
