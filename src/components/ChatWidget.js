@@ -1210,7 +1210,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
             aria-haspopup="menu"
             aria-expanded={modeOpen ? "true" : "false"}
           >
-            <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" className="w-6 h-6" />
+            <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" />
             <span className="cw-title">
               Mr Pot
               {isThinking ? <span className="cw-title-fade"> Thinking</span> : null}
@@ -1705,11 +1705,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
           color: inherit;
         }
 
-        #__chat_widget_root .cw-mode-btn img {
-          width: 28px;
-          height: 28px;
-        }
-
         #__chat_widget_root .cw-mode-btn:hover {
           background: rgba(243, 244, 246, 0.9);
         }
@@ -1722,7 +1717,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           display: inline-flex;
           align-items: baseline;
           gap: 6px;
-          font-size: 16px;
+          font-size: 22px;
           font-weight: 600;
         }
 
