@@ -1702,6 +1702,22 @@ function ChatWindow({ onMinimize, onDragStart }) {
           }
         }
 
+        :global(body.dark-skin) #__chat_widget_root .bot-container {
+          background-color: #0b1220;
+          border-color: #1f2937;
+          color: #e5e7eb;
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .bot-header {
+          background-color: #0f172a;
+          border-color: #1f2937;
+          color: #e5e7eb;
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .bot-messages {
+          background: linear-gradient(180deg, #0b1220 0%, #0f172a 100%);
+        }
+
         /* === Force the input bar to stay at the bottom === */
         #__chat_widget_root .bot-container {
           display: flex !important;
