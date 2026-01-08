@@ -1702,19 +1702,22 @@ function ChatWindow({ onMinimize, onDragStart }) {
           }
         }
 
-        :global(body.dark-skin) #__chat_widget_root .bot-container {
+        :global(body.dark-skin) #__chat_widget_root .bot-container,
+        :global(.dark) #__chat_widget_root .bot-container {
           background-color: #0b1220;
           border-color: #1f2937;
           color: #e5e7eb;
         }
 
-        :global(body.dark-skin) #__chat_widget_root .bot-header {
+        :global(body.dark-skin) #__chat_widget_root .bot-header,
+        :global(.dark) #__chat_widget_root .bot-header {
           background-color: #0f172a;
           border-color: #1f2937;
           color: #e5e7eb;
         }
 
-        :global(body.dark-skin) #__chat_widget_root .bot-messages {
+        :global(body.dark-skin) #__chat_widget_root .bot-messages,
+        :global(.dark) #__chat_widget_root .bot-messages {
           background: linear-gradient(180deg, #0b1220 0%, #0f172a 100%);
         }
 
@@ -1868,7 +1871,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
           --cw-progress-track: rgba(229, 231, 235, 1);
         }
 
-        :global(body.dark-skin) #__chat_widget_root {
+        :global(body.dark-skin) #__chat_widget_root,
+        :global(.dark) #__chat_widget_root {
           --cw-input-bg: #0f172a;
           --cw-input-border: rgba(255, 255, 255, 0.28);
           --cw-input-border-strong: rgba(255, 255, 255, 0.72);
