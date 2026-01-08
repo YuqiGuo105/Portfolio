@@ -15,6 +15,7 @@ create table public."Chat" (
   question text null,
   answer text null,
   "createdAt" timestamp with time zone not null default now(),
+  mode text null default 'regular'::text,
   constraint Chat_pkey primary key (id)
 ) TABLESPACE pg_default;
 

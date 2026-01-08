@@ -1170,11 +1170,13 @@ function ChatWindow({ onMinimize, onDragStart }) {
     setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", streaming: true, thinkingNow: null }])
 
     const baseQuestion = visibleText
+    const requestMode = mode
     const fileUrls = readyFiles.map((f) => f.url)
 
     const finalizeAndPersist = async (finalAnswer) => {
       try {
-        await supabase.from("Chat").insert([{ question: baseQuestion, answer: finalAnswer }])
+        const dbMode = requestMode === "thinking" ? "deepthinking" : "regular"
+        await supabase.from("Chat").insert([{ question: baseQuestion, answer: finalAnswer, mode: dbMode }])
       } catch (dbErr) {
         logger.warn("Supabase insert failed", dbErr)
       }
