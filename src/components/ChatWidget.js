@@ -1181,21 +1181,23 @@ function ChatWindow({ onMinimize, onDragStart }) {
       >
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-100">
           <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" className="w-6 h-6" />
-          Mr.Pot
-          <div className="flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
-            <label htmlFor="cw-deep-thinking" className="sr-only">
-              Deep thinking mode
-            </label>
-            <span className="whitespace-nowrap">Thinking</span>
-            <select
-              id="cw-deep-thinking"
-              value={deepThinking ? "deep" : "standard"}
-              onChange={(e) => setDeepThinking(e.target.value === "deep")}
-              className="rounded border border-gray-200 bg-white px-1 py-0.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-            >
-              <option value="standard">Standard</option>
-              <option value="deep">Deep</option>
-            </select>
+          <div className="flex items-center gap-2">
+            <span>Mr.Pot</span>
+            <div className="flex items-center rounded-full border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 shadow-sm transition hover:border-orange-200 hover:shadow dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
+              <label htmlFor="cw-deep-thinking" className="sr-only">
+                Deep thinking mode
+              </label>
+              <span className="mr-1 whitespace-nowrap font-medium text-gray-500 dark:text-gray-300">Thinking</span>
+              <select
+                id="cw-deep-thinking"
+                value={deepThinking ? "deep" : "standard"}
+                onChange={(e) => setDeepThinking(e.target.value === "deep")}
+                className="rounded-full border border-transparent bg-transparent px-1 py-0.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:text-gray-100"
+              >
+                <option value="standard">Standard</option>
+                <option value="deep">Deep</option>
+              </select>
+            </div>
           </div>
         </div>
         <button
