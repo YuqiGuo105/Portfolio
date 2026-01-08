@@ -1317,7 +1317,16 @@ function ChatWindow({ onMinimize, onDragStart }) {
   return (
     <div
       className="bot-container relative mb-6 flex flex-col w-screen md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700"
-      style={desktopResizable ? { width: `${widgetSize.w}px`, height: `${widgetSize.h}px`, maxHeight: "none" } : undefined}
+      style={
+        desktopResizable
+          ? {
+            width: `${widgetSize.w}px`,
+            height: `${widgetSize.h}px`,
+            maxWidth: `${widgetSize.w}px`,
+            maxHeight: "none",
+          }
+          : undefined
+      }
     >
       {desktopResizable ? (
         <>
