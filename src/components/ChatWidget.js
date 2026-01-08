@@ -1718,7 +1718,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           align-items: baseline;
           gap: 6px;
           font-size: 22px;
-          font-weight: 600;
+          font-weight: 400;
         }
 
         #__chat_widget_root .cw-title-fade {
