@@ -852,29 +852,32 @@ function ChatWindow({ onMinimize, onDragStart }) {
   // { id, file, name(original), status: "uploading"|"ready"|"error", progress, storagePath, publicUrl }
 
   // --- Desktop resize (PC only) ---
-  const SIZE_KEY = "cw:widgetSize"
   const clamp = (n, min, max) => Math.min(max, Math.max(min, n))
 
   const [desktopResizable, setDesktopResizable] = useState(false)
-  const [widgetSize, setWidgetSize] = useState(() => {
-    if (typeof window === "undefined") return { w: 520, h: 680 }
-    try {
-      const saved = JSON.parse(localStorage.getItem(SIZE_KEY) || "null")
-      if (saved && typeof saved.w === "number" && typeof saved.h === "number") return saved
-    } catch {}
-    return { w: 520, h: 680 }
-  })
+  const DEFAULT_WIDGET_SIZE = { w: 520, h: 680 }
+  const getDefaultWidgetSize = () => {
+    if (typeof window === "undefined") return DEFAULT_WIDGET_SIZE
+    const maxW = Math.min(900, window.innerWidth - 24)
+    const maxH = Math.min(900, window.innerHeight - 40)
+    return {
+      w: clamp(DEFAULT_WIDGET_SIZE.w, 360, maxW),
+      h: clamp(DEFAULT_WIDGET_SIZE.h, 420, maxH),
+    }
+  }
+
+  const [widgetSize, setWidgetSize] = useState(() => getDefaultWidgetSize())
 
   const resizeRef = useRef({
     active: false,
     dir: "both",
     startX: 0,
     startY: 0,
-    startW: 520,
-    startH: 680,
+    startW: widgetSize.w,
+    startH: widgetSize.h,
     rafId: 0,
-    nextW: 520,
-    nextH: 680,
+    nextW: widgetSize.w,
+    nextH: widgetSize.h,
   })
 
   const scrollRef = useRef(null)
@@ -965,10 +968,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   useEffect(() => {
     if (!desktopResizable) return
-    try {
-      localStorage.setItem(SIZE_KEY, JSON.stringify(widgetSize))
-    } catch {}
-  }, [widgetSize, desktopResizable])
+    setWidgetSize(getDefaultWidgetSize())
+  }, [desktopResizable])
 
   useEffect(() => {
     storageSafeSet("chatMessages", JSON.stringify(messages))
