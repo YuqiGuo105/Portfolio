@@ -1953,14 +1953,16 @@ function ChatWindow({ onMinimize, onDragStart }) {
         }
 
         #__chat_widget_root .cw-chev {
-          width: 18px;
-          height: 18px;
-          opacity: 0.9;
-          transition: transform 160ms ease;
+          width: 22px;
+          height: 22px;
+          opacity: 0.95;
+          margin-left: 2px;
+          transition: transform 160ms ease, filter 160ms ease;
         }
 
         #__chat_widget_root .cw-chev.open {
           transform: rotate(180deg);
+          filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.6));
         }
 
         #__chat_widget_root .cw-mode-menu {
