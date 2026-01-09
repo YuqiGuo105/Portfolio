@@ -1704,8 +1704,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
         :global(body.dark-skin) #__chat_widget_root .bot-container,
         :global(.dark) #__chat_widget_root .bot-container {
-          background-color: #0b1220;
-          border-color: #1f2937;
+          background-color: #0f172a !important;
+          border-color: transparent !important;
+          box-shadow: none !important;
           color: #e5e7eb;
         }
 
@@ -1719,6 +1720,16 @@ function ChatWindow({ onMinimize, onDragStart }) {
         :global(body.dark-skin) #__chat_widget_root .bot-messages,
         :global(.dark) #__chat_widget_root .bot-messages {
           background: linear-gradient(180deg, #0b1220 0%, #0f172a 100%);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .input-area,
+        :global(.dark) #__chat_widget_root .input-area {
+          border-top-color: rgba(255, 255, 255, 0.12) !important;
+        }
+
+        :global(body.dark-skin) #__chat_widget_root,
+        :global(.dark) #__chat_widget_root {
+          background: transparent !important;
         }
 
         /* === Force the input bar to stay at the bottom === */
