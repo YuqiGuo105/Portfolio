@@ -855,7 +855,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const clamp = (n, min, max) => Math.min(max, Math.max(min, n))
 
   const [desktopResizable, setDesktopResizable] = useState(false)
-  const DEFAULT_WIDGET_SIZE = { w: 520, h: 680 }
+  const DEFAULT_WIDGET_SIZE = { w: 520, h: 640 }
   const getDefaultWidgetSize = () => {
     if (typeof window === "undefined") return DEFAULT_WIDGET_SIZE
     const maxW = Math.min(900, window.innerWidth - 24)
