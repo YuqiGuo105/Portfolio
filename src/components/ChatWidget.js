@@ -855,7 +855,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const clamp = (n, min, max) => Math.min(max, Math.max(min, n))
 
   const [desktopResizable, setDesktopResizable] = useState(false)
-  const DEFAULT_WIDGET_SIZE = { w: 520, h: 680 }
+  const DEFAULT_WIDGET_SIZE = { w: 520, h: 576 }
   const getDefaultWidgetSize = () => {
     if (typeof window === "undefined") return DEFAULT_WIDGET_SIZE
     const maxW = Math.min(900, window.innerWidth - 24)
@@ -1649,8 +1649,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
       <style jsx global>{`
         #__chat_widget_root .bot-container {
-          height: min(80vh, 680px);
-          max-height: 680px;
+          height: min(68vh, 576px);
+          max-height: 576px;
         }
 
         /* ===== Desktop resize handles (show on hover only) ===== */
@@ -1758,7 +1758,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
         @supports (height: 100dvh) {
           #__chat_widget_root .bot-container {
-            height: min(80dvh, 680px);
+            height: min(68dvh, 576px);
           }
         }
 
@@ -1953,14 +1953,16 @@ function ChatWindow({ onMinimize, onDragStart }) {
         }
 
         #__chat_widget_root .cw-chev {
-          width: 18px;
-          height: 18px;
-          opacity: 0.9;
-          transition: transform 160ms ease;
+          width: 22px;
+          height: 22px;
+          opacity: 0.95;
+          margin-left: 2px;
+          transition: transform 160ms ease, filter 160ms ease;
         }
 
         #__chat_widget_root .cw-chev.open {
           transform: rotate(180deg);
+          filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.6));
         }
 
         #__chat_widget_root .cw-mode-menu {
