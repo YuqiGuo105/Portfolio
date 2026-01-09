@@ -1923,20 +1923,62 @@ function ChatWindow({ onMinimize, onDragStart }) {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          padding: 6px 8px;
+          padding: 6px 10px;
           border-radius: 10px;
-          border: 1px solid transparent;
-          background: transparent;
+          background: linear-gradient(135deg, #2563eb, #22d3ee);
+          color: #f8fafc;
+          font-weight: 600;
+          font-size: 15px;
+          border: none;
           cursor: pointer;
-          color: inherit;
+          transition: all 200ms ease;
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+          position: relative;
+          overflow: hidden;
         }
 
         #__chat_widget_root .cw-mode-btn:hover {
-          background: rgba(243, 244, 246, 0.9);
+          transform: translateY(-1px);
+          filter: brightness(1.1);
+          box-shadow: 0 6px 18px rgba(34, 211, 238, 0.4);
+        }
+
+        #__chat_widget_root .cw-mode-btn::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: 10px;
+          background: radial-gradient(
+            circle,
+            rgba(255, 255, 255, 0.25) 0%,
+            transparent 70%
+          );
+          opacity: 0;
+          pointer-events: none;
+          animation: pulseGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes pulseGlow {
+          0%,
+          100% {
+            opacity: 0;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.3;
+            transform: scale(1.05);
+          }
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-btn {
+          background: linear-gradient(135deg, #38bdf8, #7c3aed);
+          color: #0b1224;
+          box-shadow: 0 6px 16px rgba(124, 58, 237, 0.35);
         }
 
         :global(body.dark-skin) #__chat_widget_root .cw-mode-btn:hover {
-          background: rgba(31, 41, 55, 0.8);
+          box-shadow: 0 8px 22px rgba(56, 189, 248, 0.45);
+          filter: brightness(1.1);
         }
 
         #__chat_widget_root .cw-title {
