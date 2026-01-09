@@ -1649,8 +1649,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
       <style jsx global>{`
         #__chat_widget_root .bot-container {
-          height: min(80vh, 680px);
-          max-height: 680px;
+          height: min(76vh, 640px);
+          max-height: 640px;
         }
 
         /* ===== Desktop resize handles (show on hover only) ===== */
@@ -1758,7 +1758,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
         @supports (height: 100dvh) {
           #__chat_widget_root .bot-container {
-            height: min(80dvh, 680px);
+            height: min(76dvh, 640px);
           }
         }
 
