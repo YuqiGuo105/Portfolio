@@ -2,10 +2,14 @@
 
 import { createPortal } from "react-dom"
 import { useState, useEffect, useRef, Fragment } from "react"
-import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check } from "lucide-react"
+import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check, Copy } from "lucide-react"
 import Image from "next/image"
 import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import rehypeHighlight from "rehype-highlight"
+import renderMathInElement from "katex/contrib/auto-render"
 
 /* ============================================================
    ChatWidget — POST SSE for /api/rag/answer/stream
@@ -83,37 +87,67 @@ function sanitizeWysiwygHtml(html) {
   }
 }
 
-/* ───────── linkify plain URLs (for non-HTML answers) ───────── */
-const URL_RE = /\bhttps?:\/\/[^\s<]+/gi
+function MarkdownMessage({ content }) {
+  const rootRef = useRef(null)
 
-function splitTrailingPunct(url) {
-  const m = url.match(/^(.*?)([)\].,!?:;。，“”，！？、》》】】]+)?$/)
-  return { href: m?.[1] || url, tail: m?.[2] || "" }
-}
+  useEffect(() => {
+    if (!rootRef.current) return
+    try {
+      renderMathInElement(rootRef.current, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "\\[", right: "\\]", display: true },
+          { left: "\\(", right: "\\)", display: false },
+        ],
+        ignoredTags: ["script", "noscript", "style", "textarea", "pre", "code"],
+        throwOnError: false,
+      })
+    } catch {}
+  }, [content])
 
-function renderTextWithLinks(text) {
-  const s = String(text || "")
-  const out = []
-  let last = 0
+  const Pre = ({ children }) => {
+    const codeEl = Array.isArray(children) ? children[0] : children
+    const className = codeEl?.props?.className || ""
+    const lang = (className.match(/language-([a-z0-9_-]+)/i) || [])[1] || "text"
+    const raw = String(codeEl?.props?.children || "")
+    const code = raw.replace(/\n$/, "")
+    const [copied, setCopied] = useState(false)
 
-  s.replace(URL_RE, (match, offset) => {
-    const idx = Number(offset)
-    if (idx > last) out.push(s.slice(last, idx))
+    const onCopy = async () => {
+      try {
+        await navigator.clipboard.writeText(code)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 900)
+      } catch {}
+    }
 
-    const { href, tail } = splitTrailingPunct(match)
-    out.push(
-      <a key={`${idx}-${href}`} href={href} target="_blank" rel="noreferrer noopener" className="chat-link">
-        {href}
-      </a>,
+    return (
+      <div className="cw-codeblock">
+        <div className="cw-codeblock-head">
+          <span className="cw-code-lang">{lang}</span>
+          <button type="button" className="cw-code-copy" onClick={onCopy}>
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <pre>{children}</pre>
+      </div>
     )
-    if (tail) out.push(tail)
+  }
 
-    last = idx + match.length
-    return match
-  })
-
-  if (last < s.length) out.push(s.slice(last))
-  return out
+  return (
+    <div ref={rootRef} className="cw-md">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight]}
+        components={{
+          pre: Pre,
+        }}
+      >
+        {String(content || "")}
+      </ReactMarkdown>
+    </div>
+  )
 }
 
 const SESSION_TTL_MS = 15 * 60 * 1000
@@ -1450,12 +1484,12 @@ function ChatWindow({ onMinimize, onDragStart }) {
                     <TypingIndicator />
                   ) : (
                     <>
-                      <span>{renderTextWithLinks(m.content)}</span>
+                      <MarkdownMessage content={m.content} />
                       <StreamingCursor />
                     </>
                   )
                 ) : (
-                  renderTextWithLinks(m.content)
+                  <MarkdownMessage content={m.content} />
                 )}
               </div>
             )}
@@ -1795,6 +1829,56 @@ function ChatWindow({ onMinimize, onDragStart }) {
           display: block !important;
           overflow-x: auto !important;
           border-collapse: collapse !important;
+        }
+
+        #__chat_widget_root .cw-codeblock {
+          margin: 0.5rem 0;
+          border-radius: 12px;
+          overflow: hidden;
+          border: 1px solid rgba(229, 231, 235, 0.9);
+        }
+
+        :global(.dark) #__chat_widget_root .cw-codeblock,
+        :global(body.dark-skin) #__chat_widget_root .cw-codeblock {
+          border-color: rgba(55, 65, 81, 0.7);
+        }
+
+        #__chat_widget_root .cw-codeblock-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 8px 10px;
+          font-size: 12px;
+          background: rgba(15, 23, 42, 0.06);
+        }
+
+        :global(.dark) #__chat_widget_root .cw-codeblock-head,
+        :global(body.dark-skin) #__chat_widget_root .cw-codeblock-head {
+          background: rgba(0, 0, 0, 0.22);
+        }
+
+        #__chat_widget_root .cw-code-copy {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          opacity: 0.85;
+          padding: 4px 8px;
+          border-radius: 10px;
+        }
+
+        #__chat_widget_root .cw-code-copy:hover {
+          opacity: 1;
+          background: rgba(148, 163, 184, 0.18);
+        }
+
+        #__chat_widget_root .cw-codeblock pre {
+          margin: 0;
+          border: none;
+          border-radius: 0;
         }
 
         .cw-guide-message {

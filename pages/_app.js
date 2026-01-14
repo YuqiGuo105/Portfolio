@@ -4,6 +4,8 @@ import SeoHead from "../src/components/SeoHead";
 import "../styles/globals.css";
 import "../styles/carousel.css";
 import "../styles/chatWidget.css";
+import "katex/dist/katex.min.css";
+import "highlight.js/styles/github.css";
 function MyApp({ Component, pageProps }) {
   return (
     <Fragment>
