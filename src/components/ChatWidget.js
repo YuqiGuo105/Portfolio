@@ -4,7 +4,7 @@ import { createPortal } from "react-dom"
 import { useState, useEffect, useRef, Fragment } from "react"
 import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check, Copy } from "lucide-react"
 import Image from "next/image"
-import { supabase } from "../supabase/supabaseClient"
+import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
 
 // Markdown + code highlight + LaTeX math rendering (ChatGPT-like)
@@ -228,40 +228,34 @@ function ensureMathJaxLoaded() {
 // ReactMarkdown/CommonMark may treat \[ \] \( \) as escapes and drop the backslash.
 // We double-escape them (outside fenced code blocks and inline code) so the final DOM
 // still contains \[...\], \(...\) and MathJax can typeset them.
-function escapeMathDelimitersOutsideCode(md) {
+
+// Shared helper: transform ONLY outside fenced code blocks and inline code.
+function transformOutsideCode(md, transformFn) {
   const s = String(md || "")
 
   // 1) Protect fenced code blocks ```...```
   const fenceRe = /```[\s\S]*?```/g
-
   // 2) Protect inline code `...`
   const inlineCodeRe = /`[^`]*`/g
 
-  const transformDelims = (chunk) =>
-    chunk
-      // only add an extra "\" when it is NOT already escaped
-      .replace(/(^|[^\\])\\\(/g, "$1\\\\(")
-      .replace(/(^|[^\\])\\\)/g, "$1\\\\)")
-      .replace(/(^|[^\\])\\\[/g, "$1\\\\[")
-      .replace(/(^|[^\\])\\\]/g, "$1\\\\]")
-
   const transformText = (textChunk) => {
-    // Split by inline code spans; transform only non-code segments
     let out = ""
     let last = 0
     let m
+    inlineCodeRe.lastIndex = 0
     while ((m = inlineCodeRe.exec(textChunk)) !== null) {
-      out += transformDelims(textChunk.slice(last, m.index))
+      out += transformFn(textChunk.slice(last, m.index))
       out += m[0]
       last = m.index + m[0].length
     }
-    out += transformDelims(textChunk.slice(last))
+    out += transformFn(textChunk.slice(last))
     return out
   }
 
   let out = ""
   let last = 0
   let m
+  fenceRe.lastIndex = 0
   while ((m = fenceRe.exec(s)) !== null) {
     out += transformText(s.slice(last, m.index))
     out += m[0] // keep code fence untouched
@@ -271,24 +265,172 @@ function escapeMathDelimitersOutsideCode(md) {
   return out
 }
 
+// Optional: normalize some common LaTeX patterns users frequently type in chat.
+// Keep this VERY conservative to avoid changing intended math.
+function normalizeLatexOutsideCode(md) {
+  return transformOutsideCode(md, (chunk) =>
+    String(chunk || "")
+      // \vec{F}{\text{avg}}  -> \vec{F}_{\text{avg}}
+      // \vec{p}{\text{初}}   -> \vec{p}_{\text{初}}
+      .replace(/\\vec\{([^{}]+)\}\{\\text\{([^{}]+)\}\}/g, "\\vec{$1}_{\\text{$2}}")
+      // \vec{F}{\mathrm{avg}} -> \vec{F}_{\mathrm{avg}}
+      .replace(/\\vec\{([^{}]+)\}\{\\mathrm\{([^{}]+)\}\}/g, "\\vec{$1}_{\\mathrm{$2}}"),
+  )
+}
 
-// --- Streaming helper: avoid showing half-written math blocks (looks like gibberish during SSE) ---
+function escapeMathDelimitersOutsideCode(md) {
+  return transformOutsideCode(md, (chunk) =>
+    String(chunk || "")
+      // only add an extra "\" when it is NOT already escaped
+      .replace(/(^|[^\\])\\\(/g, "$1\\\\(")
+      .replace(/(^|[^\\])\\\)/g, "$1\\\\)")
+      .replace(/(^|[^\\])\\\[/g, "$1\\\\[")
+      .replace(/(^|[^\\])\\\]/g, "$1\\\\]"),
+  )
+}
+
+// --- Streaming optimization: only re-typeset when NEW math expressions become complete ---
+function stripCodeForMathScan(md) {
+  return String(md || "")
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/`[^`]*`/g, "")
+}
+
+function countOrderedPairs(s, openToken, closeToken) {
+  let i = 0
+  let open = 0
+  let pairs = 0
+  while (i < s.length) {
+    if (openToken && s.startsWith(openToken, i)) {
+      open++
+      i += openToken.length
+      continue
+    }
+    if (closeToken && s.startsWith(closeToken, i)) {
+      if (open > 0) {
+        pairs++
+        open--
+      }
+      i += closeToken.length
+      continue
+    }
+    i++
+  }
+  return pairs
+}
+
+function countSingleDollarPairs(s) {
+  // Remove $$ first to avoid double counting.
+  const t = String(s || "").replace(/\$\$/g, "")
+  let open = false
+  let pairs = 0
+  let singles = 0
+
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i]
+    if (ch === "$" && (i === 0 || t[i - 1] !== "\\") && t[i + 1] !== "$") {
+      singles++
+      open = !open
+      if (!open) pairs++
+    }
+  }
+
+  // If there's only one '$' in the whole text, it's more likely currency than math.
+  return singles < 2 ? 0 : pairs
+}
+
+// Find unmatched single-dollar $...$ opening index (ignoring $$ and escaped \$)
+function findUnmatchedSingleDollarIndex(s) {
+  let openIdx = -1
+  let singles = 0
+
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] !== "$") continue
+
+    // Skip $$ (display) blocks
+    if (s[i + 1] === "$") {
+      i++
+      continue
+    }
+    // Skip escaped \$
+    if (i > 0 && s[i - 1] === "\\") continue
+
+    singles++
+    if (openIdx === -1) openIdx = i
+    else openIdx = -1
+  }
+
+  // Only treat it as "incomplete math" if the text contains at least two '$' tokens.
+  return singles < 2 ? -1 : openIdx
+}
+
+function getMathPairStats(md) {
+  const s = stripCodeForMathScan(md)
+
+  // Block math: $$...$$ and \[...\]
+  const dbl = (s.match(/\$\$/g) || []).length
+  const blockDollars = Math.floor(dbl / 2)
+
+  // Prefer the double-escaped form (\\[ \\]) if present; otherwise fall back to (\[ \])
+  const hasDoubleBrackets = s.includes("\\\\[") || s.includes("\\\\]")
+  const openB = hasDoubleBrackets ? "\\\\[" : "\\["
+  const closeB = hasDoubleBrackets ? "\\\\]" : "\\]"
+  const blockBrackets = s.includes(openB) || s.includes(closeB) ? countOrderedPairs(s, openB, closeB) : 0
+
+  // Inline math: \( ... \) and $...$
+  const hasDoubleParens = s.includes("\\\\(") || s.includes("\\\\)")
+  const openP = hasDoubleParens ? "\\\\(" : "\\("
+  const closeP = hasDoubleParens ? "\\\\)" : "\\)"
+  const inlineParens = s.includes(openP) || s.includes(closeP) ? countOrderedPairs(s, openP, closeP) : 0
+
+  const inlineDollars = countSingleDollarPairs(s)
+
+  return {
+    blockPairs: blockDollars + blockBrackets,
+    inlinePairs: inlineParens + inlineDollars,
+  }
+}
+
+// --- Streaming helper: avoid showing half-written math (gibberish during SSE) ---
 function maskIncompleteMathBlocks(md) {
   const s = String(md || "")
-  // Incomplete $$...$$ blocks
+
+  // 1) Incomplete $$...$$ blocks
   const dbl = [...s.matchAll(/\$\$/g)]
   if (dbl.length % 2 === 1) {
     const idx = dbl[dbl.length - 1].index ?? 0
     return s.slice(0, idx) + "\n\n(公式生成中…)\n\n"
   }
-  // Incomplete \[...\] blocks
-  const open = s.lastIndexOf("\\\\[")
-  const close = s.lastIndexOf("\\\\]")
-  if (open !== -1 && open > close) {
-    return s.slice(0, open) + "\n\n(公式生成中…)\n\n"
+
+  // 2) Incomplete \[...\] blocks
+  const hasDoubleBrackets = s.includes("\\\\[") || s.includes("\\\\]")
+  const openB = hasDoubleBrackets ? "\\\\[" : "\\["
+  const closeB = hasDoubleBrackets ? "\\\\]" : "\\]"
+  const lastOpenB = s.lastIndexOf(openB)
+  const lastCloseB = s.lastIndexOf(closeB)
+  if (lastOpenB !== -1 && lastOpenB > lastCloseB) {
+    return s.slice(0, lastOpenB) + "\n\n(公式生成中…)\n\n"
   }
+
+  // 3) Incomplete \( ... \) inline blocks
+  const hasDoubleParens = s.includes("\\\\(") || s.includes("\\\\)")
+  const openP = hasDoubleParens ? "\\\\(" : "\\("
+  const closeP = hasDoubleParens ? "\\\\)" : "\\)"
+  const lastOpenP = s.lastIndexOf(openP)
+  const lastCloseP = s.lastIndexOf(closeP)
+  if (lastOpenP !== -1 && lastOpenP > lastCloseP) {
+    return s.slice(0, lastOpenP) + "(公式生成中…)"
+  }
+
+  // 4) Incomplete single-dollar inline math $...$
+  const usd = findUnmatchedSingleDollarIndex(s)
+  if (usd !== -1) {
+    return s.slice(0, usd) + "(公式生成中…)"
+  }
+
   return s
 }
+
 
 // --- Post-process MathJax output: reduce whitespace and prevent overflow beyond bubble edge ---
 function tuneMathJaxLayout(root) {
@@ -321,15 +463,27 @@ function tuneMathJaxLayout(root) {
 }
 
 // ---------- Markdown renderer (MathJax + copyable code blocks) ----------
-function MarkdownMessage({ content, deferMath = false }) {
+function MarkdownMessage({ content, streaming = false }) {
   const rootRef = useRef(null)
   const [copiedKey, setCopiedKey] = useState(null)
 
-  const md = deferMath ? String(content || "") : escapeMathDelimitersOutsideCode(content)
+  const lastMathStatsRef = useRef({ blockPairs: 0, inlinePairs: 0 })
+
+  const normalized = normalizeLatexOutsideCode(content)
+
+  const raw = escapeMathDelimitersOutsideCode(normalized)
+
+  // In streaming mode, hide incomplete trailing block-math so the UI doesn't look garbled.
+  const md = streaming ? maskIncompleteMathBlocks(raw) : raw
 
   useEffect(() => {
     if (!rootRef.current) return
-    if (deferMath) return
+
+    // In streaming mode: only typeset when NEW math expressions become complete.
+    const stats = getMathPairStats(md)
+    const last = lastMathStatsRef.current
+    const shouldTypeset = !streaming || stats.blockPairs > last.blockPairs || stats.inlinePairs > last.inlinePairs
+    if (!shouldTypeset) return
 
     // Debounce MathJax typesetting during SSE streaming to avoid jank.
     let canceled = false
@@ -344,17 +498,22 @@ function MarkdownMessage({ content, deferMath = false }) {
         // Typeset only within this message node.
         mj.typesetClear?.([rootRef.current])
         await mj.typesetPromise([rootRef.current])
+        // Remember latest completed-math counts so we don't typeset on every delta.
+        lastMathStatsRef.current = {
+          blockPairs: Math.max(lastMathStatsRef.current.blockPairs, stats.blockPairs),
+          inlinePairs: Math.max(lastMathStatsRef.current.inlinePairs, stats.inlinePairs),
+        }
         tuneMathJaxLayout(rootRef.current)
       } catch {
         // keep silent
       }
-    }, 420)
+    }, streaming ? 140 : 80)
 
     return () => {
       canceled = true
       clearTimeout(t)
     }
-  }, [md, deferMath])
+  }, [md, streaming])
 
   const onCopy = async (key, text) => {
     try {
@@ -1416,9 +1575,6 @@ function ChatWindow({ onMinimize, onDragStart }) {
           finalized = true
           clearStage(assistantId)
           finalizeAssistant(assistantId, typeof obj.payload === "string" ? obj.payload : answerBuf, onFinal)
-          console.log("evt.data(raw):", evt.data)
-          console.log("obj.payload(parsed):", obj.payload)
-
           return
         }
 
@@ -1618,7 +1774,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
                     <TypingIndicator />
                   ) : (
                     <>
-                      <MarkdownMessage content={maskIncompleteMathBlocks(m.content)} deferMath />
+                      <MarkdownMessage content={m.content} streaming />
                       <StreamingCursor />
                     </>
                   )
@@ -1823,7 +1979,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           max-height: 576px;
         }
 
-        
+
 
         /* ===== MathJax / Markdown tuning ===== */
         #__chat_widget_root .cw-md {
@@ -1853,7 +2009,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           border-radius: 999px;
         }
 
-/* ===== Desktop resize handles (show on hover only) ===== */
+        /* ===== Desktop resize handles (show on hover only) ===== */
         #__chat_widget_root .cw-resize-handle {
           position: absolute;
           z-index: 60;
@@ -2366,7 +2522,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
           outline: none;
           box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35), 0 0.75rem 1.4rem rgba(0, 0, 0, 0.18) !important;
         }
-        
+
         :global(body.dark-skin) #__chat_widget_root .cw-tour-btn:hover {
           background: rgba(30, 41, 59, 0.72);
           border-color: rgba(255, 255, 255, 0.22);
