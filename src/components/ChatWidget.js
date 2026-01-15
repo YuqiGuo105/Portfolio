@@ -2,11 +2,17 @@
 
 import { createPortal } from "react-dom"
 import { useState, useEffect, useRef, Fragment } from "react"
-import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check } from "lucide-react"
+import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check, Copy } from "lucide-react"
 import Image from "next/image"
-import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
+import { supabase } from "../supabase/supabaseClient"
 import { useRouter } from "next/router"
 
+// Markdown + code highlight + LaTeX math rendering (ChatGPT-like)
+// Math rendering uses MathJax v3 (loaded from CDN) so you do NOT need KaTeX.
+// For syntax highlighting styles, import a highlight.js theme globally (optional).
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import rehypeHighlight from "rehype-highlight"
 /* ============================================================
    ChatWidget — POST SSE for /api/rag/answer/stream
    + Attachments (2 max, progress bar, chips in msg)
@@ -20,70 +26,7 @@ const logger = {
   error: (...a) => console.error("[ChatWidget]", ...a),
 }
 
-/* ───────── WYSIWYG HTML sanitizer (DOMParser-first) ───────── */
-const sanitizeHtmlRegexFallback = (html) =>
-  String(html || "")
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/\s(on\w+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-    .replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"')
-    .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'")
-
-function sanitizeWysiwygHtml(html) {
-  const raw = String(html || "")
-  if (typeof window === "undefined" || typeof window.DOMParser === "undefined") {
-    return sanitizeHtmlRegexFallback(raw)
-  }
-
-  try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(raw, "text/html")
-
-    doc.querySelectorAll("script, iframe, object, embed, link, meta").forEach((n) => n.remove())
-
-    const all = doc.body.querySelectorAll("*")
-    all.forEach((el) => {
-      ;[...el.attributes].forEach((attr) => {
-        const name = attr.name.toLowerCase()
-        const value = String(attr.value || "")
-
-        if (name.startsWith("on")) {
-          el.removeAttribute(attr.name)
-          return
-        }
-
-        if (name === "href" || name === "src" || name === "xlink:href") {
-          const v = value.trim().replace(/\s+/g, "")
-          if (/^javascript:/i.test(v) || /^data:text\/html/i.test(v)) {
-            el.removeAttribute(attr.name)
-            return
-          }
-        }
-
-        if (name === "style") {
-          if (/expression\s*\(|url\s*\(\s*['"]?\s*javascript:/i.test(value) || /behavior\s*:/i.test(value)) {
-            el.removeAttribute("style")
-            return
-          }
-        }
-      })
-
-      if (el.tagName === "A") {
-        const href = el.getAttribute("href") || ""
-        if (href && !href.startsWith("#")) {
-          el.setAttribute("target", "_blank")
-          el.setAttribute("rel", "noreferrer noopener")
-        }
-      }
-    })
-
-    return doc.body.innerHTML
-  } catch (e) {
-    logger.warn("DOMParser sanitize failed, fallback to regex:", e?.message || e)
-    return sanitizeHtmlRegexFallback(raw)
-  }
-}
-
-/* ───────── linkify plain URLs (for non-HTML answers) ───────── */
+/* ───────── linkify plain URLs ───────── */
 const URL_RE = /\bhttps?:\/\/[^\s<]+/gi
 
 function splitTrailingPunct(url) {
@@ -221,8 +164,236 @@ function safeShort(s, max) {
   return compactText(String(s ?? ""), max).replace(/\s+/g, " ").trim()
 }
 
-function looksLikeHtml(s) {
-  return /<\/?[a-z][\s\S]*>/i.test(String(s || ""))
+
+
+// ---------- MathJax v3 loader (CDN) ----------
+// We load MathJax dynamically so LaTeX delimiters like \( ... \), \[ ... \], $$...$$ render like ChatGPT.
+// This avoids KaTeX auto-render bundling/CSS issues in some Next.js setups.
+let __mathjaxPromise = null
+
+function ensureMathJaxLoaded() {
+  if (typeof window === "undefined") return Promise.resolve(false)
+  if (window.MathJax && typeof window.MathJax.typesetPromise === "function") return Promise.resolve(true)
+  if (__mathjaxPromise) return __mathjaxPromise
+
+  __mathjaxPromise = new Promise((resolve) => {
+    try {
+      // Configure once BEFORE loading the script.
+      if (!window.MathJax) {
+        window.MathJax = {
+          // Load chemistry extension so \ce{...} works (mhchem)
+          loader: { load: ["[tex]/mhchem"] },
+          tex: {
+            // Support both $...$ and \(...\) for inline math
+            inlineMath: [["$", "$"], ["\\(", "\\)"]],
+            // Support both $$...$$ and \[...\] for display math
+            displayMath: [["$$", "$$"], ["\\[", "\\]"]],
+            processEscapes: true,
+            packages: { "[+]": ["mhchem"] },
+          },
+          chtml: {
+            linebreaks: { automatic: true, width: "container" },
+          },
+          options: {
+            // Don't typeset inside code blocks
+            skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"],
+          },
+        }}
+
+      const existing = document.querySelector('script[data-mathjax="v3"]')
+      if (existing) {
+        if (window.MathJax && typeof window.MathJax.typesetPromise === "function") return resolve(true)
+        existing.addEventListener("load", () => resolve(true))
+        existing.addEventListener("error", () => resolve(false))
+        return
+      }
+
+      const script = document.createElement("script")
+      script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+      script.async = true
+      script.dataset.mathjax = "v3"
+      script.onload = () => resolve(true)
+      script.onerror = () => resolve(false)
+      document.head.appendChild(script)
+    } catch {
+      resolve(false)
+    }
+  })
+
+  return __mathjaxPromise
+}
+
+
+// --- Fix: keep LaTeX delimiters after react-markdown parsing ---
+// ReactMarkdown/CommonMark may treat \[ \] \( \) as escapes and drop the backslash.
+// We double-escape them (outside fenced code blocks and inline code) so the final DOM
+// still contains \[...\], \(...\) and MathJax can typeset them.
+function escapeMathDelimitersOutsideCode(md) {
+  const s = String(md || "")
+
+  // 1) Protect fenced code blocks ```...```
+  const fenceRe = /```[\s\S]*?```/g
+
+  // 2) Protect inline code `...`
+  const inlineCodeRe = /`[^`]*`/g
+
+  const transformDelims = (chunk) =>
+    chunk
+      // only add an extra "\" when it is NOT already escaped
+      .replace(/(^|[^\\])\\\(/g, "$1\\\\(")
+      .replace(/(^|[^\\])\\\)/g, "$1\\\\)")
+      .replace(/(^|[^\\])\\\[/g, "$1\\\\[")
+      .replace(/(^|[^\\])\\\]/g, "$1\\\\]")
+
+  const transformText = (textChunk) => {
+    // Split by inline code spans; transform only non-code segments
+    let out = ""
+    let last = 0
+    let m
+    while ((m = inlineCodeRe.exec(textChunk)) !== null) {
+      out += transformDelims(textChunk.slice(last, m.index))
+      out += m[0]
+      last = m.index + m[0].length
+    }
+    out += transformDelims(textChunk.slice(last))
+    return out
+  }
+
+  let out = ""
+  let last = 0
+  let m
+  while ((m = fenceRe.exec(s)) !== null) {
+    out += transformText(s.slice(last, m.index))
+    out += m[0] // keep code fence untouched
+    last = m.index + m[0].length
+  }
+  out += transformText(s.slice(last))
+  return out
+}
+
+
+// --- Streaming helper: avoid showing half-written math blocks (looks like gibberish during SSE) ---
+function maskIncompleteMathBlocks(md) {
+  const s = String(md || "")
+  // Incomplete $$...$$ blocks
+  const dbl = [...s.matchAll(/\$\$/g)]
+  if (dbl.length % 2 === 1) {
+    const idx = dbl[dbl.length - 1].index ?? 0
+    return s.slice(0, idx) + "\n\n(公式生成中…)\n\n"
+  }
+  // Incomplete \[...\] blocks
+  const open = s.lastIndexOf("\\\\[")
+  const close = s.lastIndexOf("\\\\]")
+  if (open !== -1 && open > close) {
+    return s.slice(0, open) + "\n\n(公式生成中…)\n\n"
+  }
+  return s
+}
+
+// --- Post-process MathJax output: reduce whitespace and prevent overflow beyond bubble edge ---
+function tuneMathJaxLayout(root) {
+  if (!root) return
+  // Clear previous tags
+  root.querySelectorAll("p.cw-math-only").forEach((p) => p.classList.remove("cw-math-only"))
+
+  const containers = root.querySelectorAll("mjx-container")
+  containers.forEach((c) => {
+    // Prevent painting outside bubble; allow horizontal scroll if needed.
+    c.style.maxWidth = "100%"
+    c.style.overflowX = "auto"
+    c.style.overflowY = "hidden"
+    c.style.webkitOverflowScrolling = "touch"
+
+    // Display equations behave better as blocks inside narrow bubbles.
+    if (c.getAttribute("display") === "true") {
+      c.style.display = "block"
+      c.style.margin = "0.25em 0"
+    }
+
+    // Reduce extra margins created by Markdown wrapping the formula in a <p>.
+    const p = c.parentElement
+    if (p && p.tagName === "P") {
+      const elChildren = Array.from(p.children || [])
+      const onlyMath = elChildren.length === 1 && elChildren[0].tagName === "MJX-CONTAINER"
+      if (onlyMath) p.classList.add("cw-math-only")
+    }
+  })
+}
+
+// ---------- Markdown renderer (MathJax + copyable code blocks) ----------
+function MarkdownMessage({ content, deferMath = false }) {
+  const rootRef = useRef(null)
+  const [copiedKey, setCopiedKey] = useState(null)
+
+  const md = deferMath ? String(content || "") : escapeMathDelimitersOutsideCode(content)
+
+  useEffect(() => {
+    if (!rootRef.current) return
+    if (deferMath) return
+
+    // Debounce MathJax typesetting during SSE streaming to avoid jank.
+    let canceled = false
+    const t = setTimeout(async () => {
+      const ok = await ensureMathJaxLoaded()
+      if (!ok || canceled || !rootRef.current) return
+
+      const mj = window.MathJax
+      if (!mj || typeof mj.typesetPromise !== "function") return
+
+      try {
+        // Typeset only within this message node.
+        mj.typesetClear?.([rootRef.current])
+        await mj.typesetPromise([rootRef.current])
+        tuneMathJaxLayout(rootRef.current)
+      } catch {
+        // keep silent
+      }
+    }, 420)
+
+    return () => {
+      canceled = true
+      clearTimeout(t)
+    }
+  }, [md, deferMath])
+
+  const onCopy = async (key, text) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedKey(key)
+      setTimeout(() => setCopiedKey(null), 900)
+    } catch {}
+  }
+
+  const Pre = ({ children }) => {
+    const codeEl = Array.isArray(children) ? children[0] : children
+    const className = codeEl?.props?.className || ""
+    const lang = (className.match(/language-([a-z0-9_-]+)/i) || [])[1] || "text"
+    const raw = String(codeEl?.props?.children ?? "")
+    const code = raw.replace(/\n$/, "")
+    const key = `${lang}:${code.length}`
+    const copied = copiedKey === key
+
+    return (
+      <div className="cw-codeblock">
+        <div className="cw-codeblock-head">
+          <span className="cw-code-lang">{lang}</span>
+          <button type="button" className="cw-code-copy" onClick={() => onCopy(key, code)}>
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <pre className="cw-pre">{children}</pre>
+      </div>
+    )
+  }
+
+  return (
+    <div ref={rootRef} className="cw-md">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ pre: Pre }}>
+        {String(md || "")}
+      </ReactMarkdown>
+    </div>
+  )
 }
 
 /* ---------- RAG endpoint helpers ---------- */
@@ -1194,13 +1365,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
   }
 
   const finalizeAssistant = (assistantId, rawFinal, onFinal) => {
-    const finalRaw = String(rawFinal || "")
-    const html = looksLikeHtml(finalRaw)
-    const finalContent = html ? sanitizeWysiwygHtml(finalRaw) : finalRaw
+    const finalContent = String(rawFinal || "")
 
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === assistantId ? { ...m, content: finalContent, isHtml: html, streaming: false, thinkingNow: null } : m,
+        m.id === assistantId ? { ...m, content: finalContent, isHtml: false, streaming: false, thinkingNow: null } : m,
       ),
     )
 
@@ -1223,6 +1392,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
       question,
       sessionId,
       deepThinking: isThinking,
+      scopeMode: "PRIVACY_SAFE",
       ...(Array.isArray(fileUrls) && fileUrls.length > 0 ? { fileUrls } : {}),
     }
 
@@ -1246,6 +1416,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
           finalized = true
           clearStage(assistantId)
           finalizeAssistant(assistantId, typeof obj.payload === "string" ? obj.payload : answerBuf, onFinal)
+          console.log("evt.data(raw):", evt.data)
+          console.log("obj.payload(parsed):", obj.payload)
+
           return
         }
 
@@ -1409,56 +1582,53 @@ function ChatWindow({ onMinimize, onDragStart }) {
       <div ref={scrollRef} className="bot-messages flex-1 min-h-0 space-y-2 overflow-y-auto px-3 py-3">
         {messages.map((m) => (
           <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-            {m.role === "assistant" && m.isHtml ? (
-              <div
-                className="bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-900 shadow border border-gray-200/80 dark:border-gray-700 dark:bg-gray-800/90 dark:text-gray-100"
-                dangerouslySetInnerHTML={{ __html: m.content }}
-              />
-            ) : (
-              <div
-                className={
-                  m.role === "user"
-                    ? "user-message max-w-[320px] md:max-w-[420px] rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow border border-blue-700/80"
-                    : "bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-900 shadow border border-gray-200/80 dark:border-gray-700 dark:bg-gray-800/90 dark:text-gray-100"
-                }
-              >
-                {m.role === "user" && Array.isArray(m.attachments) && m.attachments.length > 0 ? (
-                  <div className="cw-msg-files">
-                    {m.attachments.map((f) => (
-                      <AttachmentChip key={f.url || f.name} name={f.name} href={f.url} status="ready" />
-                    ))}
-                  </div>
-                ) : null}
+            <div
+              className={
+                m.role === "user"
+                  ? "user-message max-w-[320px] md:max-w-[420px] rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow border border-blue-700/80"
+                  : "bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-900 shadow border border-gray-200/80 dark:border-gray-700 dark:bg-gray-800/90 dark:text-gray-100"
+              }
+            >
+              {m.role === "user" && Array.isArray(m.attachments) && m.attachments.length > 0 ? (
+                <div className="cw-msg-files">
+                  {m.attachments.map((f) => (
+                    <AttachmentChip key={f.url || f.name} name={f.name} href={f.url} status="ready" />
+                  ))}
+                </div>
+              ) : null}
 
-                {m.role === "assistant" && m.streaming && m.thinkingNow ? <StageToast step={m.thinkingNow} /> : null}
+              {m.role === "assistant" && m.streaming && m.thinkingNow ? <StageToast step={m.thinkingNow} /> : null}
 
-                {m.showGuideCta ? (
-                  <div className="cw-guide-message">
-                    <p className="cw-guide-title">Hi! How can I help you today?</p>
-                    <p className="cw-guide-copy">
-                      I'm Mr. Pot, Yuqi's web AI agent.
-                    </p>
-                    <div className="cw-guide-actions">
-                      <button type="button" className="cw-guide-btn" onClick={triggerSiteTour}>
-                        Start web guide
-                        <ArrowUpRight className="cw-guide-ico" aria-hidden="true" />
-                      </button>
-                    </div>
+              {m.showGuideCta ? (
+                <div className="cw-guide-message">
+                  <p className="cw-guide-title">Hi! How can I help you today?</p>
+                  <p className="cw-guide-copy">
+                    I'm Mr. Pot, Yuqi's web AI agent.
+                  </p>
+                  <div className="cw-guide-actions">
+                    <button type="button" className="cw-guide-btn" onClick={triggerSiteTour}>
+                      Start web guide
+                      <ArrowUpRight className="cw-guide-ico" aria-hidden="true" />
+                    </button>
                   </div>
-                ) : m.streaming ? (
+                </div>
+              ) : m.role === "assistant" ? (
+                m.streaming ? (
                   m.content === "" ? (
                     <TypingIndicator />
                   ) : (
                     <>
-                      <span>{renderTextWithLinks(m.content)}</span>
+                      <MarkdownMessage content={maskIncompleteMathBlocks(m.content)} deferMath />
                       <StreamingCursor />
                     </>
                   )
                 ) : (
-                  renderTextWithLinks(m.content)
-                )}
-              </div>
-            )}
+                  <MarkdownMessage content={m.content} />
+                )
+              ) : (
+                renderTextWithLinks(m.content)
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -1653,7 +1823,37 @@ function ChatWindow({ onMinimize, onDragStart }) {
           max-height: 576px;
         }
 
-        /* ===== Desktop resize handles (show on hover only) ===== */
+        
+
+        /* ===== MathJax / Markdown tuning ===== */
+        #__chat_widget_root .cw-md {
+          line-height: 1.55;
+        }
+        #__chat_widget_root .cw-md p {
+          margin: 0.55em 0;
+        }
+        #__chat_widget_root .cw-md p.cw-math-only {
+          margin: 0.25em 0;
+        }
+        #__chat_widget_root .cw-md mjx-container {
+          max-width: 100%;
+          overflow-x: auto;
+          overflow-y: hidden;
+          -webkit-overflow-scrolling: touch;
+        }
+        #__chat_widget_root .cw-md mjx-container[display="true"] {
+          display: block;
+          margin: 0.25em 0 !important;
+        }
+        #__chat_widget_root .cw-md mjx-container::-webkit-scrollbar {
+          height: 6px;
+        }
+        #__chat_widget_root .cw-md mjx-container::-webkit-scrollbar-thumb {
+          background: rgba(148, 163, 184, 0.55);
+          border-radius: 999px;
+        }
+
+/* ===== Desktop resize handles (show on hover only) ===== */
         #__chat_widget_root .cw-resize-handle {
           position: absolute;
           z-index: 60;
@@ -2258,8 +2458,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
         }
 
         /* ============================================================
-           ✅ OPTIONAL WYSIWYG POLISH (CSS only; no Tailwind needed)
-           1) restore list bullets/margins inside .bot-message
+           ✅ OPTIONAL markdown/message polish (CSS only; no Tailwind needed)
+           1) tune list bullets/margins inside .bot-message
            2) override pre/code to avoid inherited white-space: pre-wrap
            ============================================================ */
 
@@ -2306,6 +2506,82 @@ function ChatWindow({ onMinimize, onDragStart }) {
           white-space: inherit;
         }
 
+
+        /* ===== Markdown extras: headings, rules, KaTeX, code copy header ===== */
+        #__chat_widget_root .bot-message h1,
+        #__chat_widget_root .bot-message h2,
+        #__chat_widget_root .bot-message h3,
+        #__chat_widget_root .bot-message h4,
+        #__chat_widget_root .bot-message h5,
+        #__chat_widget_root .bot-message h6 {
+          margin: 0.6rem 0 0.25rem;
+          font-weight: 700;
+          line-height: 1.25;
+        }
+
+        #__chat_widget_root .bot-message hr {
+          border: none;
+          border-top: 1px solid rgba(229, 231, 235, 0.9);
+          margin: 0.75rem 0;
+        }
+
+        :global(.dark) #__chat_widget_root .bot-message hr,
+        :global(body.dark-skin) #__chat_widget_root .bot-message hr {
+          border-top-color: rgba(55, 65, 81, 0.7);
+        }
+
+        #__chat_widget_root .cw-codeblock {
+          margin: 0.5rem 0;
+          border-radius: 12px;
+          overflow: hidden;
+          border: 1px solid rgba(229, 231, 235, 0.9);
+        }
+
+        :global(.dark) #__chat_widget_root .cw-codeblock,
+        :global(body.dark-skin) #__chat_widget_root .cw-codeblock {
+          border-color: rgba(55, 65, 81, 0.7);
+        }
+
+        #__chat_widget_root .cw-codeblock-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 8px 10px;
+          font-size: 12px;
+          background: rgba(15, 23, 42, 0.06);
+        }
+
+        :global(.dark) #__chat_widget_root .cw-codeblock-head,
+        :global(body.dark-skin) #__chat_widget_root .cw-codeblock-head {
+          background: rgba(0, 0, 0, 0.22);
+        }
+
+        #__chat_widget_root .cw-code-copy {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          opacity: 0.9;
+          padding: 4px 8px;
+          border-radius: 10px;
+        }
+
+        #__chat_widget_root .cw-code-copy:hover {
+          opacity: 1;
+          background: rgba(148, 163, 184, 0.18);
+        }
+
+        #__chat_widget_root .bot-message pre.cw-pre {
+          margin: 0;
+          border: none;
+          border-radius: 0;
+          background: transparent;
+          padding: 10px 12px;
+          overflow-x: auto;
+        }
         #__chat_widget_root .bot-message :not(pre) > code {
           white-space: pre-wrap;
           padding: 0.12em 0.35em;
