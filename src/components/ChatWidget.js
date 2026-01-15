@@ -1744,8 +1744,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
             <div
               className={
                 m.role === "user"
-                  ? "user-message max-w-[320px] md:max-w-[420px] rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow border border-blue-700/80"
-                  : "bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-900 shadow border border-gray-200/80 dark:border-gray-700 dark:bg-gray-800/90 dark:text-gray-100"
+                  ? "user-message max-w-[85%] rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow border border-blue-700/80"
+                  : "bot-message max-w-[85%] rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-900 shadow border border-gray-200/80 dark:border-gray-700 dark:bg-gray-800/90 dark:text-gray-100"
               }
             >
               {m.role === "user" && Array.isArray(m.attachments) && m.attachments.length > 0 ? (
