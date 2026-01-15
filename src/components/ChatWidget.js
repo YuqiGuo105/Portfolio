@@ -228,34 +228,40 @@ function ensureMathJaxLoaded() {
 // ReactMarkdown/CommonMark may treat \[ \] \( \) as escapes and drop the backslash.
 // We double-escape them (outside fenced code blocks and inline code) so the final DOM
 // still contains \[...\], \(...\) and MathJax can typeset them.
-
-// Shared helper: transform ONLY outside fenced code blocks and inline code.
-function transformOutsideCode(md, transformFn) {
+function escapeMathDelimitersOutsideCode(md) {
   const s = String(md || "")
 
   // 1) Protect fenced code blocks ```...```
   const fenceRe = /```[\s\S]*?```/g
+
   // 2) Protect inline code `...`
   const inlineCodeRe = /`[^`]*`/g
 
+  const transformDelims = (chunk) =>
+    chunk
+      // only add an extra "\" when it is NOT already escaped
+      .replace(/(^|[^\\])\\\(/g, "$1\\\\(")
+      .replace(/(^|[^\\])\\\)/g, "$1\\\\)")
+      .replace(/(^|[^\\])\\\[/g, "$1\\\\[")
+      .replace(/(^|[^\\])\\\]/g, "$1\\\\]")
+
   const transformText = (textChunk) => {
+    // Split by inline code spans; transform only non-code segments
     let out = ""
     let last = 0
     let m
-    inlineCodeRe.lastIndex = 0
     while ((m = inlineCodeRe.exec(textChunk)) !== null) {
-      out += transformFn(textChunk.slice(last, m.index))
+      out += transformDelims(textChunk.slice(last, m.index))
       out += m[0]
       last = m.index + m[0].length
     }
-    out += transformFn(textChunk.slice(last))
+    out += transformDelims(textChunk.slice(last))
     return out
   }
 
   let out = ""
   let last = 0
   let m
-  fenceRe.lastIndex = 0
   while ((m = fenceRe.exec(s)) !== null) {
     out += transformText(s.slice(last, m.index))
     out += m[0] // keep code fence untouched
@@ -265,29 +271,6 @@ function transformOutsideCode(md, transformFn) {
   return out
 }
 
-// Optional: normalize some common LaTeX patterns users frequently type in chat.
-// Keep this VERY conservative to avoid changing intended math.
-function normalizeLatexOutsideCode(md) {
-  return transformOutsideCode(md, (chunk) =>
-    String(chunk || "")
-      // \vec{F}{\text{avg}}  -> \vec{F}_{\text{avg}}
-      // \vec{p}{\text{初}}   -> \vec{p}_{\text{初}}
-      .replace(/\\vec\{([^{}]+)\}\{\\text\{([^{}]+)\}\}/g, "\\vec{$1}_{\\text{$2}}")
-      // \vec{F}{\mathrm{avg}} -> \vec{F}_{\mathrm{avg}}
-      .replace(/\\vec\{([^{}]+)\}\{\\mathrm\{([^{}]+)\}\}/g, "\\vec{$1}_{\\mathrm{$2}}"),
-  )
-}
-
-function escapeMathDelimitersOutsideCode(md) {
-  return transformOutsideCode(md, (chunk) =>
-    String(chunk || "")
-      // only add an extra "\" when it is NOT already escaped
-      .replace(/(^|[^\\])\\\(/g, "$1\\\\(")
-      .replace(/(^|[^\\])\\\)/g, "$1\\\\)")
-      .replace(/(^|[^\\])\\\[/g, "$1\\\\[")
-      .replace(/(^|[^\\])\\\]/g, "$1\\\\]"),
-  )
-}
 
 // --- Streaming optimization: only re-typeset when NEW math expressions become complete ---
 function stripCodeForMathScan(md) {
@@ -301,12 +284,12 @@ function countOrderedPairs(s, openToken, closeToken) {
   let open = 0
   let pairs = 0
   while (i < s.length) {
-    if (openToken && s.startsWith(openToken, i)) {
+    if (s.startsWith(openToken, i)) {
       open++
       i += openToken.length
       continue
     }
-    if (closeToken && s.startsWith(closeToken, i)) {
+    if (s.startsWith(closeToken, i)) {
       if (open > 0) {
         pairs++
         open--
@@ -324,65 +307,36 @@ function countSingleDollarPairs(s) {
   const t = String(s || "").replace(/\$\$/g, "")
   let open = false
   let pairs = 0
-  let singles = 0
-
   for (let i = 0; i < t.length; i++) {
     const ch = t[i]
     if (ch === "$" && (i === 0 || t[i - 1] !== "\\") && t[i + 1] !== "$") {
-      singles++
       open = !open
       if (!open) pairs++
     }
   }
-
-  // If there's only one '$' in the whole text, it's more likely currency than math.
-  return singles < 2 ? 0 : pairs
-}
-
-// Find unmatched single-dollar $...$ opening index (ignoring $$ and escaped \$)
-function findUnmatchedSingleDollarIndex(s) {
-  let openIdx = -1
-  let singles = 0
-
-  for (let i = 0; i < s.length; i++) {
-    if (s[i] !== "$") continue
-
-    // Skip $$ (display) blocks
-    if (s[i + 1] === "$") {
-      i++
-      continue
-    }
-    // Skip escaped \$
-    if (i > 0 && s[i - 1] === "\\") continue
-
-    singles++
-    if (openIdx === -1) openIdx = i
-    else openIdx = -1
-  }
-
-  // Only treat it as "incomplete math" if the text contains at least two '$' tokens.
-  return singles < 2 ? -1 : openIdx
+  return pairs
 }
 
 function getMathPairStats(md) {
   const s = stripCodeForMathScan(md)
 
   // Block math: $$...$$ and \[...\]
-  const dbl = (s.match(/\$\$/g) || []).length
+  const dbl = [...s.matchAll(/\$\$/g)].length
   const blockDollars = Math.floor(dbl / 2)
 
-  // Prefer the double-escaped form (\\[ \\]) if present; otherwise fall back to (\[ \])
-  const hasDoubleBrackets = s.includes("\\\\[") || s.includes("\\\\]")
-  const openB = hasDoubleBrackets ? "\\\\[" : "\\["
-  const closeB = hasDoubleBrackets ? "\\\\]" : "\\]"
-  const blockBrackets = s.includes(openB) || s.includes(closeB) ? countOrderedPairs(s, openB, closeB) : 0
+  // During rendering we may "double-escape" delimiters (\[ \] \( \)).
+  // Prefer counting the double-escaped form if present, otherwise count the normal form.
+  const hasDoubleBrackets = s.includes("\\[") || s.includes("\\]")
+  const blockBrackets = hasDoubleBrackets
+    ? countOrderedPairs(s, "\\[", "\\]")
+    : countOrderedPairs(s, "\[", "\]")
 
-  // Inline math: \( ... \) and $...$
-  const hasDoubleParens = s.includes("\\\\(") || s.includes("\\\\)")
-  const openP = hasDoubleParens ? "\\\\(" : "\\("
-  const closeP = hasDoubleParens ? "\\\\)" : "\\)"
-  const inlineParens = s.includes(openP) || s.includes(closeP) ? countOrderedPairs(s, openP, closeP) : 0
+  const hasDoubleParens = s.includes("\\(") || s.includes("\\)")
+  const inlineParens = hasDoubleParens
+    ? countOrderedPairs(s, "\\(", "\\)")
+    : countOrderedPairs(s, "\(", "\)")
 
+  // Inline dollars: $...$ (single)
   const inlineDollars = countSingleDollarPairs(s)
 
   return {
@@ -391,46 +345,23 @@ function getMathPairStats(md) {
   }
 }
 
-// --- Streaming helper: avoid showing half-written math (gibberish during SSE) ---
+// --- Streaming helper: avoid showing half-written math blocks (looks like gibberish during SSE) ---
 function maskIncompleteMathBlocks(md) {
   const s = String(md || "")
-
-  // 1) Incomplete $$...$$ blocks
+  // Incomplete $$...$$ blocks
   const dbl = [...s.matchAll(/\$\$/g)]
   if (dbl.length % 2 === 1) {
     const idx = dbl[dbl.length - 1].index ?? 0
     return s.slice(0, idx) + "\n\n(公式生成中…)\n\n"
   }
-
-  // 2) Incomplete \[...\] blocks
-  const hasDoubleBrackets = s.includes("\\\\[") || s.includes("\\\\]")
-  const openB = hasDoubleBrackets ? "\\\\[" : "\\["
-  const closeB = hasDoubleBrackets ? "\\\\]" : "\\]"
-  const lastOpenB = s.lastIndexOf(openB)
-  const lastCloseB = s.lastIndexOf(closeB)
-  if (lastOpenB !== -1 && lastOpenB > lastCloseB) {
-    return s.slice(0, lastOpenB) + "\n\n(公式生成中…)\n\n"
+  // Incomplete \[...\] blocks
+  const open = s.lastIndexOf("\\\\[")
+  const close = s.lastIndexOf("\\\\]")
+  if (open !== -1 && open > close) {
+    return s.slice(0, open) + "\n\n(公式生成中…)\n\n"
   }
-
-  // 3) Incomplete \( ... \) inline blocks
-  const hasDoubleParens = s.includes("\\\\(") || s.includes("\\\\)")
-  const openP = hasDoubleParens ? "\\\\(" : "\\("
-  const closeP = hasDoubleParens ? "\\\\)" : "\\)"
-  const lastOpenP = s.lastIndexOf(openP)
-  const lastCloseP = s.lastIndexOf(closeP)
-  if (lastOpenP !== -1 && lastOpenP > lastCloseP) {
-    return s.slice(0, lastOpenP) + "(公式生成中…)"
-  }
-
-  // 4) Incomplete single-dollar inline math $...$
-  const usd = findUnmatchedSingleDollarIndex(s)
-  if (usd !== -1) {
-    return s.slice(0, usd) + "(公式生成中…)"
-  }
-
   return s
 }
-
 
 // --- Post-process MathJax output: reduce whitespace and prevent overflow beyond bubble edge ---
 function tuneMathJaxLayout(root) {
@@ -469,9 +400,7 @@ function MarkdownMessage({ content, streaming = false }) {
 
   const lastMathStatsRef = useRef({ blockPairs: 0, inlinePairs: 0 })
 
-  const normalized = normalizeLatexOutsideCode(content)
-
-  const raw = escapeMathDelimitersOutsideCode(normalized)
+  const raw = escapeMathDelimitersOutsideCode(content)
 
   // In streaming mode, hide incomplete trailing block-math so the UI doesn't look garbled.
   const md = streaming ? maskIncompleteMathBlocks(raw) : raw
@@ -507,7 +436,7 @@ function MarkdownMessage({ content, streaming = false }) {
       } catch {
         // keep silent
       }
-    }, streaming ? 140 : 80)
+    }, streaming ? 260 : 120)
 
     return () => {
       canceled = true
@@ -1575,6 +1504,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
           finalized = true
           clearStage(assistantId)
           finalizeAssistant(assistantId, typeof obj.payload === "string" ? obj.payload : answerBuf, onFinal)
+          console.log("evt.data(raw):", evt.data)
+          console.log("obj.payload(parsed):", obj.payload)
+
           return
         }
 
@@ -1737,13 +1669,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
       {/* ✅ only this area scrolls */}
       <div ref={scrollRef} className="bot-messages flex-1 min-h-0 space-y-2 overflow-y-auto px-3 py-3">
         {messages.map((m) => (
-          <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+          <div key={m.id} className={m.role === "user" ? "cw-msg-row cw-user" : "cw-msg-row cw-bot"}>
             <div
-              className={
-                m.role === "user"
-                  ? "user-message max-w-[320px] md:max-w-[420px] rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow border border-blue-700/80"
-                  : "bot-message max-w-[320px] md:max-w-[420px] rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-900 shadow border border-gray-200/80 dark:border-gray-700 dark:bg-gray-800/90 dark:text-gray-100"
-              }
+              className={m.role === "user" ? "user-message cw-bubble cw-bubble-user" : "bot-message cw-bubble cw-bubble-bot"}
             >
               {m.role === "user" && Array.isArray(m.attachments) && m.attachments.length > 0 ? (
                 <div className="cw-msg-files">
@@ -2129,6 +2057,70 @@ function ChatWindow({ onMinimize, onDragStart }) {
           word-break: break-word;
           white-space: pre-wrap;
         }
+
+        /* ===== Bubble scaling (CSS-only; follows ChatWidget width) ===== */
+        #__chat_widget_root {
+          --cw-bubble-max: 82%;
+        }
+
+        #__chat_widget_root .bot-messages {
+          width: 100%;
+        }
+
+        #__chat_widget_root .cw-msg-row {
+          display: flex;
+          width: 100%;
+        }
+        #__chat_widget_root .cw-msg-row.cw-user {
+          justify-content: flex-end;
+        }
+        #__chat_widget_root .cw-msg-row.cw-bot {
+          justify-content: flex-start;
+        }
+
+        #__chat_widget_root .cw-bubble {
+          box-sizing: border-box;
+          /*
+            Bubble should align to the side and grow/shrink with ChatWidget width.
+            Use max-width as a percentage (scales with widget), but let width shrink-to-content
+            to avoid huge empty space for short user messages.
+          */
+          max-width: var(--cw-bubble-max);
+          width: auto;
+          display: inline-block;
+          flex: 0 1 auto;
+          min-width: 0;
+        }
+
+        #__chat_widget_root .cw-bubble-user {
+          background: #2563eb;
+          border: 1px solid rgba(29, 78, 216, 0.8);
+          color: #ffffff;
+          padding: 8px 12px;
+          font-size: 14px;
+          line-height: 1.45;
+          border-radius: 12px;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10);
+        }
+
+        #__chat_widget_root .cw-bubble-bot {
+          background: #f9fafb;
+          border: 1px solid rgba(229, 231, 235, 0.85);
+          color: #111827;
+          padding: 8px 12px;
+          font-size: 14px;
+          line-height: 1.45;
+          border-radius: 12px;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-bubble-bot,
+        :global(.dark) #__chat_widget_root .cw-bubble-bot {
+          background: rgba(31, 41, 55, 0.90);
+          border-color: rgba(55, 65, 81, 0.90);
+          color: #f3f4f6;
+        }
+
 
         .bot-message a.chat-link {
           text-decoration: underline;
