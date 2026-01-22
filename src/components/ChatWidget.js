@@ -396,8 +396,6 @@ function tuneMathJaxLayout(root) {
 // ---------- Markdown renderer (MathJax + copyable code blocks) ----------
 function MarkdownMessage({ content, streaming = false }) {
   const rootRef = useRef(null)
-  const [copiedKey, setCopiedKey] = useState(null)
-
   const lastMathStatsRef = useRef({ blockPairs: 0, inlinePairs: 0 })
 
   const raw = escapeMathDelimitersOutsideCode(content)
@@ -444,33 +442,38 @@ function MarkdownMessage({ content, streaming = false }) {
     }
   }, [md, streaming])
 
-  const onCopy = async (key, text) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopiedKey(key)
-      setTimeout(() => setCopiedKey(null), 900)
-    } catch {}
-  }
-
   const Pre = ({ children }) => {
+    const preRef = useRef(null)
+    const [copied, setCopied] = useState(false)
+
     const codeEl = Array.isArray(children) ? children[0] : children
     const className = codeEl?.props?.className || ""
     const lang = (className.match(/language-([a-z0-9_-]+)/i) || [])[1] || "text"
-    const raw = String(codeEl?.props?.children ?? "")
-    const code = raw.replace(/\n$/, "")
-    const key = `${lang}:${code.length}`
-    const copied = copiedKey === key
+
+    // ✅ rehype-highlight 可能把代码拆成很多 <span> 节点，直接读 props.children 会变成 [object Object]
+    // 所以复制时从 DOM 的 textContent 取“用户看到的纯文本”。
+    const getCodeText = () => String(preRef.current?.textContent || "").replace(/\n$/, "")
+
+    const handleCopy = async () => {
+      try {
+        await navigator.clipboard.writeText(getCodeText())
+        setCopied(true)
+        setTimeout(() => setCopied(false), 900)
+      } catch {}
+    }
 
     return (
       <div className="cw-codeblock">
         <div className="cw-codeblock-head">
           <span className="cw-code-lang">{lang}</span>
-          <button type="button" className="cw-code-copy" onClick={() => onCopy(key, code)}>
+          <button type="button" className="cw-code-copy" onClick={handleCopy}>
             {copied ? <Check size={14} /> : <Copy size={14} />}
             {copied ? "Copied" : "Copy"}
           </button>
         </div>
-        <pre className="cw-pre">{children}</pre>
+        <pre ref={preRef} className="cw-pre">
+        {children}
+      </pre>
       </div>
     )
   }
