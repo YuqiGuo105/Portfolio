@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom"
 import { useState, useEffect, useRef, Fragment } from "react"
-import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check, Copy } from "lucide-react"
+import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check, Copy, Zap, Brain } from "lucide-react"
 import Image from "next/image"
 import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
@@ -1607,58 +1607,75 @@ function ChatWindow({ onMinimize, onDragStart }) {
         className="bot-header shrink-0 flex items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700"
         onMouseDown={onDragStart}
       >
-        <div ref={modeWrapRef} className="cw-mode-wrap">
-          <button
-            type="button"
-            className="cw-mode-btn"
-            onClick={() => setModeOpen((v) => !v)}
+        <div className="cw-header-left">
+          <div
+            className="cw-brand"
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
-            aria-haspopup="menu"
-            aria-expanded={modeOpen ? "true" : "false"}
           >
             <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" />
-            <span className="cw-title">
-              Mr Pot
-              {isThinking ? <span className="cw-title-fade"> Thinking</span> : null}
-            </span>
-            <ChevronDown className={"cw-chev " + (modeOpen ? "open" : "")} />
-          </button>
-          {modeOpen ? (
-            <div className="cw-mode-menu" role="menu">
-              <button
-                type="button"
-                className="cw-mode-item"
-                role="menuitem"
-                onClick={() => {
-                  setMode("regular")
-                  setModeOpen(false)
-                }}
-              >
-                <span className="cw-mode-left">
-                  <span className="cw-mode-name">Regular</span>
-                  <span className="cw-mode-desc">Faster / fewer resources</span>
-                </span>
-                {mode === "regular" ? <Check className="cw-check" /> : null}
-              </button>
-              <button
-                type="button"
-                className="cw-mode-item"
-                role="menuitem"
-                onClick={() => {
-                  setMode("thinking")
-                  setModeOpen(false)
-                }}
-              >
-                <span className="cw-mode-left">
-                  <span className="cw-mode-name">Thinking</span>
-                  <span className="cw-mode-desc">Deeper reasoning / more tool steps</span>
-                </span>
-                {mode === "thinking" ? <Check className="cw-check" /> : null}
-              </button>
-            </div>
-          ) : null}
+            <span className="cw-title">Mr Pot</span>
+          </div>
+
+          <div ref={modeWrapRef} className="cw-mode-wrap">
+            <button
+              type="button"
+              className={"cw-mode-pill " + (isThinking ? "deep" : "fast")}
+              onClick={() => setModeOpen((v) => !v)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              aria-haspopup="menu"
+              aria-expanded={modeOpen ? "true" : "false"}
+            >
+              {isThinking ? <Brain className="cw-mode-ico" /> : <Zap className="cw-mode-ico" />}
+              <span className="cw-mode-pill-label">{isThinking ? "Deep" : "Fast"}</span>
+              <ChevronDown className={"cw-chev " + (modeOpen ? "open" : "")} />
+            </button>
+
+            {modeOpen ? (
+              <div className="cw-mode-menu" role="menu">
+                <button
+                  type="button"
+                  className="cw-mode-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMode("regular")
+                    setModeOpen(false)
+                  }}
+                >
+                  <span className="cw-mode-item-head">
+                    <Zap className="cw-mode-item-ico" />
+                    <span className="cw-mode-left">
+                      <span className="cw-mode-name">Fast</span>
+                      <span className="cw-mode-desc">Faster / fewer resources</span>
+                    </span>
+                  </span>
+                  {mode === "regular" ? <Check className="cw-check" /> : null}
+                </button>
+
+                <button
+                  type="button"
+                  className="cw-mode-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMode("thinking")
+                    setModeOpen(false)
+                  }}
+                >
+                  <span className="cw-mode-item-head">
+                    <Brain className="cw-mode-item-ico" />
+                    <span className="cw-mode-left">
+                      <span className="cw-mode-name">Deep</span>
+                      <span className="cw-mode-desc">Deeper reasoning / more tool steps</span>
+                    </span>
+                  </span>
+                  {mode === "thinking" ? <Check className="cw-check" /> : null}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
+
         <button
           type="button"
           aria-label="Minimize chat"
@@ -2288,6 +2305,110 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
         :global(body.dark-skin) #__chat_widget_root .cw-mode-btn:hover {
           background: rgba(31, 41, 55, 0.8);
+        }
+
+        #__chat_widget_root .cw-header-left {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+        }
+
+        #__chat_widget_root .cw-brand {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+        }
+
+        #__chat_widget_root .cw-brand img {
+          flex: 0 0 auto;
+        }
+
+        #__chat_widget_root .cw-mode-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 8px;
+          border-radius: 10px;
+          border: 1px solid transparent;
+          background: transparent;
+          cursor: pointer;
+          color: inherit;
+          font-size: 13px;
+          font-weight: 600;
+          line-height: 1;
+          transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+        }
+
+        #__chat_widget_root .cw-mode-pill:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+
+        #__chat_widget_root .cw-mode-ico {
+          width: 16px;
+          height: 16px;
+          flex: 0 0 auto;
+          opacity: 0.95;
+        }
+
+        /* Fast (gray) */
+        #__chat_widget_root .cw-mode-pill.fast {
+          background: rgba(243, 244, 246, 0.9);
+        }
+
+        #__chat_widget_root .cw-mode-pill.fast:hover {
+          background: rgba(229, 231, 235, 0.95);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.fast {
+          background: rgba(31, 41, 55, 0.8);
+          color: rgba(248, 250, 252, 0.92);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.fast:hover {
+          background: rgba(31, 41, 55, 0.95);
+        }
+
+        /* Deep (pill) */
+        #__chat_widget_root .cw-mode-pill.deep {
+          border-radius: 999px;
+          background: rgba(245, 158, 11, 0.14);
+          border-color: rgba(245, 158, 11, 0.28);
+          color: rgba(217, 119, 6, 0.98);
+        }
+
+        #__chat_widget_root .cw-mode-pill.deep:hover {
+          background: rgba(245, 158, 11, 0.2);
+          border-color: rgba(245, 158, 11, 0.34);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.deep {
+          border-radius: 999px;
+          background: rgba(245, 158, 11, 0.18);
+          border-color: rgba(245, 158, 11, 0.32);
+          color: rgba(251, 191, 36, 0.96);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.deep:hover {
+          background: rgba(245, 158, 11, 0.24);
+          border-color: rgba(245, 158, 11, 0.4);
+        }
+
+        #__chat_widget_root .cw-mode-item-head {
+          display: inline-flex;
+          align-items: flex-start;
+          gap: 10px;
+          min-width: 0;
+        }
+
+        #__chat_widget_root .cw-mode-item-ico {
+          width: 16px;
+          height: 16px;
+          flex: 0 0 auto;
+          opacity: 0.9;
+          margin-top: 1px;
         }
 
         #__chat_widget_root .cw-title {
