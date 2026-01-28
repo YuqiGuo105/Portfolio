@@ -28,11 +28,13 @@ const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
 });
 // Slick slider settings
 const settings = {
-  dots: true,            // Dots for navigation
-  infinite: true,        // Infinite loop sliding
-  speed: 500,            // Transition speed
-  slidesToShow: 3,       // Number of slides to show at a time
-  slidesToScroll: 1,     // Number of slides to scroll on click
+  arrows: false,
+  dots: true,
+  dotsClass: "slick-dots tech-blog-dots",
+  infinite: true,
+  speed: 500,
+  slidesToShow: 3,
+  slidesToScroll: 1,
   responsive: [
     {
       breakpoint: 1024,
@@ -81,6 +83,7 @@ const Index = () => {
   });
   const toastTimerRef = useRef(null);
   const toastCloseTimerRef = useRef(null);
+  const techBlogSliderRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -942,7 +945,7 @@ const Index = () => {
             </div>
 
             <div className="blog-items">
-              <Slider {...settings}>
+              <Slider ref={techBlogSliderRef} {...settings}>
                 {blogs.map((blog) => (
                   <div key={blog.id} className="archive-item">
                     <div className="image">
@@ -980,6 +983,24 @@ const Index = () => {
                   </div>
                 ))}
               </Slider>
+              <div className="tech-blog-controls">
+                <button
+                  type="button"
+                  className="tech-blog-arrow"
+                  aria-label="Previous blogs"
+                  onClick={() => techBlogSliderRef.current?.slickPrev()}
+                >
+                  <span aria-hidden="true">←</span>
+                </button>
+                <button
+                  type="button"
+                  className="tech-blog-arrow"
+                  aria-label="Next blogs"
+                  onClick={() => techBlogSliderRef.current?.slickNext()}
+                >
+                  <span aria-hidden="true">→</span>
+                </button>
+              </div>
             </div>
 
             <div className="blog-more-link">
@@ -1085,6 +1106,76 @@ const Index = () => {
               text-overflow: ellipsis;
               white-space: nowrap;
               max-width: 100%;
+            }
+
+            .tech-blog-controls {
+              margin-top: 12px;
+              display: flex;
+              justify-content: flex-end;
+              gap: 12px;
+            }
+
+            .tech-blog-arrow {
+              width: 40px;
+              height: 40px;
+              border-radius: 999px;
+              border: 1px solid rgba(15, 23, 42, 0.18);
+              background: #ffffff;
+              color: rgba(15, 23, 42, 0.9);
+              font-size: 18px;
+              line-height: 1;
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              transition: border-color 0.2s ease, box-shadow 0.2s ease,
+                transform 0.2s ease;
+            }
+
+            .tech-blog-arrow:hover {
+              border-color: rgba(15, 23, 42, 0.35);
+              box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+              transform: translateY(-1px);
+            }
+
+            :global(.tech-blog-dots) {
+              margin: 18px 0 0;
+              padding: 10px 12px;
+              display: flex;
+              gap: 18px;
+              overflow-x: auto;
+              overflow-y: hidden;
+              -webkit-overflow-scrolling: touch;
+              scrollbar-width: none;
+            }
+
+            :global(.tech-blog-dots::-webkit-scrollbar) {
+              display: none;
+            }
+
+            :global(.tech-blog-dots li) {
+              flex: 0 0 auto;
+              width: auto;
+              height: 10px;
+              margin: 0;
+            }
+
+            :global(.tech-blog-dots li button) {
+              width: 10px;
+              height: 10px;
+              border-radius: 999px;
+              background: rgba(0, 0, 0, 0.28);
+              padding: 0;
+              transition: width 0.25s ease, background 0.25s ease;
+            }
+
+            :global(.tech-blog-dots li.slick-active button) {
+              width: 44px;
+              background: rgba(0, 0, 0, 0.92);
+            }
+
+            :global(.tech-blog-dots li button:before) {
+              content: "";
+              display: none;
             }
           `}</style>
         </section>
