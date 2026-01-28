@@ -85,6 +85,25 @@ const storageSafeSet = (key, value) => {
   }
 }
 
+const storageSafeRemove = (key) => {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.removeItem(key)
+  } catch (err) {
+    logger.warn("localStorage remove failed", err)
+  }
+  try {
+    window.sessionStorage.removeItem(key)
+  } catch {}
+}
+
+const clearChatPersistence = () => {
+  storageSafeRemove("chatMessages")
+  storageSafeRemove("chatSessionLastActive")
+  storageSafeRemove("chatSessionId")
+}
+
+
 const migrateSessionStorageValue = (key) => {
   if (typeof window === "undefined") return null
   try {
@@ -1083,13 +1102,19 @@ function AttachmentProgressRow({ name, progress }) {
 
 function ChatWindow({ onMinimize, onDragStart }) {
   const [messages, setMessages] = useState(() => {
+    // If the widget has been inactive for a while, start fresh (no old history).
+    if (!isSessionFresh()) {
+      clearChatPersistence()
+      return []
+    }
     const saved = readPersistedJson("chatMessages")
     return Array.isArray(saved) ? saved : []
   })
 
-  const [sessionId] = useState(() => {
+  const [sessionId, setSessionId] = useState(() => {
+    const fresh = isSessionFresh()
     let id = storageSafeGet("chatSessionId") || migrateSessionStorageValue("chatSessionId")
-    if (!id) {
+    if (!fresh || !id) {
       id = generateUUID()
       storageSafeSet("chatSessionId", id)
     }
@@ -1149,6 +1174,34 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const fileInputRef = useRef(null)
   const textareaRef = useRef(null)
   const modeWrapRef = useRef(null)
+  const touchSession = () => {
+    storageSafeSet("chatSessionLastActive", String(Date.now()))
+  }
+
+  const resetChatSession = () => {
+    // Stop any active stream before wiping.
+    if (abortRef.current) {
+      try {
+        abortRef.current.abort()
+      } catch {}
+      abortRef.current = null
+    }
+
+    clearChatPersistence()
+
+    const newId = generateUUID()
+    storageSafeSet("chatSessionId", newId)
+    storageSafeSet("chatSessionLastActive", String(Date.now()))
+    setSessionId(newId)
+
+    setInput("")
+    setComposerFiles([])
+    setErrorToast("")
+    setLoading(false)
+    setUploading(false)
+    setMessages([])
+  }
+
   const triggerSiteTour = () => {
     try {
       window.dispatchEvent(new CustomEvent("cw:site-tour:start"))
@@ -1180,6 +1233,18 @@ function ChatWindow({ onMinimize, onDragStart }) {
       return () => clearTimeout(timer)
     }
   }, [errorToast])
+  // Auto-clean chat history if inactive for > SESSION_TTL_MS (default: 10 minutes).
+  useEffect(() => {
+    touchSession()
+
+    const tick = setInterval(() => {
+      if (loading || uploading) return
+      if (!isSessionFresh()) resetChatSession()
+    }, 30 * 1000)
+
+    return () => clearInterval(tick)
+  }, [loading, uploading])
+
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -1201,7 +1266,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
         },
       ])
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [messages.length])
 
   useEffect(() => {
     const root = ensureRoot()
@@ -1525,6 +1590,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   const sendMessage = async (e) => {
     e?.preventDefault?.()
+    touchSession()
+
 
     const visibleText = input.trim()
     if ((!visibleText && composerFiles.length === 0) || loading) return
@@ -1840,7 +1907,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value)
+              touchSession()
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault()
@@ -1913,6 +1983,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
             type="file"
             multiple
             onChange={(e) => {
+              touchSession()
               pickFiles(e.target.files)
               e.target.value = ""
             }}
