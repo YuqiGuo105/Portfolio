@@ -716,17 +716,6 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const canvas = el.querySelector("canvas");
-    if (canvas) {
-      canvas.style.touchAction = "none";
-      canvas.style.WebkitUserSelect = "none";
-    }
-  }, [size]);
-
   const getCamera = (g) => {
     try {
       if (g && typeof g.camera === "function") return g.camera();
@@ -739,6 +728,17 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
       if (g && typeof g.controls === "function") return g.controls();
     } catch {}
     return null;
+  };
+
+  const configureCanvasTouch = () => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const canvas = el.querySelector("canvas");
+    if (!canvas) return;
+
+    canvas.style.touchAction = "none";
+    canvas.style.WebkitUserSelect = "none";
   };
 
   const scheduleStableCommit = () => {
@@ -796,9 +796,16 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
 
       const controls = getControls(g);
       if (controls) {
+        configureCanvasTouch();
+
         controls.enableZoom = true;
         controls.enableRotate = true;
         controls.enablePan = false;
+
+        if (controls.touches) {
+          controls.touches.ONE = 0; // ROTATE
+          controls.touches.TWO = 2; // DOLLY_PAN (pinch zoom)
+        }
 
         controls.enableDamping = true;
         controls.dampingFactor = 0.08;
