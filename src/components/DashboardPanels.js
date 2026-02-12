@@ -624,16 +624,8 @@ const DashboardPanels = () => {
       return { marketBadgeText: "loading…", marketBadgeClassName: "badge badge-warning" };
     }
 
-    if (marketMeta?.source && marketMeta.source !== "stooq") {
-      const text =
-        marketMeta.source === "simulated"
-          ? "live feed unavailable · showing simulated snapshot"
-          : `cached snapshot · source: ${marketMeta.source}`;
-      return { marketBadgeText: text, marketBadgeClassName: "badge badge-warning" };
-    }
-
-    if (marketFallback) {
-      return { marketBadgeText: "partial / fallback data", marketBadgeClassName: "badge" };
+    if (marketMeta?.source === "simulated" || marketFallback) {
+      return { marketBadgeText: "Fallback data.", marketBadgeClassName: "badge badge-warning" };
     }
 
     if (marketMeta?.source === "stooq") {
@@ -641,6 +633,13 @@ const DashboardPanels = () => {
         ? ` · partial: ${marketMeta.partial.join(", ")}`
         : "";
       return { marketBadgeText: `delayed quotes (stooq)${partial}`, marketBadgeClassName: "badge" };
+    }
+
+    if (marketMeta?.source && marketMeta.source !== "yahoo-finance") {
+      return {
+        marketBadgeText: `cached snapshot · source: ${marketMeta.source}`,
+        marketBadgeClassName: "badge badge-warning",
+      };
     }
 
     return { marketBadgeText: null, marketBadgeClassName: "badge" };

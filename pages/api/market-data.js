@@ -1,15 +1,15 @@
 // pages/api/market-data.js
 
-// Free / no-key market data source (CSV):
-// https://stooq.com/q/l/?s=gs.us,^spx&f=sd2t2ohlcv&h&e=csv
+// Free / no-key market data source (JSON):
+// https://query1.finance.yahoo.com/v8/finance/chart/GS
 // Note: data may be delayed / not real-time for all symbols.
 
 const SYMBOLS = [
-  { label: "GS", stooq: "gs.us", currency: "USD", shortName: "Goldman Sachs Group, Inc." },
-  { label: "SPX", stooq: "^spx", currency: "USD", shortName: "S&P 500 Index" },
-  { label: "UKX", stooq: "^ftse", currency: "GBP", shortName: "FTSE 100 Index" },
-  { label: "NDX", stooq: "^ndx", currency: "USD", shortName: "NASDAQ 100 Index" },
-  { label: "NKY", stooq: "^n225", currency: "JPY", shortName: "Nikkei 225" },
+  { label: "GS", yahoo: "GS", currency: "USD", shortName: "Goldman Sachs Group, Inc." },
+  { label: "SPX", yahoo: "^GSPC", currency: "USD", shortName: "S&P 500 Index" },
+  { label: "UKX", yahoo: "^FTSE", currency: "GBP", shortName: "FTSE 100 Index" },
+  { label: "NDX", yahoo: "^NDX", currency: "USD", shortName: "NASDAQ 100 Index" },
+  { label: "NKY", yahoo: "^N225", currency: "JPY", shortName: "Nikkei 225" },
 ];
 
 // Keep your baseline snapshot and simulated fallback behavior.
@@ -32,51 +32,36 @@ const parseNumber = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
-const parseTimestampMs = (dateStr, timeStr) => {
-  if (!dateStr) return null;
-  const t = (timeStr && timeStr.trim()) ? timeStr.trim() : "00:00:00";
-  const d = new Date(`${dateStr}T${t}`);
-  const ms = d.getTime();
-  return Number.isFinite(ms) ? ms : null;
-};
+const parseYahooChart = (payload) => {
+  const result = payload?.chart?.result?.[0];
+  if (!result) return null;
 
-const parseStooqCsv = (csvText) => {
-  const text = (csvText ?? "").trim();
-  if (!text) return [];
+  const timestamps = Array.isArray(result.timestamp) ? result.timestamp : [];
+  const quote = result.indicators?.quote?.[0] ?? {};
+  const opens = Array.isArray(quote.open) ? quote.open : [];
+  const closes = Array.isArray(quote.close) ? quote.close : [];
 
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
-
-  // Expected header:
-  // Symbol,Date,Time,Open,High,Low,Close,Volume
-  const header = lines[0].split(",").map((s) => s.trim());
-  const idx = (name) => header.findIndex((h) => h.toLowerCase() === name.toLowerCase());
-
-  const iSymbol = idx("Symbol");
-  const iDate = idx("Date");
-  const iTime = idx("Time");
-  const iOpen = idx("Open");
-  const iClose = idx("Close");
-
-  if (iSymbol < 0 || iDate < 0 || iOpen < 0 || iClose < 0) return [];
-
-  const rows = [];
-  for (let i = 1; i < lines.length; i += 1) {
-    const cols = lines[i].split(",").map((s) => s.trim());
-    const symbol = cols[iSymbol]?.toLowerCase();
-    if (!symbol) continue;
-
-    const open = parseNumber(cols[iOpen]);
-    const close = parseNumber(cols[iClose]);
-
-    const dateStr = cols[iDate] || null;
-    const timeStr = iTime >= 0 ? (cols[iTime] || null) : null;
-    const ts = parseTimestampMs(dateStr, timeStr);
-
-    rows.push({ symbol, open, close, ts });
+  let lastIdx = -1;
+  for (let i = closes.length - 1; i >= 0; i -= 1) {
+    if (parseNumber(closes[i]) !== null) {
+      lastIdx = i;
+      break;
+    }
   }
+  if (lastIdx < 0) return null;
 
-  return rows;
+  const close = parseNumber(closes[lastIdx]);
+  const open = parseNumber(opens[lastIdx]);
+  const tsSec = timestamps[lastIdx];
+
+  const timestamp = Number.isFinite(tsSec) ? tsSec * 1000 : Date.now();
+
+  return {
+    open,
+    close,
+    timestamp,
+    shortName: result.meta?.shortName ?? null,
+  };
 };
 
 const simulateFromBaseline = (error) => {
@@ -129,19 +114,31 @@ const buildFallbackItem = (label, now, index) => {
   };
 };
 
-const fetchTextWithTimeout = async (url, ms) => {
+const fetchWithTimeout = async (url, ms) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ms);
   try {
     const resp = await fetch(url, {
       method: "GET",
-      headers: { Accept: "text/csv,*/*" },
+      headers: { Accept: "application/json,*/*" },
       signal: controller.signal,
     });
     return resp;
   } finally {
     clearTimeout(timeout);
   }
+};
+
+const fetchYahooQuote = async (symbol) => {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+  const resp = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
+  if (!resp.ok) throw new Error(`Yahoo request failed for ${symbol} with ${resp.status}`);
+
+  const json = await resp.json();
+  const parsed = parseYahooChart(json);
+  if (!parsed) throw new Error(`Yahoo returned no usable chart data for ${symbol}`);
+
+  return parsed;
 };
 
 export default async function handler(req, res) {
@@ -155,48 +152,39 @@ export default async function handler(req, res) {
   }
 
   try {
-    const stooqSymbols = SYMBOLS.map((s) => s.stooq).join(",");
-    const url = `https://stooq.com/q/l/?s=${encodeURIComponent(
-      stooqSymbols
-    )}&f=sd2t2ohlcv&h&e=csv`;
-
-    const resp = await fetchTextWithTimeout(url, FETCH_TIMEOUT_MS);
-    if (!resp.ok) throw new Error(`Stooq request failed with ${resp.status}`);
-
-    const csv = await resp.text();
-    const rows = parseStooqCsv(csv);
-
-    const bySymbol = new Map();
-    for (const r of rows) bySymbol.set(r.symbol, r);
-
     const missing = [];
-    const data = SYMBOLS.map((cfg, index) => {
-      const r = bySymbol.get(cfg.stooq.toLowerCase());
-      if (!r || r.open === null || r.close === null) {
+    const data = await Promise.all(SYMBOLS.map(async (cfg, index) => {
+      try {
+        const quote = await fetchYahooQuote(cfg.yahoo);
+        if (quote.open === null || quote.close === null) {
+          missing.push(cfg.label);
+          return buildFallbackItem(cfg.label, now, index);
+        }
+
+        const change = quote.close - quote.open;
+        const changePercent = quote.open ? (change / quote.open) * 100 : null;
+
+        return {
+          label: cfg.label,
+          price: quote.close,
+          currency: cfg.currency,
+          change: Number.isFinite(change) ? Number(change.toFixed(2)) : null,
+          changePercent: Number.isFinite(changePercent) ? Number(changePercent.toFixed(2)) : null,
+          timestamp: quote.timestamp ?? now,
+          shortName: quote.shortName ?? cfg.shortName ?? cfg.label,
+        };
+      } catch {
         missing.push(cfg.label);
         return buildFallbackItem(cfg.label, now, index);
       }
+    })).then((rows) => rows.filter(Boolean));
 
-      const change = r.close - r.open;
-      const changePercent = r.open ? (change / r.open) * 100 : null;
-
-      return {
-        label: cfg.label,
-        price: r.close,
-        currency: cfg.currency,
-        change: Number.isFinite(change) ? Number(change.toFixed(2)) : null,
-        changePercent: Number.isFinite(changePercent) ? Number(changePercent.toFixed(2)) : null,
-        timestamp: r.ts ?? now,
-        shortName: cfg.shortName ?? cfg.label,
-      };
-    }).filter(Boolean);
-
-    if (!data.length) throw new Error("Stooq returned no usable data");
+    if (!data.length) throw new Error("Yahoo returned no usable data");
 
     const payload = {
       data,
       meta: {
-        source: "stooq",
+        source: "yahoo-finance",
         updatedAt: now,
         partial: missing.length ? missing : null,
       },
