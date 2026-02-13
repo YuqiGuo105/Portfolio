@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom"
 import { useState, useEffect, useRef, Fragment } from "react"
-import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check, Copy, Zap, Brain } from "lucide-react"
+import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, ChevronUp, Check, Copy, Zap, Brain, CircleDot, CheckCircle2, Clock } from "lucide-react"
 import Image from "next/image"
 import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
@@ -949,6 +949,164 @@ function StageToast({ step }) {
   )
 }
 
+/* ---------- Collapsible Todo List ---------- */
+
+function TodoStatusIcon({ status }) {
+  if (status === "COMPLETED") return <CheckCircle2 className="todo-ico todo-done" />
+  if (status === "IN_PROGRESS") return <CircleDot className="todo-ico todo-prog" />
+  return <Clock className="todo-ico todo-pend" />
+}
+
+function TodoList({ todos, collapsed, setCollapsed }) {
+  if (!Array.isArray(todos) || todos.length === 0) return null
+
+  const done = todos.filter((t) => t.status === "COMPLETED").length
+  const total = todos.length
+
+  return (
+    <div className="todo-list-wrap">
+      <button
+        type="button"
+        className="todo-header"
+        onClick={() => setCollapsed((v) => !v)}
+        aria-expanded={!collapsed}
+      >
+        <span className="todo-summary">
+          Tasks ({done}/{total})
+        </span>
+        {collapsed ? <ChevronDown className="todo-chev" /> : <ChevronUp className="todo-chev" />}
+      </button>
+
+      {!collapsed && (
+        <div className="todo-items">
+          {todos.map((todo) => (
+            <div key={todo.id} className={"todo-row" + (todo.status === "COMPLETED" ? " done" : "")}>
+              <TodoStatusIcon status={todo.status} />
+              <div className="todo-body">
+                <span className="todo-title">{todo.title}</span>
+                {todo.description ? <span className="todo-desc">{todo.description}</span> : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <style jsx>{`
+        .todo-list-wrap {
+          animation: stageIn 180ms ease-out;
+          border-radius: 12px;
+          border: 1px solid rgba(229, 231, 235, 0.9);
+          background: rgba(248, 250, 252, 0.92);
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+          overflow: hidden;
+          margin-bottom: 8px;
+        }
+        :global(.dark) .todo-list-wrap,
+        :global(body.dark-skin) .todo-list-wrap {
+          border-color: rgba(55, 65, 81, 0.7);
+          background: rgba(15, 23, 42, 0.55);
+          box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
+        }
+        .todo-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          padding: 10px 14px;
+          border: none;
+          background: none;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 600;
+          color: rgba(17, 24, 39, 0.95);
+        }
+        :global(.dark) .todo-header,
+        :global(body.dark-skin) .todo-header {
+          color: rgba(248, 250, 252, 0.92);
+        }
+        .todo-summary {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .todo-chev {
+          width: 16px;
+          height: 16px;
+          opacity: 0.6;
+          transition: transform 150ms ease;
+        }
+        .todo-items {
+          padding: 0 14px 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .todo-row {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          padding: 6px 0;
+          border-top: 1px solid rgba(229, 231, 235, 0.5);
+        }
+        :global(.dark) .todo-row,
+        :global(body.dark-skin) .todo-row {
+          border-top-color: rgba(55, 65, 81, 0.4);
+        }
+        .todo-row.done {
+          opacity: 0.6;
+        }
+        .todo-body {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 0;
+        }
+        .todo-title {
+          font-size: 13px;
+          font-weight: 500;
+          color: rgba(17, 24, 39, 0.9);
+          line-height: 1.3;
+        }
+        :global(.dark) .todo-title,
+        :global(body.dark-skin) .todo-title {
+          color: rgba(248, 250, 252, 0.88);
+        }
+        .todo-row.done .todo-title {
+          text-decoration: line-through;
+        }
+        .todo-desc {
+          font-size: 11px;
+          color: rgba(100, 116, 139, 0.9);
+          line-height: 1.3;
+        }
+        :global(.dark) .todo-desc,
+        :global(body.dark-skin) .todo-desc {
+          color: rgba(226, 232, 240, 0.6);
+        }
+        @keyframes stageIn {
+          from { opacity: 0; transform: translateY(6px) scale(0.99); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
+      <style jsx global>{`
+        .todo-ico {
+          width: 16px;
+          height: 16px;
+          flex-shrink: 0;
+          margin-top: 1px;
+        }
+        .todo-done { color: #22c55e; }
+        .todo-prog { color: #3b82f6; animation: pulseSoft 1.2s ease-in-out infinite; }
+        .todo-pend { color: #94a3b8; }
+        @keyframes pulseSoft {
+          0%, 100% { transform: scale(1); opacity: 0.95; }
+          50% { transform: scale(1.06); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 /* ----------------- upload helpers (FIXED InvalidKey) ----------------- */
 
 function sanitizeFilenameForStorageKey(name) {
@@ -1137,6 +1295,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
   // composer attachments (max 2 per outgoing message)
   const [composerFiles, setComposerFiles] = useState([])
   // { id, file, name(original), status: "uploading"|"ready"|"error", progress, storagePath, publicUrl }
+
+  const [todoList, setTodoList] = useState([])
+  const [todoCollapsed, setTodoCollapsed] = useState(false)
 
   // --- Desktop resize (PC only) ---
   const clamp = (n, min, max) => Math.min(max, Math.max(min, n))
@@ -1558,6 +1719,20 @@ function ChatWindow({ onMinimize, onDragStart }) {
         const obj = safeJsonParse(evt.data) || {}
         const stage = obj.stage || evt.event || "message"
 
+        if (stage === "todo_update" || stage === "todo_list") {
+          if (Array.isArray(obj.payload)) setTodoList(obj.payload)
+          return
+        }
+
+        if (stage === "todo_complete") {
+          if (obj.payload && obj.payload.id != null) {
+            setTodoList((prev) =>
+              prev.map((t) => (t.id === obj.payload.id ? { ...t, ...obj.payload } : t)),
+            )
+          }
+          return
+        }
+
         if (stage === "answer_delta") {
           const delta = typeof obj.payload === "string" ? obj.payload : ""
           if (delta) {
@@ -1769,6 +1944,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
               ) : null}
 
               {m.role === "assistant" && m.streaming && m.thinkingNow ? <StageToast step={m.thinkingNow} /> : null}
+
+              {m.role === "assistant" && m.streaming && todoList.length > 0 ? (
+                <TodoList todos={todoList} collapsed={todoCollapsed} setCollapsed={setTodoCollapsed} />
+              ) : null}
 
               {m.showGuideCta ? (
                 <div className="cw-guide-message">
