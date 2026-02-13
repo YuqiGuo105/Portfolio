@@ -963,8 +963,6 @@ function StageToast({ step }) {
 }
 
 function PlanToast({ step }) {
-  if (!step || !step.planData) return null
-
   const [expandedSections, setExpandedSections] = useState({
     subtasks: true,
     constraints: false,
@@ -977,6 +975,8 @@ function PlanToast({ step }) {
       [section]: !prev[section]
     }))
   }
+
+  if (!step || !step.planData) return null
 
   const { planData } = step
 
@@ -1064,7 +1064,6 @@ function PlanToast({ step }) {
           background: rgba(248, 249, 250, 0.95);
           border-radius: 12px;
           padding: 12px;
-          border-left: 4px solid #007bff;
           border: 1px solid rgba(229, 231, 235, 0.9);
           border-left: 4px solid #007bff;
           box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
