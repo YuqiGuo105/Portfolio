@@ -1146,7 +1146,7 @@ function PlanToast({ step }) {
           color: rgba(226, 232, 240, 0.8);
         }
         .plan-list li:before {
-          content: "\25A1 ";
+          content: "\\25A1  ";
           margin-right: 6px;
           color: #6c757d;
         }
