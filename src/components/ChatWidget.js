@@ -647,6 +647,19 @@ function summarizePayload(payload, max = 180) {
   return safeShort(t, max)
 }
 
+function formatPlanPayload(payload) {
+  if (!payload || payload.displayType !== 'todoList') return null
+
+  return {
+    objective: payload.objective || '',
+    subtasks: Array.isArray(payload.subtasks) ? payload.subtasks : [],
+    constraints: Array.isArray(payload.constraints) ? payload.constraints : [],
+    successCriteria: Array.isArray(payload.successCriteria) ? payload.successCriteria : [],
+    subtaskCount: payload.subtaskCount || 0,
+    constraintCount: payload.constraintCount || 0
+  }
+}
+
 function formatStageTitle(stage, message) {
   const msg = typeof message === "string" ? message.trim() : ""
   if (msg) return msg
@@ -942,6 +955,210 @@ function StageToast({ step }) {
           }
           100% {
             left: 120%;
+          }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function PlanToast({ step }) {
+  if (!step || !step.planData) return null
+
+  const [expandedSections, setExpandedSections] = useState({
+    subtasks: true,
+    constraints: false,
+    successCriteria: false
+  })
+
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }))
+  }
+
+  const { planData } = step
+
+  return (
+    <div key={step.id} className="plan-toast mb-2">
+      <div className="plan-card">
+        <div className="plan-header">
+          <span className="spinnerWrap" aria-hidden="true">
+            <Loader2 className="spinnerIcon" />
+          </span>
+          <div className="plan-title">Plan Created</div>
+        </div>
+
+        <div className="plan-objective">
+          <strong>Objective:</strong> {planData.objective}
+        </div>
+
+        {planData.subtasks.length > 0 && (
+          <div className="plan-section">
+            <div
+              className="section-header"
+              onClick={() => toggleSection('subtasks')}
+              style={{ cursor: 'pointer' }}
+            >
+              <span>{expandedSections.subtasks ? '\u25BC' : '\u25B6'}</span>
+              <strong>Subtasks ({planData.subtaskCount})</strong>
+            </div>
+            {expandedSections.subtasks && (
+              <ul className="plan-list">
+                {planData.subtasks.map((task, idx) => (
+                  <li key={idx}>{task}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {planData.constraints.length > 0 && (
+          <div className="plan-section">
+            <div
+              className="section-header"
+              onClick={() => toggleSection('constraints')}
+              style={{ cursor: 'pointer' }}
+            >
+              <span>{expandedSections.constraints ? '\u25BC' : '\u25B6'}</span>
+              <strong>Constraints ({planData.constraintCount})</strong>
+            </div>
+            {expandedSections.constraints && (
+              <ul className="plan-list">
+                {planData.constraints.map((constraint, idx) => (
+                  <li key={idx}>{constraint}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {planData.successCriteria.length > 0 && (
+          <div className="plan-section">
+            <div
+              className="section-header"
+              onClick={() => toggleSection('successCriteria')}
+              style={{ cursor: 'pointer' }}
+            >
+              <span>{expandedSections.successCriteria ? '\u25BC' : '\u25B6'}</span>
+              <strong>Success Criteria ({planData.successCriteria.length})</strong>
+            </div>
+            {expandedSections.successCriteria && (
+              <ul className="plan-list">
+                {planData.successCriteria.map((criteria, idx) => (
+                  <li key={idx}>{criteria}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+
+      <style jsx>{`
+        .plan-toast {
+          animation: stageIn 180ms ease-out;
+        }
+        .plan-card {
+          position: relative;
+          background: rgba(248, 249, 250, 0.95);
+          border-radius: 12px;
+          padding: 12px;
+          border-left: 4px solid #007bff;
+          border: 1px solid rgba(229, 231, 235, 0.9);
+          border-left: 4px solid #007bff;
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+        }
+        :global(.dark) .plan-card,
+        :global(body.dark-skin) .plan-card {
+          background: rgba(15, 23, 42, 0.55);
+          border-color: rgba(55, 65, 81, 0.7);
+          border-left-color: #3b82f6;
+          box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
+        }
+        .plan-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 12px;
+        }
+        .plan-title {
+          font-weight: 600;
+          font-size: 14px;
+          color: rgba(17, 24, 39, 0.95);
+        }
+        :global(.dark) .plan-title,
+        :global(body.dark-skin) .plan-title {
+          color: rgba(248, 250, 252, 0.92);
+        }
+        .plan-objective {
+          margin-bottom: 12px;
+          padding: 8px;
+          background: white;
+          border-radius: 4px;
+          font-size: 13px;
+          color: rgba(17, 24, 39, 0.95);
+        }
+        :global(.dark) .plan-objective,
+        :global(body.dark-skin) .plan-objective {
+          background: rgba(30, 41, 59, 0.5);
+          color: rgba(226, 232, 240, 0.9);
+        }
+        .plan-section {
+          margin-top: 8px;
+        }
+        .section-header {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px;
+          background: white;
+          border-radius: 4px;
+          margin-bottom: 4px;
+          user-select: none;
+          font-size: 13px;
+          color: rgba(17, 24, 39, 0.95);
+        }
+        :global(.dark) .section-header,
+        :global(body.dark-skin) .section-header {
+          background: rgba(30, 41, 59, 0.5);
+          color: rgba(226, 232, 240, 0.9);
+        }
+        .section-header:hover {
+          background: #e9ecef;
+        }
+        :global(.dark) .section-header:hover,
+        :global(body.dark-skin) .section-header:hover {
+          background: rgba(51, 65, 85, 0.6);
+        }
+        .plan-list {
+          list-style: none;
+          padding-left: 24px;
+          margin: 4px 0;
+        }
+        .plan-list li {
+          padding: 4px 0;
+          font-size: 13px;
+          line-height: 1.5;
+          color: rgba(17, 24, 39, 0.85);
+        }
+        :global(.dark) .plan-list li,
+        :global(body.dark-skin) .plan-list li {
+          color: rgba(226, 232, 240, 0.8);
+        }
+        .plan-list li:before {
+          content: "\25A1 ";
+          margin-right: 6px;
+          color: #6c757d;
+        }
+        @keyframes stageIn {
+          from {
+            opacity: 0;
+            transform: translateY(6px) scale(0.99);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
           }
         }
       `}</style>
@@ -1497,6 +1714,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
   const setStage = (assistantId, stage, obj = {}) => {
     const title = formatStageTitle(stage, obj?.message)
     const keyInfo = summarizePayload(obj?.payload, 180)
+    const planData = formatPlanPayload(obj?.payload)
 
     setMessages((prev) =>
       prev.map((m) =>
@@ -1508,6 +1726,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
               stage,
               title,
               keyInfo,
+              planData,
+              displayType: obj?.payload?.displayType,
               ts: Date.now(),
             },
           }
@@ -1768,7 +1988,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
                 </div>
               ) : null}
 
-              {m.role === "assistant" && m.streaming && m.thinkingNow ? <StageToast step={m.thinkingNow} /> : null}
+              {m.role === "assistant" && m.streaming && m.thinkingNow ? (
+                m.thinkingNow.displayType === 'todoList'
+                  ? <PlanToast step={m.thinkingNow} />
+                  : <StageToast step={m.thinkingNow} />
+              ) : null}
 
               {m.showGuideCta ? (
                 <div className="cw-guide-message">
