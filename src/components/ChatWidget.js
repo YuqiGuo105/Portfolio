@@ -513,16 +513,15 @@ function normalizeRagBaseUrl(raw) {
   const u = new URL(raw, typeof window !== "undefined" ? window.location.origin : "http://localhost")
   u.hash = ""
   u.search = ""
-  u.pathname = u.pathname.replace(/\/api\/rag\/answer\/stream\/?$/, "/api/rag/answer")
-  if (!/\/api\/rag\/answer\/?$/.test(u.pathname)) {
-    u.pathname = u.pathname.replace(/\/$/, "") + "/api/rag/answer"
-  }
+  // Strip trailing /answer/stream or /answer to get base
+  u.pathname = u.pathname.replace(/\/answer(\/stream)?\/?$/, "")
   return u.toString().replace(/\/$/, "")
 }
 
 function ragStreamUrl(ragBaseUrl) {
   const u = new URL(ragBaseUrl, window.location.origin)
-  u.pathname = u.pathname.replace(/\/api\/rag\/answer\/?$/, "/api/rag/answer/stream")
+  // Ensure path ends with /answer/stream
+  u.pathname = u.pathname.replace(/\/$/, "") + "/answer/stream"
   return u.toString()
 }
 
@@ -530,6 +529,11 @@ async function resolveRagEndpoint() {
   const primaryRaw = process.env.NEXT_PUBLIC_ASSIST_API || process.env.NEXT_PUBLIC_RAG_API || ""
   const primary = primaryRaw ? normalizeRagBaseUrl(primaryRaw) : ""
   const fallback = "/api/rag/answer"
+
+  // If external API is configured, use it directly without health check
+  if (primary && primary.startsWith("http")) {
+    return primary
+  }
 
   const candidates = []
   if (primary) candidates.push(primary)
@@ -645,6 +649,54 @@ function extractPayloadText(payload) {
 function summarizePayload(payload, max = 180) {
   const t = extractPayloadText(payload)
   return safeShort(t, max)
+}
+
+// Create a more readable summary based on stage type and payload
+function formatStageKeyInfo(stage, payload) {
+  if (!payload) return ""
+  
+  switch (stage) {
+    case "start":
+      return `Mode: ${payload.mode || "?"} | Scope: ${payload.scopeMode || "?"}`
+    case "History":
+    case "REDIS":
+      return `${payload.historyCount || 0} messages in history`
+    case "deep_plan_start":
+      return "Creating execution plan..."
+    case "deep_plan_done":
+      return `${payload.subtaskCount || 0} tasks planned`
+    case "deep_reasoning_start":
+      return "Starting deep reasoning..."
+    case "deep_reasoning_step":
+      return `Round ${payload.round || "?"}: ${payload.action || "thinking"}...`
+    case "deep_reasoning_done":
+      return `${payload.rounds || 1} rounds | Confidence: ${Math.round((payload.confidence || 0) * 100)}%`
+    case "RAG":
+    case "Searching":
+      return payload.query ? `Searching: "${safeShort(payload.query, 60)}"` : "Searching documents..."
+    case "tool_call_start":
+    case "tool_call":
+      return payload.tool ? `Using: ${payload.tool}` : "Calling tool..."
+    case "tool_call_result":
+      return payload.tool ? `${payload.tool} completed` : "Tool completed"
+    case "tool_call_error":
+      return payload.error ? `Error: ${safeShort(payload.error, 80)}` : "Tool error"
+    case "file_extract_start":
+      return "Extracting file content..."
+    case "file_extract":
+      return payload.fileName ? `Processing: ${payload.fileName}` : "Processing file..."
+    case "file_extract_done":
+      return "File extraction complete"
+    case "deep_synthesis":
+      return "Synthesizing final answer..."
+    case "verify":
+    case "deep_verification":
+      return "Verifying answer..."
+    case "deep_reflection":
+      return "Reflecting on response..."
+    default:
+      return summarizePayload(payload, 120)
+  }
 }
 
 function formatPlanPayload(payload) {
@@ -1349,6 +1401,10 @@ function ChatWindow({ onMinimize, onDragStart }) {
   })
   const isThinking = mode === "thinking"
   const [modeOpen, setModeOpen] = useState(false)
+  
+  // Current plan from deep_plan_done stage (shown above input)
+  const [currentPlan, setCurrentPlan] = useState(null)
+  const [planExpanded, setPlanExpanded] = useState(true)
 
   // composer attachments (max 2 per outgoing message)
   const [composerFiles, setComposerFiles] = useState([])
@@ -1712,7 +1768,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
   const setStage = (assistantId, stage, obj = {}) => {
     const title = formatStageTitle(stage, obj?.message)
-    const keyInfo = summarizePayload(obj?.payload, 180)
+    const keyInfo = formatStageKeyInfo(stage, obj?.payload)
     const planData = formatPlanPayload(obj?.payload)
 
     setMessages((prev) =>
@@ -1760,13 +1816,33 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
     let answerBuf = ""
     let finalized = false
+    let pendingUpdate = false
+    let rafId = null
+
+    // Throttled UI update to avoid janky rendering during fast streaming
+    const flushContentUpdate = () => {
+      if (pendingUpdate && answerBuf) {
+        setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: answerBuf, streaming: true } : m)))
+        pendingUpdate = false
+      }
+    }
+
+    const scheduleContentUpdate = () => {
+      pendingUpdate = true
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          rafId = null
+          flushContentUpdate()
+        })
+      }
+    }
 
     setStage(assistantId, "start", { message: "Init", payload: { ts: Date.now() } })
 
     const body = {
       question,
       sessionId,
-      deepThinking: isThinking,
+      mode: isThinking ? "DEEPTHINKING" : "FAST",
       scopeMode: "PRIVACY_SAFE",
       ...(Array.isArray(fileUrls) && fileUrls.length > 0 ? { fileUrls } : {}),
     }
@@ -1778,19 +1854,42 @@ function ChatWindow({ onMinimize, onDragStart }) {
         const stage = obj.stage || evt.event || "message"
 
         if (stage === "answer_delta") {
-          const delta = typeof obj.payload === "string" ? obj.payload : ""
+          // Backend sends { payload: { delta: "..." } }
+          const delta = typeof obj.payload?.delta === "string" ? obj.payload.delta : ""
           if (delta) {
             answerBuf += delta
-            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: answerBuf, streaming: true } : m)))
+            // Use throttled update for smoother streaming
+            scheduleContentUpdate()
           }
-          setStage(assistantId, stage, obj)
+          // Don't update stage display for answer_delta - just accumulate content
           return
+        }
+
+        // Store plan data when deep_plan_done arrives
+        if (stage === "deep_plan_done" && obj.payload?.displayType === "todoList") {
+          setCurrentPlan({
+            objective: obj.payload.objective || "",
+            subtasks: Array.isArray(obj.payload.subtasks) ? obj.payload.subtasks : [],
+            constraints: Array.isArray(obj.payload.constraints) ? obj.payload.constraints : [],
+            successCriteria: Array.isArray(obj.payload.successCriteria) ? obj.payload.successCriteria : [],
+            subtaskCount: obj.payload.subtaskCount || 0,
+            constraintCount: obj.payload.constraintCount || 0,
+          })
+          setPlanExpanded(true)
         }
 
         if (stage === "answer_final") {
           finalized = true
+          // Cancel pending RAF and flush any remaining content
+          if (rafId) {
+            cancelAnimationFrame(rafId)
+            rafId = null
+          }
+          flushContentUpdate()
           clearStage(assistantId)
-          finalizeAssistant(assistantId, typeof obj.payload === "string" ? obj.payload : answerBuf, onFinal)
+          // Backend sends { payload: { answer: "..." } }
+          const finalAnswer = typeof obj.payload?.answer === "string" ? obj.payload.answer : answerBuf
+          finalizeAssistant(assistantId, finalAnswer, onFinal)
           console.log("evt.data(raw):", evt.data)
           console.log("obj.payload(parsed):", obj.payload)
 
@@ -1801,7 +1900,14 @@ function ChatWindow({ onMinimize, onDragStart }) {
       },
     })
 
+    // Cleanup RAF if still pending
+    if (rafId) {
+      cancelAnimationFrame(rafId)
+      rafId = null
+    }
+
     if (!finalized && answerBuf) {
+      flushContentUpdate()
       clearStage(assistantId)
       finalizeAssistant(assistantId, answerBuf, onFinal)
     }
@@ -2049,12 +2155,73 @@ function ChatWindow({ onMinimize, onDragStart }) {
         </div>
       )}
 
+      {/* Collapsible Plan Panel */}
+      {currentPlan && (
+        <div className="cw-plan-panel" style={{
+          padding: "8px 12px",
+          backgroundColor: "var(--cw-input-bg)",
+          borderTop: "1px solid var(--cw-input-border)",
+          borderBottom: "1px solid var(--cw-input-border)",
+        }}>
+          <div 
+            onClick={() => setPlanExpanded(!planExpanded)} 
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "8px", 
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+          >
+            <span style={{ fontSize: "12px", color: "var(--cw-input-text)" }}>
+              {planExpanded ? "\u25BC" : "\u25B6"}
+            </span>
+            <span style={{ fontWeight: 600, fontSize: "13px", color: "var(--cw-input-text)" }}>
+              Plan ({currentPlan.subtaskCount} tasks)
+            </span>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setCurrentPlan(null); }}
+              style={{
+                marginLeft: "auto",
+                padding: "2px 6px",
+                fontSize: "11px",
+                background: "transparent",
+                border: "1px solid rgba(156,163,175,0.4)",
+                borderRadius: "4px",
+                cursor: "pointer",
+                color: "var(--cw-input-text)",
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+          {planExpanded && (
+            <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--cw-input-text)" }}>
+              {currentPlan.objective && (
+                <div style={{ marginBottom: "6px", fontStyle: "italic", opacity: 0.85 }}>
+                  {currentPlan.objective}
+                </div>
+              )}
+              <ul style={{ margin: 0, paddingLeft: "18px", listStyle: "none" }}>
+                {currentPlan.subtasks.map((task, i) => (
+                  <li key={i} style={{ marginBottom: "3px", display: "flex", alignItems: "flex-start", gap: "6px" }}>
+                    <span style={{ color: "rgba(156,163,175,0.8)" }}>\u25CB</span>
+                    <span>{task}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
       <form
         onSubmit={sendMessage}
         className="input-area shrink-0 px-3 py-1"
         style={{
           backgroundColor: "var(--cw-input-bg)",
-          borderTop: "1px solid var(--cw-input-border)",
+          borderTop: currentPlan ? "none" : "1px solid var(--cw-input-border)",
           color: "var(--cw-input-text)",
         }}
       >
