@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom"
 import { useState, useEffect, useRef, Fragment } from "react"
-import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check, Copy, Zap, Brain } from "lucide-react"
+import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check, Copy, Zap, Brain, Circle } from "lucide-react"
 import Image from "next/image"
 import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
@@ -173,6 +173,13 @@ function safeJsonParse(s) {
   }
 }
 
+// Strip [QA], 【QA】, or similar markers from the beginning of content
+function stripQAPrefix(text) {
+  if (!text) return text
+  // Match [QA], 【QA】, [QA], 【QA】, and variations with optional whitespace
+  return String(text).replace(/^\s*(\[QA\]|【QA】|\[QA]|【QA】|\[QA：\]|【QA：】)\s*/gi, "")
+}
+
 function compactText(s, max = 220) {
   if (s == null) return ""
   const t = String(s)
@@ -256,13 +263,54 @@ function escapeMathDelimitersOutsideCode(md) {
   // 2) Protect inline code `...`
   const inlineCodeRe = /`[^`]*`/g
 
-  const transformDelims = (chunk) =>
-    chunk
-      // only add an extra "\" when it is NOT already escaped
-      .replace(/(^|[^\\])\\\(/g, "$1\\\\(")
-      .replace(/(^|[^\\])\\\)/g, "$1\\\\)")
-      .replace(/(^|[^\\])\\\[/g, "$1\\\\[")
-      .replace(/(^|[^\\])\\\]/g, "$1\\\\]")
+  // Helper: count consecutive backslashes ending at position `pos` (exclusive)
+  const countTrailingBackslashes = (str, pos) => {
+    let count = 0
+    while (pos > 0 && str[pos - 1] === "\\") {
+      count++
+      pos--
+    }
+    return count
+  }
+
+  // Escape a delimiter only if preceded by an EVEN number of backslashes
+  // (even = not escaped, odd = already escaped by a preceding backslash)
+  const escapeDelimiter = (str, openDelim, closeDelim) => {
+    let result = ""
+    let i = 0
+    while (i < str.length) {
+      // Check for delimiter (either open or close)
+      let matched = null
+      if (str.startsWith(openDelim, i)) {
+        matched = openDelim
+      } else if (str.startsWith(closeDelim, i)) {
+        matched = closeDelim
+      }
+
+      if (matched) {
+        const backslashCount = countTrailingBackslashes(str, i)
+        if (backslashCount % 2 === 0) {
+          // Even backslashes: delimiter is NOT escaped, add extra backslash
+          result += "\\" + matched
+        } else {
+          // Odd backslashes: delimiter IS escaped, keep as-is
+          result += matched
+        }
+        i += matched.length
+      } else {
+        result += str[i]
+        i++
+      }
+    }
+    return result
+  }
+
+  const transformDelims = (chunk) => {
+    // Process \( \) then \[ \]
+    let out = escapeDelimiter(chunk, "\\(", "\\)")
+    out = escapeDelimiter(out, "\\[", "\\]")
+    return out
+  }
 
   const transformText = (textChunk) => {
     // Split by inline code spans; transform only non-code segments
@@ -366,19 +414,47 @@ function getMathPairStats(md) {
 
 // --- Streaming helper: avoid showing half-written math blocks (looks like gibberish during SSE) ---
 function maskIncompleteMathBlocks(md) {
-  const s = String(md || "")
+  let s = String(md || "")
+
   // Incomplete $$...$$ blocks
   const dbl = [...s.matchAll(/\$\$/g)]
   if (dbl.length % 2 === 1) {
     const idx = dbl[dbl.length - 1].index ?? 0
     return s.slice(0, idx) + "\n\n(公式生成中…)\n\n"
   }
-  // Incomplete \[...\] blocks
-  const open = s.lastIndexOf("\\\\[")
-  const close = s.lastIndexOf("\\\\]")
-  if (open !== -1 && open > close) {
-    return s.slice(0, open) + "\n\n(公式生成中…)\n\n"
+
+  // Incomplete \[...\] display math blocks (after escaping: \\[ and \\])
+  const openBracket = s.lastIndexOf("\\\\[")
+  const closeBracket = s.lastIndexOf("\\\\]")
+  if (openBracket !== -1 && openBracket > closeBracket) {
+    return s.slice(0, openBracket) + "\n\n(公式生成中…)\n\n"
   }
+
+  // Incomplete \(...\) inline math blocks (after escaping: \\( and \\))
+  const openParen = s.lastIndexOf("\\\\(")
+  const closeParen = s.lastIndexOf("\\\\)")
+  if (openParen !== -1 && openParen > closeParen) {
+    return s.slice(0, openParen) + "\n\n(公式生成中…)\n\n"
+  }
+
+  // Incomplete $...$ inline math (single dollar)
+  // Count unescaped single $ (not part of $$)
+  const withoutDoubleDollar = s.replace(/\$\$/g, "\x00\x00") // placeholder
+  let dollarCount = 0
+  for (let i = 0; i < withoutDoubleDollar.length; i++) {
+    if (withoutDoubleDollar[i] === "$" && (i === 0 || withoutDoubleDollar[i - 1] !== "\\")) {
+      dollarCount++
+    }
+  }
+  if (dollarCount % 2 === 1) {
+    // Find the last unmatched $
+    for (let i = s.length - 1; i >= 0; i--) {
+      if (s[i] === "$" && (i === 0 || s[i - 1] !== "\\") && (i === s.length - 1 || s[i + 1] !== "$") && (i === 0 || s[i - 1] !== "$")) {
+        return s.slice(0, i) + "\n\n(公式生成中…)\n\n"
+      }
+    }
+  }
+
   return s
 }
 
@@ -416,11 +492,28 @@ function tuneMathJaxLayout(root) {
 function MarkdownMessage({ content, streaming = false }) {
   const rootRef = useRef(null)
   const lastMathStatsRef = useRef({ blockPairs: 0, inlinePairs: 0 })
+  const lastTypesetTimeRef = useRef(0)
+  const pendingTypesetRef = useRef(null)
 
   const raw = escapeMathDelimitersOutsideCode(content)
 
   // In streaming mode, hide incomplete trailing block-math so the UI doesn't look garbled.
   const md = streaming ? maskIncompleteMathBlocks(raw) : raw
+
+  // Cleanup MathJax modifications before React tries to update the DOM
+  // This prevents "removeChild" errors when React reconciles
+  useEffect(() => {
+    const el = rootRef.current
+    return () => {
+      if (el && window.MathJax?.typesetClear) {
+        try {
+          window.MathJax.typesetClear([el])
+        } catch {
+          // Ignore errors during cleanup
+        }
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!rootRef.current) return
@@ -428,36 +521,80 @@ function MarkdownMessage({ content, streaming = false }) {
     // In streaming mode: only typeset when NEW math expressions become complete.
     const stats = getMathPairStats(md)
     const last = lastMathStatsRef.current
-    const shouldTypeset = !streaming || stats.blockPairs > last.blockPairs || stats.inlinePairs > last.inlinePairs
-    if (!shouldTypeset) return
+    const hasNewMath = stats.blockPairs > last.blockPairs || stats.inlinePairs > last.inlinePairs
+    
+    // Skip if no new math and still streaming
+    if (streaming && !hasNewMath) return
 
-    // Debounce MathJax typesetting during SSE streaming to avoid jank.
-    let canceled = false
-    const t = setTimeout(async () => {
+    const doTypeset = async () => {
       const ok = await ensureMathJaxLoaded()
-      if (!ok || canceled || !rootRef.current) return
+      if (!rootRef.current || !ok) return
 
       const mj = window.MathJax
       if (!mj || typeof mj.typesetPromise !== "function") return
 
       try {
-        // Typeset only within this message node.
+        // Add fade class before typesetting for smooth transition
+        rootRef.current.classList.add("cw-math-rendering")
+        
         mj.typesetClear?.([rootRef.current])
         await mj.typesetPromise([rootRef.current])
-        // Remember latest completed-math counts so we don't typeset on every delta.
+        
+        // Update stats after successful typeset
         lastMathStatsRef.current = {
           blockPairs: Math.max(lastMathStatsRef.current.blockPairs, stats.blockPairs),
           inlinePairs: Math.max(lastMathStatsRef.current.inlinePairs, stats.inlinePairs),
         }
+        lastTypesetTimeRef.current = Date.now()
         tuneMathJaxLayout(rootRef.current)
+        
+        // Remove rendering class after brief delay for fade-in effect
+        requestAnimationFrame(() => {
+          rootRef.current?.classList.remove("cw-math-rendering")
+        })
       } catch {
         // keep silent
       }
-    }, streaming ? 260 : 120)
+    }
+
+    // Clear any pending typeset
+    if (pendingTypesetRef.current) {
+      cancelAnimationFrame(pendingTypesetRef.current)
+      pendingTypesetRef.current = null
+    }
+
+    if (!streaming) {
+      // Not streaming: typeset immediately with short delay for DOM to settle
+      const t = setTimeout(doTypeset, 50)
+      return () => clearTimeout(t)
+    }
+
+    // Streaming mode: use throttle approach (typeset at most every 80ms)
+    const now = Date.now()
+    const elapsed = now - lastTypesetTimeRef.current
+    const THROTTLE_MS = 80
+
+    if (elapsed >= THROTTLE_MS) {
+      // Enough time passed, typeset on next animation frame
+      pendingTypesetRef.current = requestAnimationFrame(doTypeset)
+    } else {
+      // Schedule typeset after remaining throttle time
+      const delay = THROTTLE_MS - elapsed
+      const t = setTimeout(() => {
+        pendingTypesetRef.current = requestAnimationFrame(doTypeset)
+      }, delay)
+      return () => {
+        clearTimeout(t)
+        if (pendingTypesetRef.current) {
+          cancelAnimationFrame(pendingTypesetRef.current)
+        }
+      }
+    }
 
     return () => {
-      canceled = true
-      clearTimeout(t)
+      if (pendingTypesetRef.current) {
+        cancelAnimationFrame(pendingTypesetRef.current)
+      }
     }
   }, [md, streaming])
 
@@ -513,23 +650,27 @@ function normalizeRagBaseUrl(raw) {
   const u = new URL(raw, typeof window !== "undefined" ? window.location.origin : "http://localhost")
   u.hash = ""
   u.search = ""
-  u.pathname = u.pathname.replace(/\/api\/rag\/answer\/stream\/?$/, "/api/rag/answer")
-  if (!/\/api\/rag\/answer\/?$/.test(u.pathname)) {
-    u.pathname = u.pathname.replace(/\/$/, "") + "/api/rag/answer"
-  }
+  // Strip trailing /answer/stream or /answer to get base
+  u.pathname = u.pathname.replace(/\/answer(\/stream)?\/?$/, "")
   return u.toString().replace(/\/$/, "")
 }
 
 function ragStreamUrl(ragBaseUrl) {
   const u = new URL(ragBaseUrl, window.location.origin)
-  u.pathname = u.pathname.replace(/\/api\/rag\/answer\/?$/, "/api/rag/answer/stream")
+  // Ensure path ends with /answer/stream
+  u.pathname = u.pathname.replace(/\/$/, "") + "/answer/stream"
   return u.toString()
 }
 
 async function resolveRagEndpoint() {
   const primaryRaw = process.env.NEXT_PUBLIC_ASSIST_API || process.env.NEXT_PUBLIC_RAG_API || ""
   const primary = primaryRaw ? normalizeRagBaseUrl(primaryRaw) : ""
-  const fallback = "/api/rag/answer"
+  const fallback = "/api/rag"
+
+  // If external API is configured (starts with http), use it directly without health check
+  if (primary && primary.startsWith("http")) {
+    return primary
+  }
 
   const candidates = []
   if (primary) candidates.push(primary)
@@ -563,16 +704,21 @@ function parseSSEBlock(block) {
 }
 
 async function postSSE(url, body, { onEvent, signal }) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-    },
-    body: JSON.stringify(body),
-    mode: "cors",
-    signal,
-  })
+  let res
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify(body),
+      mode: "cors",
+      signal,
+    })
+  } catch (fetchErr) {
+    throw fetchErr
+  }
 
   if (!res.ok) {
     const t = await res.text().catch(() => "")
@@ -629,6 +775,49 @@ function extractPayloadText(payload) {
   }
 
   if (typeof payload === "object") {
+    // Task 1: Enhanced stage information display - handle specific fields
+    const enhancedParts = []
+    
+    // Handle docsFound or docCount fields
+    if (payload.docsFound != null) {
+      enhancedParts.push(`found ${payload.docsFound} docs`)
+    } else if (payload.docCount != null) {
+      enhancedParts.push(`found ${payload.docCount} docs`)
+    }
+    
+    // Handle score field
+    if (payload.score != null) {
+      const scoreVal = typeof payload.score === "number" ? payload.score.toFixed(2) : payload.score
+      enhancedParts.push(`score: ${scoreVal}`)
+    }
+    
+    // Handle relevance field
+    if (payload.relevance != null) {
+      enhancedParts.push(`relevance: ${payload.relevance}`)
+    }
+    
+    // Handle chunks/results count
+    if (payload.chunksFound != null) {
+      enhancedParts.push(`${payload.chunksFound} chunks`)
+    }
+    if (payload.resultsCount != null) {
+      enhancedParts.push(`${payload.resultsCount} results`)
+    }
+    
+    // Handle history hits
+    if (payload.historyHits != null) {
+      enhancedParts.push(`${payload.historyHits} history hits`)
+    }
+    if (payload.cacheHit != null) {
+      enhancedParts.push(payload.cacheHit ? "cache hit" : "cache miss")
+    }
+    
+    // If we found enhanced fields, return them
+    if (enhancedParts.length > 0) {
+      return enhancedParts.join("  ·  ")
+    }
+    
+    // Fallback to existing generic extraction logic
     const t = payload.content ?? payload.preview ?? payload.text ?? payload.message ?? payload.title ?? payload.name
     if (t != null && String(t).trim()) return String(t)
     if (payload.ts != null) return `ts=${payload.ts}`
@@ -741,6 +930,122 @@ function Overlay({ onClick }) {
       className="fixed inset-0 z-[2147483646] bg-gray-900/40 backdrop-blur-sm transition-opacity sm:hidden"
       onClick={onClick}
     />
+  )
+}
+
+/* ---------- TodoList for deep_plan_done ---------- */
+function TodoList({ subtasks, expanded = false }) {
+  const [isExpanded, setIsExpanded] = useState(expanded)
+  const completed = subtasks.filter(t => typeof t === 'object' ? t.status === 'complete' : false).length
+    
+  return (
+    <div className="todo-container">
+      <div className="todo-header" onClick={() => setIsExpanded(!isExpanded)}>
+        <ChevronDown className={`todo-chevron ${isExpanded ? "expanded" : ""}`} />
+        <span>Todos ({completed}/{subtasks.length})</span>
+      </div>
+      {isExpanded && (
+        <div className="todo-list">
+          {subtasks.map((task, idx) => {
+            const isComplete = typeof task === 'object' ? task.status === 'complete' : false
+            const taskText = typeof task === 'object' ? (task.text || task.name || JSON.stringify(task)) : String(task)
+            return (
+              <div key={idx} className={`todo-item ${isComplete ? 'completed' : ''}`}>
+                {isComplete ? <Check className="todo-icon done" /> : <Circle className="todo-icon pending" />}
+                <span className="todo-text">{taskText}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <style jsx>{`
+        .todo-container {
+          margin-bottom: 12px;
+          border-radius: 10px;
+          border: 1px solid rgba(229, 231, 235, 0.9);
+          background: rgba(248, 250, 252, 0.95);
+          overflow: hidden;
+        }
+        :global(.dark) .todo-container,
+        :global(body.dark-skin) .todo-container {
+          border-color: rgba(55, 65, 81, 0.7);
+          background: rgba(15, 23, 42, 0.6);
+        }
+        .todo-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 12px;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 500;
+          color: rgba(17, 24, 39, 0.9);
+          transition: background 0.15s ease;
+        }
+        .todo-header:hover {
+          background: rgba(0, 0, 0, 0.04);
+        }
+        :global(.dark) .todo-header,
+        :global(body.dark-skin) .todo-header {
+          color: rgba(248, 250, 252, 0.9);
+        }
+        :global(.dark) .todo-header:hover,
+        :global(body.dark-skin) .todo-header:hover {
+          background: rgba(255, 255, 255, 0.05);
+        }
+        .todo-chevron {
+          width: 16px;
+          height: 16px;
+          transition: transform 0.2s ease;
+          flex-shrink: 0;
+        }
+        .todo-chevron.expanded {
+          transform: rotate(180deg);
+        }
+        .todo-list {
+          border-top: 1px solid rgba(229, 231, 235, 0.6);
+          padding: 8px 0;
+        }
+        :global(.dark) .todo-list,
+        :global(body.dark-skin) .todo-list {
+          border-top-color: rgba(55, 65, 81, 0.5);
+        }
+        .todo-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          padding: 6px 12px;
+          font-size: 12px;
+          line-height: 1.4;
+          color: rgba(55, 65, 81, 0.95);
+        }
+        :global(.dark) .todo-item,
+        :global(body.dark-skin) .todo-item {
+          color: rgba(226, 232, 240, 0.9);
+        }
+        .todo-item.completed .todo-text {
+          text-decoration: line-through;
+          opacity: 0.6;
+        }
+        .todo-icon {
+          width: 14px;
+          height: 14px;
+          flex-shrink: 0;
+          margin-top: 1px;
+        }
+        .todo-icon.done {
+          color: #10b981;
+        }
+        .todo-icon.pending {
+          color: rgba(156, 163, 175, 0.8);
+        }
+        .todo-text {
+          flex: 1;
+          min-width: 0;
+          word-break: break-word;
+        }
+      `}</style>
+    </div>
   )
 }
 
@@ -1525,14 +1830,14 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === assistantId ? { ...m, content: finalContent, isHtml: false, streaming: false, thinkingNow: null } : m,
+        m.id === assistantId ? { ...m, content: finalContent, isHtml: false, streaming: false, thinkingNow: null, planPayload: m.planPayload } : m,
       ),
     )
 
     onFinal?.(finalContent)
   }
 
-  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal }) => {
+  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal, requestMode, currentSessionId }) => {
     const base = ragEndpointRef.current || (await resolveRagEndpoint())
     const streamUrl = ragStreamUrl(base)
 
@@ -1541,14 +1846,17 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
     let answerBuf = ""
     let finalized = false
+    
+    // Use the passed requestMode to determine DEEPTHINKING vs FAST
+    const useDeepThinking = requestMode === "thinking"
 
     setStage(assistantId, "start", { message: "Init", payload: { ts: Date.now() } })
 
     const body = {
       question,
-      sessionId,
-      deepThinking: isThinking,
-      scopeMode: "PRIVACY_SAFE",
+      sessionId: currentSessionId,
+      mode: useDeepThinking ? "DEEPTHINKING" : "FAST",
+      scopeMode: useDeepThinking ? "GENERAL" : "OWNER_ONLY",
       ...(Array.isArray(fileUrls) && fileUrls.length > 0 ? { fileUrls } : {}),
     }
 
@@ -1559,25 +1867,53 @@ function ChatWindow({ onMinimize, onDragStart }) {
         const stage = obj.stage || evt.event || "message"
 
         if (stage === "answer_delta") {
-          const delta = typeof obj.payload === "string" ? obj.payload : ""
+          // Backend sends { payload: { delta: "..." } }
+          const delta = typeof obj.payload?.delta === "string" ? obj.payload.delta : ""
           if (delta) {
             answerBuf += delta
-            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: answerBuf, streaming: true } : m)))
+            // Strip [QA] prefix markers before displaying
+            const cleanContent = stripQAPrefix(answerBuf)
+            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: cleanContent, streaming: true } : m)))
           }
-          setStage(assistantId, stage, obj)
+          // Don't update stage display for answer_delta - just accumulate content
           return
         }
 
         if (stage === "answer_final") {
           finalized = true
           clearStage(assistantId)
-          finalizeAssistant(assistantId, typeof obj.payload === "string" ? obj.payload : answerBuf, onFinal)
-          console.log("evt.data(raw):", evt.data)
-          console.log("obj.payload(parsed):", obj.payload)
+          // Backend sends { payload: { answer: "..." } }
+          const rawFinalAnswer = typeof obj.payload?.answer === "string" ? obj.payload.answer : answerBuf
+          // Strip [QA] prefix markers from final answer
+          const finalAnswer = stripQAPrefix(rawFinalAnswer)
+          finalizeAssistant(assistantId, finalAnswer, onFinal)
 
           return
         }
 
+        // Task 3: Handle deep_plan_done stage with subtasks for TodoList
+        if (stage === "deep_plan_done") {
+          if (obj.payload?.subtasks) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      planPayload: {
+                        subtasks: obj.payload.subtasks,
+                        status: obj.payload.status,
+                        subtaskCount: obj.payload.subtaskCount,
+                        displayType: obj.payload.displayType,
+                      },
+                    }
+                  : m,
+              ),
+            )
+          }
+        }
+
+        // Task 2: Ensure all stages including History/redis are processed
+        // Do not filter out any stage names - pass all to setStage
         setStage(assistantId, stage, obj)
       },
     })
@@ -1636,8 +1972,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
 
     try {
-      await startRagSSE({ question: baseQuestion, fileUrls, assistantId, onFinal: finalizeAndPersist })
+      await startRagSSE({ question: baseQuestion, fileUrls, assistantId, requestMode, currentSessionId: sessionId, onFinal: finalizeAndPersist })
     } catch (err) {
+      console.error("[ChatWidget] SSE failed:", err)
       logger.error("SSE failed:", err)
       setMessages((prev) =>
         prev.map((m) =>
@@ -1770,6 +2107,11 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
               {m.role === "assistant" && m.streaming && m.thinkingNow ? <StageToast step={m.thinkingNow} /> : null}
 
+              {/* Task 3: Render TodoList when planPayload with subtasks is present */}
+              {m.role === "assistant" && m.planPayload?.subtasks?.length > 0 ? (
+                <TodoList subtasks={m.planPayload.subtasks} expanded={true} />
+              ) : null}
+
               {m.showGuideCta ? (
                 <div className="cw-guide-message">
                   <p className="cw-guide-title">Hi! How can I help you today?</p>
@@ -1789,12 +2131,12 @@ function ChatWindow({ onMinimize, onDragStart }) {
                     <TypingIndicator />
                   ) : (
                     <>
-                      <MarkdownMessage content={m.content} streaming />
+                      <MarkdownMessage key={`${m.id}-streaming`} content={m.content} streaming />
                       <StreamingCursor />
                     </>
                   )
                 ) : (
-                  <MarkdownMessage content={m.content} />
+                  <MarkdownMessage key={`${m.id}-final`} content={m.content} />
                 )
               ) : (
                 renderTextWithLinks(m.content)
@@ -2004,12 +2346,138 @@ function ChatWindow({ onMinimize, onDragStart }) {
         #__chat_widget_root .cw-md {
           line-height: 1.55;
         }
+        #__chat_widget_root .cw-md.cw-math-rendering mjx-container {
+          opacity: 0.7;
+          transition: opacity 150ms ease-out;
+        }
+        #__chat_widget_root .cw-md mjx-container {
+          opacity: 1;
+          transition: opacity 150ms ease-out;
+        }
         #__chat_widget_root .cw-md p {
           margin: 0.55em 0;
+        }
+        #__chat_widget_root .cw-md p:first-child {
+          margin-top: 0;
+        }
+        #__chat_widget_root .cw-md p:last-child {
+          margin-bottom: 0;
         }
         #__chat_widget_root .cw-md p.cw-math-only {
           margin: 0.25em 0;
         }
+        
+        /* Headings */
+        #__chat_widget_root .cw-md h1,
+        #__chat_widget_root .cw-md h2,
+        #__chat_widget_root .cw-md h3,
+        #__chat_widget_root .cw-md h4,
+        #__chat_widget_root .cw-md h5,
+        #__chat_widget_root .cw-md h6 {
+          margin: 0.8em 0 0.4em 0;
+          font-weight: 600;
+          line-height: 1.3;
+        }
+        #__chat_widget_root .cw-md h1:first-child,
+        #__chat_widget_root .cw-md h2:first-child,
+        #__chat_widget_root .cw-md h3:first-child {
+          margin-top: 0;
+        }
+        #__chat_widget_root .cw-md h1 { font-size: 1.3em; }
+        #__chat_widget_root .cw-md h2 { font-size: 1.2em; }
+        #__chat_widget_root .cw-md h3 { font-size: 1.1em; }
+        #__chat_widget_root .cw-md h4 { font-size: 1em; }
+        #__chat_widget_root .cw-md h5 { font-size: 0.95em; }
+        #__chat_widget_root .cw-md h6 { font-size: 0.9em; }
+        
+        /* Lists */
+        #__chat_widget_root .cw-md ul,
+        #__chat_widget_root .cw-md ol {
+          margin: 0.5em 0;
+          padding-left: 1.5em;
+        }
+        #__chat_widget_root .cw-md li {
+          margin: 0.25em 0;
+        }
+        #__chat_widget_root .cw-md li > ul,
+        #__chat_widget_root .cw-md li > ol {
+          margin: 0.2em 0;
+        }
+        #__chat_widget_root .cw-md ul {
+          list-style-type: disc;
+        }
+        #__chat_widget_root .cw-md ol {
+          list-style-type: decimal;
+        }
+        #__chat_widget_root .cw-md li::marker {
+          color: #6b7280;
+        }
+        :global(body.dark-skin) #__chat_widget_root .cw-md li::marker,
+        :global(.dark) #__chat_widget_root .cw-md li::marker {
+          color: #9ca3af;
+        }
+        
+        /* Inline styles */
+        #__chat_widget_root .cw-md strong {
+          font-weight: 600;
+        }
+        #__chat_widget_root .cw-md em {
+          font-style: italic;
+        }
+        
+        /* Blockquote */
+        #__chat_widget_root .cw-md blockquote {
+          margin: 0.5em 0;
+          padding: 0.3em 0.8em;
+          border-left: 3px solid #d1d5db;
+          background: rgba(0, 0, 0, 0.03);
+          color: #4b5563;
+        }
+        :global(body.dark-skin) #__chat_widget_root .cw-md blockquote,
+        :global(.dark) #__chat_widget_root .cw-md blockquote {
+          border-left-color: #4b5563;
+          background: rgba(255, 255, 255, 0.05);
+          color: #d1d5db;
+        }
+        
+        /* Horizontal rule */
+        #__chat_widget_root .cw-md hr {
+          margin: 0.8em 0;
+          border: none;
+          border-top: 1px solid #e5e7eb;
+        }
+        :global(body.dark-skin) #__chat_widget_root .cw-md hr,
+        :global(.dark) #__chat_widget_root .cw-md hr {
+          border-top-color: #374151;
+        }
+        
+        /* Tables */
+        #__chat_widget_root .cw-md table {
+          border-collapse: collapse;
+          margin: 0.5em 0;
+          font-size: 0.9em;
+          width: 100%;
+        }
+        #__chat_widget_root .cw-md th,
+        #__chat_widget_root .cw-md td {
+          border: 1px solid #d1d5db;
+          padding: 0.4em 0.6em;
+          text-align: left;
+        }
+        #__chat_widget_root .cw-md th {
+          background: rgba(0, 0, 0, 0.04);
+          font-weight: 600;
+        }
+        :global(body.dark-skin) #__chat_widget_root .cw-md th,
+        :global(.dark) #__chat_widget_root .cw-md th {
+          background: rgba(255, 255, 255, 0.06);
+          border-color: #4b5563;
+        }
+        :global(body.dark-skin) #__chat_widget_root .cw-md td,
+        :global(.dark) #__chat_widget_root .cw-md td {
+          border-color: #4b5563;
+        }
+        
         #__chat_widget_root .cw-md mjx-container {
           max-width: 100%;
           overflow-x: auto;
@@ -2970,6 +3438,7 @@ function LauncherButton({ onOpen, onDragStart }) {
 export default function ChatWidget() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const [offset, setOffset] = useState(() => {
     if (typeof window !== "undefined") {
       try {
@@ -2990,6 +3459,7 @@ export default function ChatWidget() {
     rootRef.current = el
     el.style.pointerEvents = "auto"
     el.style.transform = `translate(${offset.x}px, ${offset.y}px)`
+    setMounted(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -3075,9 +3545,8 @@ export default function ChatWidget() {
     setOpen(true)
   }
 
-  const container = rootRef.current || ensureRoot()
-  rootRef.current = container
-  if (!container) return null
+  // Only render portal after component is mounted and container is ready
+  if (!mounted || !rootRef.current) return null
 
   return createPortal(
     open ? (
@@ -3088,6 +3557,6 @@ export default function ChatWidget() {
     ) : (
       <LauncherButton onOpen={handleOpen} onDragStart={startDrag} />
     ),
-    container,
+    rootRef.current,
   )
 }
