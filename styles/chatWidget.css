@@ -255,3 +255,104 @@
     80% { transform: rotate(-10deg); }
     100% { transform: rotate(0deg); }
   }
+
+  /* TodoList component styles (Task 3) */
+  .todo-container {
+    margin-bottom: 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(229, 231, 235, 0.9);
+    background: rgba(248, 250, 252, 0.95);
+    overflow: hidden;
+  }
+  body.dark-skin .todo-container {
+    border-color: rgba(55, 65, 81, 0.7);
+    background: rgba(15, 23, 42, 0.6);
+  }
+  .todo-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(17, 24, 39, 0.9);
+    transition: background 0.15s ease;
+  }
+  .todo-header:hover {
+    background: rgba(0, 0, 0, 0.04);
+  }
+  body.dark-skin .todo-header {
+    color: rgba(248, 250, 252, 0.9);
+  }
+  body.dark-skin .todo-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .todo-chevron {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+  .todo-chevron.expanded {
+    transform: rotate(180deg);
+  }
+  .todo-list {
+    border-top: 1px solid rgba(229, 231, 235, 0.6);
+    padding: 8px 0;
+  }
+  body.dark-skin .todo-list {
+    border-top-color: rgba(55, 65, 81, 0.5);
+  }
+  .todo-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: rgba(55, 65, 81, 0.95);
+  }
+  body.dark-skin .todo-item {
+    color: rgba(226, 232, 240, 0.9);
+  }
+  .todo-item.completed .todo-text {
+    text-decoration: line-through;
+    opacity: 0.6;
+  }
+  .todo-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .todo-icon.done {
+    color: #10b981;
+  }
+  .todo-icon.pending {
+    color: rgba(156, 163, 175, 0.8);
+  }
+  .todo-text {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+  }
+
+  /* Math rendering smooth transition */
+  .cw-math-rendering mjx-container {
+    opacity: 0.7;
+    transition: opacity 0.15s ease-out;
+  }
+  mjx-container {
+    opacity: 1;
+    transition: opacity 0.15s ease-out;
+  }
+  /* Math containers from remark-math */
+  .cw-math-block {
+    display: block;
+    margin: 0.5em 0;
+    overflow-x: auto;
+  }
+  .cw-math-inline {
+    display: inline;
+  }
