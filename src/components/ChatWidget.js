@@ -1052,6 +1052,91 @@ function TodoList({ subtasks, expanded = false }) {
 /* ---------- Stage toast ---------- */
 function StageToast({ step }) {
   if (!step) return null
+  
+  // Extract a simple, user-friendly summary from rawPayload
+  const getPayloadSummary = () => {
+    const { rawPayload } = step
+    
+    if (!rawPayload) return null
+    
+    // Handle array of tasks/subtasks
+    if (Array.isArray(rawPayload)) {
+      // Check if it's an array of task objects
+      const tasks = rawPayload.filter(item => 
+        item && typeof item === "object" && (item.title || item.name || item.text)
+      )
+      if (tasks.length > 0) {
+        return { type: "tasks", tasks }
+      }
+      return null
+    }
+    
+    if (typeof rawPayload !== "object") return null
+    
+    // Check if rawPayload itself is a single task object
+    if (rawPayload.title && (rawPayload.id || rawPayload.order != null)) {
+      return { type: "tasks", tasks: [rawPayload] }
+    }
+    
+    // Check for tasks/subtasks array inside the object
+    const taskArray = rawPayload.tasks ?? rawPayload.subtasks ?? rawPayload.steps ?? rawPayload.plan
+    if (Array.isArray(taskArray) && taskArray.length > 0) {
+      const tasks = taskArray.filter(item => 
+        item && typeof item === "object" && (item.title || item.name || item.text)
+      )
+      if (tasks.length > 0) {
+        return { type: "tasks", tasks }
+      }
+    }
+    
+    // Look for document/result counts
+    const docCount = rawPayload.docsFound ?? rawPayload.docCount ?? rawPayload.count ?? rawPayload.total ?? rawPayload.resultsCount
+    if (docCount != null && typeof docCount === "number") {
+      return { type: "text", text: `Found ${docCount} document${docCount !== 1 ? "s" : ""}` }
+    }
+    
+    // Look for chunks
+    if (rawPayload.chunksFound != null) {
+      return { type: "text", text: `Found ${rawPayload.chunksFound} chunk${rawPayload.chunksFound !== 1 ? "s" : ""}` }
+    }
+    
+    // Look for history hits
+    if (rawPayload.historyHits != null) {
+      return { type: "text", text: `Found ${rawPayload.historyHits} relevant message${rawPayload.historyHits !== 1 ? "s" : ""}` }
+    }
+    
+    return null
+  }
+  
+  const summary = getPayloadSummary()
+  
+  // Render tasks as a simple numbered list
+  const renderTasks = (tasks) => {
+    const maxShow = 4
+    const shown = tasks.slice(0, maxShow)
+    const remaining = tasks.length - maxShow
+    
+    return (
+      <div className="task-list">
+        {shown.map((task, idx) => {
+          const title = task.title || task.name || task.text || "Task"
+          const num = task.order ?? idx + 1
+          const done = task.completed || task.done
+          return (
+            <div key={task.id || idx} className={`task-item ${done ? "done" : ""}`}>
+              <span className="task-num">{num}.</span>
+              <span className="task-title">{title}</span>
+              {done && <Check className="task-check" />}
+            </div>
+          )
+        })}
+        {remaining > 0 && (
+          <div className="task-more">+{remaining} more</div>
+        )}
+      </div>
+    )
+  }
+  
   return (
     <div key={step.id} className="stage-toast mb-2">
       <div className="stage-card">
@@ -1062,10 +1147,13 @@ function StageToast({ step }) {
           <div className="stage-text">{step.title}</div>
         </div>
 
-        <div className="row2">
-          <span className="key-label">key info:</span>
-          <span className="key-value">{step.keyInfo}</span>
-        </div>
+        {summary?.type === "text" && (
+          <div className="row2">
+            <span className="key-value">{summary.text}</span>
+          </div>
+        )}
+        
+        {summary?.type === "tasks" && renderTasks(summary.tasks)}
 
         <div className="bar" aria-hidden="true" />
       </div>
@@ -1080,8 +1168,8 @@ function StageToast({ step }) {
           border: 1px solid rgba(229, 231, 235, 0.9);
           background: rgba(248, 250, 252, 0.92);
           box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-          padding: 12px 14px 14px;
-          max-height: 92px;
+          padding: 12px 14px 18px;
+          max-height: 180px;
           overflow: hidden;
         }
         :global(.dark) .stage-card,
@@ -1120,46 +1208,39 @@ function StageToast({ step }) {
         .stage-text {
           font-size: 18px;
           font-weight: 500;
-          color: rgba(17, 24, 39, 0.95);
           line-height: 1.1;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-        }
-        :global(.dark) .stage-text,
-        :global(body.dark-skin) .stage-text {
-          color: rgba(248, 250, 252, 0.92);
+          /* Gradient animation */
+          color: transparent;
+          background-image: linear-gradient(
+            90deg,
+            rgba(30, 41, 59, 0.35) 0%,
+            rgba(59, 130, 246, 0.95) 35%,
+            rgba(236, 72, 153, 0.85) 55%,
+            rgba(16, 185, 129, 0.85) 75%,
+            rgba(30, 41, 59, 0.35) 100%
+          );
+          background-size: 220% 100%;
+          background-position: 0% 50%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          animation: waveText 1.6s ease-in-out infinite;
         }
         .row2 {
-          margin-top: 8px;
-          display: flex;
-          align-items: flex-start;
-          gap: 8px;
+          margin-top: 6px;
           min-width: 0;
         }
-        .key-label {
-          font-size: 12px;
-          color: rgba(100, 116, 139, 0.9);
-          flex-shrink: 0;
-          line-height: 1.2;
-        }
-        :global(.dark) .key-label,
-        :global(body.dark-skin) .key-label {
-          color: rgba(226, 232, 240, 0.7);
-        }
         .key-value {
-          font-size: 12px;
-          line-height: 1.25;
+          font-size: 13px;
+          line-height: 1.3;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
             monospace;
           min-width: 0;
-
-          display: -webkit-box;
-          -webkit-box-orient: vertical;
-          -webkit-line-clamp: 2;
           overflow: hidden;
-          white-space: pre-wrap;
-          word-break: break-word;
+          text-overflow: ellipsis;
+          white-space: nowrap;
 
           color: transparent;
           background-image: linear-gradient(
@@ -1195,8 +1276,58 @@ function StageToast({ step }) {
           height: 100%;
           width: 40%;
           border-radius: 999px;
-          background: rgba(100, 116, 139, 0.7);
+          background: linear-gradient(90deg, #3b82f6, #ec4899, #10b981);
           animation: indeterminate 1.2s ease-in-out infinite;
+        }
+        .task-list {
+          margin-top: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .task-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 6px;
+          font-size: 13px;
+          line-height: 1.4;
+          color: rgba(30, 41, 59, 0.85);
+        }
+        :global(.dark) .task-item,
+        :global(body.dark-skin) .task-item {
+          color: rgba(226, 232, 240, 0.85);
+        }
+        .task-item.done {
+          opacity: 0.6;
+        }
+        .task-item.done .task-title {
+          text-decoration: line-through;
+        }
+        .task-num {
+          font-weight: 600;
+          color: rgba(59, 130, 246, 0.9);
+          min-width: 18px;
+          flex-shrink: 0;
+        }
+        .task-title {
+          line-height: 1.4;
+          min-width: 0;
+        }
+        .task-check {
+          width: 14px;
+          height: 14px;
+          color: rgba(16, 185, 129, 0.9);
+          flex-shrink: 0;
+        }
+        .task-more {
+          font-size: 12px;
+          color: rgba(100, 116, 139, 0.7);
+          font-style: italic;
+          margin-left: 24px;
+        }
+        :global(.dark) .task-more,
+        :global(body.dark-skin) .task-more {
+          color: rgba(226, 232, 240, 0.5);
         }
         @keyframes stageIn {
           from {
@@ -1813,6 +1944,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
               stage,
               title,
               keyInfo,
+              rawPayload: obj?.payload,
               ts: Date.now(),
             },
           }
