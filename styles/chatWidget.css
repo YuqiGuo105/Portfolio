@@ -356,3 +356,96 @@
   .cw-math-inline {
     display: inline;
   }
+
+  /* ========== Page-Awareness Highlighting ========== */
+  /* Highlighted text that matches page content (in chat response) */
+  .cw-page-ref {
+    background: linear-gradient(120deg, #fff3cd 0%, #ffe69c 100%);
+    padding: 1px 4px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 2px solid #ffc107;
+    font-weight: 500;
+  }
+  .cw-page-ref:hover {
+    background: linear-gradient(120deg, #ffe69c 0%, #ffd54f 100%);
+    box-shadow: 0 2px 8px rgba(255, 193, 7, 0.4);
+    transform: translateY(-1px);
+  }
+
+  /* Highlighted text ON THE ACTUAL PAGE (outside chat widget) */
+  .cw-page-highlight {
+    background: linear-gradient(120deg, #bbf7d0 0%, #86efac 100%);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border-bottom: 3px solid #22c55e;
+    box-shadow: 0 2px 12px rgba(34, 197, 94, 0.3);
+    transition: all 0.3s ease;
+    position: relative;
+  }
+  .cw-page-highlight::after {
+    content: "✨";
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    font-size: 12px;
+    animation: cw-sparkle 1s ease-in-out infinite;
+  }
+  .cw-page-highlight-pulse {
+    animation: cw-highlight-pulse 2s ease-out;
+  }
+  @keyframes cw-highlight-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+    }
+    50% {
+      box-shadow: 0 0 20px 10px rgba(34, 197, 94, 0.3);
+    }
+    100% {
+      box-shadow: 0 2px 12px rgba(34, 197, 94, 0.3);
+    }
+  }
+  @keyframes cw-sparkle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+  }
+
+  /* Page reference popup */
+  .cw-page-popup {
+    position: fixed;
+    max-width: 300px;
+    padding: 12px 16px;
+    background: #1a1a2e;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    z-index: 2147483647;
+    animation: cw-popup-in 0.2s ease-out;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+  }
+  .cw-page-popup::before {
+    content: "📄 From this page:";
+    display: block;
+    font-size: 10px;
+    color: #ffc107;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .cw-page-popup p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #e8e8e8;
+  }
+  @keyframes cw-popup-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }

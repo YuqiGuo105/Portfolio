@@ -26,6 +26,208 @@ const logger = {
   error: (...a) => console.error("[ChatWidget]", ...a),
 }
 
+// ─── Page-context extraction (yuqi.site only) ───────────────────────────────
+const ALLOWED_HOSTS = ["yuqi.site", "www.yuqi.site", "localhost", "127.0.0.1"]
+
+function isAllowedHost() {
+  if (typeof window === "undefined") return false
+  return ALLOWED_HOSTS.some(h => window.location.hostname === h || window.location.hostname.endsWith("." + h))
+}
+
+/**
+ * Per-page-type structured extractors — limits token usage.
+ * Keys are Next.js router.pathname patterns (bracket form).
+ */
+const PAGE_EXTRACTORS = {
+  "/": () => {
+    const sections = []
+    const about = document.querySelector("#about-section .profile-box .text")
+    if (about) sections.push("About: " + about.innerText.replace(/\s+/g, " ").trim().slice(0, 400))
+    document.querySelectorAll("#resume-section .history-item").forEach(el => {
+      sections.push(el.innerText.replace(/\s+/g, " ").trim().slice(0, 120))
+    })
+    document.querySelectorAll("#Blog-section .archive-item .desc").forEach((el, i) => {
+      if (i < 4) sections.push("Blog: " + el.innerText.replace(/\s+/g, " ").trim().slice(0, 100))
+    })
+    return sections.join(" | ")
+  },
+  "/blog": () => {
+    const items = []
+    document.querySelectorAll(".archive-item .desc").forEach((el, i) => {
+      if (i < 8) items.push(el.innerText.replace(/\s+/g, " ").trim().slice(0, 120))
+    })
+    return items.join(" | ")
+  },
+  "/work-single/[id]": () => {
+    // Dynamic route: extract project title + content
+    const title = document.querySelector("h1,h2,.project-title")?.innerText?.trim() || ""
+    const content = document.querySelector(".text[dangerouslySetInnerHTML], .text, article, main")
+    const text = content ? content.innerText.replace(/\s+/g, " ").trim().slice(0, 800) : ""
+    return [title, text].filter(Boolean).join(" | ")
+  },
+  "/#market-weather-dashboard": () => {
+    const el = document.querySelector("#market-weather-dashboard")
+    return el ? el.innerText.replace(/\s+/g, " ").trim().slice(0, 600) : ""
+  },
+}
+
+/**
+ * Extract pre-processed page context.
+ * Returns null if not on an allowed host, or if no meaningful content found.
+ * @param {string} routerPathname - Next.js router.pathname (bracket form, e.g. "/work-single/[id]")
+ */
+function extractPageContext(routerPathname) {
+  if (typeof window === "undefined" || !isAllowedHost()) return null
+
+  const pageTitle = document.title || routerPathname
+  let text = ""
+
+  // Try registered extractor by Next.js pathname pattern
+  const extractor = PAGE_EXTRACTORS[routerPathname]
+  if (extractor) {
+    try { text = extractor() } catch {}
+  }
+
+  // Generic fallback: use main/article content, skip nav/footer/chat
+  if (!text) {
+    const main = document.querySelector("main") || document.querySelector("article") || document.body
+    const clone = main.cloneNode(true)
+    clone.querySelectorAll("nav,footer,script,style,header,.bot-container").forEach(n => n.remove())
+    text = clone.innerText
+  }
+
+  // Pre-process: collapse whitespace, deduplicate lines, cap at 1500 chars
+  const seen = new Set()
+  text = text
+    .split(/[\n\r]+/)
+    .map(l => l.replace(/\s+/g, " ").trim())
+    .filter(l => l.length > 10 && !seen.has(l) && seen.add(l))
+    .join("\n")
+    .slice(0, 1500)
+
+  if (!text) return null
+
+  return {
+    url: window.location.href,
+    pagePattern: routerPathname,  // e.g. "/work-single/[id]" — stable across all work-single pages
+    text,
+    pageTitle,
+  }
+}
+
+/**
+ * Find sentences from pageText that appear (or closely match) in responseText.
+ * Returns array of { phrase, context } for highlighting.
+ * Works for both English and Chinese.
+ */
+function findPageMatches(responseText, pageText) {
+  if (!responseText || !pageText) return []
+  const resp = responseText.toLowerCase()
+  // Split pageText into sentences (handles both EN and ZH)
+  const sentences = pageText
+    .split(/[.。!！?？\n]+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 15)
+
+  const matches = []
+  for (const sentence of sentences) {
+    const lower = sentence.toLowerCase()
+    const MIN = 15
+    for (let len = Math.min(lower.length, 80); len >= MIN; len--) {
+      for (let start = 0; start <= lower.length - len; start++) {
+        const fragment = lower.slice(start, start + len)
+        if (resp.includes(fragment)) {
+          matches.push({ phrase: sentence.slice(start, start + len), context: sentence })
+          break
+        }
+      }
+    }
+  }
+  // Deduplicate by phrase
+  const seen = new Set()
+  return matches.filter(m => !seen.has(m.phrase) && seen.add(m.phrase))
+}
+
+/**
+ * Highlight matching phrases on the actual webpage (outside the chat widget).
+ * Wraps matching text in <mark class="cw-page-highlight"> and scrolls to first match.
+ * Returns a cleanup function to remove highlights.
+ */
+function highlightPageContent(matches) {
+  if (!matches?.length || typeof document === "undefined") return () => {}
+  
+  const highlightedNodes = []
+  const main = document.querySelector("main") || document.querySelector("article") || document.body
+  
+  // Skip chat widget container
+  const chatContainer = document.querySelector(".bot-container, .launch-button")
+  
+  // Walk text nodes in main content
+  const walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      // Skip nodes inside chat widget
+      if (chatContainer?.contains(node)) return NodeFilter.FILTER_REJECT
+      // Skip script/style/nav/footer
+      const parent = node.parentElement
+      if (parent?.closest("script, style, nav, footer, .bot-container")) return NodeFilter.FILTER_REJECT
+      return NodeFilter.FILTER_ACCEPT
+    }
+  })
+
+  const nodesToReplace = []
+  let textNode
+  while ((textNode = walker.nextNode())) {
+    for (const { phrase } of matches) {
+      const idx = textNode.textContent.toLowerCase().indexOf(phrase.toLowerCase())
+      if (idx >= 0) {
+        nodesToReplace.push({ node: textNode, phrase, idx })
+        break // One match per text node
+      }
+    }
+  }
+
+  let firstMark = null
+  for (const { node, phrase, idx } of nodesToReplace) {
+    const parent = node.parentNode
+    if (!parent) continue
+    
+    const before = document.createTextNode(node.textContent.slice(0, idx))
+    const mark = document.createElement("mark")
+    mark.className = "cw-page-highlight"
+    mark.textContent = node.textContent.slice(idx, idx + phrase.length)
+    const after = document.createTextNode(node.textContent.slice(idx + phrase.length))
+    
+    parent.replaceChild(after, node)
+    parent.insertBefore(mark, after)
+    parent.insertBefore(before, mark)
+    
+    highlightedNodes.push({ mark, before, after, originalText: node.textContent, parent })
+    if (!firstMark) firstMark = mark
+  }
+
+  // Scroll to first highlighted element with smooth animation
+  if (firstMark) {
+    setTimeout(() => {
+      firstMark.scrollIntoView({ behavior: "smooth", block: "center" })
+      // Add pulse animation
+      firstMark.classList.add("cw-page-highlight-pulse")
+    }, 300)
+  }
+
+  console.log("[PageAwareness] Highlighted", highlightedNodes.length, "elements on page")
+
+  // Return cleanup function
+  return () => {
+    for (const { mark, before, after, originalText, parent } of highlightedNodes) {
+      if (!mark.parentNode) continue
+      const textNode = document.createTextNode(originalText)
+      parent.replaceChild(textNode, before)
+      mark.remove()
+      after.remove()
+    }
+  }
+}
+
 /* ───────── linkify plain URLs ───────── */
 const URL_RE = /\bhttps?:\/\/[^\s<]+/gi
 
@@ -639,6 +841,112 @@ function MarkdownMessage({ content, streaming = false }) {
       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ pre: Pre }}>
         {String(md || "")}
       </ReactMarkdown>
+    </div>
+  )
+}
+
+/**
+ * Wraps MarkdownMessage and highlights phrases that matched page content.
+ * Only rendered when pageMatches is non-empty (i.e. backend confirmed page relevance).
+ */
+function HighlightedMarkdown({ content, streaming, pageMatches }) {
+  const [popup, setPopup] = useState(null) // { x, y, context }
+  const rootRef = useRef(null)
+
+  useEffect(() => {
+    if (!rootRef.current || !pageMatches?.length || streaming) return
+
+    // Walk text nodes and wrap matched phrases in <mark class="cw-page-ref">
+    const walker = document.createTreeWalker(rootRef.current, NodeFilter.SHOW_TEXT)
+    const nodesToReplace = []
+
+    let node
+    while ((node = walker.nextNode())) {
+      for (const { phrase, context } of pageMatches) {
+        const idx = node.textContent.toLowerCase().indexOf(phrase.toLowerCase())
+        if (idx >= 0) {
+          nodesToReplace.push({ node, phrase, context, idx })
+          break
+        }
+      }
+    }
+
+    for (const { node, phrase, context, idx } of nodesToReplace) {
+      const parent = node.parentNode
+      if (!parent) continue  // Skip if node is no longer in DOM
+      
+      const before = document.createTextNode(node.textContent.slice(0, idx))
+      const mark = document.createElement("mark")
+      mark.className = "cw-page-ref"
+      mark.dataset.context = context
+      mark.textContent = node.textContent.slice(idx, idx + phrase.length)
+      const after = document.createTextNode(node.textContent.slice(idx + phrase.length))
+      
+      // Replace original node with before + mark + after
+      parent.replaceChild(after, node)
+      parent.insertBefore(mark, after)
+      parent.insertBefore(before, mark)
+    }
+  }, [content, streaming, pageMatches])
+
+  const handleMarkClick = (e) => {
+    const mark = e.target.closest(".cw-page-ref")
+    if (!mark) return
+    const rect = mark.getBoundingClientRect()
+    setPopup({ x: rect.left, y: rect.top - 8, context: mark.dataset.context })
+  }
+
+  return (
+    <>
+      <div ref={rootRef} onClick={handleMarkClick}>
+        <MarkdownMessage content={content} streaming={streaming} />
+      </div>
+      {popup && typeof document !== "undefined" && createPortal(
+        <PageRefPopup
+          context={popup.context}
+          x={popup.x}
+          y={popup.y}
+          onClose={() => setPopup(null)}
+        />,
+        document.body
+      )}
+    </>
+  )
+}
+
+/**
+ * Popup window showing the matched page excerpt.
+ * Language of content naturally matches the response (which matches user's input language
+ * per BASE_PROMPT language rules already in place on the backend).
+ */
+function PageRefPopup({ context, x, y, onClose }) {
+  return (
+    <div
+      className="cw-page-popup"
+      style={{
+        position: "fixed",
+        left: Math.min(x, typeof window !== "undefined" ? window.innerWidth - 300 : x),
+        top: y - 120,
+        zIndex: 2147483647,
+        background: "var(--cw-bg, white)",
+        border: "1px solid rgba(59,130,246,0.3)",
+        borderRadius: 10,
+        boxShadow: "0 8px 24px rgba(15,23,42,0.18)",
+        padding: "10px 14px",
+        maxWidth: 280,
+        fontSize: 13,
+        lineHeight: 1.5,
+      }}
+    >
+      <button
+        className="cw-page-popup-close"
+        onClick={onClose}
+        style={{ position: "absolute", top: 6, right: 8, background: "none", border: "none", cursor: "pointer" }}
+      >
+        ✕
+      </button>
+      <div style={{ fontWeight: 600, marginBottom: 4, color: "#3b82f6" }}>📄 From this page</div>
+      <div style={{ color: "var(--cw-text, #1e293b)" }}>"{context}"</div>
     </div>
   )
 }
@@ -1536,7 +1844,7 @@ function AttachmentProgressRow({ name, progress }) {
 
 /* ---------- Chat window ---------- */
 
-function ChatWindow({ onMinimize, onDragStart }) {
+function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
   const [messages, setMessages] = useState(() => {
     // If the widget has been inactive for a while, start fresh (no old history).
     if (!isSessionFresh()) {
@@ -1969,7 +2277,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
     onFinal?.(finalContent)
   }
 
-  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal, requestMode, currentSessionId }) => {
+  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal, requestMode, currentSessionId, pageContext }) => {
     const base = ragEndpointRef.current || (await resolveRagEndpoint())
     const streamUrl = ragStreamUrl(base)
 
@@ -1978,6 +2286,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
 
     let answerBuf = ""
     let finalized = false
+    let pageRelevanceResult = null  // Store page relevance from answer_final
     
     // Use the passed requestMode to determine DEEPTHINKING vs FAST
     const useDeepThinking = requestMode === "thinking"
@@ -1990,6 +2299,8 @@ function ChatWindow({ onMinimize, onDragStart }) {
       mode: useDeepThinking ? "DEEPTHINKING" : "FAST",
       scopeMode: useDeepThinking ? "GENERAL" : "OWNER_ONLY",
       ...(Array.isArray(fileUrls) && fileUrls.length > 0 ? { fileUrls } : {}),
+      // Send pageContext inside ext map — no backend schema change needed
+      ...(pageContext ? { ext: { currentPageUrl: pageContext.url, currentPagePattern: pageContext.pagePattern, pageContextText: pageContext.text, pageTitle: pageContext.pageTitle } } : {}),
     }
 
     await postSSE(streamUrl, body, {
@@ -2018,6 +2329,34 @@ function ChatWindow({ onMinimize, onDragStart }) {
           const rawFinalAnswer = typeof obj.payload?.answer === "string" ? obj.payload.answer : answerBuf
           // Strip [QA] prefix markers from final answer
           const finalAnswer = stripQAPrefix(rawFinalAnswer)
+          
+          // Read pageRelevance from backend (informational, not required for highlighting)
+          pageRelevanceResult = obj.payload?.pageRelevance || null
+          
+          // Trigger page highlight if we have page context — find matching text regardless of KB results
+          // The highlighting is based on text matching between LLM response and current page content
+          if (pageContext?.text) {
+            const matches = findPageMatches(finalAnswer, pageContext.text)
+            // Only update if we found actual matches
+            if (matches.length > 0) {
+              console.log("[PageAwareness] Found", matches.length, "matches to highlight", matches)
+              
+              // 1. Highlight text in chat response
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId
+                  ? { ...m, pageMatches: matches, pageContextText: pageContext.text }
+                  : m
+              ))
+              
+              // 2. Highlight matching content on the actual webpage (scroll + glow effect)
+              const cleanupHighlights = highlightPageContent(matches)
+              // Auto-remove page highlights after 15 seconds
+              setTimeout(() => {
+                cleanupHighlights()
+              }, 15000)
+            }
+          }
+          
           finalizeAssistant(assistantId, finalAnswer, onFinal)
 
           return
@@ -2092,6 +2431,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
     const baseQuestion = visibleText
     const requestMode = mode
     const fileUrls = readyFiles.map((f) => f.url)
+    
+    // Capture page context at send time
+    const pageCtx = extractPageContext(routerPathname || "/")
 
     const finalizeAndPersist = async (finalAnswer) => {
       try {
@@ -2104,7 +2446,7 @@ function ChatWindow({ onMinimize, onDragStart }) {
     }
 
     try {
-      await startRagSSE({ question: baseQuestion, fileUrls, assistantId, requestMode, currentSessionId: sessionId, onFinal: finalizeAndPersist })
+      await startRagSSE({ question: baseQuestion, fileUrls, assistantId, requestMode, currentSessionId: sessionId, onFinal: finalizeAndPersist, pageContext: pageCtx })
     } catch (err) {
       console.error("[ChatWidget] SSE failed:", err)
       logger.error("SSE failed:", err)
@@ -2268,7 +2610,9 @@ function ChatWindow({ onMinimize, onDragStart }) {
                     </>
                   )
                 ) : (
-                  <MarkdownMessage key={`${m.id}-final`} content={m.content} />
+                  m.pageMatches?.length > 0
+                    ? <HighlightedMarkdown key={`${m.id}-final`} content={m.content} streaming={false} pageMatches={m.pageMatches} />
+                    : <MarkdownMessage key={`${m.id}-final`} content={m.content} />
                 )
               ) : (
                 renderTextWithLinks(m.content)
@@ -3538,6 +3882,26 @@ function ChatWindow({ onMinimize, onDragStart }) {
           background: rgba(0, 0, 0, 0.2);
           border-color: rgba(55, 65, 81, 0.7);
         }
+
+        /* Page-context highlighting */
+        #__chat_widget_root .cw-page-ref {
+          background: rgba(59, 130, 246, 0.2);
+          border-radius: 3px;
+          cursor: pointer;
+          padding: 0 2px;
+          transition: background 0.15s;
+        }
+        #__chat_widget_root .cw-page-ref:hover {
+          background: rgba(59, 130, 246, 0.4);
+        }
+        :global(.dark) #__chat_widget_root .cw-page-ref,
+        :global(body.dark-skin) #__chat_widget_root .cw-page-ref {
+          background: rgba(59, 130, 246, 0.3);
+        }
+        :global(.dark) #__chat_widget_root .cw-page-ref:hover,
+        :global(body.dark-skin) #__chat_widget_root .cw-page-ref:hover {
+          background: rgba(59, 130, 246, 0.5);
+        }
       `}</style>
     </div>
   )
@@ -3684,7 +4048,7 @@ export default function ChatWidget() {
     open ? (
       <Fragment>
         <Overlay onClick={() => setOpen(false)} />
-        <ChatWindow onMinimize={() => setOpen(false)} onDragStart={startDrag} />
+        <ChatWindow onMinimize={() => setOpen(false)} onDragStart={startDrag} routerPathname={router.pathname} />
       </Fragment>
     ) : (
       <LauncherButton onOpen={handleOpen} onDragStart={startDrag} />
