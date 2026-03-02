@@ -116,36 +116,86 @@ function extractPageContext(routerPathname) {
 }
 
 /**
+ * Detect if text is primarily CJK (Chinese/Japanese/Korean).
+ */
+function isCJKText(text) {
+  if (!text) return false
+  const cjkChars = (text.match(/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g) || []).length
+  return cjkChars > text.length * 0.3
+}
+
+/**
+ * Parse and extract the [KEYWORDS_EN]...[/KEYWORDS_EN] section from LLM response.
+ * Returns { cleanedText, keywords } where keywords is { term: explanation }.
+ */
+function parseKeywordsEN(text) {
+  if (!text) return { cleanedText: text, keywords: {} }
+  
+  const regex = /\[KEYWORDS_EN\]([\s\S]*?)\[\/KEYWORDS_EN\]/
+  const match = text.match(regex)
+  
+  if (!match) return { cleanedText: text, keywords: {} }
+  
+  const keywordsBlock = match[1].trim()
+  const cleanedText = text.replace(regex, "").trim()
+  
+  // Parse "term: explanation" lines
+  const keywords = {}
+  const lines = keywordsBlock.split("\n").filter(l => l.trim())
+  for (const line of lines) {
+    const colonIdx = line.indexOf(":")
+    if (colonIdx > 0) {
+      const term = line.slice(0, colonIdx).trim()
+      const explanation = line.slice(colonIdx + 1).trim()
+      if (term && explanation) {
+        keywords[term.toLowerCase()] = { original: term, en: explanation }
+      }
+    }
+  }
+  
+  return { cleanedText, keywords }
+}
+
+/**
  * Find sentences from pageText that appear (or closely match) in responseText.
  * Returns array of { phrase, context } for highlighting.
- * Works for both English and Chinese.
+ * Works for both English and Chinese/CJK languages.
  */
 function findPageMatches(responseText, pageText) {
   if (!responseText || !pageText) return []
   const resp = responseText.toLowerCase()
+  
+  // Detect if response is CJK - use different thresholds
+  const isCJK = isCJKText(responseText)
+  const MIN_SENTENCE_LEN = isCJK ? 4 : 15
+  const MIN_MATCH_LEN = isCJK ? 3 : 15
+  const MAX_MATCH_LEN = isCJK ? 30 : 80
+  
   // Split pageText into sentences (handles both EN and ZH)
   const sentences = pageText
-    .split(/[.。!！?？\n]+/)
+    .split(/[.。!！?？\n，,；;：:]+/)
     .map(s => s.trim())
-    .filter(s => s.length > 15)
+    .filter(s => s.length >= MIN_SENTENCE_LEN)
 
   const matches = []
   for (const sentence of sentences) {
     const lower = sentence.toLowerCase()
-    const MIN = 15
-    for (let len = Math.min(lower.length, 80); len >= MIN; len--) {
+    for (let len = Math.min(lower.length, MAX_MATCH_LEN); len >= MIN_MATCH_LEN; len--) {
+      let found = false
       for (let start = 0; start <= lower.length - len; start++) {
         const fragment = lower.slice(start, start + len)
         if (resp.includes(fragment)) {
           matches.push({ phrase: sentence.slice(start, start + len), context: sentence })
+          found = true
           break
         }
       }
+      if (found) break
     }
   }
   // Deduplicate by phrase
   const seen = new Set()
-  return matches.filter(m => !seen.has(m.phrase) && seen.add(m.phrase))
+  return matches.filter(m => !seen.has(m.phrase) && seen.add(m.phrase)).slice(0, 5)
 }
 
 /**
@@ -849,8 +899,8 @@ function MarkdownMessage({ content, streaming = false }) {
  * Wraps MarkdownMessage and highlights phrases that matched page content.
  * Only rendered when pageMatches is non-empty (i.e. backend confirmed page relevance).
  */
-function HighlightedMarkdown({ content, streaming, pageMatches }) {
-  const [popup, setPopup] = useState(null) // { x, y, context }
+function HighlightedMarkdown({ content, streaming, pageMatches, keywordsEN = {} }) {
+  const [popup, setPopup] = useState(null) // { x, y, context, phrase }
   const rootRef = useRef(null)
 
   useEffect(() => {
@@ -879,6 +929,7 @@ function HighlightedMarkdown({ content, streaming, pageMatches }) {
       const mark = document.createElement("mark")
       mark.className = "cw-page-ref"
       mark.dataset.context = context
+      mark.dataset.phrase = phrase  // Store phrase for keyword lookup
       mark.textContent = node.textContent.slice(idx, idx + phrase.length)
       const after = document.createTextNode(node.textContent.slice(idx + phrase.length))
       
@@ -893,7 +944,12 @@ function HighlightedMarkdown({ content, streaming, pageMatches }) {
     const mark = e.target.closest(".cw-page-ref")
     if (!mark) return
     const rect = mark.getBoundingClientRect()
-    setPopup({ x: rect.left, y: rect.top - 8, context: mark.dataset.context })
+    setPopup({ 
+      x: rect.left, 
+      y: rect.top - 8, 
+      context: mark.dataset.context,
+      phrase: mark.dataset.phrase 
+    })
   }
 
   return (
@@ -904,6 +960,8 @@ function HighlightedMarkdown({ content, streaming, pageMatches }) {
       {popup && typeof document !== "undefined" && createPortal(
         <PageRefPopup
           context={popup.context}
+          phrase={popup.phrase}
+          keywordsEN={keywordsEN}
           x={popup.x}
           y={popup.y}
           onClose={() => setPopup(null)}
@@ -915,38 +973,83 @@ function HighlightedMarkdown({ content, streaming, pageMatches }) {
 }
 
 /**
- * Popup window showing the matched page excerpt.
- * Language of content naturally matches the response (which matches user's input language
- * per BASE_PROMPT language rules already in place on the backend).
+ * Popup card showing the matched page excerpt with visual styling.
+ * Detects language (CJK vs EN) and shows appropriate label.
+ * Now also displays English explanations for non-English terms.
+ * Similar to Wikipedia preview cards.
  */
-function PageRefPopup({ context, x, y, onClose }) {
+function PageRefPopup({ context, phrase, keywordsEN = {}, x, y, onClose }) {
+  const isCJK = isCJKText(context)
+  const label = isCJK ? "📄 来自当前页面" : "📄 From this page"
+  const closeLabel = isCJK ? "关闭" : "Close"
+  
+  // Look up English explanation for this phrase
+  const phraseLower = (phrase || "").toLowerCase()
+  const keywordMatch = keywordsEN[phraseLower] || 
+    // Try partial match if exact match fails
+    Object.entries(keywordsEN).find(([key]) => 
+      phraseLower.includes(key) || key.includes(phraseLower)
+    )?.[1]
+  
+  // Calculate safe position
+  const safeX = typeof window !== "undefined" 
+    ? Math.min(Math.max(10, x - 140), window.innerWidth - 300) 
+    : x
+  const safeY = typeof window !== "undefined"
+    ? Math.min(Math.max(80, y - 160), window.innerHeight - 240)
+    : y - 120
+
   return (
     <div
       className="cw-page-popup"
       style={{
         position: "fixed",
-        left: Math.min(x, typeof window !== "undefined" ? window.innerWidth - 300 : x),
-        top: y - 120,
+        left: safeX,
+        top: safeY,
         zIndex: 2147483647,
-        background: "var(--cw-bg, white)",
-        border: "1px solid rgba(59,130,246,0.3)",
-        borderRadius: 10,
-        boxShadow: "0 8px 24px rgba(15,23,42,0.18)",
-        padding: "10px 14px",
-        maxWidth: 280,
-        fontSize: 13,
-        lineHeight: 1.5,
       }}
+      onClick={(e) => e.stopPropagation()}
     >
-      <button
-        className="cw-page-popup-close"
-        onClick={onClose}
-        style={{ position: "absolute", top: 6, right: 8, background: "none", border: "none", cursor: "pointer" }}
-      >
-        ✕
-      </button>
-      <div style={{ fontWeight: 600, marginBottom: 4, color: "#3b82f6" }}>📄 From this page</div>
-      <div style={{ color: "var(--cw-text, #1e293b)" }}>"{context}"</div>
+      {/* Header bar with icon */}
+      <div className="cw-page-popup-header">
+        <span className="cw-page-popup-icon">🔗</span>
+        <span>{label}</span>
+        <button
+          className="cw-page-popup-close"
+          onClick={onClose}
+          title={closeLabel}
+        >
+          ✕
+        </button>
+      </div>
+      
+      {/* Content area with quote styling */}
+      <div className="cw-page-popup-content">
+        <blockquote className="cw-page-popup-quote">
+          {context}
+        </blockquote>
+        
+        {/* English explanation section (Wikipedia-style) */}
+        {keywordMatch && (
+          <div className="cw-page-popup-en-section">
+            <div className="cw-page-popup-en-header">
+              <span>🌐</span>
+              <span>{isCJK ? "英文释义" : "English"}</span>
+            </div>
+            <div className="cw-page-popup-en-term">
+              {keywordMatch.original}
+            </div>
+            <div className="cw-page-popup-en-explanation">
+              {keywordMatch.en}
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {/* Footer with hint */}
+      <div className="cw-page-popup-footer">
+        {isCJK ? "💡 AI回答引用了此页面内容" : "💡 AI response referenced this page content"}
+      </div>
     </div>
   )
 }
@@ -2328,7 +2431,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
           // Backend sends { payload: { answer: "..." } }
           const rawFinalAnswer = typeof obj.payload?.answer === "string" ? obj.payload.answer : answerBuf
           // Strip [QA] prefix markers from final answer
-          const finalAnswer = stripQAPrefix(rawFinalAnswer)
+          const strippedQA = stripQAPrefix(rawFinalAnswer)
+          
+          // Parse and extract [KEYWORDS_EN] section (bilingual keyword explanations)
+          const { cleanedText: finalAnswer, keywords: keywordsEN } = parseKeywordsEN(strippedQA)
+          if (Object.keys(keywordsEN).length > 0) {
+            console.log("[PageAwareness] Extracted keywords:", keywordsEN)
+          }
           
           // Read pageRelevance from backend (informational, not required for highlighting)
           pageRelevanceResult = obj.payload?.pageRelevance || null
@@ -2341,10 +2450,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
             if (matches.length > 0) {
               console.log("[PageAwareness] Found", matches.length, "matches to highlight", matches)
               
-              // 1. Highlight text in chat response
+              // 1. Highlight text in chat response (include keywordsEN for popup)
               setMessages(prev => prev.map(m =>
                 m.id === assistantId
-                  ? { ...m, pageMatches: matches, pageContextText: pageContext.text }
+                  ? { ...m, pageMatches: matches, pageContextText: pageContext.text, keywordsEN }
                   : m
               ))
               
@@ -2611,7 +2720,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
                   )
                 ) : (
                   m.pageMatches?.length > 0
-                    ? <HighlightedMarkdown key={`${m.id}-final`} content={m.content} streaming={false} pageMatches={m.pageMatches} />
+                    ? <HighlightedMarkdown key={`${m.id}-final`} content={m.content} streaming={false} pageMatches={m.pageMatches} keywordsEN={m.keywordsEN} />
                     : <MarkdownMessage key={`${m.id}-final`} content={m.content} />
                 )
               ) : (

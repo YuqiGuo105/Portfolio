@@ -411,41 +411,146 @@
     50% { opacity: 0.5; transform: scale(1.2); }
   }
 
-  /* Page reference popup */
+  /* Page reference popup - Wikipedia-style preview card */
   .cw-page-popup {
     position: fixed;
-    max-width: 300px;
-    padding: 12px 16px;
-    background: #1a1a2e;
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    width: 320px;
+    max-width: 90vw;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05);
     z-index: 2147483647;
-    animation: cw-popup-in 0.2s ease-out;
-    border: 1px solid rgba(255, 193, 7, 0.3);
+    animation: cw-popup-in 0.25s ease-out;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
-  .cw-page-popup::before {
-    content: "📄 From this page:";
-    display: block;
-    font-size: 10px;
-    color: #ffc107;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 6px;
+  
+  /* Header bar */
+  .cw-page-popup-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    font-size: 13px;
     font-weight: 600;
   }
-  .cw-page-popup p {
+  .cw-page-popup-icon {
+    font-size: 16px;
+  }
+  .cw-page-popup-close {
+    margin-left: auto;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  }
+  .cw-page-popup-close:hover {
+    background: rgba(255, 255, 255, 0.4);
+  }
+  
+  /* Content area */
+  .cw-page-popup-content {
+    padding: 14px 16px;
+  }
+  .cw-page-popup-quote {
     margin: 0;
+    padding: 12px 14px;
+    background: #f8fafc;
+    border-left: 4px solid #3b82f6;
+    border-radius: 0 8px 8px 0;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #1e293b;
+    font-style: italic;
+  }
+  
+  /* English explanation section (bilingual popup) */
+  .cw-page-popup-en-section {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    border-radius: 8px;
+    border-left: 4px solid #10b981;
+  }
+  .cw-page-popup-en-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #059669;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .cw-page-popup-en-term {
+    font-size: 15px;
+    font-weight: 700;
+    color: #065f46;
+    margin-bottom: 4px;
+  }
+  .cw-page-popup-en-explanation {
     font-size: 13px;
     line-height: 1.5;
-    color: #e8e8e8;
+    color: #047857;
   }
+  
+  /* Footer hint */
+  .cw-page-popup-footer {
+    padding: 10px 16px;
+    background: #f1f5f9;
+    font-size: 11px;
+    color: #64748b;
+    border-top: 1px solid #e2e8f0;
+  }
+  
   @keyframes cw-popup-in {
     from {
       opacity: 0;
-      transform: translateY(4px);
+      transform: translateY(8px) scale(0.95);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: translateY(0) scale(1);
+    }
+  }
+  
+  /* Dark mode support */
+  @media (prefers-color-scheme: dark) {
+    .cw-page-popup {
+      background: #1e293b;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    }
+    .cw-page-popup-quote {
+      background: #334155;
+      color: #e2e8f0;
+    }
+    .cw-page-popup-en-section {
+      background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+      border-left-color: #34d399;
+    }
+    .cw-page-popup-en-header {
+      color: #6ee7b7;
+    }
+    .cw-page-popup-en-term {
+      color: #a7f3d0;
+    }
+    .cw-page-popup-en-explanation {
+      color: #6ee7b7;
+    }
+    .cw-page-popup-footer {
+      background: #0f172a;
+      color: #94a3b8;
+      border-top-color: #334155;
     }
   }
