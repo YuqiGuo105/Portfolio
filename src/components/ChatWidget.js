@@ -126,7 +126,8 @@ function isCJKText(text) {
 
 /**
  * Parse and extract the [KEYWORDS_EN]...[/KEYWORDS_EN] section from LLM response.
- * Returns { cleanedText, keywords } where keywords is { term: explanation }.
+ * Returns { cleanedText, keywords } where keywords is { term: { original, en } }.
+ * Handles both "term: explanation" format and comma-separated fallback.
  */
 function parseKeywordsEN(text) {
   if (!text) return { cleanedText: text, keywords: {} }
@@ -139,9 +140,10 @@ function parseKeywordsEN(text) {
   const keywordsBlock = match[1].trim()
   const cleanedText = text.replace(regex, "").trim()
   
-  // Parse "term: explanation" lines
   const keywords = {}
   const lines = keywordsBlock.split("\n").filter(l => l.trim())
+  
+  // Try "term: explanation" format first
   for (const line of lines) {
     const colonIdx = line.indexOf(":")
     if (colonIdx > 0) {
@@ -153,6 +155,14 @@ function parseKeywordsEN(text) {
     }
   }
   
+  // Fallback: if no colon format found, try comma-separated on single line
+  if (Object.keys(keywords).length === 0 && lines.length === 1) {
+    const terms = lines[0].split(",").map(t => t.trim()).filter(Boolean)
+    for (const term of terms) {
+      keywords[term.toLowerCase()] = { original: term, en: term }
+    }
+  }
+  
   return { cleanedText, keywords }
 }
 
@@ -160,32 +170,60 @@ function parseKeywordsEN(text) {
  * Find sentences from pageText that appear (or closely match) in responseText.
  * Returns array of { phrase, context } for highlighting.
  * Works for both English and Chinese/CJK languages.
+ * Also matches proper nouns (names, companies) for cross-language scenarios.
  */
-function findPageMatches(responseText, pageText) {
+function findPageMatches(responseText, pageText, question) {
   if (!responseText || !pageText) return []
   const resp = responseText.toLowerCase()
+  const qLower = (question || "").toLowerCase()
   
-  // Detect if response is CJK - use different thresholds
-  const isCJK = isCJKText(responseText)
-  const MIN_SENTENCE_LEN = isCJK ? 4 : 15
-  const MIN_MATCH_LEN = isCJK ? 3 : 15
-  const MAX_MATCH_LEN = isCJK ? 30 : 80
-  
-  // Split pageText into sentences (handles both EN and ZH)
-  const sentences = pageText
-    .split(/[.。!！?？\n，,；;：:]+/)
-    .map(s => s.trim())
-    .filter(s => s.length >= MIN_SENTENCE_LEN)
-
   const matches = []
+  const seen = new Set()
+  
+  // 1. Extract proper nouns from pageText (names, companies, etc.)
+  // These are language-agnostic and should match across translations
+  // Skip nouns that appear in the user's question (user already knows those terms)
+  const properNouns = pageText.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g) || []
+  const uniqueNouns = [...new Set(properNouns.filter(n => n.length >= 4))]
+  
+  for (const noun of uniqueNouns) {
+    // Skip if the noun (or any part of it) appears in the question
+    const nounParts = noun.toLowerCase().split(/\s+/)
+    const inQuestion = nounParts.some(part => part.length >= 3 && qLower.includes(part))
+    if (inQuestion) continue
+    
+    if (resp.includes(noun.toLowerCase()) && !seen.has(noun)) {
+      // Find context sentence containing this noun
+      const sentences = pageText.split(/[.。!！?？\n]+/).filter(s => s.includes(noun))
+      const context = sentences[0]?.trim() || noun
+      matches.push({ phrase: noun, context })
+      seen.add(noun)
+    }
+  }
+  
+  // 2. Split pageText into sentences for substring matching
+  // Determine min match length per sentence based on its own language, not the response
+  const sentences = pageText
+    .split(/[.。!！?？\n]+/)
+    .map(s => s.trim())
+    .filter(s => s.length >= 4)
+
   for (const sentence of sentences) {
+    const sentenceIsCJK = isCJKText(sentence)
+    const MIN_MATCH = sentenceIsCJK ? 3 : 15
+    const MAX_MATCH = sentenceIsCJK ? 30 : 80
     const lower = sentence.toLowerCase()
-    for (let len = Math.min(lower.length, MAX_MATCH_LEN); len >= MIN_MATCH_LEN; len--) {
+    
+    for (let len = Math.min(lower.length, MAX_MATCH); len >= MIN_MATCH; len--) {
       let found = false
       for (let start = 0; start <= lower.length - len; start++) {
         const fragment = lower.slice(start, start + len)
-        if (resp.includes(fragment)) {
+        // For non-CJK fragments, require word boundary (no partial word matches like "ing")
+        if (!sentenceIsCJK && !/^[a-z]/.test(fragment.charAt(0) === ' ' ? fragment.charAt(1) : fragment.charAt(0))) continue
+        if (!sentenceIsCJK && fragment.length < 15) continue  // Hard floor for English fragments
+        if (resp.includes(fragment) && !seen.has(fragment)) {
           matches.push({ phrase: sentence.slice(start, start + len), context: sentence })
+          seen.add(fragment)
           found = true
           break
         }
@@ -193,9 +231,8 @@ function findPageMatches(responseText, pageText) {
       if (found) break
     }
   }
-  // Deduplicate by phrase
-  const seen = new Set()
-  return matches.filter(m => !seen.has(m.phrase) && seen.add(m.phrase)).slice(0, 5)
+  
+  return matches.slice(0, 5)
 }
 
 /**
@@ -269,11 +306,18 @@ function highlightPageContent(matches) {
   // Return cleanup function
   return () => {
     for (const { mark, before, after, originalText, parent } of highlightedNodes) {
-      if (!mark.parentNode) continue
-      const textNode = document.createTextNode(originalText)
-      parent.replaceChild(textNode, before)
-      mark.remove()
-      after.remove()
+      try {
+        if (!mark.parentNode) continue
+        const textNode = document.createTextNode(originalText)
+        // Safe cleanup: only replace nodes still attached to this parent
+        if (before.parentNode === parent) parent.replaceChild(textNode, before)
+        else parent.insertBefore(textNode, mark)
+        mark.remove()
+        if (after.parentNode === parent) after.remove()
+      } catch (e) {
+        // DOM may have changed (React re-render), skip gracefully
+        console.warn("[PageAwareness] cleanup skip:", e.message)
+      }
     }
   }
 }
@@ -921,22 +965,44 @@ function HighlightedMarkdown({ content, streaming, pageMatches, keywordsEN = {} 
       }
     }
 
+    const markedNodes = []
     for (const { node, phrase, context, idx } of nodesToReplace) {
       const parent = node.parentNode
-      if (!parent) continue  // Skip if node is no longer in DOM
+      if (!parent || !parent.contains(node)) continue  // Skip if node is no longer in DOM
       
-      const before = document.createTextNode(node.textContent.slice(0, idx))
-      const mark = document.createElement("mark")
-      mark.className = "cw-page-ref"
-      mark.dataset.context = context
-      mark.dataset.phrase = phrase  // Store phrase for keyword lookup
-      mark.textContent = node.textContent.slice(idx, idx + phrase.length)
-      const after = document.createTextNode(node.textContent.slice(idx + phrase.length))
-      
-      // Replace original node with before + mark + after
-      parent.replaceChild(after, node)
-      parent.insertBefore(mark, after)
-      parent.insertBefore(before, mark)
+      try {
+        const before = document.createTextNode(node.textContent.slice(0, idx))
+        const mark = document.createElement("mark")
+        mark.className = "cw-page-ref"
+        mark.dataset.context = context
+        mark.dataset.phrase = phrase  // Store phrase for keyword lookup
+        mark.textContent = node.textContent.slice(idx, idx + phrase.length)
+        const after = document.createTextNode(node.textContent.slice(idx + phrase.length))
+        
+        // Replace original node with before + mark + after
+        parent.replaceChild(after, node)
+        parent.insertBefore(mark, after)
+        parent.insertBefore(before, mark)
+        markedNodes.push({ mark, before, after, originalText: node.textContent, parent })
+      } catch (e) {
+        console.warn("[HighlightedMarkdown] DOM replace skip:", e.message)
+      }
+    }
+
+    // Cleanup on unmount or re-render
+    return () => {
+      for (const { mark, before, after, originalText, parent } of markedNodes) {
+        try {
+          if (!mark.parentNode) continue
+          const textNode = document.createTextNode(originalText)
+          if (before.parentNode === parent) parent.replaceChild(textNode, before)
+          else parent.insertBefore(textNode, mark)
+          mark.remove()
+          if (after.parentNode === parent) after.remove()
+        } catch (e) {
+          // React may have already replaced the DOM
+        }
+      }
     }
   }, [content, streaming, pageMatches])
 
@@ -2417,8 +2483,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
           const delta = typeof obj.payload?.delta === "string" ? obj.payload.delta : ""
           if (delta) {
             answerBuf += delta
-            // Strip [QA] prefix markers before displaying
-            const cleanContent = stripQAPrefix(answerBuf)
+            // Strip [QA] prefix markers and [KEYWORDS_EN] section before displaying
+            let cleanContent = stripQAPrefix(answerBuf)
+            // Hide [KEYWORDS_EN]...[/KEYWORDS_EN] and partial tags during streaming
+            cleanContent = cleanContent.replace(/\[KEYWORDS_EN\][\s\S]*?(\[\/KEYWORDS_EN\]|$)/g, "").trim()
             setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: cleanContent, streaming: true } : m)))
           }
           // Don't update stage display for answer_delta - just accumulate content
@@ -2445,7 +2513,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
           // Trigger page highlight if we have page context — find matching text regardless of KB results
           // The highlighting is based on text matching between LLM response and current page content
           if (pageContext?.text) {
-            const matches = findPageMatches(finalAnswer, pageContext.text)
+            const matches = findPageMatches(finalAnswer, pageContext.text, question)
             // Only update if we found actual matches
             if (matches.length > 0) {
               console.log("[PageAwareness] Found", matches.length, "matches to highlight", matches)
