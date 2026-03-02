@@ -180,24 +180,38 @@ function findPageMatches(responseText, pageText, question) {
   const matches = []
   const seen = new Set()
   
+  // Meta/profile terms that are not useful keywords to highlight
+  // These are site navigation, user profile info, or generic structural terms
+  const FILTER_TERMS = new Set([
+    "yuqi", "guo", "yuqi guo",  // User name (customizable per site)
+    "about", "contact", "home", "portfolio", "projects", "blog", "work", "life", "experience",
+    "page", "site", "profile", "section", "menu", "navigation", "footer", "header",
+    "education", "background", "resume", "cv", "linkedin", "github"
+  ])
+  
   // 1. Extract proper nouns from pageText (names, companies, etc.)
   // These are language-agnostic and should match across translations
-  // Skip nouns that appear in the user's question (user already knows those terms)
+  // Skip nouns that appear in the question or are meta/profile terms
   const properNouns = pageText.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g) || []
   const uniqueNouns = [...new Set(properNouns.filter(n => n.length >= 4))]
   
   for (const noun of uniqueNouns) {
+    const nounLower = noun.toLowerCase()
+    
+    // Skip if filtered meta term
+    if (FILTER_TERMS.has(nounLower)) continue
+    
     // Skip if the noun (or any part of it) appears in the question
-    const nounParts = noun.toLowerCase().split(/\s+/)
+    const nounParts = nounLower.split(/\s+/)
     const inQuestion = nounParts.some(part => part.length >= 3 && qLower.includes(part))
     if (inQuestion) continue
     
-    if (resp.includes(noun.toLowerCase()) && !seen.has(noun)) {
+    if (resp.includes(nounLower) && !seen.has(nounLower)) {
       // Find context sentence containing this noun
       const sentences = pageText.split(/[.。!！?？\n]+/).filter(s => s.includes(noun))
       const context = sentences[0]?.trim() || noun
       matches.push({ phrase: noun, context })
-      seen.add(noun)
+      seen.add(nounLower)
     }
   }
   
@@ -1040,13 +1054,14 @@ function HighlightedMarkdown({ content, streaming, pageMatches, keywordsEN = {} 
 
 /**
  * Popup card showing the matched page excerpt with visual styling.
+ * Page Preview (页面预览) card - displays matched keywords with context from current page.
  * Detects language (CJK vs EN) and shows appropriate label.
- * Now also displays English explanations for non-English terms.
- * Similar to Wikipedia preview cards.
+ * Also displays English explanations (Keywords EN) for non-English terms.
+ * Similar to Wikipedia link preview / tooltip cards.
  */
 function PageRefPopup({ context, phrase, keywordsEN = {}, x, y, onClose }) {
   const isCJK = isCJKText(context)
-  const label = isCJK ? "📄 来自当前页面" : "📄 From this page"
+  const label = isCJK ? "🔗 页面预览" : "🔗 Page Preview"
   const closeLabel = isCJK ? "关闭" : "Close"
   
   // Look up English explanation for this phrase
