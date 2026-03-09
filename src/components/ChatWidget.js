@@ -251,13 +251,21 @@ function findPageMatches(responseText, pageText, question) {
 
 /**
  * Highlight matching phrases on the actual webpage (outside the chat widget).
- * Wraps matching text in <mark class="cw-page-highlight"> and scrolls to first match.
- * Returns a cleanup function to remove highlights.
+ * Wraps matching text in <mark class="cw-page-highlight"> and exposes helpers so
+ * chat-side keyword clicks can jump to the corresponding page highlight.
+ * Highlights persist until explicitly cleaned up.
  */
 function highlightPageContent(matches) {
-  if (!matches?.length || typeof document === "undefined") return () => {}
+  if (!matches?.length || typeof document === "undefined") {
+    return {
+      cleanup: () => {},
+      scrollToPhrase: () => false,
+      hasHighlights: false,
+    }
+  }
   
   const highlightedNodes = []
+  const phraseToMarks = new Map()
   const main = document.querySelector("main") || document.querySelector("article") || document.body
   
   // Skip chat widget container
@@ -295,6 +303,7 @@ function highlightPageContent(matches) {
     const before = document.createTextNode(node.textContent.slice(0, idx))
     const mark = document.createElement("mark")
     mark.className = "cw-page-highlight"
+    mark.dataset.cwPhrase = phrase
     mark.textContent = node.textContent.slice(idx, idx + phrase.length)
     const after = document.createTextNode(node.textContent.slice(idx + phrase.length))
     
@@ -303,36 +312,63 @@ function highlightPageContent(matches) {
     parent.insertBefore(before, mark)
     
     highlightedNodes.push({ mark, before, after, originalText: node.textContent, parent })
+
+    const phraseKey = phrase.toLowerCase()
+    const existing = phraseToMarks.get(phraseKey) || []
+    existing.push(mark)
+    phraseToMarks.set(phraseKey, existing)
+
     if (!firstMark) firstMark = mark
+  }
+
+  const pulseMark = (mark) => {
+    if (!mark) return false
+    mark.classList.remove("cw-page-highlight-pulse")
+    void mark.offsetWidth
+    mark.classList.add("cw-page-highlight-pulse")
+    mark.scrollIntoView({ behavior: "smooth", block: "center" })
+    return true
   }
 
   // Scroll to first highlighted element with smooth animation
   if (firstMark) {
     setTimeout(() => {
-      firstMark.scrollIntoView({ behavior: "smooth", block: "center" })
-      // Add pulse animation
-      firstMark.classList.add("cw-page-highlight-pulse")
+      pulseMark(firstMark)
     }, 300)
   }
 
   console.log("[PageAwareness] Highlighted", highlightedNodes.length, "elements on page")
 
-  // Return cleanup function
-  return () => {
-    for (const { mark, before, after, originalText, parent } of highlightedNodes) {
-      try {
-        if (!mark.parentNode) continue
-        const textNode = document.createTextNode(originalText)
-        // Safe cleanup: only replace nodes still attached to this parent
-        if (before.parentNode === parent) parent.replaceChild(textNode, before)
-        else parent.insertBefore(textNode, mark)
-        mark.remove()
-        if (after.parentNode === parent) after.remove()
-      } catch (e) {
-        // DOM may have changed (React re-render), skip gracefully
-        console.warn("[PageAwareness] cleanup skip:", e.message)
+  return {
+    hasHighlights: highlightedNodes.length > 0,
+    scrollToPhrase: (phrase) => {
+      const phraseKey = String(phrase || "").toLowerCase()
+      const candidates = phraseToMarks.get(phraseKey) || []
+      if (candidates.length > 0) return pulseMark(candidates[0])
+
+      for (const [key, marks] of phraseToMarks.entries()) {
+        if (phraseKey.includes(key) || key.includes(phraseKey)) {
+          return pulseMark(marks[0])
+        }
       }
-    }
+      return false
+    },
+    cleanup: () => {
+      for (const { mark, before, after, originalText, parent } of highlightedNodes) {
+        try {
+          if (!mark.parentNode) continue
+          const textNode = document.createTextNode(originalText)
+          // Safe cleanup: only replace nodes still attached to this parent
+          if (before.parentNode === parent) parent.replaceChild(textNode, before)
+          else parent.insertBefore(textNode, mark)
+          mark.remove()
+          if (after.parentNode === parent) after.remove()
+        } catch (e) {
+          // DOM may have changed (React re-render), skip gracefully
+          console.warn("[PageAwareness] cleanup skip:", e.message)
+        }
+      }
+    },
   }
 }
 
@@ -957,7 +993,7 @@ function MarkdownMessage({ content, streaming = false }) {
  * Wraps MarkdownMessage and highlights phrases that matched page content.
  * Only rendered when pageMatches is non-empty (i.e. backend confirmed page relevance).
  */
-function HighlightedMarkdown({ content, streaming, pageMatches, keywordsEN = {} }) {
+function HighlightedMarkdown({ content, streaming, pageMatches, keywordsEN = {}, onPhraseClick }) {
   const [popup, setPopup] = useState(null) // { x, y, context, phrase }
   const rootRef = useRef(null)
 
@@ -1023,12 +1059,14 @@ function HighlightedMarkdown({ content, streaming, pageMatches, keywordsEN = {} 
   const handleMarkClick = (e) => {
     const mark = e.target.closest(".cw-page-ref")
     if (!mark) return
+    const phrase = mark.dataset.phrase
+    onPhraseClick?.(phrase)
     const rect = mark.getBoundingClientRect()
     setPopup({ 
       x: rect.left, 
       y: rect.top - 8, 
       context: mark.dataset.context,
-      phrase: mark.dataset.phrase 
+      phrase 
     })
   }
 
@@ -2102,6 +2140,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
   const fileInputRef = useRef(null)
   const textareaRef = useRef(null)
   const modeWrapRef = useRef(null)
+  const pageHighlightRef = useRef({ cleanup: () => {}, scrollToPhrase: () => false, hasHighlights: false })
   const touchSession = () => {
     storageSafeSet("chatSessionLastActive", String(Date.now()))
   }
@@ -2264,6 +2303,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
         } catch {}
         abortRef.current = null
       }
+      try {
+        pageHighlightRef.current?.cleanup?.()
+      } catch {}
     },
     [],
   )
@@ -2540,12 +2582,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
                   : m
               ))
               
-              // 2. Highlight matching content on the actual webpage (scroll + glow effect)
-              const cleanupHighlights = highlightPageContent(matches)
-              // Auto-remove page highlights after 15 seconds
-              setTimeout(() => {
-                cleanupHighlights()
-              }, 15000)
+              // 2. Highlight matching content on the actual webpage and keep it persistent
+              try {
+                pageHighlightRef.current?.cleanup?.()
+              } catch {}
+              pageHighlightRef.current = highlightPageContent(matches)
             }
           }
           
@@ -2587,10 +2628,18 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
     }
   }
 
+  const jumpToHighlightedPhrase = (phrase) => {
+    return pageHighlightRef.current?.scrollToPhrase?.(phrase)
+  }
+
   const sendMessage = async (e) => {
     e?.preventDefault?.()
     touchSession()
 
+    try {
+      pageHighlightRef.current?.cleanup?.()
+    } catch {}
+    pageHighlightRef.current = { cleanup: () => {}, scrollToPhrase: () => false, hasHighlights: false }
 
     const visibleText = input.trim()
     if ((!visibleText && composerFiles.length === 0) || loading) return
@@ -2803,7 +2852,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
                   )
                 ) : (
                   m.pageMatches?.length > 0
-                    ? <HighlightedMarkdown key={`${m.id}-final`} content={m.content} streaming={false} pageMatches={m.pageMatches} keywordsEN={m.keywordsEN} />
+                    ? <HighlightedMarkdown key={`${m.id}-final`} content={m.content} streaming={false} pageMatches={m.pageMatches} keywordsEN={m.keywordsEN} onPhraseClick={jumpToHighlightedPhrase} />
                     : <MarkdownMessage key={`${m.id}-final`} content={m.content} />
                 )
               ) : (
