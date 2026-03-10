@@ -126,41 +126,82 @@ function isCJKText(text) {
 
 /**
  * Parse and extract the [KEYWORDS_EN]...[/KEYWORDS_EN] section from LLM response.
+ * Also handles plain "term:" lines at the end of text (not wrapped in tags).
  * Returns { cleanedText, keywords } where keywords is { term: { original, en } }.
- * Handles both "term: explanation" format and comma-separated fallback.
+ * Handles both "term: Name: explanation" and "term: Name - explanation" formats.
  */
 function parseKeywordsEN(text) {
   if (!text) return { cleanedText: text, keywords: {} }
   
-  const regex = /\[KEYWORDS_EN\]([\s\S]*?)\[\/KEYWORDS_EN\]/
-  const match = text.match(regex)
-  
-  if (!match) return { cleanedText: text, keywords: {} }
-  
-  const keywordsBlock = match[1].trim()
-  const cleanedText = text.replace(regex, "").trim()
-  
+  let cleanedText = text
   const keywords = {}
-  const lines = keywordsBlock.split("\n").filter(l => l.trim())
   
-  // Try "term: explanation" format first
-  for (const line of lines) {
-    const colonIdx = line.indexOf(":")
-    if (colonIdx > 0) {
-      const term = line.slice(0, colonIdx).trim()
-      const explanation = line.slice(colonIdx + 1).trim()
-      if (term && explanation) {
-        keywords[term.toLowerCase()] = { original: term, en: explanation }
+  // 1. Try tagged format: [KEYWORDS_EN]...[/KEYWORDS_EN]
+  const taggedRegex = /\[KEYWORDS_EN\]([\s\S]*?)\[\/KEYWORDS_EN\]/
+  const taggedMatch = text.match(taggedRegex)
+  
+  if (taggedMatch) {
+    const keywordsBlock = taggedMatch[1].trim()
+    cleanedText = text.replace(taggedRegex, "").trim()
+    
+    const lines = keywordsBlock.split("\n").filter(l => l.trim())
+    for (const line of lines) {
+      // Try colon separator first, then dash
+      let colonIdx = line.indexOf(":")
+      let separator = ":"
+      if (colonIdx < 0) {
+        colonIdx = line.indexOf("-")
+        separator = "-"
+      }
+      if (colonIdx > 0) {
+        const term = line.slice(0, colonIdx).trim()
+        const explanation = line.slice(colonIdx + 1).trim()
+        if (term && explanation) {
+          keywords[term.toLowerCase()] = { original: term, en: explanation }
+        }
+      }
+    }
+    
+    // Fallback: comma-separated on single line
+    if (Object.keys(keywords).length === 0 && lines.length === 1) {
+      const terms = lines[0].split(",").map(t => t.trim()).filter(Boolean)
+      for (const term of terms) {
+        keywords[term.toLowerCase()] = { original: term, en: term }
       }
     }
   }
   
-  // Fallback: if no colon format found, try comma-separated on single line
-  if (Object.keys(keywords).length === 0 && lines.length === 1) {
-    const terms = lines[0].split(",").map(t => t.trim()).filter(Boolean)
-    for (const term of terms) {
-      keywords[term.toLowerCase()] = { original: term, en: term }
+  // 2. Also strip plain "term:" lines at the end of text (LLM sometimes outputs without tags)
+  // Match lines starting with "term:" followed by a name and either colon or dash definition
+  // Format: "term: Name - definition" or "term: Name: definition"
+  const termLineRegex = /\n\s*term:\s*[^:\-\n]+[\:\-]\s*[^\n]+/gi
+  const termMatches = cleanedText.match(termLineRegex)
+  if (termMatches) {
+    for (const termLine of termMatches) {
+      // Parse "term: Name - Definition" or "term: Name: Definition" format
+      const withoutPrefix = termLine.replace(/^\n\s*term:\s*/i, "").trim()
+      // Find first colon or dash as separator
+      const colonIdx = withoutPrefix.indexOf(":")
+      const dashIdx = withoutPrefix.indexOf(" - ")
+      let sepIdx = -1
+      let sepLen = 1
+      if (dashIdx >= 0 && (colonIdx < 0 || dashIdx < colonIdx)) {
+        sepIdx = dashIdx
+        sepLen = 3 // " - " is 3 chars
+      } else if (colonIdx >= 0) {
+        sepIdx = colonIdx
+        sepLen = 1
+      }
+      if (sepIdx > 0) {
+        const term = withoutPrefix.slice(0, sepIdx).trim()
+        const explanation = withoutPrefix.slice(sepIdx + sepLen).trim()
+        if (term && explanation && !keywords[term.toLowerCase()]) {
+          keywords[term.toLowerCase()] = { original: term, en: explanation }
+        }
+      }
     }
+    // Remove all "term:" lines from the displayed text
+    cleanedText = cleanedText.replace(termLineRegex, "").trim()
   }
   
   return { cleanedText, keywords }
@@ -266,7 +307,13 @@ function highlightPageContent(matches) {
   
   const highlightedNodes = []
   const phraseToMarks = new Map()
+  const phraseToContext = new Map() // Store context for each phrase
   const main = document.querySelector("main") || document.querySelector("article") || document.body
+  
+  // Build phrase -> context lookup
+  for (const { phrase, context } of matches) {
+    phraseToContext.set(phrase.toLowerCase(), context)
+  }
   
   // Skip chat widget container
   const chatContainer = document.querySelector(".bot-container, .launch-button")
@@ -304,6 +351,7 @@ function highlightPageContent(matches) {
     const mark = document.createElement("mark")
     mark.className = "cw-page-highlight"
     mark.dataset.cwPhrase = phrase
+    mark.dataset.cwContext = phraseToContext.get(phrase.toLowerCase()) || phrase
     mark.textContent = node.textContent.slice(idx, idx + phrase.length)
     const after = document.createTextNode(node.textContent.slice(idx + phrase.length))
     
@@ -337,6 +385,63 @@ function highlightPageContent(matches) {
     }, 300)
   }
 
+  // Create Wikipedia-style popup for page highlights
+  let activePopup = null
+  const removePopup = () => {
+    if (activePopup) {
+      activePopup.remove()
+      activePopup = null
+    }
+  }
+
+  const showPagePopup = (mark) => {
+    removePopup()
+    const phrase = mark.dataset.cwPhrase || ""
+    const context = mark.dataset.cwContext || phrase
+    const isCJK = /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(context)
+    
+    const rect = mark.getBoundingClientRect()
+    const popup = document.createElement("div")
+    popup.className = "cw-page-highlight-popup"
+    popup.innerHTML = `
+      <div class="cw-php-content">
+        <div class="cw-php-term">${phrase}</div>
+        <div class="cw-php-context">${context}</div>
+      </div>
+    `
+    
+    // Position popup (appears below the highlight like Wikipedia)
+    const safeX = Math.min(Math.max(10, rect.left), window.innerWidth - 320)
+    const safeY = rect.bottom + 8 > window.innerHeight - 150 
+      ? rect.top - 120 
+      : rect.bottom + 8
+    popup.style.cssText = `position:fixed;left:${safeX}px;top:${safeY}px;z-index:2147483647;`
+    
+    document.body.appendChild(popup)
+    activePopup = popup
+    
+    // Close on outside click
+    const closeOnOutside = (e) => {
+      if (!popup.contains(e.target) && e.target !== mark) {
+        removePopup()
+        document.removeEventListener("click", closeOnOutside)
+      }
+    }
+    setTimeout(() => document.addEventListener("click", closeOnOutside), 10)
+  }
+
+  // Add click handlers to all marks
+  const markClickHandlers = new Map()
+  for (const { mark } of highlightedNodes) {
+    const handler = (e) => {
+      e.stopPropagation()
+      showPagePopup(mark)
+    }
+    mark.addEventListener("click", handler)
+    mark.style.cursor = "pointer"
+    markClickHandlers.set(mark, handler)
+  }
+
   console.log("[PageAwareness] Highlighted", highlightedNodes.length, "elements on page")
 
   return {
@@ -354,6 +459,18 @@ function highlightPageContent(matches) {
       return false
     },
     cleanup: () => {
+      // Remove any active popup
+      removePopup()
+      
+      // Remove click handlers from all marks
+      for (const [mark, handler] of markClickHandlers.entries()) {
+        try {
+          mark.removeEventListener("click", handler)
+        } catch {}
+      }
+      markClickHandlers.clear()
+      
+      // Restore original text nodes
       for (const { mark, before, after, originalText, parent } of highlightedNodes) {
         try {
           if (!mark.parentNode) continue
@@ -994,7 +1111,6 @@ function MarkdownMessage({ content, streaming = false }) {
  * Only rendered when pageMatches is non-empty (i.e. backend confirmed page relevance).
  */
 function HighlightedMarkdown({ content, streaming, pageMatches, keywordsEN = {}, onPhraseClick }) {
-  const [popup, setPopup] = useState(null) // { x, y, context, phrase }
   const rootRef = useRef(null)
 
   useEffect(() => {
@@ -1060,33 +1176,14 @@ function HighlightedMarkdown({ content, streaming, pageMatches, keywordsEN = {},
     const mark = e.target.closest(".cw-page-ref")
     if (!mark) return
     const phrase = mark.dataset.phrase
+    // Only scroll to page highlight, no popup
     onPhraseClick?.(phrase)
-    const rect = mark.getBoundingClientRect()
-    setPopup({ 
-      x: rect.left, 
-      y: rect.top - 8, 
-      context: mark.dataset.context,
-      phrase 
-    })
   }
 
   return (
-    <>
-      <div ref={rootRef} onClick={handleMarkClick}>
-        <MarkdownMessage content={content} streaming={streaming} />
-      </div>
-      {popup && typeof document !== "undefined" && createPortal(
-        <PageRefPopup
-          context={popup.context}
-          phrase={popup.phrase}
-          keywordsEN={keywordsEN}
-          x={popup.x}
-          y={popup.y}
-          onClose={() => setPopup(null)}
-        />,
-        document.body
-      )}
-    </>
+    <div ref={rootRef} onClick={handleMarkClick}>
+      <MarkdownMessage content={content} streaming={streaming} />
+    </div>
   )
 }
 
@@ -2066,7 +2163,7 @@ function AttachmentProgressRow({ name, progress }) {
 
 /* ---------- Chat window ---------- */
 
-function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
+function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef }) {
   const [messages, setMessages] = useState(() => {
     // If the widget has been inactive for a while, start fresh (no old history).
     if (!isSessionFresh()) {
@@ -2140,7 +2237,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
   const fileInputRef = useRef(null)
   const textareaRef = useRef(null)
   const modeWrapRef = useRef(null)
-  const pageHighlightRef = useRef({ cleanup: () => {}, scrollToPhrase: () => false, hasHighlights: false })
   const touchSession = () => {
     storageSafeSet("chatSessionLastActive", String(Date.now()))
   }
@@ -2174,7 +2270,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
       window.dispatchEvent(new CustomEvent("cw:site-tour:start"))
     } catch {}
   }
-
 
   useEffect(() => {
     storageSafeSet(MODE_KEY, mode)
@@ -2544,6 +2639,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname }) {
             let cleanContent = stripQAPrefix(answerBuf)
             // Hide [KEYWORDS_EN]...[/KEYWORDS_EN] and partial tags during streaming
             cleanContent = cleanContent.replace(/\[KEYWORDS_EN\][\s\S]*?(\[\/KEYWORDS_EN\]|$)/g, "").trim()
+            // Hide plain "term:" lines (LLM sometimes outputs without tags) - handles both ":" and " - " separators
+            cleanContent = cleanContent.replace(/\n\s*term:\s*[^:\-\n]+[\:\-][^\n]*/gi, "").trim()
             setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: cleanContent, streaming: true } : m)))
           }
           // Don't update stage display for answer_delta - just accumulate content
@@ -4190,6 +4287,16 @@ export default function ChatWidget() {
   const offsetRef = useRef(offset)
   const dragRef = useRef({ dragging: false })
   const tourCollapsedRef = useRef(false)
+  const pageHighlightRef = useRef({ cleanup: () => {}, scrollToPhrase: () => false, hasHighlights: false })
+
+  // Clean up page highlights and close the chat widget
+  const handleClose = () => {
+    try {
+      pageHighlightRef.current?.cleanup?.()
+    } catch {}
+    pageHighlightRef.current = { cleanup: () => {}, scrollToPhrase: () => false, hasHighlights: false }
+    setOpen(false)
+  }
 
   useEffect(() => {
     const el = ensureRoot()
@@ -4288,8 +4395,8 @@ export default function ChatWidget() {
   return createPortal(
     open ? (
       <Fragment>
-        <Overlay onClick={() => setOpen(false)} />
-        <ChatWindow onMinimize={() => setOpen(false)} onDragStart={startDrag} routerPathname={router.pathname} />
+        <Overlay onClick={handleClose} />
+        <ChatWindow onMinimize={handleClose} onDragStart={startDrag} routerPathname={router.pathname} pageHighlightRef={pageHighlightRef} />
       </Fragment>
     ) : (
       <LauncherButton onOpen={handleOpen} onDragStart={startDrag} />

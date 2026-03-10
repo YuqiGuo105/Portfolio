@@ -554,3 +554,84 @@
       border-top-color: #334155;
     }
   }
+
+  /* ========== Page Highlight Popup (Wikipedia-style for on-page highlights) ========== */
+  .cw-page-highlight-popup {
+    width: 300px;
+    max-width: 90vw;
+    background: #ffffff;
+    border: 1px solid #a2a9b1;
+    border-radius: 2px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    animation: cw-php-in 0.15s ease-out;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  .cw-php-content {
+    padding: 12px 14px;
+  }
+
+  .cw-php-term {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0645ad;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #eaecf0;
+    padding-bottom: 8px;
+  }
+
+  .cw-php-context {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #202122;
+  }
+
+  @keyframes cw-php-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Dark mode for page highlight popup */
+  @media (prefers-color-scheme: dark) {
+    .cw-page-highlight-popup {
+      background: #27292d;
+      border-color: #54595d;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+    .cw-php-term {
+      color: #6ea8fe;
+      border-bottom-color: #3c3f44;
+    }
+    .cw-php-context {
+      color: #e3e3e3;
+    }
+  }
+
+  body.dark-skin .cw-page-highlight-popup {
+    background: #27292d;
+    border-color: #54595d;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+  body.dark-skin .cw-php-term {
+    color: #6ea8fe;
+    border-bottom-color: #3c3f44;
+  }
+  body.dark-skin .cw-php-context {
+    color: #e3e3e3;
+  }
+
+  /* Make page highlights more interactive */
+  .cw-page-highlight {
+    cursor: pointer;
+  }
+  .cw-page-highlight:hover {
+    background: linear-gradient(120deg, #86efac 0%, #4ade80 100%);
+    transform: scale(1.02);
+  }
