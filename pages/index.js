@@ -1087,6 +1087,31 @@ const Index = () => {
               max-width: 100%;
             }
           `}</style>
+          
+          {/* Border styling for blogs */}
+          <style jsx global>{`
+            /* Technical Blog Cards Border */
+            #Blog-section .blog-items .archive-item {
+              border: 1px solid rgba(0, 0, 0, 0.12);
+              border-radius: 8px;
+              overflow: hidden;
+            }
+            
+            body.dark-skin #Blog-section .blog-items .archive-item {
+              border: 1px solid rgba(255, 255, 255, 0.15);
+            }
+            
+            /* Life Blog Cards Border */
+            #Blog-section .blog-items.grid .archive-item {
+              border: 1px solid rgba(0, 0, 0, 0.12);
+              border-radius: 8px;
+              overflow: hidden;
+            }
+            
+            body.dark-skin #Blog-section .blog-items.grid .archive-item {
+              border: 1px solid rgba(255, 255, 255, 0.15);
+            }
+          `}</style>
         </section>
 
         <LogInDialog
