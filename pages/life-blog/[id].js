@@ -2,6 +2,7 @@ import Layout from "../../src/layout/Layout";
 import {supabase} from '../../src/supabase/supabaseClient';
 import {useRouter} from 'next/router';
 import {useState, useEffect} from 'react';
+import BlogComments from "../../src/components/BlogComments";
 import DOMPurify from 'dompurify';
 
 const LifeBlog = () => {
@@ -150,21 +151,25 @@ const LifeBlog = () => {
                   {/* Tags Section */}
                   <span className="tags-links">
                      <span>Tags:</span>
-                    {blog.tags.split(',').map((tag, index) => (
-                      // Assuming you want to simply display the tags without linking to a specific URL
-                      // If you have a tagging system where each tag has a specific URL, adjust the href accordingly
+                    {blog.tags && blog.tags.split(',').map((tag, index) => (
                       <a
-                        href="#"
+                        href={`/blogs?tag=${encodeURIComponent(tag.trim())}`}
                         key={index}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          router.push(`/blogs?tag=${encodeURIComponent(tag.trim())}`);
+                        }}
                       >
-                        {tag.trim()} {/* Trim to remove any potential whitespace */}
-                        {index < blog.tags.split(',').length - 1 ? '' : ''}
+                        {tag.trim()}
                       </a>
                     ))}
                     </span>
 
                 </div>
               </div>
+
+              {/* Comments Section */}
+              <BlogComments blogId={blog.id} blogType="life" />
             </div>
 
           </div>

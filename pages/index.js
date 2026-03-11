@@ -983,7 +983,7 @@ const Index = () => {
             </div>
 
             <div className="blog-more-link">
-              <Link href="/blog" legacyBehavior>
+              <Link href="/blogs?type=technical" legacyBehavior>
                 <a className="btn">
                   <span>View Blogs</span>
                 </a>
@@ -1070,7 +1070,7 @@ const Index = () => {
             </div>
 
             <div className="blog-more-link">
-              <Link href="#" legacyBehavior>
+              <Link href="/blogs?type=life" legacyBehavior>
                 <a className="btn">
                   <span>View Blog</span>
                 </a>
