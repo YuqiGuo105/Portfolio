@@ -151,6 +151,8 @@ export default function CVPage() {
   });
   const [submittingComment, setSubmittingComment] = useState(false);
   const [activeAnnoId, setActiveAnnoId] = useState(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef(null);
 
   const quillRef = useRef(null);
   const contentRef = useRef(null);
@@ -581,6 +583,67 @@ export default function CVPage() {
     }
   };
 
+  /* ---------------- export ---------------- */
+  const handleExport = useCallback((format) => {
+    setShowExportMenu(false);
+    const html = safeHtml || "<p>No content</p>";
+
+    const triggerDownload = (filename, mimeType, content) => {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
+    if (format === "txt") {
+      const div = document.createElement("div");
+      div.innerHTML = html;
+      const text = div.innerText || div.textContent || "";
+      triggerDownload("Yuqi_Guo_CV.txt", "text/plain;charset=utf-8", text);
+    } else if (format === "doc") {
+      const docHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head><meta charset='utf-8'><title>CV – Yuqi Guo</title>
+<style>body{font-family:Calibri,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.6}h1,h2,h3{color:#1a1a1a}a{color:#2563eb}</style>
+</head><body>${html}</body></html>`;
+      triggerDownload("Yuqi_Guo_CV.doc", "application/msword", docHtml);
+    } else if (format === "pdf") {
+      const win = window.open("", "_blank");
+      if (!win) {
+        setStatusMsg("Pop-up blocked — please allow pop-ups for this site.");
+        setTimeout(() => setStatusMsg(""), 3000);
+        return;
+      }
+      win.document.write(`<!DOCTYPE html><html><head>
+<meta charset="utf-8">
+<title>CV – Yuqi Guo</title>
+<style>
+  @page{margin:18mm 20mm}
+  body{font-family:Calibri,Georgia,sans-serif;max-width:800px;margin:0 auto;padding:0 10px;line-height:1.6;color:#111}
+  h1,h2,h3{color:#1a1a1a;page-break-after:avoid}
+  img{max-width:100%}
+  a{color:#2563eb;text-decoration:none}
+  p,li{orphans:3;widows:3}
+</style>
+</head><body>${html}<script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);};<\/script></body></html>`);
+      win.document.close();
+    }
+  }, [safeHtml]);
+
+  // Close export menu on outside click
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handler = (e) => {
+      if (!exportMenuRef.current?.contains(e.target)) setShowExportMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showExportMenu]);
+
   const handlePopoverKeyDown = (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
@@ -703,6 +766,36 @@ export default function CVPage() {
                 </div>
               </div>
             ) : (
+              <>
+              {cvRow?.content && (
+                <div className="cv-export-toolbar">
+                  <div className="cv-export-wrap" ref={exportMenuRef}>
+                    <button
+                      type="button"
+                      className="cv-export-trigger"
+                      onClick={() => setShowExportMenu((v) => !v)}
+                      aria-haspopup="true"
+                      aria-expanded={showExportMenu}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Export ▾
+                    </button>
+                    {showExportMenu && (
+                      <ul className="cv-export-menu" role="menu">
+                        <li role="menuitem">
+                          <button type="button" onClick={() => handleExport("txt")}>Plain Text (.txt)</button>
+                        </li>
+                        <li role="menuitem">
+                          <button type="button" onClick={() => handleExport("doc")}>Word Document (.doc)</button>
+                        </li>
+                        <li role="menuitem">
+                          <button type="button" onClick={() => handleExport("pdf")}>PDF (print)</button>
+                        </li>
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="cv-doc-grid">
                 <article
                   ref={contentRef}
@@ -777,6 +870,7 @@ export default function CVPage() {
                   </ul>
                 </aside>
               </div>
+              </>
             )}
           </div>
         </div>

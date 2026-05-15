@@ -324,6 +324,66 @@ body.dark-skin .leetcode-icon-bottom.custom-leetcode-icon {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* ---- export toolbar (above content window) ---- */
+.cv-export-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.cv-export-wrap {
+  position: relative;
+  display: inline-block;
+}
+.cv-export-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.cv-export-trigger:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+.cv-export-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 9999;
+  min-width: 190px;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+.cv-export-menu li button {
+  display: block;
+  width: 100%;
+  padding: 9px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 0.9rem;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cv-export-menu li button:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
 .cv-status {
   margin: 12px 0;
   padding: 10px 14px;
@@ -1101,6 +1161,29 @@ body.dark-skin .cv-editor-actions .btn.btn-ghost:hover {
 /* Sign in/out link button */
 body.dark-skin .cv-link-btn { color: #93c5fd; }
 body.dark-skin .cv-link-btn:hover { background: rgba(59, 130, 246, 0.15); }
+
+/* Export dropdown */
+body.dark-skin .cv-export-trigger {
+  border-color: #334155;
+  color: #cbd5e1;
+}
+body.dark-skin .cv-export-trigger:hover {
+  background: #1e293b;
+  border-color: #475569;
+  color: #f1f5f9;
+}
+body.dark-skin .cv-export-menu {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+body.dark-skin .cv-export-menu li button {
+  color: #e2e8f0;
+}
+body.dark-skin .cv-export-menu li button:hover {
+  background: #334155;
+  color: #f8fafc;
+}
 
 /* Annotation popover stays bright (overlays anything) */
 body.dark-skin .cv-anno-popover {
