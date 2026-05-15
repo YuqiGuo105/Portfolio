@@ -900,14 +900,11 @@ const Index = () => {
 
                 <div className="clear" />
                 {/* Button CV */}
-                <a
-                  target="_blank"
-                  rel="noreferrer"
-                  href="https://github.com/YuqiGuo105/Resume/blob/main/Yuqi_Guo_Resume.pdf"
-                  className="btn"
-                >
-                  <span>Download CV</span>
-                </a>
+                <Link href="/cv">
+                  <a className="btn">
+                    <span>View CV</span>
+                  </a>
+                </Link>
               </div>
             </div>
           </div>
