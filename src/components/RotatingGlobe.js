@@ -702,7 +702,7 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
     };
   }, []);
 
-  // prevent page scroll while interacting globe
+  // prevent page scroll/zoom while interacting with the globe
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -712,20 +712,154 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
       e.preventDefault();
     };
 
+    // iOS Safari/Chrome fire non-standard `gesturestart/change/end` events for
+    // pinch and will zoom the whole page unless we preventDefault on them.
+    // Android Chrome ignores these events (it uses `touch-action` CSS instead),
+    // so this listener is a no-op there and safe to register on all platforms.
+    // Suppressing them on iOS lets the underlying touchstart/touchmove events
+    // reach Three.js OrbitControls so two-finger pinch zooms the globe.
+    const onGesture = (e) => {
+      e.preventDefault();
+    };
+
+    // Cross-platform safety net: even with `touch-action: none` on the canvas,
+    // some iOS versions and a few Android browsers still try to scroll/zoom
+    // the page on a two-finger drag that originates inside the container
+    // (e.g. when the gesture starts on a child element without touch-action).
+    // Explicitly prevent the default for any multi-touch move so the gesture
+    // is delivered to OrbitControls as a pinch on both iOS and Android.
+    const onTouchMove = (e) => {
+      if (e.touches && e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
     el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    el.addEventListener("gesturestart", onGesture, { passive: false });
+    el.addEventListener("gesturechange", onGesture, { passive: false });
+    el.addEventListener("gestureend", onGesture, { passive: false });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("gesturestart", onGesture);
+      el.removeEventListener("gesturechange", onGesture);
+      el.removeEventListener("gestureend", onGesture);
+      el.removeEventListener("touchmove", onTouchMove);
+    };
   }, []);
 
+  // Keep the canvas `touch-action: none` even after react-globe.gl recreates
+  // it. This is the primary mechanism that makes pinch-zoom work on Android
+  // Chrome (which has no `gesturestart` event and relies entirely on the CSS
+  // `touch-action` hint to surrender the gesture to JS). Observing the
+  // container ensures the style is re-applied whenever a new canvas is
+  // mounted, so neither iOS nor Android falls back to native page gestures.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    const canvas = el.querySelector("canvas");
-    if (canvas) {
-      canvas.style.touchAction = "none";
-      canvas.style.WebkitUserSelect = "none";
+    const apply = () => {
+      const canvas = el.querySelector("canvas");
+      if (canvas) {
+        canvas.style.touchAction = "none";
+        canvas.style.webkitUserSelect = "none";
+        canvas.style.userSelect = "none";
+      }
+    };
+
+    apply();
+
+    let mo;
+    if (typeof MutationObserver !== "undefined") {
+      mo = new MutationObserver(apply);
+      mo.observe(el, { childList: true, subtree: true });
     }
+    return () => {
+      if (mo) mo.disconnect();
+    };
   }, [size]);
+
+  // Custom pinch-to-zoom handler for iOS and Android.
+  //
+  // OrbitControls' built-in two-finger handling is fragile: the TOUCH enum
+  // values vary across Three.js versions, react-globe.gl may reset `touches`
+  // after our setup effect runs, and `enablePan = false` can silently drop
+  // the dolly on some Android builds.
+  //
+  // Instead we drive altitude directly via globe.pointOfView() whenever two
+  // fingers are on screen:
+  //  - touchstart (2 fingers): record initial pinch distance + altitude, then
+  //    suspend OrbitControls so it cannot fight our position updates.
+  //  - touchmove  (2 fingers): compute new altitude from the pinch ratio and
+  //    push it to the globe. preventDefault() ensures the browser does not
+  //    also try to scroll or zoom the page (needed on Android Chrome + iOS).
+  //  - touchend / touchcancel: re-enable OrbitControls and re-sync zoom refs.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    let pinchActive = false;
+    let initDist = 0;
+    let initAlt = 2.2;
+
+    const getTouchDist = (touches) =>
+      Math.hypot(
+        touches[0].clientX - touches[1].clientX,
+        touches[0].clientY - touches[1].clientY
+      );
+
+    const onTouchStart = (e) => {
+      if (e.touches.length !== 2) return;
+      pinchActive = true;
+      initDist = getTouchDist(e.touches);
+      const g = globeRef.current;
+      initAlt = g?.pointOfView?.()?.altitude ?? 2.2;
+      // Suspend OrbitControls so it cannot fight our manual altitude updates.
+      const ctrl = getControls(g);
+      if (ctrl) ctrl.enabled = false;
+    };
+
+    const onTouchMove = (e) => {
+      if (!pinchActive || e.touches.length !== 2) return;
+      e.preventDefault();
+      const d = getTouchDist(e.touches);
+      if (!d || !initDist) return;
+      // initDist/d > 1 => fingers spread => zoom in (lower altitude)
+      const newAlt = Math.max(0.15, Math.min(4.5, initAlt * (initDist / d)));
+      const g = globeRef.current;
+      if (g?.pointOfView) {
+        const { lat, lng } = g.pointOfView();
+        g.pointOfView({ lat, lng, altitude: newAlt });
+      }
+    };
+
+    const onTouchEnd = (e) => {
+      if (!pinchActive) return;
+      if (e.touches.length < 2) {
+        pinchActive = false;
+        const g = globeRef.current;
+        const ctrl = getControls(g);
+        if (ctrl) ctrl.enabled = true;
+        // Re-sync zoom-tracking refs so pin density updates correctly.
+        setTimeout(() => sampleCameraToRefs(true), 0);
+      }
+    };
+
+    // touchstart passive: we never call preventDefault here, so passive is fine.
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const getCamera = (g) => {
     try {
@@ -810,6 +944,19 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
         controls.minDistance = 120;
         controls.maxDistance = 2200;
         controls.zoomSpeed = 0.9;
+
+        // Ensure two-finger gestures on touch devices (iOS Safari/Chrome and
+        // Android Chrome/Firefox/Samsung Internet) are interpreted as DOLLY
+        // (pinch zoom) on the globe instead of the OrbitControls default of
+        // DOLLY_PAN — pan is disabled here, so without this override the
+        // pinch could be silently dropped on some Android builds.
+        // THREE.TOUCH enums: ROTATE=0, PAN=1, DOLLY_PAN=2, DOLLY_ROTATE=3.
+        try {
+          if (controls.touches) {
+            controls.touches.ONE = 0;            // one finger -> rotate
+            controls.touches.TWO = 3;            // two fingers -> dolly + rotate (no pan)
+          }
+        } catch {}
       }
     } catch {}
 
