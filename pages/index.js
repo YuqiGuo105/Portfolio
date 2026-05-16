@@ -72,6 +72,18 @@ const Index = () => {
   const router = useRouter();
   const [showLogin, setShowLogin] = useState(false);
   const [pendingNext, setPendingNext] = useState(null);
+  const [githubCommits, setGithubCommits] = useState("600+");
+  const [githubModalOpen, setGithubModalOpen] = useState(false);
+  const [isLightSkin, setIsLightSkin] = useState(false);
+
+  // Detect light/dark skin from body class
+  useEffect(() => {
+    const check = () => setIsLightSkin(document.body.classList.contains("light-skin"));
+    check();
+    const obs = new MutationObserver(check);
+    obs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
 
   // --- Simple toast (no library) ---
   const [toast, setToast] = useState({
@@ -147,6 +159,27 @@ const Index = () => {
     };
 
     bootstrap();
+
+    /* GitHub commit count */
+    const fetchGithubCommits = async () => {
+      try {
+        const res = await fetch(
+          "https://api.github.com/search/commits?q=author:YuqiGuo105&per_page=1",
+          { headers: { Accept: "application/vnd.github.cloak-preview+json" } }
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json.total_count && json.total_count > 0) {
+          const count = json.total_count;
+          // Round down to nearest 100 and show as e.g. "600+"
+          const rounded = Math.floor(count / 100) * 100;
+          setGithubCommits(count >= 1000 ? `${(count / 1000).toFixed(1)}k+` : `${rounded}+`);
+        }
+      } catch (_) {
+        /* keep fallback */
+      }
+    };
+    fetchGithubCommits();
     if (!isProfileModalOpen || !isPlaying || stories.length === 0) return;
 
     timerRef.current = setInterval(() => {
@@ -269,8 +302,10 @@ const Index = () => {
     autoplay: true,
   };
   const openStoryModal = () => {
-    if (!stories.length) return;
-
+    if (!stories.length) {
+      setGithubModalOpen(true);
+      return;
+    }
     setCurrentStoryIndex(0);
     setProgress(0);
     setIsPlaying(true);
@@ -626,6 +661,147 @@ const Index = () => {
             )}
           </div>
         </Modal>
+
+        {/* ── GitHub Activity Modal ── */}
+        <Modal
+          isOpen={githubModalOpen}
+          onRequestClose={() => setGithubModalOpen(false)}
+          contentLabel="GitHub Activity"
+          style={{
+            overlay: {
+              backgroundColor: "rgba(0,0,0,0.75)",
+              zIndex: 1000,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              backdropFilter: "blur(6px)",
+            },
+            content: {
+              position: "relative",
+              inset: "auto",
+              width: "96%",
+              maxWidth: "900px",
+              maxHeight: "88vh",
+              padding: 0,
+              border: "none",
+              background: "none",
+              overflow: "hidden",
+              borderRadius: "18px",
+            },
+          }}
+        >
+          <div style={{
+            background: isLightSkin ? "#ffffff" : "#0d1117",
+            borderRadius: "18px",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            boxShadow: isLightSkin ? "0 8px 40px rgba(0,0,0,0.14)" : "0 8px 40px rgba(0,0,0,0.6)",
+          }}>
+            {/* Header */}
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "18px 24px",
+              borderBottom: isLightSkin ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <img
+                  src="/assets/images/profile_guyuqi.jpg"
+                  alt="YuqiGuo105"
+                  style={{ width: 36, height: 36, minWidth: 36, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+                />
+                <div>
+                  <div style={{ color: isLightSkin ? "#1c2528" : "#e6edf3", fontWeight: 700, fontSize: "15px" }}>YuqiGuo105</div>
+                  <div style={{ color: isLightSkin ? "#6b7280" : "#7d8590", fontSize: "12px" }}>GitHub Activity</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setGithubModalOpen(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: isLightSkin ? "#6b7280" : "#7d8590",
+                  fontSize: "22px",
+                  cursor: "pointer",
+                  lineHeight: 1,
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                }}
+              >×</button>
+            </div>
+
+            {/* Contribution graph */}
+            <div style={{ padding: "20px 24px", overflowY: "auto", background: isLightSkin ? "#f7f5f2" : "transparent" }}>
+              <div style={{ color: isLightSkin ? "#6b7280" : "#7d8590", fontSize: "13px", marginBottom: "12px" }}>
+                {githubCommits} contributions in the last year
+              </div>
+              <img
+                src={`https://ghchart.rshah.org/ff8059/YuqiGuo105`}
+                alt="GitHub Contribution Chart"
+                style={{ width: "100%", borderRadius: "8px", display: "block", background: isLightSkin ? "#fff" : "transparent", padding: isLightSkin ? "8px" : 0 }}
+                onError={(e) => { e.target.style.display = "none"; }}
+              />
+              <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                <div style={{ color: isLightSkin ? "#1c2528" : "#e6edf3", fontWeight: 600, fontSize: "14px" }}>Recent Activity</div>
+                {[
+                  { repo: "YuqiGuo105/Portfolio", label: "6 commits", icon: "fa-code-branch" },
+                  { repo: "kubernetes-client/java", label: "1 commit + PR", icon: "fa-code-pull-request" },
+                  { repo: "YuqiGuo105/ai-agent-platform", label: "active", icon: "fa-robot" },
+                ].map((item) => (
+                  <a
+                    key={item.repo}
+                    href={`https://github.com/${item.repo}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: "10px 14px",
+                      background: isLightSkin ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)",
+                      borderRadius: "8px",
+                      border: isLightSkin ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(255,255,255,0.08)",
+                      textDecoration: "none",
+                      transition: "background 0.2s",
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,128,89,0.10)"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = isLightSkin ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)"}
+                  >
+                    <i className={`fas ${item.icon}`} style={{ color: "#ff8059", fontSize: "13px", width: 16 }} />
+                    <span style={{ color: isLightSkin ? "#1c2528" : "#e6edf3", fontSize: "13px", flex: 1 }}>{item.repo}</span>
+                    <span style={{ color: isLightSkin ? "#6b7280" : "#7d8590", fontSize: "12px" }}>{item.label}</span>
+                    <i className="fas fa-external-link-alt" style={{ color: isLightSkin ? "#9ca3af" : "#7d8590", fontSize: "10px" }} />
+                  </a>
+                ))}
+              </div>
+              <div style={{ marginTop: "18px", textAlign: "center" }}>
+                <a
+                  href="https://github.com/YuqiGuo105"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "10px 24px",
+                    background: "linear-gradient(135deg,#ff8059,#ff4d24)",
+                    borderRadius: "50px",
+                    color: "#fff",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                  }}
+                >
+                  <i className="fab fa-github" />
+                  View Full GitHub Profile
+                </a>
+              </div>
+            </div>
+          </div>
+        </Modal>
+
         <section className="section section-started">
           <div className="container">
             {/* Hero Started */}
@@ -633,7 +809,8 @@ const Index = () => {
               <div
                 className="slide"
                 style={{
-                  display: "inline-block",
+                  display: "block",
+                  textAlign: "center",
                   cursor: "pointer",
                 }}
                 onClick={openStoryModal}
@@ -647,9 +824,8 @@ const Index = () => {
                     transition: "transform 0.3s ease",
                   }}
                 >
-                  {/* 渐变圆环 */}
-                  {stories.length > 0 && (
-                    <div
+                  {/* 渐变圆环 — always visible */}
+                  <div
                       style={{
                         position: "absolute",
                         top: "-10px",
@@ -664,7 +840,6 @@ const Index = () => {
                         backgroundSize: "100% 400%",
                       }}
                     />
-                  )}
 
                   <img
                     src="/assets/images/profile_guyuqi.jpg"
@@ -739,7 +914,7 @@ const Index = () => {
                     Experience <strong>{yearsOfExperience} Years</strong>
                   </li>
                   <li>
-                    Commits on github <strong> 200+</strong>
+                    Commits on github <strong> {githubCommits}</strong>
                   </li>
                 </ul>
               </div>
@@ -1087,26 +1262,57 @@ const Index = () => {
           
           {/* Border styling for blogs */}
           <style jsx global>{`
-            /* Technical Blog Cards Border */
-            #Blog-section .blog-items .archive-item {
-              border: 1px solid rgba(0, 0, 0, 0.12);
-              border-radius: 8px;
-              overflow: hidden;
-            }
-            
-            body.dark-skin #Blog-section .blog-items .archive-item {
-              border: 1px solid rgba(255, 255, 255, 0.15);
-            }
-            
-            /* Life Blog Cards Border */
+            /* ── Blog card base ── */
+            #Blog-section .blog-items .archive-item,
             #Blog-section .blog-items.grid .archive-item {
-              border: 1px solid rgba(0, 0, 0, 0.12);
-              border-radius: 8px;
+              border: 1px solid rgba(0, 0, 0, 0.09);
+              border-radius: 14px;
               overflow: hidden;
+              background: #fff;
+              box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+              transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+              position: relative;
             }
-            
+
+            /* Accent top bar on hover */
+            #Blog-section .blog-items .archive-item::before,
+            #Blog-section .blog-items.grid .archive-item::before {
+              content: '';
+              position: absolute;
+              top: 0;
+              left: 0;
+              right: 0;
+              height: 3px;
+              background: linear-gradient(90deg, #ff8059, #ff4d24);
+              opacity: 0;
+              transition: opacity 0.3s ease;
+              z-index: 1;
+            }
+
+            #Blog-section .blog-items .archive-item:hover,
+            #Blog-section .blog-items.grid .archive-item:hover {
+              transform: translateY(-5px);
+              box-shadow: 0 12px 36px rgba(0, 0, 0, 0.12);
+              border-color: rgba(255, 128, 89, 0.35);
+            }
+
+            #Blog-section .blog-items .archive-item:hover::before,
+            #Blog-section .blog-items.grid .archive-item:hover::before {
+              opacity: 1;
+            }
+
+            /* Dark mode */
+            body.dark-skin #Blog-section .blog-items .archive-item,
             body.dark-skin #Blog-section .blog-items.grid .archive-item {
-              border: 1px solid rgba(255, 255, 255, 0.15);
+              background: rgba(22, 28, 38, 0.92);
+              border-color: rgba(255, 255, 255, 0.08);
+              box-shadow: 0 2px 14px rgba(0, 0, 0, 0.28);
+            }
+
+            body.dark-skin #Blog-section .blog-items .archive-item:hover,
+            body.dark-skin #Blog-section .blog-items.grid .archive-item:hover {
+              box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+              border-color: rgba(255, 128, 89, 0.3);
             }
           `}</style>
         </section>

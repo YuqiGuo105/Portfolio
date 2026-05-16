@@ -1,114 +1,143 @@
 import Isotope from "isotope-layout";
 import Link from "next/link";
-import {Fragment, useCallback, useEffect, useRef, useState} from "react";
+import {Fragment, useEffect, useRef, useState} from "react";
 import {supabase} from '../supabase/supabaseClient';
+
+const FILTERS = [
+  { key: "all",        label: "All",        icon: "fa-border-all" },
+  { key: "Full-Stack", label: "Full Stack",  icon: "fa-layer-group" },
+  { key: "Backend",    label: "Backend",     icon: "fa-server" },
+  { key: "Web-Infra",  label: "Web Infra",   icon: "fa-cloud" },
+];
 
 const ProjectIsotop = () => {
   const isotope = useRef();
   const [filterKey, setFilterKey] = useState("all");
   const [projects, setProjects] = useState([]);
 
-  // Fetch projects from Supabase
   useEffect(() => {
     const fetchProjects = async () => {
       const {data, error} = await supabase
         .from('Projects')
         .select('*')
         .order('num', {ascending: false});
-
-      if (!error) {
-        setProjects(data);
-      } else {
-        console.error(error);
-      }
+      if (!error) setProjects(data);
+      else console.error(error);
     };
-
     fetchProjects();
   }, []);
 
-  // Initialize Isotope after projects are fetched
   useEffect(() => {
-    if (projects.length && !isotope.current) {
-      isotope.current = new Isotope(".works-items", {
-        itemSelector: ".works-col",
+    if (!projects.length) return;
+    if (isotope.current) { isotope.current.destroy(); isotope.current = null; }
+    const timer = setTimeout(() => {
+      isotope.current = new Isotope(".proj-grid", {
+        itemSelector: ".proj-col",
+        layoutMode: "fitRows",
         percentPosition: true,
-        masonry: {
-          columnWidth: ".works-col",
-        },
       });
-    }
-
+    }, 120);
     return () => {
-      if (isotope.current) {
-        isotope.current.destroy();
-      }
+      clearTimeout(timer);
+      if (isotope.current) { isotope.current.destroy(); isotope.current = null; }
     };
   }, [projects]);
 
-  // Handle Isotope layout update on filter change
   useEffect(() => {
     if (isotope.current) {
-      const filter = filterKey === 'all' ? '*' : `.${filterKey}`;
-      isotope.current.arrange({ filter });
+      isotope.current.arrange({ filter: filterKey === "all" ? "*" : `.${filterKey}` });
     }
   }, [filterKey]);
 
-
-  // Handle filter change
-  const handleFilterKeyChange = (key) => () => {
-    setFilterKey(key);
-  };
-
-  // Determine active button class
-  const activeBtn = (value) => (value === filterKey ? "active" : "");
-
-
   return (
     <Fragment>
-      <div className="works-box">
-        <div className="filter-links">
-          {/* Updated to include dynamic categories if needed */}
-          <a className={`c-pointer ${activeBtn("all")}`} onClick={handleFilterKeyChange("all")}>All</a>
-          <a className={`c-pointer ${activeBtn("Full-Stack")}`} onClick={handleFilterKeyChange("Full-Stack")}>Full
-            Stack</a>
-          <a className={`c-pointer ${activeBtn("Backend")}`} onClick={handleFilterKeyChange("Backend")}>Backend</a>
-          <a className={`c-pointer ${activeBtn("Web Infra")}`}
-             onClick={handleFilterKeyChange("Web-Infra")}>Web Infra</a>
-        </div>
-        <div className="works-items works-list-items row">
-          {projects.map((project) => {
-            const targetUrl = `/work-single/${project.id}`;
-            const categoryClasses = project.category
-              ? project.category
-                  .split(',')
-                  .map((cat) => cat.trim().replace(/\s+/g, '-'))
-                  .join(' ')
-              : '';
-            return (
-              <div
-                key={project.id}
-                className={`works-col col-xs-12 col-sm-12 col-md-12 col-lg-12 ${categoryClasses}`}
-              >
-                <div className="works-item">
-                  <Link href={targetUrl} passHref>
-                    <a>
-                      <span className="image">
-                        <span className="img">
-                          <img src={project.image_url} alt={project.title}/>
-                          <span className="overlay"/>
-                        </span>
+      {/* ── Filter pills ── */}
+      <div className="proj-filters">
+        {FILTERS.map(({ key, label, icon }) => (
+          <button
+            key={key}
+            className={`proj-filter-btn${filterKey === key ? " active" : ""}`}
+            onClick={() => setFilterKey(key)}
+          >
+            <i className={`fas ${icon}`} />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ── Card grid ── */}
+      <div className="proj-grid row">
+        {projects.map((project) => {
+          const categoryClasses = project.category
+            ? project.category.split(',').map((c) => c.trim().replace(/\s+/g, '-')).join(' ')
+            : '';
+          const techList = project.technology
+            ? project.technology.split(',').map((t) => t.trim()).filter(Boolean)
+            : [];
+          const cats = project.category
+            ? project.category.split(',').map((c) => c.trim())
+            : [];
+
+          return (
+            <div
+              key={project.id}
+              className={`proj-col col-xs-12 col-sm-6 col-md-6 col-lg-4 ${categoryClasses}`}
+            >
+              <Link href={`/work-single/${project.id}`} passHref>
+                <a className="proj-card">
+                  {/* Image area */}
+                  <div className="proj-card-image">
+                    <img src={project.image_url} alt={project.title} />
+                    <div className="proj-card-overlay">
+                      <span className="proj-card-cta">
+                        <i className="fas fa-arrow-right" />
+                        View Project
                       </span>
-                      <span className="desc">
-                        <span className="name">{project.title}</span>
-                        <span className="category">{project.category}</span>
+                    </div>
+                    {cats.length > 0 && (
+                      <div className="proj-card-badges">
+                        {cats.map((cat, i) => (
+                          <span key={i} className="proj-badge">{cat}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Body */}
+                  <div className="proj-card-body">
+                    <h3 className="proj-card-title">{project.title}</h3>
+                    {techList.length > 0 && (
+                      <div className="proj-tech-list">
+                        {techList.slice(0, 4).map((tech, i) => (
+                          <span key={i} className="proj-tech-tag">{tech}</span>
+                        ))}
+                        {techList.length > 4 && (
+                          <span className="proj-tech-tag proj-tech-more">+{techList.length - 4}</span>
+                        )}
+                      </div>
+                    )}
+                    <div className="proj-card-footer">
+                      {project.year && <span className="proj-year">{project.year}</span>}
+                      <span className="proj-arrow">
+                        <i className="fas fa-external-link-alt" />
                       </span>
-                    </a>
-                  </Link>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                    </div>
+                  </div>
+                </a>
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── View All button ── */}
+      <div className="proj-view-all-wrap">
+        <Link href="/works-list" passHref>
+          <a className="proj-view-all-btn">
+            <span>View All Projects</span>
+            <i className="fas fa-chevron-right" />
+          </a>
+        </Link>
       </div>
     </Fragment>
   );

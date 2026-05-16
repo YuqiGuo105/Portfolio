@@ -1276,3 +1276,360 @@ body.dark-skin .cv-side-empty {
   background: #0f172a !important;
   border-color: #334155 !important;
 }
+
+/* =====================================================
+   PROJECT SECTION — Modern Card & Filter Design
+   ===================================================== */
+
+/* ── Filter pills ── */
+.proj-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin: 40px 0 48px;
+}
+
+.proj-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.28s ease;
+  backdrop-filter: blur(6px);
+}
+
+.proj-filter-btn i {
+  font-size: 12px;
+  opacity: 0.75;
+  transition: opacity 0.2s ease;
+}
+
+.proj-filter-btn:hover {
+  border-color: rgba(255, 128, 89, 0.55);
+  color: #fff;
+  background: rgba(255, 128, 89, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(255, 128, 89, 0.2);
+}
+
+.proj-filter-btn:hover i { opacity: 1; }
+
+.proj-filter-btn.active {
+  background: linear-gradient(135deg, #ff8059 0%, #ff4d24 100%);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 6px 22px rgba(255, 128, 89, 0.45);
+  transform: translateY(-2px);
+}
+
+.proj-filter-btn.active i { opacity: 1; }
+
+/* ── Card grid ── */
+.proj-grid {
+  margin: 0 -14px;
+  align-items: stretch;
+}
+
+.proj-col {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Individual card — equal fixed height ── */
+.proj-card {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none !important;
+  background: rgba(22, 28, 38, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: transform 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease;
+  height: 100%;
+  min-height: 390px;
+}
+
+.proj-card:hover {
+  transform: translateY(-7px);
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 128, 89, 0.28);
+  border-color: rgba(255, 128, 89, 0.35);
+  text-decoration: none !important;
+}
+
+/* ── Image area — fixed height ── */
+.proj-card-image {
+  position: relative;
+  overflow: hidden;
+  height: 200px;
+  flex-shrink: 0;
+}
+
+.proj-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.5s ease;
+}
+
+.proj-card:hover .proj-card-image img { transform: scale(1.07); }
+
+/* Hover overlay */
+.proj-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 100, 60, 0.78), rgba(16, 30, 50, 0.65));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.32s ease;
+}
+
+.proj-card:hover .proj-card-overlay { opacity: 1; }
+
+.proj-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  background: rgba(0, 0, 0, 0.28);
+  padding: 10px 22px;
+  border-radius: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(4px);
+}
+
+/* Category badge chips */
+.proj-card-badges {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  z-index: 2;
+}
+
+.proj-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 50px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.55);
+  color: #ff8059;
+  border: 1px solid rgba(255, 128, 89, 0.5);
+  backdrop-filter: blur(6px);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* ── Card body — fills remaining height ── */
+.proj-card-body {
+  padding: 18px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.proj-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 12px;
+  line-height: 1.35;
+  font-family: inherit;
+}
+
+/* Tech stack pill tags */
+.proj-tech-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.proj-tech-tag {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  letter-spacing: 0.3px;
+}
+
+.proj-tech-more {
+  color: #ff8059;
+  border-color: rgba(255, 128, 89, 0.3);
+  background: rgba(255, 128, 89, 0.08);
+}
+
+/* Card footer */
+.proj-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 12px;
+  margin-top: auto;
+}
+
+.proj-year {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+  letter-spacing: 0.8px;
+  font-weight: 500;
+}
+
+.proj-arrow {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 10px;
+  transition: all 0.28s ease;
+  flex-shrink: 0;
+}
+
+.proj-card:hover .proj-arrow {
+  background: #ff8059;
+  border-color: #ff8059;
+  color: #fff;
+}
+
+/* ── View All button ── */
+.proj-view-all-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 48px;
+  margin-bottom: 8px;
+}
+
+.proj-view-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 36px;
+  border-radius: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75) !important;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.7px;
+  text-decoration: none !important;
+  transition: all 0.3s ease;
+}
+
+.proj-view-all-btn i {
+  font-size: 11px;
+  transition: transform 0.25s ease;
+}
+
+.proj-view-all-btn:hover {
+  background: linear-gradient(135deg, #ff8059 0%, #ff4d24 100%);
+  border-color: transparent;
+  color: #fff !important;
+  box-shadow: 0 8px 28px rgba(255, 128, 89, 0.4);
+  text-decoration: none !important;
+  transform: translateY(-2px);
+}
+
+.proj-view-all-btn:hover i { transform: translateX(3px); }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .proj-filter-btn { padding: 8px 16px; font-size: 12px; }
+  .proj-card-image { height: 180px; }
+  .proj-card-title { font-size: 16px; }
+  .proj-card { min-height: 360px; }
+}
+
+/* =====================================================
+   LIGHT MODE overrides for project section
+   ===================================================== */
+body.light-skin .proj-filter-btn {
+  border-color: rgba(28, 37, 40, 0.18);
+  background: rgba(28, 37, 40, 0.04);
+  color: rgba(28, 37, 40, 0.6);
+}
+
+body.light-skin .proj-filter-btn:hover {
+  color: #1c2528;
+  background: rgba(255, 128, 89, 0.1);
+  border-color: rgba(255, 128, 89, 0.4);
+}
+
+body.light-skin .proj-filter-btn.active {
+  color: #fff;
+  background: linear-gradient(135deg, #ff8059 0%, #ff4d24 100%);
+  border-color: transparent;
+}
+
+body.light-skin .proj-card {
+  background: #ffffff;
+  border-color: rgba(28, 37, 40, 0.1);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
+}
+
+body.light-skin .proj-card:hover {
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(255, 128, 89, 0.3);
+  border-color: rgba(255, 128, 89, 0.3);
+}
+
+body.light-skin .proj-card-title { color: #1c2528; }
+
+body.light-skin .proj-tech-tag {
+  background: rgba(28, 37, 40, 0.06);
+  color: rgba(28, 37, 40, 0.6);
+  border-color: rgba(28, 37, 40, 0.12);
+}
+
+body.light-skin .proj-tech-more {
+  color: #ff8059;
+  border-color: rgba(255, 128, 89, 0.3);
+  background: rgba(255, 128, 89, 0.07);
+}
+
+body.light-skin .proj-card-footer {
+  border-top-color: rgba(28, 37, 40, 0.1);
+}
+
+body.light-skin .proj-year { color: rgba(28, 37, 40, 0.35); }
+
+body.light-skin .proj-arrow {
+  border-color: rgba(28, 37, 40, 0.15);
+  color: rgba(28, 37, 40, 0.4);
+}
+
+body.light-skin .proj-view-all-btn {
+  border-color: rgba(28, 37, 40, 0.2);
+  color: rgba(28, 37, 40, 0.75) !important;
+}
+
+body.light-skin .proj-view-all-btn:hover {
+  color: #fff !important;
+  border-color: transparent;
+}
