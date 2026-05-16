@@ -3404,6 +3404,19 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
             inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
           color: #e5e7eb;
         }
+
+        :global(body.light-skin) #__chat_widget_root .bot-container {
+          background: #ffffff !important;
+          border: 1px solid rgba(99, 102, 241, 0.2) !important;
+          box-shadow:
+            0 4px 24px rgba(0, 0, 0, 0.08),
+            0 1px 4px rgba(0, 0, 0, 0.04) !important;
+          color: #1e293b;
+        }
+        :global(body.light-skin) #__chat_widget_root .bot-container::before,
+        :global(body.light-skin) #__chat_widget_root .bot-container::after {
+          display: none;
+        }
         
         :global(body.dark-skin) #__chat_widget_root .bot-container::before,
         :global(.dark) #__chat_widget_root .bot-container::before {
@@ -3438,6 +3451,15 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           backdrop-filter: blur(16px);
           border-color: rgba(99, 102, 241, 0.25) !important;
           color: #e5e7eb;
+        }
+
+        :global(body.light-skin) #__chat_widget_root .bot-header {
+          background: #f8fafc !important;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+          color: #1e293b !important;
+        }
+        :global(body.light-skin) #__chat_widget_root .bot-header::after {
+          display: none;
         }
 
         /* AG-UI Messages Area */
@@ -3491,6 +3513,20 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         :global(.dark) #__chat_widget_root .input-area {
           background: rgba(10, 15, 30, 0.95) !important;
           border-top-color: rgba(99, 102, 241, 0.25) !important;
+        }
+
+        :global(body.light-skin) #__chat_widget_root .input-area {
+          background: #f8fafc !important;
+          border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+        }
+        :global(body.light-skin) #__chat_widget_root .input-area::before {
+          display: none;
+        }
+        :global(body.light-skin) #__chat_widget_root .bot-input {
+          color: #1e293b !important;
+        }
+        :global(body.light-skin) #__chat_widget_root .bot-input::placeholder {
+          color: #94a3b8 !important;
         }
 
         :global(body.dark-skin) #__chat_widget_root,
@@ -3634,6 +3670,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
             inset 0 1px 0 rgba(255, 255, 255, 0.05);
         }
 
+        :global(body.light-skin) #__chat_widget_root .cw-bubble-bot {
+          background: #f1f5f9;
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          color: #1e293b;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
 
         .bot-message a.chat-link {
           text-decoration: underline;
@@ -3762,6 +3805,19 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           --cw-progress-track: rgba(55, 65, 81, 0.9);
           --ag-accent: #818cf8;
           --ag-accent-glow: rgba(129, 140, 248, 0.5);
+        }
+
+        :global(body.light-skin) #__chat_widget_root {
+          --cw-input-bg: rgba(255, 255, 255, 0.85);
+          --cw-input-border: rgba(0, 0, 0, 0.12);
+          --cw-input-border-strong: rgba(99, 102, 241, 0.4);
+          --cw-input-text: #1e293b;
+          --cw-input-placeholder: #94a3b8;
+          --cw-attachment-border: rgba(0, 0, 0, 0.12);
+          --cw-attachment-border-strong: rgba(99, 102, 241, 0.4);
+          --cw-attachment-bg: rgba(255, 255, 255, 0.7);
+          --cw-progress-surface: rgba(248, 250, 252, 0.95);
+          --cw-progress-track: rgba(0, 0, 0, 0.08);
         }
         
         /* AG-UI Textbox styles */
@@ -3979,6 +4035,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           font-weight: 600;
           color: #e2e8f0;
           text-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+        }
+        :global(body.light-skin) #__chat_widget_root .cw-title {
+          color: #1e293b;
+          text-shadow: none;
         }
           font-size: 22px;
           font-weight: 400;
