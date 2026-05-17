@@ -261,6 +261,7 @@ body.dark-skin .leetcode-icon-bottom.custom-leetcode-icon {
   margin: 0 auto;
   padding: 40px 0 80px;
   color: #1f2937;
+  box-sizing: border-box;
 }
 .cv-header {
   display: flex;
@@ -467,6 +468,76 @@ body.dark-skin .leetcode-icon-bottom.custom-leetcode-icon {
   .cv-comment-row { grid-template-columns: 1fr; }
   .cv-content { padding: 22px 18px; }
   .cv-title { font-size: 1.8rem; }
+
+  /* Page wrapper */
+  .cv-page { padding: 20px 0 60px; }
+
+  /* Header: stack title + actions vertically */
+  .cv-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .cv-title { font-size: 1.6rem; }
+
+  /* Profile pill: allow wrapping, shrink email text */
+  .cv-profile {
+    flex-wrap: wrap;
+    border-radius: 14px;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .cv-profile .cv-profile-text {
+    font-size: 0.8rem;
+    word-break: break-all;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Content card padding */
+  .cv-content { padding: 18px 14px; font-size: 0.95rem; }
+
+  /* Side comment panel: make it collapsible feel via scrollable box */
+  .cv-side {
+    max-height: 300px;
+  }
+
+  /* Floating "Add comment" pill: fix to viewport center-bottom on mobile */
+  .cv-add-comment-btn {
+    position: fixed;
+    bottom: 72px;
+    left: 50% !important;
+    top: auto !important;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    z-index: 9999;
+  }
+  .cv-add-comment-btn:hover {
+    transform: translateX(-50%);
+  }
+
+  /* Annotation popover: fix to viewport, full-width */
+  .cv-anno-popover {
+    position: fixed;
+    bottom: 0;
+    left: 0 !important;
+    top: auto !important;
+    transform: none;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -8px 40px rgba(15, 23, 42, 0.22);
+    animation: cvSlideUp 0.2s ease-out;
+  }
+  .cv-anno-arrow { display: none; }
+
+  @keyframes cvSlideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+
+  /* Export toolbar */
+  .cv-export-toolbar { justify-content: flex-start; }
 }
 .cv-comment-form input,
 .cv-comment-form textarea {
