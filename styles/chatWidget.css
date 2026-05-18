@@ -635,3 +635,533 @@
     background: linear-gradient(120deg, #86efac 0%, #4ade80 100%);
     transform: scale(1.02);
   }
+
+/* ---- ToolCallCard ---- */
+.tool-calls-container {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tool-call-card {
+  border-radius: 8px;
+  border: 1px solid rgba(229,231,235,0.8);
+  background: rgba(249,250,251,0.95);
+  padding: 10px 12px;
+  font-size: 13px;
+  transition: all 0.2s ease;
+}
+body.dark-skin .tool-call-card {
+  border-color: rgba(75,85,99,0.6);
+  background: rgba(31,41,55,0.9);
+}
+.tool-call-card.status-running  { border-left: 3px solid #6366f1; }
+.tool-call-card.status-completed { border-left: 3px solid #10b981; }
+.tool-call-card.status-failed {
+  border-left: 3px solid #ef4444;
+  background: rgba(254,242,242,0.95);
+}
+body.dark-skin .tool-call-card.status-failed { background: rgba(69,28,28,0.9); }
+
+.tool-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tool-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6366f1;
+  flex-shrink: 0;
+}
+.tool-icon svg { width: 16px; height: 16px; }
+.tool-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.tool-name {
+  font-weight: 600;
+  color: #1f2937;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+body.dark-skin .tool-name { color: #e5e7eb; }
+.tool-status {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(99,102,241,0.1);
+  color: #6366f1;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+.tool-call-card.status-completed .tool-status {
+  background: rgba(16,185,129,0.12);
+  color: #10b981;
+}
+.tool-call-card.status-failed .tool-status {
+  background: rgba(239,68,68,0.12);
+  color: #ef4444;
+}
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.status-icon svg { width: 16px; height: 16px; }
+.status-icon.spin svg { animation: tcSpin 0.9s linear infinite; }
+.tool-call-card.status-completed .status-icon { color: #10b981; }
+.tool-call-card.status-failed   .status-icon { color: #ef4444; }
+.tool-call-card.status-pending  .status-icon { color: #9ca3af; }
+.tool-message { margin-top: 6px; color: #4b5563; font-size: 13px; }
+body.dark-skin .tool-message { color: #d1d5db; }
+.tool-detail {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+body.dark-skin .tool-detail { color: #9ca3af; }
+.tool-duration { margin-top: 4px; font-size: 11px; color: #9ca3af; text-align: right; }
+@keyframes tcSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ------ TodoList component ------ */
+.todo-container {
+  margin-bottom: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  background: rgba(248, 250, 252, 0.95);
+  overflow: hidden;
+}
+.dark .todo-container,
+body.dark-skin .todo-container {
+  border-color: rgba(55, 65, 81, 0.7);
+  background: rgba(15, 23, 42, 0.6);
+}
+.todo-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(17, 24, 39, 0.9);
+  transition: background 0.15s ease;
+}
+.todo-header:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+.dark .todo-header,
+body.dark-skin .todo-header {
+  color: rgba(248, 250, 252, 0.9);
+}
+.dark .todo-header:hover,
+body.dark-skin .todo-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.todo-chevron {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.todo-chevron.expanded {
+  transform: rotate(180deg);
+}
+.todo-list {
+  border-top: 1px solid rgba(229, 231, 235, 0.6);
+  padding: 8px 0;
+}
+.dark .todo-list,
+body.dark-skin .todo-list {
+  border-top-color: rgba(55, 65, 81, 0.5);
+}
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(55, 65, 81, 0.95);
+}
+.dark .todo-item,
+body.dark-skin .todo-item {
+  color: rgba(226, 232, 240, 0.9);
+}
+.todo-item.completed .todo-text {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.todo-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.todo-icon.done  { color: #10b981; }
+.todo-icon.pending { color: rgba(156, 163, 175, 0.8); }
+.todo-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* ------ StageToast component ------ */
+.stage-toast { animation: stageIn 180ms ease-out; }
+.stage-card {
+  position: relative;
+  border-radius: 12px;
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  background: rgba(248, 250, 252, 0.92);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  padding: 12px 14px 18px;
+  max-height: 180px;
+  overflow: hidden;
+}
+.dark .stage-card,
+body.dark-skin .stage-card {
+  border-color: rgba(55, 65, 81, 0.7);
+  background: rgba(15, 23, 42, 0.55);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
+}
+.row1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.spinnerWrap {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.16));
+  animation: pulseSoft 1.2s ease-in-out infinite;
+}
+.spinnerIcon {
+  width: 18px;
+  height: 18px;
+  color: rgba(75, 85, 99, 0.95);
+  animation: spinFast 0.75s linear infinite;
+}
+.dark .spinnerIcon,
+body.dark-skin .spinnerIcon {
+  color: rgba(226, 232, 240, 0.85);
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+}
+.stage-text {
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    rgba(30, 41, 59, 0.35) 0%,
+    rgba(59, 130, 246, 0.95) 35%,
+    rgba(236, 72, 153, 0.85) 55%,
+    rgba(16, 185, 129, 0.85) 75%,
+    rgba(30, 41, 59, 0.35) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: waveText 1.6s ease-in-out infinite;
+}
+.row2 { margin-top: 6px; min-width: 0; }
+.key-value {
+  font-size: 13px;
+  line-height: 1.3;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    rgba(30, 41, 59, 0.35) 0%,
+    rgba(59, 130, 246, 0.95) 35%,
+    rgba(236, 72, 153, 0.85) 55%,
+    rgba(16, 185, 129, 0.85) 75%,
+    rgba(30, 41, 59, 0.35) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: waveText 1.6s ease-in-out infinite;
+}
+.stage-card .bar {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 10px;
+  height: 2px;
+  border-radius: 999px;
+  overflow: hidden;
+  opacity: 0.55;
+  background: rgba(148, 163, 184, 0.25);
+}
+.stage-card .bar::before {
+  content: "";
+  position: absolute;
+  left: -40%;
+  top: 0;
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #3b82f6, #ec4899, #10b981);
+  animation: indeterminate 1.2s ease-in-out infinite;
+}
+.task-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stage-card .task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(30, 41, 59, 0.85);
+}
+.dark .stage-card .task-item,
+body.dark-skin .stage-card .task-item {
+  color: rgba(226, 232, 240, 0.85);
+}
+.stage-card .task-item.done { opacity: 0.6; }
+.stage-card .task-item.done .task-title { text-decoration: line-through; }
+.task-num {
+  font-weight: 600;
+  color: rgba(59, 130, 246, 0.9);
+  min-width: 18px;
+  flex-shrink: 0;
+}
+.task-title { line-height: 1.4; min-width: 0; }
+.task-check { width: 14px; height: 14px; color: rgba(16, 185, 129, 0.9); flex-shrink: 0; }
+.task-more {
+  font-size: 12px;
+  color: rgba(100, 116, 139, 0.7);
+  font-style: italic;
+  margin-left: 24px;
+}
+.dark .task-more,
+body.dark-skin .task-more {
+  color: rgba(226, 232, 240, 0.5);
+}
+@keyframes stageIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes spinFast {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes pulseSoft {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50%       { transform: scale(1.06); opacity: 1; }
+}
+@keyframes waveText {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes indeterminate {
+  0%   { left: -40%; }
+  50%  { left: 60%; }
+  100% { left: 120%; }
+}
+
+/* ------ ToolCallCard: Todo list integration ------ */
+.tool-call-card.requires-approval {
+  border-left: 3px solid #f59e0b;
+  background: rgba(255, 251, 235, 0.95);
+}
+body.dark-skin .tool-call-card.requires-approval,
+.dark .tool-call-card.requires-approval {
+  background: rgba(69, 53, 28, 0.9);
+  border-left-color: #fbbf24;
+}
+
+.tool-todos {
+  margin-top: 8px;
+  border-top: 1px solid rgba(229, 231, 235, 0.5);
+  padding-top: 8px;
+}
+body.dark-skin .tool-todos,
+.dark .tool-todos {
+  border-top-color: rgba(75, 85, 99, 0.5);
+}
+.tool-todos-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(55, 65, 81, 0.9);
+  transition: background 0.15s ease;
+  border-radius: 4px;
+  user-select: none;
+}
+.tool-todos-header:hover { background: rgba(0, 0, 0, 0.04); }
+body.dark-skin .tool-todos-header,
+.dark .tool-todos-header { color: rgba(226, 232, 240, 0.9); }
+body.dark-skin .tool-todos-header:hover,
+.dark .tool-todos-header:hover { background: rgba(255, 255, 255, 0.05); }
+.tool-todos-header .todo-chevron {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.tool-todos-header .todo-chevron.expanded { transform: rotate(180deg); }
+
+.tool-todos-list { padding: 4px 0; }
+.tool-todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(55, 65, 81, 0.95);
+}
+body.dark-skin .tool-todo-item,
+.dark .tool-todo-item { color: rgba(226, 232, 240, 0.9); }
+.tool-todo-item.completed .todo-text {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.tool-todo-item .todo-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.tool-todo-item .todo-icon.done    { color: #10b981; }
+.tool-todo-item .todo-icon.pending { color: rgba(156, 163, 175, 0.8); }
+.tool-todo-item .todo-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* ------ ToolCallCard: Approval (Copilot-style) ------ */
+.tool-approval {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(229, 231, 235, 0.8);
+}
+body.dark-skin .tool-approval,
+.dark .tool-approval {
+  background: rgba(31, 41, 55, 0.8);
+  border-color: rgba(75, 85, 99, 0.6);
+}
+.approval-message {
+  font-size: 12px;
+  color: rgba(55, 65, 81, 0.9);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+body.dark-skin .approval-message,
+.dark .approval-message { color: rgba(226, 232, 240, 0.9); }
+.approval-actions { display: flex; gap: 8px; }
+.approval-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.05s ease;
+  border: none;
+  color: #fff;
+}
+.approval-btn:active { transform: scale(0.98); }
+.approval-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.approval-btn.approve { background: #10b981; }
+.approval-btn.approve:hover:not(:disabled) { background: #059669; }
+.approval-btn.reject  { background: #ef4444; }
+.approval-btn.reject:hover:not(:disabled)  { background: #dc2626; }
+.approval-btn .btn-icon { width: 14px; height: 14px; }
+
+.approval-result {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-align: center;
+}
+.approval-result.approved {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+.approval-result.rejected {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+/* ------ ToolCallCard: Collapsible card ------ */
+.tool-header-collapsible {
+  cursor: pointer;
+  user-select: none;
+}
+.tool-header-collapsible:hover {
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 6px;
+}
+body.dark-skin .tool-header-collapsible:hover,
+.dark .tool-header-collapsible:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.tool-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.tool-duration-inline {
+  font-size: 10px;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+.card-chevron {
+  width: 14px;
+  height: 14px;
+  opacity: 0.55;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.card-chevron.expanded {
+  transform: rotate(180deg);
+}
+.tool-card-body {
+  padding-top: 4px;
+}

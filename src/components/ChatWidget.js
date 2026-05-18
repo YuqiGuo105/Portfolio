@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom"
 import { useState, useEffect, useRef, Fragment } from "react"
-import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check, Copy, Zap, Brain, Circle } from "lucide-react"
+import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check, Copy, Zap, Brain, Circle, Square, Sparkles, Compass, Search, BookOpen, Wrench, MessageSquare, CheckCircle2, Clock } from "lucide-react"
 import Image from "next/image"
 import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
@@ -1676,336 +1676,668 @@ function TodoList({ subtasks, expanded = false }) {
   )
 }
 
-/* ---------- Stage toast ---------- */
-function StageToast({ step }) {
-  if (!step) return null
-  
-  // Extract a simple, user-friendly summary from rawPayload
-  const getPayloadSummary = () => {
-    const { rawPayload } = step
-    
-    if (!rawPayload) return null
-    
-    // Handle array of tasks/subtasks
-    if (Array.isArray(rawPayload)) {
-      // Check if it's an array of task objects
-      const tasks = rawPayload.filter(item => 
-        item && typeof item === "object" && (item.title || item.name || item.text)
-      )
-      if (tasks.length > 0) {
-        return { type: "tasks", tasks }
-      }
-      return null
-    }
-    
-    if (typeof rawPayload !== "object") return null
-    
-    // Check if rawPayload itself is a single task object
-    if (rawPayload.title && (rawPayload.id || rawPayload.order != null)) {
-      return { type: "tasks", tasks: [rawPayload] }
-    }
-    
-    // Check for tasks/subtasks array inside the object
-    const taskArray = rawPayload.tasks ?? rawPayload.subtasks ?? rawPayload.steps ?? rawPayload.plan
-    if (Array.isArray(taskArray) && taskArray.length > 0) {
-      const tasks = taskArray.filter(item => 
-        item && typeof item === "object" && (item.title || item.name || item.text)
-      )
-      if (tasks.length > 0) {
-        return { type: "tasks", tasks }
-      }
-    }
-    
-    // Look for document/result counts
-    const docCount = rawPayload.docsFound ?? rawPayload.docCount ?? rawPayload.count ?? rawPayload.total ?? rawPayload.resultsCount
-    if (docCount != null && typeof docCount === "number") {
-      return { type: "text", text: `Found ${docCount} document${docCount !== 1 ? "s" : ""}` }
-    }
-    
-    // Look for chunks
-    if (rawPayload.chunksFound != null) {
-      return { type: "text", text: `Found ${rawPayload.chunksFound} chunk${rawPayload.chunksFound !== 1 ? "s" : ""}` }
-    }
-    
-    // Look for history hits
-    if (rawPayload.historyHits != null) {
-      return { type: "text", text: `Found ${rawPayload.historyHits} relevant message${rawPayload.historyHits !== 1 ? "s" : ""}` }
-    }
-    
-    return null
+/* ---------- Tool call helpers ---------- */
+
+/**
+ * Stage registry — add an entry here to support a new stage type.
+ * `match` runs against the lowercased `stage || title`. First match wins.
+ * tone keys map to CSS classes (.tone-*) below; add new tones in both
+ * ToolCard and StageToast style blocks if introducing one.
+ */
+const STAGE_REGISTRY = [
+  { match: (s) => /plan/.test(s),                              label: "Planning",     tone: "violet",  Icon: Sparkles },
+  { match: (s) => /(route|intent|classif)/.test(s),            label: "Routing",      tone: "blue",    Icon: Compass },
+  { match: (s) => /(retriev|search|kb|rag|query)/.test(s),     label: "Searching",    tone: "indigo",  Icon: Search },
+  { match: (s) => /(doc|chunk|embed|index)/.test(s),           label: "Reading docs", tone: "cyan",    Icon: FileText },
+  { match: (s) => /(history|memory|context)/.test(s),          label: "Context",      tone: "amber",   Icon: BookOpen },
+  { match: (s) => /(tool|call|invoke|api|fetch)/.test(s),      label: "Tool call",    tone: "emerald", Icon: Wrench },
+  { match: (s) => /(generate|compose|answer|reply|stream)/.test(s), label: "Generating", tone: "rose",  Icon: MessageSquare },
+  { match: (s) => /(think|reason|reflect|brain)/.test(s),      label: "Thinking",     tone: "violet",  Icon: Brain },
+]
+
+const DEFAULT_STAGE_META = { label: "Processing", tone: "slate", Icon: Circle }
+
+function getStageMeta(stage, title) {
+  const s = String(stage || title || "").toLowerCase()
+  if (!s) return DEFAULT_STAGE_META
+  for (const entry of STAGE_REGISTRY) {
+    if (entry.match(s)) return entry
   }
-  
-  const summary = getPayloadSummary()
-  
-  // Render tasks as a simple numbered list
-  const renderTasks = (tasks) => {
-    const maxShow = 4
-    const shown = tasks.slice(0, maxShow)
-    const remaining = tasks.length - maxShow
-    
-    return (
-      <div className="task-list">
-        {shown.map((task, idx) => {
-          const title = task.title || task.name || task.text || "Task"
-          const num = task.order ?? idx + 1
-          const done = task.completed || task.done
-          return (
-            <div key={task.id || idx} className={`task-item ${done ? "done" : ""}`}>
-              <span className="task-num">{num}.</span>
-              <span className="task-title">{title}</span>
-              {done && <Check className="task-check" />}
-            </div>
-          )
-        })}
-        {remaining > 0 && (
-          <div className="task-more">+{remaining} more</div>
-        )}
-      </div>
-    )
+  return DEFAULT_STAGE_META
+}
+
+// Pull a short one-line summary from a card payload (without huge JSON)
+function getCardSummary(step) {
+  const p = step?.rawPayload
+  if (step?.keyInfo && typeof step.keyInfo === "string") return step.keyInfo
+  if (!p) return null
+  if (typeof p === "string") return p.length > 80 ? p.slice(0, 77) + "…" : p
+  if (typeof p !== "object") return null
+
+  if (Array.isArray(p)) return `${p.length} item${p.length === 1 ? "" : "s"}`
+
+  if (typeof p.docsFound === "number") return `${p.docsFound} doc${p.docsFound === 1 ? "" : "s"}`
+  if (typeof p.docCount === "number") return `${p.docCount} doc${p.docCount === 1 ? "" : "s"}`
+  if (typeof p.chunksFound === "number")
+    return `${p.chunksFound} chunk${p.chunksFound === 1 ? "" : "s"}`
+  if (typeof p.historyHits === "number")
+    return `${p.historyHits} message${p.historyHits === 1 ? "" : "s"}`
+  if (typeof p.count === "number") return `${p.count} result${p.count === 1 ? "" : "s"}`
+
+  const taskArr = p.tasks ?? p.subtasks ?? p.steps ?? p.plan
+  if (Array.isArray(taskArr) && taskArr.length > 0)
+    return `${taskArr.length} task${taskArr.length === 1 ? "" : "s"}`
+
+  if (typeof p.query === "string") return `"${p.query.slice(0, 60)}${p.query.length > 60 ? "…" : ""}"`
+  if (typeof p.message === "string" && p.message.length < 80) return p.message
+  return null
+}
+
+// Format a millisecond duration as a short readable string (e.g. "1.2s", "340ms", "2m 5s")
+function formatDuration(ms) {
+  if (typeof ms !== "number" || !isFinite(ms) || ms < 0) return null
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  if (ms < 60000) return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`
+  const m = Math.floor(ms / 60000)
+  const s = Math.round((ms % 60000) / 1000)
+  return `${m}m ${s}s`
+}
+
+// Turn a step's payload into plain-language bullet points a non-technical reader can understand.
+// Returns an array of { label, value } pairs; never includes raw JSON.
+function humanizeStep(step) {
+  const out = []
+  const meta = getStageMeta(step?.stage, step?.title)
+  const p = step?.rawPayload
+
+  if (p && typeof p === "object" && !Array.isArray(p)) {
+    if (typeof p.query === "string" && p.query.trim()) {
+      out.push({ label: "What I searched for", value: `“${p.query.trim().slice(0, 200)}”` })
+    }
+    if (typeof p.intent === "string") out.push({ label: "Topic", value: p.intent })
+    if (typeof p.route === "string") out.push({ label: "Route", value: p.route })
+    if (typeof p.toolName === "string") out.push({ label: "Tool", value: p.toolName })
+    if (typeof p.functionName === "string") out.push({ label: "Tool", value: p.functionName })
+
+    if (typeof p.docsFound === "number")
+      out.push({ label: "Found", value: `${p.docsFound} matching document${p.docsFound === 1 ? "" : "s"}` })
+    else if (typeof p.docCount === "number")
+      out.push({ label: "Found", value: `${p.docCount} matching document${p.docCount === 1 ? "" : "s"}` })
+    if (typeof p.chunksFound === "number")
+      out.push({ label: "Read", value: `${p.chunksFound} passage${p.chunksFound === 1 ? "" : "s"}` })
+    if (typeof p.historyHits === "number")
+      out.push({ label: "Recalled", value: `${p.historyHits} earlier message${p.historyHits === 1 ? "" : "s"}` })
+    if (typeof p.count === "number" && !out.some((x) => x.label === "Found"))
+      out.push({ label: "Result", value: `${p.count} item${p.count === 1 ? "" : "s"}` })
+
+    const taskArr = p.tasks ?? p.subtasks ?? p.steps ?? p.plan
+    if (Array.isArray(taskArr) && taskArr.length > 0) {
+      const items = taskArr
+        .slice(0, 5)
+        .map((t) => (typeof t === "string" ? t : t?.title || t?.name || t?.text))
+        .filter(Boolean)
+      if (items.length) out.push({ label: "My plan", value: items, kind: "list" })
+    }
+
+    if (typeof p.message === "string" && p.message.length < 200 && !out.some((x) => x.value === p.message)) {
+      out.push({ label: "Note", value: p.message })
+    }
+    if (typeof p.result === "string" && p.result.length < 300) {
+      out.push({ label: "Result", value: p.result })
+    }
+  } else if (typeof p === "string" && p.trim()) {
+    out.push({ label: "Note", value: p.length > 240 ? p.slice(0, 237) + "…" : p })
+  } else if (Array.isArray(p)) {
+    out.push({ label: "Result", value: `${p.length} item${p.length === 1 ? "" : "s"}` })
   }
-  
+
+  return out
+}
+
+/* ---------- Collapsible tool history (timeline) ---------- */
+function ToolHistory({ cards }) {
+  const [open, setOpen] = useState(false)
+  if (!Array.isArray(cards) || cards.length === 0) return null
+  const count = cards.length
   return (
-    <div key={step.id} className="stage-toast mb-2">
-      <div className="stage-card">
-        <div className="row1">
-          <span className="spinnerWrap" aria-hidden="true">
-            <Loader2 className="spinnerIcon" />
-          </span>
-          <div className="stage-text">{step.title}</div>
+    <div className="cw-th mb-2">
+      <button
+        type="button"
+        className={"cw-th-toggle " + (open ? "is-open" : "")}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open ? "true" : "false"}
+      >
+        <span className="cw-th-check" aria-hidden="true">
+          <Check />
+        </span>
+        <span className="cw-th-label">
+          Used {count} tool{count === 1 ? "" : "s"}
+        </span>
+        <span className="cw-th-chev" aria-hidden="true">
+          <ChevronDown />
+        </span>
+      </button>
+      {open ? (
+        <div className="cw-th-body">
+          {cards.map((card, idx) => (
+            <ToolCard key={card.id} step={card} index={idx} isLast={idx === count - 1} />
+          ))}
         </div>
-
-        {summary?.type === "text" && (
-          <div className="row2">
-            <span className="key-value">{summary.text}</span>
-          </div>
-        )}
-        
-        {summary?.type === "tasks" && renderTasks(summary.tasks)}
-
-        <div className="bar" aria-hidden="true" />
-      </div>
-
+      ) : null}
       <style jsx>{`
-        .stage-toast {
-          animation: stageIn 180ms ease-out;
-        }
-        .stage-card {
-          position: relative;
-          border-radius: 12px;
-          border: 1px solid rgba(229, 231, 235, 0.9);
-          background: rgba(248, 250, 252, 0.92);
-          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-          padding: 12px 14px 18px;
-          max-height: 180px;
-          overflow: hidden;
-        }
-        :global(.dark) .stage-card,
-        :global(body.dark-skin) .stage-card {
-          border-color: rgba(55, 65, 81, 0.7);
-          background: rgba(15, 23, 42, 0.55);
-          box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
-        }
-        .row1 {
+        .cw-th {
           display: flex;
-          align-items: center;
-          gap: 10px;
-          min-width: 0;
+          flex-direction: column;
+          gap: 8px;
         }
-        .spinnerWrap {
+        .cw-th-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          align-self: flex-start;
+          padding: 5px 10px 5px 6px;
+          border-radius: 999px;
+          border: 1px solid rgba(16, 185, 129, 0.28);
+          background: linear-gradient(
+            135deg,
+            rgba(16, 185, 129, 0.08),
+            rgba(59, 130, 246, 0.06)
+          );
+          color: #047857;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: transform 120ms ease, background-color 150ms ease, border-color 150ms ease;
+        }
+        .cw-th-toggle:hover {
+          transform: translateY(-1px);
+          border-color: rgba(16, 185, 129, 0.5);
+        }
+        .cw-th-check {
           width: 18px;
           height: 18px;
+          border-radius: 999px;
+          background: rgba(16, 185, 129, 0.18);
+          color: #059669;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          flex-shrink: 0;
-          filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.16));
-          animation: pulseSoft 1.2s ease-in-out infinite;
         }
-        .spinnerIcon {
-          width: 18px;
-          height: 18px;
-          color: rgba(75, 85, 99, 0.95);
-          animation: spinFast 0.75s linear infinite;
+        .cw-th-check :global(svg) {
+          width: 12px;
+          height: 12px;
+          stroke-width: 3;
         }
-        :global(.dark) .spinnerIcon,
-        :global(body.dark-skin) .spinnerIcon {
-          color: rgba(226, 232, 240, 0.85);
-          filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+        .cw-th-chev {
+          display: inline-flex;
+          opacity: 0.6;
+          transition: transform 180ms ease;
         }
-        .stage-text {
-          font-size: 18px;
-          font-weight: 500;
-          line-height: 1.1;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          /* Gradient animation */
-          color: transparent;
-          background-image: linear-gradient(
-            90deg,
-            rgba(30, 41, 59, 0.35) 0%,
-            rgba(59, 130, 246, 0.95) 35%,
-            rgba(236, 72, 153, 0.85) 55%,
-            rgba(16, 185, 129, 0.85) 75%,
-            rgba(30, 41, 59, 0.35) 100%
+        .cw-th-chev :global(svg) {
+          width: 14px;
+          height: 14px;
+        }
+        .cw-th-toggle.is-open .cw-th-chev {
+          transform: rotate(180deg);
+        }
+        :global(body.dark-skin) .cw-th-toggle,
+        :global(.dark) .cw-th-toggle {
+          color: #6ee7b7;
+          background: linear-gradient(
+            135deg,
+            rgba(16, 185, 129, 0.16),
+            rgba(59, 130, 246, 0.12)
           );
-          background-size: 220% 100%;
-          background-position: 0% 50%;
-          -webkit-background-clip: text;
-          background-clip: text;
-          animation: waveText 1.6s ease-in-out infinite;
+          border-color: rgba(16, 185, 129, 0.4);
         }
-        .row2 {
-          margin-top: 6px;
-          min-width: 0;
+        :global(body.dark-skin) .cw-th-check,
+        :global(.dark) .cw-th-check {
+          background: rgba(16, 185, 129, 0.25);
+          color: #6ee7b7;
         }
-        .key-value {
-          font-size: 13px;
-          line-height: 1.3;
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
-            monospace;
-          min-width: 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
+        .cw-th-body {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          animation: thIn 180ms ease-out;
+        }
+        @keyframes thIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  )
+}
 
-          color: transparent;
-          background-image: linear-gradient(
-            90deg,
-            rgba(30, 41, 59, 0.35) 0%,
-            rgba(59, 130, 246, 0.95) 35%,
-            rgba(236, 72, 153, 0.85) 55%,
-            rgba(16, 185, 129, 0.85) 75%,
-            rgba(30, 41, 59, 0.35) 100%
-          );
-          background-size: 220% 100%;
-          background-position: 0% 50%;
-          -webkit-background-clip: text;
-          background-clip: text;
-          animation: waveText 1.6s ease-in-out infinite;
+/* ---------- Completed tool card (in history) ---------- */
+function ToolCard({ step }) {
+  const [open, setOpen] = useState(false)
+  if (!step) return null
+  const meta = getStageMeta(step.stage, step.title)
+  const StageIcon = meta.Icon || Circle
+  const details = humanizeStep(step)
+  const hasDetails = details.length > 0
+  const duration = step.tsEnd && step.ts ? formatDuration(step.tsEnd - step.ts) : null
+
+  return (
+    <div className={`cw-tc tone-${meta.tone}`}>
+      <button
+        type="button"
+        className={"cw-tc-row " + (open ? "is-open" : "") + (hasDetails ? "" : " no-details")}
+        onClick={() => hasDetails && setOpen((v) => !v)}
+        aria-expanded={open ? "true" : "false"}
+        disabled={!hasDetails}
+      >
+        <span className="cw-tc-icon" aria-hidden="true"><StageIcon /></span>
+        <span className="cw-tc-name">{meta.label}</span>
+        {duration ? (
+          <span className="cw-tc-dur"><Clock /> {duration}</span>
+        ) : null}
+        <span className="cw-tc-status" aria-hidden="true"><CheckCircle2 /></span>
+        {hasDetails ? (
+          <span className="cw-tc-chev" aria-hidden="true"><ChevronDown /></span>
+        ) : null}
+      </button>
+      {open && hasDetails ? (
+        <div className="cw-tc-detail">
+          {details.map((d, i) => (
+            d.kind === "list" && Array.isArray(d.value) ? (
+              <ol className="cw-tc-list" key={i}>
+                {d.value.map((it, j) => <li key={j}>{it}</li>)}
+              </ol>
+            ) : (
+              <div className="cw-tc-line" key={i}>
+                <span className="cw-tc-k">{d.label}</span>
+                <span className="cw-tc-v">{d.value}</span>
+              </div>
+            )
+          ))}
+        </div>
+      ) : null}
+      <style jsx>{`
+        .cw-tc { --tone: 100, 116, 139; }
+        .cw-tc.tone-violet  { --tone: 139, 92, 246; }
+        .cw-tc.tone-blue    { --tone: 59, 130, 246; }
+        .cw-tc.tone-indigo  { --tone: 99, 102, 241; }
+        .cw-tc.tone-cyan    { --tone: 6, 182, 212; }
+        .cw-tc.tone-amber   { --tone: 245, 158, 11; }
+        .cw-tc.tone-emerald { --tone: 16, 185, 129; }
+        .cw-tc.tone-rose    { --tone: 244, 63, 94; }
+        .cw-tc.tone-slate   { --tone: 100, 116, 139; }
+
+        .cw-tc-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+          padding: 5px 8px;
+          margin: 0 -8px;
+          border: none;
+          background: transparent;
+          border-radius: 6px;
+          text-align: left;
+          cursor: pointer;
+          font-size: 13px;
+          line-height: 1.4;
+          transition: background 120ms ease;
         }
-        .bar {
-          position: absolute;
-          left: 14px;
-          right: 14px;
-          bottom: 10px;
-          height: 2px;
-          border-radius: 999px;
+        .cw-tc-row:hover:not(:disabled) { background: rgba(var(--tone), 0.07); }
+        .cw-tc-row.no-details { cursor: default; }
+        :global(body.dark-skin) .cw-tc-row:hover:not(:disabled),
+        :global(.dark) .cw-tc-row:hover:not(:disabled) { background: rgba(var(--tone), 0.12); }
+
+        .cw-tc-icon {
+          flex-shrink: 0;
+          display: inline-flex;
+          color: rgb(var(--tone));
+        }
+        .cw-tc-icon :global(svg) { width: 15px; height: 15px; stroke-width: 2; }
+
+        .cw-tc-name {
+          flex: 1 1 auto;
+          min-width: 0;
+          font-weight: 600;
+          color: rgba(15, 23, 42, 0.9);
+          white-space: nowrap;
           overflow: hidden;
-          opacity: 0.55;
-          background: rgba(148, 163, 184, 0.25);
+          text-overflow: ellipsis;
         }
-        .bar::before {
-          content: "";
-          position: absolute;
-          left: -40%;
-          top: 0;
-          height: 100%;
-          width: 40%;
-          border-radius: 999px;
-          background: linear-gradient(90deg, #3b82f6, #ec4899, #10b981);
-          animation: indeterminate 1.2s ease-in-out infinite;
+        :global(body.dark-skin) .cw-tc-name,
+        :global(.dark) .cw-tc-name { color: rgba(226, 232, 240, 0.92); }
+
+        .cw-tc-dur {
+          flex-shrink: 0;
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          font-size: 11.5px;
+          color: rgba(100, 116, 139, 0.85);
+          font-variant-numeric: tabular-nums;
         }
-        .task-list {
-          margin-top: 8px;
+        .cw-tc-dur :global(svg) { width: 11px; height: 11px; }
+        :global(body.dark-skin) .cw-tc-dur,
+        :global(.dark) .cw-tc-dur { color: rgba(148, 163, 184, 0.85); }
+
+        .cw-tc-status {
+          flex-shrink: 0;
+          display: inline-flex;
+          color: rgb(16, 185, 129);
+        }
+        .cw-tc-status :global(svg) { width: 14px; height: 14px; }
+
+        .cw-tc-chev {
+          flex-shrink: 0;
+          display: inline-flex;
+          color: rgba(100, 116, 139, 0.5);
+          transition: transform 180ms ease;
+        }
+        .cw-tc-chev :global(svg) { width: 13px; height: 13px; }
+        .cw-tc-row.is-open .cw-tc-chev { transform: rotate(180deg); }
+
+        .cw-tc-detail {
+          margin: 3px 0 3px 23px;
+          padding: 6px 10px;
+          border-left: 2px solid rgba(var(--tone), 0.3);
           display: flex;
           flex-direction: column;
           gap: 4px;
+          animation: tcOpen 150ms ease-out;
         }
-        .task-item {
+        .cw-tc-line {
           display: flex;
-          align-items: flex-start;
+          align-items: baseline;
           gap: 6px;
-          font-size: 13px;
-          line-height: 1.4;
-          color: rgba(30, 41, 59, 0.85);
+          font-size: 12.5px;
+          line-height: 1.5;
         }
-        :global(.dark) .task-item,
-        :global(body.dark-skin) .task-item {
-          color: rgba(226, 232, 240, 0.85);
-        }
-        .task-item.done {
-          opacity: 0.6;
-        }
-        .task-item.done .task-title {
-          text-decoration: line-through;
-        }
-        .task-num {
-          font-weight: 600;
-          color: rgba(59, 130, 246, 0.9);
-          min-width: 18px;
+        .cw-tc-k {
           flex-shrink: 0;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: rgb(var(--tone));
+          opacity: 0.8;
         }
-        .task-title {
-          line-height: 1.4;
+        .cw-tc-v {
+          color: rgba(30, 41, 59, 0.85);
+          word-break: break-word;
           min-width: 0;
         }
-        .task-check {
+        :global(body.dark-skin) .cw-tc-v,
+        :global(.dark) .cw-tc-v { color: rgba(203, 213, 225, 0.9); }
+        .cw-tc-list {
+          margin: 1px 0 0 0;
+          padding-left: 16px;
+          font-size: 12.5px;
+          line-height: 1.5;
+          color: rgba(30, 41, 59, 0.85);
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        :global(body.dark-skin) .cw-tc-list,
+        :global(.dark) .cw-tc-list { color: rgba(203, 213, 225, 0.9); }
+        .cw-tc-list li { list-style: disc; }
+
+        @keyframes tcOpen {
+          from { opacity: 0; transform: translateY(-2px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+/* ---------- Live stage toast (while streaming) ---------- */
+function StageToast({ step }) {
+  if (!step) return null
+  const meta = getStageMeta(step.stage, step.title)
+  const StageIcon = meta.Icon || Circle
+  const summary = getCardSummary(step)
+  const title = step.title || meta.label
+
+  // Extract tasks for the live mini-list (if any)
+  const tasks = (() => {
+    const p = step.rawPayload
+    if (!p) return null
+    if (Array.isArray(p)) {
+      const t = p.filter((it) => it && typeof it === "object" && (it.title || it.name || it.text))
+      return t.length ? t : null
+    }
+    if (typeof p !== "object") return null
+    const arr = p.tasks ?? p.subtasks ?? p.steps ?? p.plan
+    if (Array.isArray(arr) && arr.length) {
+      const t = arr.filter((it) => it && typeof it === "object" && (it.title || it.name || it.text))
+      return t.length ? t : null
+    }
+    return null
+  })()
+
+  return (
+    <div key={step.id} className={`cw-st tone-${meta.tone} mb-2`}>
+      <div className="cw-st-card">
+        <div className="cw-st-head">
+          <span className="cw-st-spinner" aria-hidden="true">
+            <StageIcon className="cw-st-glyph" />
+            <Loader2 className="cw-st-ring" />
+          </span>
+          <div className="cw-st-info">
+            <div className="cw-st-row1">
+              <span className="cw-st-tag">{meta.label}</span>
+              <span className="cw-st-title">{title}</span>
+            </div>
+            {summary ? <div className="cw-st-sub">{summary}</div> : null}
+          </div>
+        </div>
+
+        {tasks ? (
+          <ul className="cw-st-tasks">
+            {tasks.slice(0, 4).map((t, i) => (
+              <li key={t.id || i} className={t.completed || t.done ? "done" : ""}>
+                <span className="num">{t.order ?? i + 1}</span>
+                <span className="txt">{t.title || t.name || t.text}</span>
+                {(t.completed || t.done) ? <Check className="chk" /> : null}
+              </li>
+            ))}
+            {tasks.length > 4 ? <li className="more">+{tasks.length - 4} more</li> : null}
+          </ul>
+        ) : null}
+
+        <div className="cw-st-bar" aria-hidden="true" />
+      </div>
+
+      <style jsx>{`
+        .cw-st { --tone: 99, 102, 241; animation: stIn 200ms ease-out; }
+        .cw-st.tone-violet  { --tone: 139, 92, 246; }
+        .cw-st.tone-blue    { --tone: 59, 130, 246; }
+        .cw-st.tone-indigo  { --tone: 99, 102, 241; }
+        .cw-st.tone-cyan    { --tone: 6, 182, 212; }
+        .cw-st.tone-amber   { --tone: 245, 158, 11; }
+        .cw-st.tone-emerald { --tone: 16, 185, 129; }
+        .cw-st.tone-rose    { --tone: 244, 63, 94; }
+        .cw-st.tone-slate   { --tone: 100, 116, 139; }
+
+        .cw-st-card {
+          position: relative;
+          border-radius: 10px;
+          padding: 11px 14px 15px;
+          border: 1px solid rgba(var(--tone), 0.25);
+          background: rgba(255, 255, 255, 0.92);
+          box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+          overflow: hidden;
+        }
+        :global(body.dark-skin) .cw-st-card,
+        :global(.dark) .cw-st-card {
+          background: rgba(15, 23, 42, 0.55);
+          border-color: rgba(var(--tone), 0.38);
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        }
+
+        .cw-st-head {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .cw-st-spinner {
+          position: relative;
+          width: 28px;
+          height: 28px;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .cw-st-glyph {
+          position: absolute;
           width: 14px;
           height: 14px;
-          color: rgba(16, 185, 129, 0.9);
+          color: rgb(var(--tone));
+          stroke-width: 2;
+          z-index: 1;
+        }
+        .cw-st-ring {
+          position: absolute;
+          inset: 0;
+          width: 28px;
+          height: 28px;
+          color: rgba(var(--tone), 0.55);
+          stroke-dasharray: 50 22;
+          animation: spin 1.1s linear infinite;
+        }
+
+        .cw-st-info {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+        .cw-st-row1 {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          min-width: 0;
+        }
+        .cw-st-tag {
           flex-shrink: 0;
+          font-size: 9.5px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.07em;
+          color: rgb(var(--tone));
+          padding: 2px 5px;
+          border-radius: 4px;
+          background: rgba(var(--tone), 0.13);
         }
-        .task-more {
+        :global(body.dark-skin) .cw-st-tag,
+        :global(.dark) .cw-st-tag { background: rgba(var(--tone), 0.22); }
+        .cw-st-title {
+          font-size: 13.5px;
+          font-weight: 600;
+          line-height: 1.25;
+          color: transparent;
+          background-image: linear-gradient(
+            90deg,
+            rgba(30, 41, 59, 0.55) 0%,
+            rgb(var(--tone)) 30%,
+            rgba(236, 72, 153, 0.85) 55%,
+            rgb(var(--tone)) 75%,
+            rgba(30, 41, 59, 0.55) 100%
+          );
+          background-size: 220% 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          animation: waveText 1.8s ease-in-out infinite;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          flex: 1;
+          min-width: 0;
+        }
+        :global(body.dark-skin) .cw-st-title,
+        :global(.dark) .cw-st-title {
+          background-image: linear-gradient(
+            90deg,
+            rgba(226, 232, 240, 0.45) 0%,
+            rgb(var(--tone)) 30%,
+            rgba(244, 114, 182, 0.9) 55%,
+            rgb(var(--tone)) 75%,
+            rgba(226, 232, 240, 0.45) 100%
+          );
+          background-size: 220% 100%;
+        }
+        .cw-st-sub {
           font-size: 12px;
-          color: rgba(100, 116, 139, 0.7);
-          font-style: italic;
-          margin-left: 24px;
+          line-height: 1.4;
+          color: rgba(71, 85, 105, 0.85);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
-        :global(.dark) .task-more,
-        :global(body.dark-skin) .task-more {
-          color: rgba(226, 232, 240, 0.5);
+        :global(body.dark-skin) .cw-st-sub,
+        :global(.dark) .cw-st-sub { color: rgba(148, 163, 184, 0.9); }
+
+        .cw-st-tasks {
+          margin: 9px 0 0 40px;
+          padding: 0;
+          list-style: none;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
         }
-        @keyframes stageIn {
-          from {
-            opacity: 0;
-            transform: translateY(6px) scale(0.99);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
+        .cw-st-tasks li {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          color: rgba(30, 41, 59, 0.85);
         }
-        @keyframes spinFast {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
+        :global(body.dark-skin) .cw-st-tasks li,
+        :global(.dark) .cw-st-tasks li { color: rgba(226, 232, 240, 0.85); }
+        .cw-st-tasks li.done { opacity: 0.5; }
+        .cw-st-tasks li.done .txt { text-decoration: line-through; }
+        .cw-st-tasks .num { font-weight: 700; color: rgb(var(--tone)); min-width: 14px; font-size: 11px; }
+        .cw-st-tasks .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+        .cw-st-tasks .chk { width: 11px; height: 11px; color: #10b981; stroke-width: 3; flex-shrink: 0; }
+        .cw-st-tasks .more { font-size: 11px; color: rgba(100, 116, 139, 0.6); font-style: italic; }
+
+        .cw-st-bar {
+          position: absolute;
+          left: 0; right: 0; bottom: 0;
+          height: 2px;
+          overflow: hidden;
+          background: rgba(var(--tone), 0.07);
         }
-        @keyframes pulseSoft {
-          0%,
-          100% {
-            transform: scale(1);
-            opacity: 0.95;
-          }
-          50% {
-            transform: scale(1.06);
-            opacity: 1;
-          }
+        .cw-st-bar::before {
+          content: "";
+          position: absolute;
+          left: -40%; top: 0;
+          height: 100%; width: 40%;
+          background: linear-gradient(90deg, transparent, rgb(var(--tone)), transparent);
+          animation: indeterminate 1.3s ease-in-out infinite;
+        }
+        @keyframes stIn {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
         }
         @keyframes waveText {
-          0% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-          100% {
-            background-position: 0% 50%;
-          }
+          0%   { background-position: 0% 50%; }
+          50%  { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
         }
         @keyframes indeterminate {
-          0% {
-            left: -40%;
-          }
-          50% {
-            left: 60%;
-          }
-          100% {
-            left: 120%;
-          }
+          0%   { left: -40%; }
+          100% { left: 100%; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .cw-st-ring, .cw-st-title, .cw-st-bar::before { animation: none; }
         }
       `}</style>
     </div>
@@ -2559,31 +2891,67 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     setComposerFiles((prev) => prev.filter((x) => x.id !== id))
   }
 
+  // Stages we never want to surface as a "tool call card" — too noisy / not meaningful
+  // to the user (lifecycle/heartbeat/init markers). Edit this set to add/remove filters.
+  const TRIVIAL_STAGES = new Set([
+    "start", "begin", "init", "initialize", "initialized",
+    "heartbeat", "ping", "keepalive", "keep_alive",
+    "ack", "noop", "open", "close", "connected", "disconnected",
+    "answer_delta", "answer_final", "message",
+    "complete", "completed", "done", "finished", "finish", "end", "ended", "final", "answer",
+  ])
+  const isTrivialStage = (stage) => {
+    const s = String(stage || "").toLowerCase()
+    if (!s) return true
+    if (TRIVIAL_STAGES.has(s)) return true
+    // catch *_start / *_begin / *_init / *_done / *_complete variants
+    if (/(^|_)(start|begin|init|heartbeat|ping|done|complete|completed|end|ended|finish|finished|final)$/.test(s)) return true
+    return false
+  }
+
   const setStage = (assistantId, stage, obj = {}) => {
+    if (isTrivialStage(stage)) return
     const title = formatStageTitle(stage, obj?.message)
     const keyInfo = summarizePayload(obj?.payload, 180)
+    const now = Date.now()
+    const card = {
+      id: `${String(stage || "stage")}-${now}-${Math.random().toString(36).slice(2, 6)}`,
+      stage,
+      title,
+      keyInfo,
+      rawPayload: obj?.payload,
+      ts: now,
+    }
 
     setMessages((prev) =>
-      prev.map((m) =>
-        m.id === assistantId
-          ? {
-            ...m,
-            thinkingNow: {
-              id: `${String(stage || "stage")}-${Date.now()}`,
-              stage,
-              title,
-              keyInfo,
-              rawPayload: obj?.payload,
-              ts: Date.now(),
-            },
-          }
-          : m,
-      ),
+      prev.map((m) => {
+        if (m.id !== assistantId) return m
+        const existing = Array.isArray(m.toolCards) ? m.toolCards : []
+        const last = existing[existing.length - 1]
+        // Close out the previous card with an end timestamp
+        const closed = last && !last.tsEnd ? [...existing.slice(0, -1), { ...last, tsEnd: now }] : existing
+        // De-dupe: skip if previous card has the same stage + title (avoids repeated steps)
+        const isDup = last && last.stage === stage && last.title === title
+        return {
+          ...m,
+          thinkingNow: card,
+          toolCards: isDup ? closed : [...closed, card],
+        }
+      }),
     )
   }
 
   const clearStage = (assistantId) => {
-    setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, thinkingNow: null } : m)))
+    const now = Date.now()
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== assistantId) return m
+        const existing = Array.isArray(m.toolCards) ? m.toolCards : []
+        const last = existing[existing.length - 1]
+        const closed = last && !last.tsEnd ? [...existing.slice(0, -1), { ...last, tsEnd: now }] : existing
+        return { ...m, thinkingNow: null, toolCards: closed }
+      }),
+    )
   }
 
   const finalizeAssistant = (assistantId, rawFinal, onFinal) => {
@@ -2611,8 +2979,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     
     // Use the passed requestMode to determine DEEPTHINKING vs FAST
     const useDeepThinking = requestMode === "thinking"
-
-    setStage(assistantId, "start", { message: "Init", payload: { ts: Date.now() } })
 
     const body = {
       question,
@@ -2750,6 +3116,32 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       .filter((f) => f.status === "ready" && f.publicUrl)
       .map((f) => ({ name: f.name, url: f.publicUrl }))
 
+    // --- Site-tour intent shortcut ---
+    // If the user explicitly asks for a web/site tour, skip the backend and
+    // re-render the "Start web guide" CTA so they can launch it directly.
+    const tourIntentRegex = /\b(?:guide\s+me(?:\s+(?:through|around|on|the))?(?:\s+(?:the\s+)?(?:web|site|website|portfolio|page))?|(?:web|site|website|guided)\s*tour|show\s+me\s+around|walk\s+me\s+through(?:\s+the\s+(?:site|web|website|portfolio))?|take\s+me\s+on\s+a\s+tour|start\s+(?:the\s+)?(?:web\s+)?guide)\b/i
+    if (visibleText && readyFiles.length === 0 && tourIntentRegex.test(visibleText)) {
+      setMessages((prev) => [...prev, { id: generateUUID(), role: "user", content: visibleText, attachments: [] }])
+      setInput("")
+      setComposerFiles([])
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateUUID(),
+          role: "assistant",
+          content: "Sure — click below to start the guided web tour.",
+          showGuideCta: true,
+        },
+      ])
+      try {
+        const dbMode = mode === "thinking" ? "deepthinking" : "regular"
+        await supabase.from("Chat").insert([{ question: visibleText, answer: "[web tour CTA shown]", mode: dbMode }])
+      } catch (dbErr) {
+        logger.warn("Supabase insert failed", dbErr)
+      }
+      return
+    }
+
     if (abortRef.current) {
       try {
         abortRef.current.abort()
@@ -2764,7 +3156,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     setComposerFiles([])
 
     const assistantId = generateUUID()
-    setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", streaming: true, thinkingNow: null }])
+    setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", streaming: true, thinkingNow: null, toolCards: [] }])
 
     const baseQuestion = visibleText
     const requestMode = mode
@@ -2786,13 +3178,22 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     try {
       await startRagSSE({ question: baseQuestion, fileUrls, assistantId, requestMode, currentSessionId: sessionId, onFinal: finalizeAndPersist, pageContext: pageCtx })
     } catch (err) {
-      console.error("[ChatWidget] SSE failed:", err)
-      logger.error("SSE failed:", err)
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId ? { ...m, content: "⚠️ Failed to contact assistant.", streaming: false, thinkingNow: null } : m,
-        ),
-      )
+      if (err?.name === "AbortError") {
+        // User stopped the stream — keep whatever partial content was buffered
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId && m.streaming ? { ...m, streaming: false, thinkingNow: null } : m,
+          ),
+        )
+      } else {
+        console.error("[ChatWidget] SSE failed:", err)
+        logger.error("SSE failed:", err)
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId ? { ...m, content: "⚠️ Failed to contact assistant.", streaming: false, thinkingNow: null } : m,
+          ),
+        )
+      }
       setLoading(false)
     }
   }
@@ -2918,6 +3319,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               ) : null}
 
               {m.role === "assistant" && m.streaming && m.thinkingNow ? <StageToast step={m.thinkingNow} /> : null}
+
+              {/* Persist completed tool/stage cards after streaming so the user can review what ran */}
+              {m.role === "assistant" && !m.streaming && Array.isArray(m.toolCards) && m.toolCards.length > 0 ? (
+                <ToolHistory cards={m.toolCards} />
+              ) : null}
 
               {/* Task 3: Render TodoList when planPayload with subtasks is present */}
               {m.role === "assistant" && m.planPayload?.subtasks?.length > 0 ? (
@@ -3100,39 +3506,70 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
             }}
           />
 
-          {/* Send button */}
-          <button
-            type="submit"
-            aria-label="Send message"
-            disabled={(!input.trim() && composerFiles.length === 0) || loading}
-            style={{
-              width: "40px",
-              height: "40px",
-              minWidth: "40px",
-              maxWidth: "40px",
-              minHeight: "40px",
-              maxHeight: "40px",
-              flexShrink: 0,
-              flexGrow: 0,
-              borderRadius: "8px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#f97316",
-              color: "white",
-              border: "none",
-              cursor: "pointer",
-              opacity: (!input.trim() && composerFiles.length === 0) || loading ? 0.5 : 1,
-              padding: 0,
-              boxSizing: "border-box",
-            }}
-          >
-            {loading ? (
-              <Loader2 style={{ width: "18px", height: "18px", color: "white" }} className="animate-spin" />
-            ) : (
+          {/* Stop / Send button */}
+          {loading ? (
+            <button
+              type="button"
+              aria-label="Stop generating"
+              onClick={() => {
+                if (abortRef.current) {
+                  try { abortRef.current.abort() } catch {}
+                  abortRef.current = null
+                }
+              }}
+              style={{
+                width: "40px",
+                height: "40px",
+                minWidth: "40px",
+                maxWidth: "40px",
+                minHeight: "40px",
+                maxHeight: "40px",
+                flexShrink: 0,
+                flexGrow: 0,
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#ef4444",
+                color: "white",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                boxSizing: "border-box",
+              }}
+            >
+              <Square style={{ width: "16px", height: "16px", color: "white", fill: "white" }} />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              aria-label="Send message"
+              disabled={!input.trim() && composerFiles.length === 0}
+              style={{
+                width: "40px",
+                height: "40px",
+                minWidth: "40px",
+                maxWidth: "40px",
+                minHeight: "40px",
+                maxHeight: "40px",
+                flexShrink: 0,
+                flexGrow: 0,
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#f97316",
+                color: "white",
+                border: "none",
+                cursor: "pointer",
+                opacity: !input.trim() && composerFiles.length === 0 ? 0.5 : 1,
+                padding: 0,
+                boxSizing: "border-box",
+              }}
+            >
               <ArrowUpRight style={{ width: "18px", height: "18px", color: "white" }} />
-            )}
-          </button>
+            </button>
+          )}
 
           <input
             ref={fileInputRef}
@@ -3153,14 +3590,14 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         #__chat_widget_root .bot-container {
           height: min(68vh, 576px);
           max-height: 576px;
-          background: linear-gradient(145deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%) !important;
+          background: linear-gradient(145deg, #ffffff 0%, #f8fafc 60%, #f1f5f9 100%) !important;
           position: relative;
-          border: 1px solid rgba(99, 102, 241, 0.3) !important;
+          border: 1px solid rgba(99, 102, 241, 0.18) !important;
           box-shadow: 
-            0 0 0 1px rgba(99, 102, 241, 0.1),
-            0 20px 50px -12px rgba(0, 0, 0, 0.5),
-            0 0 80px -20px rgba(99, 102, 241, 0.4),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+            0 0 0 1px rgba(99, 102, 241, 0.08),
+            0 20px 50px -12px rgba(0, 0, 0, 0.1),
+            0 0 60px -20px rgba(99, 102, 241, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
         }
         
         #__chat_widget_root .bot-container::before {
@@ -3168,8 +3605,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           position: absolute;
           inset: 0;
           background: 
-            radial-gradient(ellipse at top, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
-            radial-gradient(ellipse at bottom, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+            radial-gradient(ellipse at top, rgba(99, 102, 241, 0.06) 0%, transparent 50%),
+            radial-gradient(ellipse at bottom, rgba(139, 92, 246, 0.04) 0%, transparent 50%);
           pointer-events: none;
           border-radius: inherit;
         }
@@ -3395,42 +3832,29 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
         :global(body.dark-skin) #__chat_widget_root .bot-container,
         :global(.dark) #__chat_widget_root .bot-container {
-          background: linear-gradient(145deg, #0a0f1a 0%, #111827 50%, #1e1b4b 100%) !important;
-          border-color: rgba(99, 102, 241, 0.35) !important;
+          background: linear-gradient(145deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%) !important;
+          border-color: rgba(99, 102, 241, 0.3) !important;
           box-shadow: 
-            0 0 0 1px rgba(99, 102, 241, 0.15),
-            0 25px 60px -12px rgba(0, 0, 0, 0.6),
-            0 0 100px -20px rgba(99, 102, 241, 0.5),
-            inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
+            0 0 0 1px rgba(99, 102, 241, 0.1),
+            0 25px 60px -12px rgba(0, 0, 0, 0.5),
+            0 0 80px -20px rgba(99, 102, 241, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
           color: #e5e7eb;
-        }
-
-        :global(body.light-skin) #__chat_widget_root .bot-container {
-          background: #ffffff !important;
-          border: 1px solid rgba(99, 102, 241, 0.2) !important;
-          box-shadow:
-            0 4px 24px rgba(0, 0, 0, 0.08),
-            0 1px 4px rgba(0, 0, 0, 0.04) !important;
-          color: #1e293b;
-        }
-        :global(body.light-skin) #__chat_widget_root .bot-container::before,
-        :global(body.light-skin) #__chat_widget_root .bot-container::after {
-          display: none;
         }
         
         :global(body.dark-skin) #__chat_widget_root .bot-container::before,
         :global(.dark) #__chat_widget_root .bot-container::before {
           background: 
-            radial-gradient(ellipse at top, rgba(99, 102, 241, 0.2) 0%, transparent 50%),
-            radial-gradient(ellipse at bottom right, rgba(139, 92, 246, 0.15) 0%, transparent 50%);
+            radial-gradient(ellipse at top, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+            radial-gradient(ellipse at bottom right, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
         }
 
-        /* AG-UI Header - Always dark agent style */
+        /* AG-UI Header */
         #__chat_widget_root .bot-header {
-          background: rgba(15, 23, 42, 0.95) !important;
+          background: rgba(248, 250, 252, 0.97) !important;
           backdrop-filter: blur(16px) !important;
-          border-bottom: 1px solid rgba(99, 102, 241, 0.2) !important;
-          color: #e5e7eb !important;
+          border-bottom: 1px solid rgba(99, 102, 241, 0.15) !important;
+          color: #1e293b !important;
           position: relative;
           z-index: 10;
         }
@@ -3447,19 +3871,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         
         :global(body.dark-skin) #__chat_widget_root .bot-header,
         :global(.dark) #__chat_widget_root .bot-header {
-          background: rgba(10, 15, 30, 0.98) !important;
+          background: rgba(15, 23, 42, 0.97) !important;
           backdrop-filter: blur(16px);
-          border-color: rgba(99, 102, 241, 0.25) !important;
-          color: #e5e7eb;
-        }
-
-        :global(body.light-skin) #__chat_widget_root .bot-header {
-          background: #f8fafc !important;
-          border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
-          color: #1e293b !important;
-        }
-        :global(body.light-skin) #__chat_widget_root .bot-header::after {
-          display: none;
+          border-color: rgba(99, 102, 241, 0.2) !important;
+          color: #e5e7eb !important;
         }
 
         /* AG-UI Messages Area */
@@ -3493,9 +3908,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         
         /* AG-UI Input Area */
         #__chat_widget_root .input-area {
-          background: rgba(15, 23, 42, 0.9) !important;
+          background: rgba(248, 250, 252, 0.97) !important;
           backdrop-filter: blur(16px) !important;
-          border-top: 1px solid rgba(99, 102, 241, 0.2) !important;
+          border-top: 1px solid rgba(99, 102, 241, 0.15) !important;
           position: relative;
         }
         
@@ -3511,22 +3926,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
         :global(body.dark-skin) #__chat_widget_root .input-area,
         :global(.dark) #__chat_widget_root .input-area {
-          background: rgba(10, 15, 30, 0.95) !important;
-          border-top-color: rgba(99, 102, 241, 0.25) !important;
-        }
-
-        :global(body.light-skin) #__chat_widget_root .input-area {
-          background: #f8fafc !important;
-          border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
-        }
-        :global(body.light-skin) #__chat_widget_root .input-area::before {
-          display: none;
-        }
-        :global(body.light-skin) #__chat_widget_root .bot-input {
-          color: #1e293b !important;
-        }
-        :global(body.light-skin) #__chat_widget_root .bot-input::placeholder {
-          color: #94a3b8 !important;
+          background: rgba(15, 23, 42, 0.9) !important;
+          border-top-color: rgba(99, 102, 241, 0.2) !important;
         }
 
         :global(body.dark-skin) #__chat_widget_root,
@@ -3633,17 +4034,17 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
         /* AG-UI Bot/Agent Bubble */
         #__chat_widget_root .cw-bubble-bot {
-          background: rgba(30, 41, 59, 0.85);
+          background: rgba(241, 245, 249, 0.9);
           backdrop-filter: blur(12px);
-          border: 1px solid rgba(99, 102, 241, 0.2);
-          color: #e2e8f0;
+          border: 1px solid rgba(99, 102, 241, 0.15);
+          color: #1e293b;
           padding: 12px 18px;
           font-size: 14px;
           line-height: 1.55;
           border-radius: 20px 20px 20px 6px;
           box-shadow: 
-            0 4px 16px rgba(0, 0, 0, 0.2),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            0 4px 16px rgba(0, 0, 0, 0.06),
+            inset 0 1px 0 rgba(255, 255, 255, 0.8);
           position: relative;
         }
         
@@ -3661,20 +4062,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
         :global(body.dark-skin) #__chat_widget_root .cw-bubble-bot,
         :global(.dark) #__chat_widget_root .cw-bubble-bot {
-          background: rgba(25, 35, 55, 0.9);
+          background: rgba(30, 41, 59, 0.85);
           backdrop-filter: blur(12px);
-          border-color: rgba(99, 102, 241, 0.25);
+          border-color: rgba(99, 102, 241, 0.2);
           color: #e2e8f0;
           box-shadow: 
-            0 4px 16px rgba(0, 0, 0, 0.3),
+            0 4px 16px rgba(0, 0, 0, 0.2),
             inset 0 1px 0 rgba(255, 255, 255, 0.05);
-        }
-
-        :global(body.light-skin) #__chat_widget_root .cw-bubble-bot {
-          background: #f1f5f9;
-          border: 1px solid rgba(0, 0, 0, 0.08);
-          color: #1e293b;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
         }
 
 
@@ -3777,6 +4171,22 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
         /* ===== AG-UI Theme tokens ===== */
         :global(body) #__chat_widget_root {
+          --cw-input-bg: rgba(248, 250, 252, 0.95);
+          --cw-input-border: rgba(99, 102, 241, 0.2);
+          --cw-input-border-strong: rgba(99, 102, 241, 0.4);
+          --cw-input-text: #1e293b;
+          --cw-input-placeholder: #94a3b8;
+          --cw-attachment-border: rgba(99, 102, 241, 0.2);
+          --cw-attachment-border-strong: rgba(99, 102, 241, 0.4);
+          --cw-attachment-bg: rgba(241, 245, 249, 0.8);
+          --cw-progress-surface: rgba(241, 245, 249, 0.9);
+          --cw-progress-track: rgba(226, 232, 240, 0.8);
+          --ag-accent: #6366f1;
+          --ag-accent-glow: rgba(99, 102, 241, 0.3);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root,
+        :global(.dark) #__chat_widget_root {
           --cw-input-bg: rgba(30, 41, 59, 0.9);
           --cw-input-border: rgba(99, 102, 241, 0.3);
           --cw-input-border-strong: rgba(99, 102, 241, 0.5);
@@ -3787,37 +4197,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           --cw-attachment-bg: rgba(30, 41, 59, 0.8);
           --cw-progress-surface: rgba(30, 41, 59, 0.9);
           --cw-progress-track: rgba(55, 65, 81, 0.8);
-          --ag-accent: #6366f1;
-          --ag-accent-glow: rgba(99, 102, 241, 0.4);
-        }
-
-        :global(body.dark-skin) #__chat_widget_root,
-        :global(.dark) #__chat_widget_root {
-          --cw-input-bg: rgba(15, 23, 42, 0.95);
-          --cw-input-border: rgba(99, 102, 241, 0.35);
-          --cw-input-border-strong: rgba(99, 102, 241, 0.6);
-          --cw-input-text: #e2e8f0;
-          --cw-input-placeholder: #94a3b8;
-          --cw-attachment-border: rgba(99, 102, 241, 0.35);
-          --cw-attachment-border-strong: rgba(99, 102, 241, 0.55);
-          --cw-attachment-bg: rgba(15, 23, 42, 0.6);
-          --cw-progress-surface: rgba(15, 23, 42, 0.7);
-          --cw-progress-track: rgba(55, 65, 81, 0.9);
           --ag-accent: #818cf8;
           --ag-accent-glow: rgba(129, 140, 248, 0.5);
-        }
-
-        :global(body.light-skin) #__chat_widget_root {
-          --cw-input-bg: rgba(255, 255, 255, 0.85);
-          --cw-input-border: rgba(0, 0, 0, 0.12);
-          --cw-input-border-strong: rgba(99, 102, 241, 0.4);
-          --cw-input-text: #1e293b;
-          --cw-input-placeholder: #94a3b8;
-          --cw-attachment-border: rgba(0, 0, 0, 0.12);
-          --cw-attachment-border-strong: rgba(99, 102, 241, 0.4);
-          --cw-attachment-bg: rgba(255, 255, 255, 0.7);
-          --cw-progress-surface: rgba(248, 250, 252, 0.95);
-          --cw-progress-track: rgba(0, 0, 0, 0.08);
         }
         
         /* AG-UI Textbox styles */
@@ -3942,11 +4323,16 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           border: 1px solid rgba(99, 102, 241, 0.2);
           background: rgba(99, 102, 241, 0.1);
           cursor: pointer;
-          color: #e2e8f0;
+          color: #374151;
           font-size: 13px;
           font-weight: 600;
           line-height: 1;
           transition: all 200ms ease;
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill,
+        :global(.dark) #__chat_widget_root .cw-mode-pill {
+          color: #e2e8f0;
         }
 
         #__chat_widget_root .cw-mode-pill:focus-visible {
@@ -3963,52 +4349,54 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
         /* Fast mode - AG-UI style */
         #__chat_widget_root .cw-mode-pill.fast {
+          background: rgba(99, 102, 241, 0.1);
+          border-color: rgba(99, 102, 241, 0.2);
+          color: #4338ca;
+        }
+
+        #__chat_widget_root .cw-mode-pill.fast:hover {
+          background: rgba(99, 102, 241, 0.18);
+          border-color: rgba(99, 102, 241, 0.35);
+          box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.fast {
           background: rgba(99, 102, 241, 0.15);
           border-color: rgba(99, 102, 241, 0.25);
           color: #c7d2fe;
         }
 
-        #__chat_widget_root .cw-mode-pill.fast:hover {
-          background: rgba(99, 102, 241, 0.25);
-          border-color: rgba(99, 102, 241, 0.4);
-          box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
-        }
-
-        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.fast {
-          background: rgba(99, 102, 241, 0.12);
-          border-color: rgba(99, 102, 241, 0.25);
-          color: #c7d2fe;
-        }
-
         :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.fast:hover {
-          background: rgba(99, 102, 241, 0.22);
+          background: rgba(99, 102, 241, 0.25);
           border-color: rgba(99, 102, 241, 0.4);
         }
 
         /* Deep mode - AG-UI amber accent */
         #__chat_widget_root .cw-mode-pill.deep {
           border-radius: 999px;
+          background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
+          border-color: rgba(245, 158, 11, 0.3);
+          color: #b45309;
+          box-shadow: 0 0 8px rgba(245, 158, 11, 0.1);
+        }
+
+        #__chat_widget_root .cw-mode-pill.deep:hover {
+          background: linear-gradient(135deg, rgba(245, 158, 11, 0.22) 0%, rgba(217, 119, 6, 0.18) 100%);
+          border-color: rgba(245, 158, 11, 0.45);
+          box-shadow: 0 0 16px rgba(245, 158, 11, 0.18);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.deep {
           background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.15) 100%);
           border-color: rgba(245, 158, 11, 0.35);
           color: #fcd34d;
           box-shadow: 0 0 12px rgba(245, 158, 11, 0.15);
         }
 
-        #__chat_widget_root .cw-mode-pill.deep:hover {
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.deep:hover {
           background: linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(217, 119, 6, 0.25) 100%);
           border-color: rgba(245, 158, 11, 0.5);
           box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
-        }
-
-        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.deep {
-          background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.12) 100%);
-          border-color: rgba(245, 158, 11, 0.35);
-          color: #fcd34d;
-        }
-
-        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.deep:hover {
-          background: linear-gradient(135deg, rgba(245, 158, 11, 0.28) 0%, rgba(217, 119, 6, 0.22) 100%);
-          border-color: rgba(245, 158, 11, 0.5);
         }
 
         #__chat_widget_root .cw-mode-item-head {
@@ -4033,15 +4421,14 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           gap: 6px;
           font-size: 20px;
           font-weight: 600;
-          color: #e2e8f0;
-          text-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
-        }
-        :global(body.light-skin) #__chat_widget_root .cw-title {
           color: #1e293b;
           text-shadow: none;
         }
-          font-size: 22px;
-          font-weight: 400;
+
+        :global(body.dark-skin) #__chat_widget_root .cw-title,
+        :global(.dark) #__chat_widget_root .cw-title {
+          color: #e2e8f0;
+          text-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
         }
 
         #__chat_widget_root .cw-title-fade {
@@ -4070,19 +4457,20 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           width: 240px;
           z-index: 200;
           border-radius: 14px;
-          border: 1px solid rgba(99, 102, 241, 0.25);
-          background: rgba(20, 27, 45, 0.98);
+          border: 1px solid rgba(99, 102, 241, 0.2);
+          background: rgba(255, 255, 255, 0.98);
           backdrop-filter: blur(16px);
           box-shadow: 
-            0 16px 40px rgba(0, 0, 0, 0.4),
-            0 0 30px rgba(99, 102, 241, 0.15),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            0 16px 40px rgba(0, 0, 0, 0.12),
+            0 0 30px rgba(99, 102, 241, 0.08),
+            inset 0 1px 0 rgba(255, 255, 255, 0.8);
           overflow: hidden;
         }
 
-        :global(body.dark-skin) #__chat_widget_root .cw-mode-menu {
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-menu,
+        :global(.dark) #__chat_widget_root .cw-mode-menu {
           border-color: rgba(99, 102, 241, 0.3);
-          background: rgba(10, 15, 30, 0.98);
+          background: rgba(20, 27, 45, 0.98);
           box-shadow: 
             0 20px 50px rgba(0, 0, 0, 0.5),
             0 0 40px rgba(99, 102, 241, 0.2);
@@ -4099,8 +4487,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           border: none;
           cursor: pointer;
           text-align: left;
-          color: #e2e8f0;
+          color: #1e293b;
           transition: background-color 150ms ease;
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-item,
+        :global(.dark) #__chat_widget_root .cw-mode-item {
+          color: #e2e8f0;
         }
 
         #__chat_widget_root .cw-mode-item:hover {
@@ -4122,6 +4515,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           font-size: 13px;
           font-weight: 700;
           line-height: 1.1;
+          color: #1e293b;
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-name,
+        :global(.dark) #__chat_widget_root .cw-mode-name {
           color: #e2e8f0;
         }
 
