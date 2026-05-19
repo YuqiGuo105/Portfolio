@@ -33,7 +33,7 @@ function computePopover(anchorRect, popEl) {
 }
 
 export default function SiteTour() {
-    const steps = useMemo(
+    const STATIC_STEPS = useMemo(
         () => [
             {
                 id: "about",
@@ -81,6 +81,14 @@ export default function SiteTour() {
         []
     )
 
+    // steps state supports both static default and dynamic AI-generated overrides
+    const [steps, setSteps] = useState(null) // null = use STATIC_STEPS
+    const stepsRef = useRef(null)            // always mirrors current effective steps
+
+    const effectiveSteps = steps || STATIC_STEPS
+    // Keep ref in sync so go() always reads latest without stale closures
+    stepsRef.current = effectiveSteps
+
     const [open, setOpen] = useState(false)
     const [idx, setIdx] = useState(0)
     const [anchorRect, setAnchorRect] = useState(null)
@@ -104,6 +112,7 @@ export default function SiteTour() {
     const close = useCallback(() => {
         setOpen(false)
         setIdx(0)
+        setSteps(null) // reset to static steps for next tour
         activeElRef.current = null
         if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("cw:site-tour:end"))
@@ -111,7 +120,7 @@ export default function SiteTour() {
     }, [])
     const go = useCallback(
         (nextIdx) => {
-            const step = steps[nextIdx]
+            const step = stepsRef.current[nextIdx]
             if (!step) return
             const el = document.getElementById(step.targetId)
             if (!el) return
@@ -136,13 +145,14 @@ export default function SiteTour() {
             }
             requestAnimationFrame(watchStable)
         },
-        [steps],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [], // intentionally empty — reads from stepsRef to avoid stale closure
     )
 
 
 
     const next = () => {
-        if (idx >= steps.length - 1) return close()
+        if (idx >= effectiveSteps.length - 1) return close()
         setIdx((v) => v + 1)
     }
     const prev = () => {
@@ -151,13 +161,34 @@ export default function SiteTour() {
     }
 
     useEffect(() => {
-        const onStart = () => {
+        const onStart = (e) => {
+            // Allow dynamic steps to be passed directly with the start event
+            if (e?.detail?.steps?.length > 0) {
+                const dynamic = e.detail.steps
+                setSteps(dynamic)
+                stepsRef.current = dynamic
+            }
             setOpen(true)
             setIdx(0)
             requestAnimationFrame(() => go(0))
         }
+        const onDynamic = (e) => {
+            if (e?.detail?.steps?.length > 0) {
+                const dynamic = e.detail.steps
+                setSteps(dynamic)
+                stepsRef.current = dynamic
+                // Start tour automatically with the new steps
+                setOpen(true)
+                setIdx(0)
+                requestAnimationFrame(() => go(0))
+            }
+        }
         window.addEventListener("cw:site-tour:start", onStart)
-        return () => window.removeEventListener("cw:site-tour:start", onStart)
+        window.addEventListener("cw:site-tour:dynamic", onDynamic)
+        return () => {
+            window.removeEventListener("cw:site-tour:start", onStart)
+            window.removeEventListener("cw:site-tour:dynamic", onDynamic)
+        }
     }, [go])
 
     useEffect(() => {
@@ -199,7 +230,7 @@ export default function SiteTour() {
     if (typeof window === "undefined") return null
     if (!open) return null
 
-    const current = steps[idx]
+    const current = effectiveSteps[idx]
     const { style: baseStyle, placement } = computePopover(anchorRect, popRef.current)
 
     const popStyle = {
@@ -239,11 +270,11 @@ export default function SiteTour() {
                 <div className="st-bd">{current?.content}</div>
 
                 <div className="st-ft">
-                    <div className="st-count">{idx + 1} / {steps.length}</div>
+                    <div className="st-count">{idx + 1} / {effectiveSteps.length}</div>
                     <div className="st-actions">
                         <button className="st-btn st-plain" onClick={prev} disabled={idx === 0}>Prev</button>
                         <button className="st-btn st-primary" onClick={next}>
-                            {idx === steps.length - 1 ? "Done" : "Next"}
+                            {idx === effectiveSteps.length - 1 ? "Done" : "Next"}
                         </button>
                     </div>
                 </div>

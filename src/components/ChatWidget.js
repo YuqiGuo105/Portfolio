@@ -1472,6 +1472,63 @@ function formatStageTitle(stage, message) {
 
 /* ---------- UI bits ---------- */
 
+function ReasoningChain({ steps, streaming }) {
+  const [expanded, setExpanded] = useState(true)
+  if (!steps?.length) return null
+  const doneCount = steps.filter((s) => s.completed).length
+  return (
+    <div className="cw-reasoning">
+      <button type="button" className="cw-reasoning-toggle" onClick={() => setExpanded((v) => !v)}>
+        <Brain className="cw-r-ico" size={14} />
+        <span>Reasoning {doneCount}/{steps.length}</span>
+        <ChevronDown className={"cw-chev " + (expanded ? "open" : "")} size={13} />
+      </button>
+      {expanded && (
+        <div className="cw-reasoning-steps">
+          {steps.map((step, i) => (
+            <div key={i} className={"cw-rs " + (step.completed ? "done" : streaming ? "active" : "")}>
+              <div className="cw-rs-dot">
+                {step.completed ? <CheckCircle2 className="cw-rs-check" size={14} /> : <Circle className="cw-rs-circle" size={14} />}
+              </div>
+              <div className="cw-rs-body">
+                <div className="cw-rs-label">{step.label}</div>
+                {step.detail && <div className="cw-rs-detail">{step.detail}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function KeyConceptsBar({ concepts }) {
+  if (!concepts?.length) return null
+  const colorMap = {
+    primary: "#ef4444",
+    secondary: "#f59e0b",
+    contextual: "#10b981",
+    TECH: "#3b82f6",
+    PERSON: "#8b5cf6",
+    ORG: "#f97316",
+    CONCEPT: "#6b7280",
+  }
+  return (
+    <div className="cw-concepts">
+      <span className="cw-concepts-label">Key concepts:</span>
+      {concepts.map((c, i) => (
+        <span
+          key={i}
+          className="cw-concept-badge"
+          style={{ borderColor: colorMap[c.importance] || colorMap[c.type] || "#6b7280" }}
+        >
+          {c.term}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function TypingIndicator() {
   return (
     <div className="typing">
@@ -2524,9 +2581,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
   const MODE_KEY = "cw:mode"
   const [mode, setMode] = useState(() => {
     const saved = storageSafeGet(MODE_KEY)
-    return saved === "thinking" ? "thinking" : "regular"
+    return ["thinking", "web_guide", "enhance"].includes(saved) ? saved : "regular"
   })
   const isThinking = mode === "thinking"
+  const isWebGuide = mode === "web_guide"
+  const isEnhance  = mode === "enhance"
   const [modeOpen, setModeOpen] = useState(false)
 
   // composer attachments (max 2 per outgoing message)
@@ -2977,14 +3036,16 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     let finalized = false
     let pageRelevanceResult = null  // Store page relevance from answer_final
     
-    // Use the passed requestMode to determine DEEPTHINKING vs FAST
-    const useDeepThinking = requestMode === "thinking"
+    // Map frontend mode to backend mode string
+    const backendMode = requestMode === "thinking" ? "DEEPTHINKING"
+      : requestMode === "web_guide" ? "WEB_GUIDE"
+      : requestMode === "enhance" ? "ENHANCE" : "FAST"
 
     const body = {
       question,
       sessionId: currentSessionId,
-      mode: useDeepThinking ? "DEEPTHINKING" : "FAST",
-      scopeMode: useDeepThinking ? "GENERAL" : "OWNER_ONLY",
+      mode: backendMode,
+      scopeMode: (requestMode === "thinking" || requestMode === "web_guide") ? "GENERAL" : "OWNER_ONLY",
       ...(Array.isArray(fileUrls) && fileUrls.length > 0 ? { fileUrls } : {}),
       // Send pageContext inside ext map — no backend schema change needed
       ...(pageContext ? { ext: { currentPageUrl: pageContext.url, currentPagePattern: pageContext.pagePattern, pageContextText: pageContext.text, pageTitle: pageContext.pageTitle } } : {}),
@@ -3058,6 +3119,59 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           return
         }
 
+        // Handle reasoning_step (DeepThinking plan/verify steps)
+        if (stage === "reasoning_step") {
+          const { label, detail, completed } = obj.payload || {}
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== assistantId) return m
+              const existing = Array.isArray(m.reasoningSteps) ? m.reasoningSteps : []
+              let updatedSteps
+              if (completed) {
+                const lastIdx = [...existing].reverse().findIndex((s) => s.label === label)
+                if (lastIdx >= 0) {
+                  const realIdx = existing.length - 1 - lastIdx
+                  updatedSteps = existing.map((s, i) => (i === realIdx ? { ...s, completed: true, detail } : s))
+                } else {
+                  updatedSteps = [...existing, { label, detail, completed: true }]
+                }
+              } else {
+                updatedSteps = [...existing, { label, detail, completed: false }]
+              }
+              return { ...m, reasoningSteps: updatedSteps }
+            })
+          )
+          return
+        }
+
+        // Handle tour_steps (WebGuide AI tour)
+        if (stage === "tour_steps") {
+          const tourSteps = obj.payload?.steps
+          const autoStart = obj.payload?.autoStart
+          if (Array.isArray(tourSteps) && tourSteps.length > 0) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id !== assistantId ? m : { ...m, tourSteps }))
+            )
+            if (autoStart) {
+              try {
+                window.dispatchEvent(new CustomEvent("cw:site-tour:dynamic", { detail: { steps: tourSteps } }))
+              } catch {}
+            }
+          }
+          return
+        }
+
+        // Handle key_concepts (Enhance mode)
+        if (stage === "key_concepts") {
+          const concepts = obj.payload?.concepts
+          if (Array.isArray(concepts) && concepts.length > 0) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id !== assistantId ? m : { ...m, keyConcepts: concepts }))
+            )
+          }
+          return
+        }
+
         // Task 3: Handle deep_plan_done stage with subtasks for TodoList
         if (stage === "deep_plan_done") {
           if (obj.payload?.subtasks) {
@@ -3120,7 +3234,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     // If the user explicitly asks for a web/site tour, skip the backend and
     // re-render the "Start web guide" CTA so they can launch it directly.
     const tourIntentRegex = /\b(?:guide\s+me(?:\s+(?:through|around|on|the))?(?:\s+(?:the\s+)?(?:web|site|website|portfolio|page))?|(?:web|site|website|guided)\s*tour|show\s+me\s+around|walk\s+me\s+through(?:\s+the\s+(?:site|web|website|portfolio))?|take\s+me\s+on\s+a\s+tour|start\s+(?:the\s+)?(?:web\s+)?guide)\b/i
-    if (visibleText && readyFiles.length === 0 && tourIntentRegex.test(visibleText)) {
+    if (visibleText && readyFiles.length === 0 && mode !== "web_guide" && tourIntentRegex.test(visibleText)) {
       setMessages((prev) => [...prev, { id: generateUUID(), role: "user", content: visibleText, attachments: [] }])
       setInput("")
       setComposerFiles([])
@@ -3167,7 +3281,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
     const finalizeAndPersist = async (finalAnswer) => {
       try {
-        const dbMode = requestMode === "thinking" ? "deepthinking" : "regular"
+        const dbMode = requestMode === "thinking" ? "deepthinking"
+          : requestMode === "web_guide" ? "web_guide"
+          : requestMode === "enhance" ? "enhance" : "regular"
         await supabase.from("Chat").insert([{ question: baseQuestion, answer: finalAnswer, mode: dbMode }])
       } catch (dbErr) {
         logger.warn("Supabase insert failed", dbErr)
@@ -3237,15 +3353,15 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           <div ref={modeWrapRef} className="cw-mode-wrap">
             <button
               type="button"
-              className={"cw-mode-pill " + (isThinking ? "deep" : "fast")}
+              className={"cw-mode-pill " + (isThinking ? "deep" : isWebGuide ? "guide" : isEnhance ? "enhance" : "fast")}
               onClick={() => setModeOpen((v) => !v)}
               onMouseDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
               aria-haspopup="menu"
               aria-expanded={modeOpen ? "true" : "false"}
             >
-              {isThinking ? <Brain className="cw-mode-ico" /> : <Zap className="cw-mode-ico" />}
-              <span className="cw-mode-pill-label">{isThinking ? "Deep" : "Fast"}</span>
+              {isThinking ? <Brain className="cw-mode-ico" /> : isWebGuide ? <Compass className="cw-mode-ico" /> : isEnhance ? <Sparkles className="cw-mode-ico" /> : <Zap className="cw-mode-ico" />}
+              <span className="cw-mode-pill-label">{isThinking ? "Deep" : isWebGuide ? "Guide" : isEnhance ? "Enhance" : "Fast"}</span>
               <ChevronDown className={"cw-chev " + (modeOpen ? "open" : "")} />
             </button>
 
@@ -3287,6 +3403,44 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
                     </span>
                   </span>
                   {mode === "thinking" ? <Check className="cw-check" /> : null}
+                </button>
+
+                <button
+                  type="button"
+                  className="cw-mode-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMode("web_guide")
+                    setModeOpen(false)
+                  }}
+                >
+                  <span className="cw-mode-item-head">
+                    <Compass className="cw-mode-item-ico" />
+                    <span className="cw-mode-left">
+                      <span className="cw-mode-name">Web Guide</span>
+                      <span className="cw-mode-desc">AI-personalised site tour</span>
+                    </span>
+                  </span>
+                  {mode === "web_guide" ? <Check className="cw-check" /> : null}
+                </button>
+
+                <button
+                  type="button"
+                  className="cw-mode-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMode("enhance")
+                    setModeOpen(false)
+                  }}
+                >
+                  <span className="cw-mode-item-head">
+                    <Sparkles className="cw-mode-item-ico" />
+                    <span className="cw-mode-left">
+                      <span className="cw-mode-name">Enhance</span>
+                      <span className="cw-mode-desc">Semantic keyword highlights</span>
+                    </span>
+                  </span>
+                  {mode === "enhance" ? <Check className="cw-check" /> : null}
                 </button>
               </div>
             ) : null}
@@ -3330,6 +3484,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
                 <TodoList subtasks={m.planPayload.subtasks} expanded={true} />
               ) : null}
 
+              {/* Reasoning chain for Deep Thinking mode */}
+              {m.role === "assistant" && m.reasoningSteps?.length > 0 ? (
+                <ReasoningChain steps={m.reasoningSteps} streaming={m.streaming} />
+              ) : null}
+
               {m.showGuideCta ? (
                 <div className="cw-guide-message">
                   <p className="cw-guide-title">Hi! How can I help you today?</p>
@@ -3361,6 +3520,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               ) : (
                 renderTextWithLinks(m.content)
               )}
+
+              {/* Key concepts bar for Enhance mode */}
+              {m.role === "assistant" && !m.streaming && m.keyConcepts?.length > 0 ? (
+                <KeyConceptsBar concepts={m.keyConcepts} />
+              ) : null}
             </div>
           </div>
         ))}
@@ -4397,6 +4561,117 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           background: linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(217, 119, 6, 0.25) 100%);
           border-color: rgba(245, 158, 11, 0.5);
           box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
+        }
+
+        /* Guide mode pill */
+        #__chat_widget_root .cw-mode-pill.guide {
+          background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.08) 100%);
+          border-color: rgba(16, 185, 129, 0.3);
+          color: #047857;
+        }
+        #__chat_widget_root .cw-mode-pill.guide:hover {
+          background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.15) 100%);
+          border-color: rgba(16, 185, 129, 0.5);
+        }
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.guide {
+          background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(5, 150, 105, 0.12) 100%);
+          border-color: rgba(16, 185, 129, 0.35);
+          color: #34d399;
+        }
+
+        /* Enhance mode pill */
+        #__chat_widget_root .cw-mode-pill.enhance {
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(109, 40, 217, 0.08) 100%);
+          border-color: rgba(139, 92, 246, 0.3);
+          color: #6d28d9;
+        }
+        #__chat_widget_root .cw-mode-pill.enhance:hover {
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(109, 40, 217, 0.15) 100%);
+          border-color: rgba(139, 92, 246, 0.5);
+        }
+        :global(body.dark-skin) #__chat_widget_root .cw-mode-pill.enhance {
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.18) 0%, rgba(109, 40, 217, 0.12) 100%);
+          border-color: rgba(139, 92, 246, 0.35);
+          color: #c4b5fd;
+        }
+
+        /* Reasoning chain */
+        #__chat_widget_root .cw-reasoning {
+          margin-top: 8px;
+          border: 1px solid rgba(245, 158, 11, 0.2);
+          border-radius: 8px;
+          overflow: hidden;
+          background: rgba(245, 158, 11, 0.03);
+        }
+        #__chat_widget_root .cw-reasoning-toggle {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          width: 100%;
+          padding: 7px 10px;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          background: none;
+          border: none;
+          color: inherit;
+          text-align: left;
+          opacity: 0.75;
+        }
+        #__chat_widget_root .cw-reasoning-toggle:hover { opacity: 1; }
+        #__chat_widget_root .cw-r-ico { flex: 0 0 auto; color: #f59e0b; }
+        #__chat_widget_root .cw-reasoning-steps {
+          padding: 4px 10px 10px 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        #__chat_widget_root .cw-rs {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          font-size: 12px;
+          opacity: 0.7;
+        }
+        #__chat_widget_root .cw-rs.done { opacity: 1; }
+        #__chat_widget_root .cw-rs.active { opacity: 0.9; }
+        #__chat_widget_root .cw-rs-dot { flex: 0 0 auto; padding-top: 1px; }
+        #__chat_widget_root .cw-rs-check { color: #10b981; }
+        #__chat_widget_root .cw-rs-circle { color: #9ca3af; }
+        #__chat_widget_root .cw-rs-label { font-weight: 500; }
+        #__chat_widget_root .cw-rs-detail { font-size: 11px; opacity: 0.7; margin-top: 1px; }
+
+        /* Key concepts bar */
+        #__chat_widget_root .cw-concepts {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 6px;
+          margin-top: 10px;
+          padding-top: 8px;
+          border-top: 1px solid rgba(0,0,0,0.08);
+        }
+        #__chat_widget_root .cw-concepts-label {
+          font-size: 11px;
+          font-weight: 600;
+          opacity: 0.5;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          flex-shrink: 0;
+        }
+        #__chat_widget_root .cw-concept-badge {
+          font-size: 11px;
+          padding: 2px 8px;
+          border-radius: 999px;
+          border: 1.5px solid;
+          background: rgba(255,255,255,0.5);
+          cursor: default;
+        }
+        :global(body.dark-skin) #__chat_widget_root .cw-concepts {
+          border-top-color: rgba(255,255,255,0.1);
+        }
+        :global(body.dark-skin) #__chat_widget_root .cw-concept-badge {
+          background: rgba(0,0,0,0.2);
         }
 
         #__chat_widget_root .cw-mode-item-head {
