@@ -6,6 +6,7 @@ import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check, Copy, Za
 import Image from "next/image"
 import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
+import LogInDialog from "../components/LogInDialog"
 
 // Markdown + code highlight + LaTeX math rendering (ChatGPT-like)
 // Math rendering uses MathJax v3 (loaded from CDN) so you do NOT need KaTeX.
@@ -2579,14 +2580,17 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
   const [endpoint, setEndpoint] = useState("")
   const [errorToast, setErrorToast] = useState("")
   const MODE_KEY = "cw:mode"
+
+  const BLOG_OWNER_EMAIL = "yuqi.guo17@gmail.com"
+  // Matches any phrasing that implies blog creation / mutation
+  const BLOG_MGMT_INTENT = /\b(create|write|add|update|edit|modify|delete|remove|publish)\b.{0,60}\b(blog|tech\s+blog|life\s+blog|blog\s+post)\b|\b(list|show)\s+(my\s+)?(tech|life)\s+blog/i
   const [mode, setMode] = useState(() => {
     const saved = storageSafeGet(MODE_KEY)
-    return ["thinking", "web_guide", "enhance"].includes(saved) ? saved : "regular"
+    return ["thinking"].includes(saved) ? saved : "regular"
   })
   const isThinking = mode === "thinking"
-  const isWebGuide = mode === "web_guide"
-  const isEnhance  = mode === "enhance"
   const [modeOpen, setModeOpen] = useState(false)
+  const [showLoginDialog, setShowLoginDialog] = useState(false)
 
   // composer attachments (max 2 per outgoing message)
   const [composerFiles, setComposerFiles] = useState([])
@@ -3025,7 +3029,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     onFinal?.(finalContent)
   }
 
-  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal, requestMode, currentSessionId, pageContext }) => {
+  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal, requestMode, currentSessionId, pageContext, userEmail }) => {
     const base = ragEndpointRef.current || (await resolveRagEndpoint())
     const streamUrl = ragStreamUrl(base)
 
@@ -3037,18 +3041,17 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     let pageRelevanceResult = null  // Store page relevance from answer_final
     
     // Map frontend mode to backend mode string
-    const backendMode = requestMode === "thinking" ? "DEEPTHINKING"
-      : requestMode === "web_guide" ? "WEB_GUIDE"
-      : requestMode === "enhance" ? "ENHANCE" : "FAST"
+    const backendMode = requestMode === "thinking" ? "DEEPTHINKING" : "FAST"
 
     const body = {
       question,
       sessionId: currentSessionId,
       mode: backendMode,
-      scopeMode: (requestMode === "thinking" || requestMode === "web_guide") ? "GENERAL" : "OWNER_ONLY",
+      scopeMode: requestMode === "thinking" ? "GENERAL" : "OWNER_ONLY",
       ...(Array.isArray(fileUrls) && fileUrls.length > 0 ? { fileUrls } : {}),
       // Send pageContext inside ext map — no backend schema change needed
       ...(pageContext ? { ext: { currentPageUrl: pageContext.url, currentPagePattern: pageContext.pagePattern, pageContextText: pageContext.text, pageTitle: pageContext.pageTitle } } : {}),
+      ...(userEmail ? { userEmail } : {}),
     }
 
     await postSSE(streamUrl, body, {
@@ -3161,7 +3164,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           return
         }
 
-        // Handle key_concepts (Enhance mode)
+        // Handle key_concepts (from extract_key_concepts tool)
         if (stage === "key_concepts") {
           const concepts = obj.payload?.concepts
           if (Array.isArray(concepts) && concepts.length > 0) {
@@ -3169,6 +3172,65 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               prev.map((m) => (m.id !== assistantId ? m : { ...m, keyConcepts: concepts }))
             )
           }
+          return
+        }
+
+        // Handle tool_call_start — show tool invocation card
+        if (stage === "tool_call_start") {
+          const { toolName, args, callId } = obj.payload || {}
+          if (toolName) {
+            const now = Date.now()
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== assistantId) return m
+                const existing = Array.isArray(m.toolCards) ? m.toolCards : []
+                return {
+                  ...m,
+                  toolCards: [
+                    ...existing,
+                    {
+                      id: callId || `tc-${now}`,
+                      stage: "tool_call_start",
+                      title: `\u{1F527} ${toolName}`,
+                      keyInfo: args ? String(args).slice(0, 120) : "",
+                      rawPayload: obj.payload,
+                      ts: now,
+                      toolName,
+                      callId,
+                    },
+                  ],
+                }
+              })
+            )
+          }
+          return
+        }
+
+        // Handle tool_call_result — update the matching tool card with latency
+        if (stage === "tool_call_result") {
+          const { toolName, callId, latencyMs, status } = obj.payload || {}
+          const now = Date.now()
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== assistantId) return m
+              const existing = Array.isArray(m.toolCards) ? m.toolCards : []
+              const updated = existing.map((c) => {
+                if (c.callId && c.callId === callId) {
+                  return { ...c, tsEnd: now, keyInfo: latencyMs ? `${latencyMs}ms · ${status || "done"}` : (status || "done") }
+                }
+                return c
+              })
+              return { ...m, toolCards: updated }
+            })
+          )
+          return
+        }
+
+        // Handle intent_decided — emit as a regular stage card (dev info)
+        if (stage === "intent_decided") {
+          const { useRAG, ragScope, toolHints, reasoning } = obj.payload || {}
+          const info = [useRAG ? `RAG:${ragScope || "auto"}` : "no-RAG", toolHints?.length ? `tools:${toolHints.join(",")}` : null].filter(Boolean).join(" · ")
+          setStage(assistantId, "intent_decided", { message: `Intent: ${info}`, payload: obj.payload })
           return
         }
 
@@ -3234,7 +3296,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     // If the user explicitly asks for a web/site tour, skip the backend and
     // re-render the "Start web guide" CTA so they can launch it directly.
     const tourIntentRegex = /\b(?:guide\s+me(?:\s+(?:through|around|on|the))?(?:\s+(?:the\s+)?(?:web|site|website|portfolio|page))?|(?:web|site|website|guided)\s*tour|show\s+me\s+around|walk\s+me\s+through(?:\s+the\s+(?:site|web|website|portfolio))?|take\s+me\s+on\s+a\s+tour|start\s+(?:the\s+)?(?:web\s+)?guide)\b/i
-    if (visibleText && readyFiles.length === 0 && mode !== "web_guide" && tourIntentRegex.test(visibleText)) {
+    if (visibleText && readyFiles.length === 0 && !isThinking && tourIntentRegex.test(visibleText)) {
       setMessages((prev) => [...prev, { id: generateUUID(), role: "user", content: visibleText, attachments: [] }])
       setInput("")
       setComposerFiles([])
@@ -3254,6 +3316,28 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         logger.warn("Supabase insert failed", dbErr)
       }
       return
+    }
+
+    // --- Blog management auth guard ---
+    if (visibleText && BLOG_MGMT_INTENT.test(visibleText)) {
+      const { data: { session } } = await supabase.auth.getSession()
+      const authedEmail = session?.user?.email
+      if (!authedEmail || authedEmail.toLowerCase() !== BLOG_OWNER_EMAIL) {
+        setMessages((prev) => [
+          ...prev,
+          { id: generateUUID(), role: "user", content: visibleText, attachments: [] },
+          {
+            id: generateUUID(),
+            role: "assistant",
+            content: "Blog management is restricted to the site owner. Please log in with the authorised account to continue.",
+            showLoginCta: true,
+          },
+        ])
+        setInput("")
+        setComposerFiles([])
+        setShowLoginDialog(true)
+        return
+      }
     }
 
     if (abortRef.current) {
@@ -3281,9 +3365,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
     const finalizeAndPersist = async (finalAnswer) => {
       try {
-        const dbMode = requestMode === "thinking" ? "deepthinking"
-          : requestMode === "web_guide" ? "web_guide"
-          : requestMode === "enhance" ? "enhance" : "regular"
+        const dbMode = requestMode === "thinking" ? "deepthinking" : "regular"
         await supabase.from("Chat").insert([{ question: baseQuestion, answer: finalAnswer, mode: dbMode }])
       } catch (dbErr) {
         logger.warn("Supabase insert failed", dbErr)
@@ -3292,7 +3374,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     }
 
     try {
-      await startRagSSE({ question: baseQuestion, fileUrls, assistantId, requestMode, currentSessionId: sessionId, onFinal: finalizeAndPersist, pageContext: pageCtx })
+      const { data: { session: activeSession } } = await supabase.auth.getSession()
+      const ownerEmail = activeSession?.user?.email || null
+      await startRagSSE({ question: baseQuestion, fileUrls, assistantId, requestMode, currentSessionId: sessionId, onFinal: finalizeAndPersist, pageContext: pageCtx, userEmail: ownerEmail })
     } catch (err) {
       if (err?.name === "AbortError") {
         // User stopped the stream — keep whatever partial content was buffered
@@ -3353,15 +3437,15 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           <div ref={modeWrapRef} className="cw-mode-wrap">
             <button
               type="button"
-              className={"cw-mode-pill " + (isThinking ? "deep" : isWebGuide ? "guide" : isEnhance ? "enhance" : "fast")}
+              className={"cw-mode-pill " + (isThinking ? "deep" : "fast")}
               onClick={() => setModeOpen((v) => !v)}
               onMouseDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
               aria-haspopup="menu"
               aria-expanded={modeOpen ? "true" : "false"}
             >
-              {isThinking ? <Brain className="cw-mode-ico" /> : isWebGuide ? <Compass className="cw-mode-ico" /> : isEnhance ? <Sparkles className="cw-mode-ico" /> : <Zap className="cw-mode-ico" />}
-              <span className="cw-mode-pill-label">{isThinking ? "Deep" : isWebGuide ? "Guide" : isEnhance ? "Enhance" : "Fast"}</span>
+              {isThinking ? <Brain className="cw-mode-ico" /> : <Zap className="cw-mode-ico" />}
+              <span className="cw-mode-pill-label">{isThinking ? "Deep" : "Fast"}</span>
               <ChevronDown className={"cw-chev " + (modeOpen ? "open" : "")} />
             </button>
 
@@ -3405,43 +3489,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
                   {mode === "thinking" ? <Check className="cw-check" /> : null}
                 </button>
 
-                <button
-                  type="button"
-                  className="cw-mode-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setMode("web_guide")
-                    setModeOpen(false)
-                  }}
-                >
-                  <span className="cw-mode-item-head">
-                    <Compass className="cw-mode-item-ico" />
-                    <span className="cw-mode-left">
-                      <span className="cw-mode-name">Web Guide</span>
-                      <span className="cw-mode-desc">AI-personalised site tour</span>
-                    </span>
-                  </span>
-                  {mode === "web_guide" ? <Check className="cw-check" /> : null}
-                </button>
 
-                <button
-                  type="button"
-                  className="cw-mode-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setMode("enhance")
-                    setModeOpen(false)
-                  }}
-                >
-                  <span className="cw-mode-item-head">
-                    <Sparkles className="cw-mode-item-ico" />
-                    <span className="cw-mode-left">
-                      <span className="cw-mode-name">Enhance</span>
-                      <span className="cw-mode-desc">Semantic keyword highlights</span>
-                    </span>
-                  </span>
-                  {mode === "enhance" ? <Check className="cw-check" /> : null}
-                </button>
               </div>
             ) : null}
           </div>
@@ -3489,7 +3537,18 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
                 <ReasoningChain steps={m.reasoningSteps} streaming={m.streaming} />
               ) : null}
 
-              {m.showGuideCta ? (
+              {m.showLoginCta ? (
+                <div className="cw-guide-message">
+                  <p className="cw-guide-title">Login required</p>
+                  <p className="cw-guide-copy">Blog management is restricted to the site owner.</p>
+                  <div className="cw-guide-actions">
+                    <button type="button" className="cw-guide-btn" onClick={() => setShowLoginDialog(true)}>
+                      Log In
+                      <ArrowUpRight className="cw-guide-ico" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              ) : m.showGuideCta ? (
                 <div className="cw-guide-message">
                   <p className="cw-guide-title">Hi! How can I help you today?</p>
                   <p className="cw-guide-copy">
@@ -5197,6 +5256,20 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           background: rgba(59, 130, 246, 0.5);
         }
       `}</style>
+
+      <LogInDialog
+        open={showLoginDialog}
+        title="Owner Login Required"
+        onClose={() => setShowLoginDialog(false)}
+        onConfirm={async (email, password) => {
+          const { error } = await supabase.auth.signInWithPassword({ email, password })
+          if (error) {
+            logger.warn("Login failed", error.message)
+            return { error: error.message }
+          }
+          setShowLoginDialog(false)
+        }}
+      />
     </div>
   )
 }
