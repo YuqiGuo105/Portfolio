@@ -7,6 +7,7 @@ import Image from "next/image"
 import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
 import LogInDialog from "../components/LogInDialog"
+import RelatedLinks from "../components/RelatedLinks"
 
 // Markdown + code highlight + LaTeX math rendering (ChatGPT-like)
 // Math rendering uses MathJax v3 (loaded from CDN) so you do NOT need KaTeX.
@@ -36,44 +37,7 @@ function isAllowedHost() {
 }
 
 /**
- * Per-page-type structured extractors — limits token usage.
- * Keys are Next.js router.pathname patterns (bracket form).
- */
-const PAGE_EXTRACTORS = {
-  "/": () => {
-    const sections = []
-    const about = document.querySelector("#about-section .profile-box .text")
-    if (about) sections.push("About: " + about.innerText.replace(/\s+/g, " ").trim().slice(0, 400))
-    document.querySelectorAll("#resume-section .history-item").forEach(el => {
-      sections.push(el.innerText.replace(/\s+/g, " ").trim().slice(0, 120))
-    })
-    document.querySelectorAll("#Blog-section .archive-item .desc").forEach((el, i) => {
-      if (i < 4) sections.push("Blog: " + el.innerText.replace(/\s+/g, " ").trim().slice(0, 100))
-    })
-    return sections.join(" | ")
-  },
-  "/blog": () => {
-    const items = []
-    document.querySelectorAll(".archive-item .desc").forEach((el, i) => {
-      if (i < 8) items.push(el.innerText.replace(/\s+/g, " ").trim().slice(0, 120))
-    })
-    return items.join(" | ")
-  },
-  "/work-single/[id]": () => {
-    // Dynamic route: extract project title + content
-    const title = document.querySelector("h1,h2,.project-title")?.innerText?.trim() || ""
-    const content = document.querySelector(".text[dangerouslySetInnerHTML], .text, article, main")
-    const text = content ? content.innerText.replace(/\s+/g, " ").trim().slice(0, 800) : ""
-    return [title, text].filter(Boolean).join(" | ")
-  },
-  "/#market-weather-dashboard": () => {
-    const el = document.querySelector("#market-weather-dashboard")
-    return el ? el.innerText.replace(/\s+/g, " ").trim().slice(0, 600) : ""
-  },
-}
-
-/**
- * Extract pre-processed page context.
+ * Extract generic page context for any route.
  * Returns null if not on an allowed host, or if no meaningful content found.
  * @param {string} routerPathname - Next.js router.pathname (bracket form, e.g. "/work-single/[id]")
  */
@@ -83,19 +47,15 @@ function extractPageContext(routerPathname) {
   const pageTitle = document.title || routerPathname
   let text = ""
 
-  // Try registered extractor by Next.js pathname pattern
-  const extractor = PAGE_EXTRACTORS[routerPathname]
-  if (extractor) {
-    try { text = extractor() } catch {}
-  }
-
-  // Generic fallback: use main/article content, skip nav/footer/chat
-  if (!text) {
-    const main = document.querySelector("main") || document.querySelector("article") || document.body
-    const clone = main.cloneNode(true)
-    clone.querySelectorAll("nav,footer,script,style,header,.bot-container").forEach(n => n.remove())
-    text = clone.innerText
-  }
+  // Generic extraction: main/article/.content, skip nav/footer/chat
+  const main =
+    document.querySelector("main") ||
+    document.querySelector("article") ||
+    document.querySelector(".content") ||
+    document.body
+  const clone = main.cloneNode(true)
+  clone.querySelectorAll("nav,footer,script,style,header,.bot-container").forEach(n => n.remove())
+  text = clone.innerText
 
   // Pre-process: collapse whitespace, deduplicate lines, cap at 1500 chars
   const seen = new Set()
@@ -3224,6 +3184,17 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           return
         }
 
+        // Handle related_links — attach dynamic content suggestions to assistant message
+        if (stage === "related_links") {
+          const links = obj.payload?.links
+          if (Array.isArray(links) && links.length > 0) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id !== assistantId ? m : { ...m, relatedLinks: links }))
+            )
+          }
+          return
+        }
+
         // Handle tool_call_start — show tool invocation card
         if (stage === "tool_call_start") {
           const { toolName, args, callId } = obj.payload || {}
@@ -3637,6 +3608,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               {/* Source cards — shown below answer when KB hits have linkable content */}
               {m.role === "assistant" && !m.streaming && m.sourceCards?.length > 0 ? (
                 <SourceCardsRow cards={m.sourceCards} />
+              ) : null}
+
+              {/* Related links — dynamic content suggestions from semantic search */}
+              {m.role === "assistant" && !m.streaming && m.relatedLinks?.length > 0 ? (
+                <RelatedLinks links={m.relatedLinks} />
               ) : null}
             </div>
           </div>
