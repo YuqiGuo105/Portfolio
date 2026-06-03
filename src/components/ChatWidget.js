@@ -1530,6 +1530,44 @@ function KeyConceptsBar({ concepts }) {
   )
 }
 
+function SourceCardsRow({ cards }) {
+  if (!cards?.length) return null
+  const badgeLabel = (type) => {
+    if (type === "life_blog") return "Life Blog"
+    if (type === "tech_blog") return "Tech Blog"
+    if (type === "Projects") return "Project"
+    return "Article"
+  }
+  const emoji = (type) => {
+    if (type === "life_blog") return "✈️"
+    if (type === "tech_blog") return "💡"
+    return "🗂️"
+  }
+  return (
+    <div className="cw-source-cards">
+      {cards.map((c) => (
+        <a
+          key={c.id}
+          href={c.url}
+          className="cw-source-card"
+          target="_blank"
+          rel="noopener noreferrer"
+          title={c.title}
+        >
+          {c.imageUrl
+            ? <img src={c.imageUrl} alt={c.title} className="cw-source-card-img" loading="lazy" />
+            : <div className="cw-source-card-img-placeholder">{emoji(c.type)}</div>
+          }
+          <div className="cw-source-card-body">
+            <div className="cw-source-card-badge">{badgeLabel(c.type)}</div>
+            <div className="cw-source-card-title">{c.title}</div>
+          </div>
+        </a>
+      ))}
+    </div>
+  )
+}
+
 function TypingIndicator() {
   return (
     <div className="typing">
@@ -3175,6 +3213,17 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           return
         }
 
+        // Handle sources_found — attach source cards to assistant message
+        if (stage === "sources_found") {
+          const sources = obj.payload?.sources
+          if (Array.isArray(sources) && sources.length > 0) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id !== assistantId ? m : { ...m, sourceCards: sources }))
+            )
+          }
+          return
+        }
+
         // Handle tool_call_start — show tool invocation card
         if (stage === "tool_call_start") {
           const { toolName, args, callId } = obj.payload || {}
@@ -3583,6 +3632,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               {/* Key concepts bar for Enhance mode */}
               {m.role === "assistant" && !m.streaming && m.keyConcepts?.length > 0 ? (
                 <KeyConceptsBar concepts={m.keyConcepts} />
+              ) : null}
+
+              {/* Source cards — shown below answer when KB hits have linkable content */}
+              {m.role === "assistant" && !m.streaming && m.sourceCards?.length > 0 ? (
+                <SourceCardsRow cards={m.sourceCards} />
               ) : null}
             </div>
           </div>
