@@ -22,7 +22,7 @@ export default async function handler(req, res) {
 
     res.status(200).json(results);
   } catch (error) {
-    console.error('[search] api error', error);
+    console.error('[search] writer-service error', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 }

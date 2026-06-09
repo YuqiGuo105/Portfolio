@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const results = await searchItems({ q, source, limit, offset });
     return NextResponse.json(results, { status: 200 });
   } catch (error) {
-    console.error('[search] error', error);
+    console.error('[search] writer-service error', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

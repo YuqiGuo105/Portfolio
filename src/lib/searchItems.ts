@@ -1,7 +1,24 @@
-import { createClient, PostgrestError } from '@supabase/supabase-js';
+/**
+ * searchItems — proxies to the writer-service full-text search API.
+ *
+ * writer-service uses PostgreSQL websearch_to_tsquery (FTS) with an ILIKE
+ * fallback, giving relevance-ranked results across writer.blogs,
+ * writer.life_blogs, and writer.projects.
+ *
+ * Server-side callers (pages/api/search.js, app/api/search/route.ts) use
+ * WRITER_API_URL (private). The browser never calls writer-service directly
+ * for search — it always goes through the Next.js proxy route.
+ */
+
+// Server-side base URL (never exposed to the browser).
+const WRITER_API_BASE =
+  process.env.WRITER_API_URL ||
+  process.env.NEXT_PUBLIC_WRITER_API_URL ||
+  'http://localhost:8081';
 
 export type SearchItem = {
-  id: number;
+  // writer-service returns sourceId (string UUID or bigint) instead of numeric id
+  id?: number;
   source: string;
   sourceTable: string;
   sourceId: string;
@@ -10,6 +27,7 @@ export type SearchItem = {
   url: string | null;
   tags: string | null;
   publishedAt: string | null;
+  rank?: number;
 };
 
 export type SearchParams = {
@@ -18,32 +36,6 @@ export type SearchParams = {
   limit?: number;
   offset?: number;
 };
-
-type SearchItemRow = {
-  id: number;
-  source: string;
-  source_table: string;
-  source_id: string;
-  title: string | null;
-  description: string | null;
-  url: string | null;
-  tags: string | null;
-  published_at: string | null;
-};
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-let supabaseClient = SUPABASE_URL && SUPABASE_SERVICE_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-  : null;
-
-function getClient() {
-  if (!supabaseClient) {
-    throw new Error('Supabase credentials are not configured');
-  }
-  return supabaseClient;
-}
 
 function sanitizeLimit(limit?: number) {
   const fallback = 20;
@@ -70,71 +62,56 @@ export async function searchItems(params: SearchParams): Promise<{
     return { results: [], total: 0, limit, offset };
   }
 
-  const client = getClient();
-  const searchTerm = `%${q.trim()}%`;
+  const url = new URL(`${WRITER_API_BASE}/api/search`);
+  url.searchParams.set('q', q.trim());
+  url.searchParams.set('limit', String(limit));
+  url.searchParams.set('offset', String(offset));
+  if (source) url.searchParams.set('source', source);
 
-  const filters = [
-    `title.ilike.${searchTerm}`,
-    `description.ilike.${searchTerm}`,
-    `tags.ilike.${searchTerm}`,
-    `content.ilike.${searchTerm}`,
-  ];
+  const res = await fetch(url.toString(), {
+    headers: { 'Content-Type': 'application/json' },
+    // Next.js server-side fetch — no caching for real-time results
+    cache: 'no-store',
+  });
 
-  let query = client
-    .from('search_items')
-    .select(
-      'id, source, source_table, source_id, title, description, url, tags, published_at',
-      { count: 'exact' }
-    )
-    .or(filters.join(','))
-    .order('published_at', { ascending: false, nullsLast: true })
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
-
-  if (source) {
-    query = query.eq('source', source);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error || `Search API error: ${res.status}`);
   }
 
-  let { data, error, count } = await query;
+  const data = await res.json() as {
+    results: Array<{
+      source: string;
+      sourceTable: string;
+      sourceId: string;
+      title: string | null;
+      description: string | null;
+      url: string | null;
+      tags: string | null;
+      publishedAt: string | null;
+      rank?: number;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  };
 
-  if (error && error.message && error.message.includes('content')) {
-    const fallbackFilters = filters.filter((value) => !value.startsWith('content.'));
-    const fallbackQuery = client
-      .from('search_items')
-      .select(
-        'id, source, source_table, source_id, title, description, url, tags, published_at',
-        { count: 'exact' }
-      )
-      .or(fallbackFilters.join(','))
-      .order('published_at', { ascending: false, nullsLast: true })
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    const fallbackResult = await fallbackQuery;
-    data = fallbackResult.data;
-    error = fallbackResult.error as PostgrestError | null;
-    count = fallbackResult.count;
-  }
-
-  if (error) {
-    throw error as PostgrestError;
-  }
-
-  const results: SearchItem[] = (data || []).map((item: SearchItemRow) => ({
-    id: item.id,
+  const results: SearchItem[] = (data.results || []).map((item, idx) => ({
+    id: idx,
     source: item.source,
-    sourceTable: item.source_table,
-    sourceId: item.source_id,
+    sourceTable: item.sourceTable,
+    sourceId: item.sourceId,
     title: item.title,
     description: item.description,
     url: item.url,
     tags: item.tags,
-    publishedAt: item.published_at ? new Date(item.published_at).toISOString() : null,
+    publishedAt: item.publishedAt,
+    rank: item.rank,
   }));
 
   return {
     results,
-    total: count || 0,
+    total: data.total ?? results.length,
     limit,
     offset,
   };
