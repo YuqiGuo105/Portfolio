@@ -1,11 +1,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const GITHUB_URL =
-  process.env.REACT_APP_GITHUB_URL || "https://github.com/YuqiGuo105";
-const INSTAGRAM_URL =
-  process.env.REACT_APP_INSTAGRAM_URL ||
-  "https://www.instagram.com/yuqi_guo17/";
+const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL;
+const INSTAGRAM_URL = process.env.NEXT_PUBLIC_INSTAGRAM_URL;
 
 const Header = ({ onOpenSearch }) => {
   const openMenu = (event) => {

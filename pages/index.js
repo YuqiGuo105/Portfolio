@@ -15,12 +15,9 @@ import { useRouter } from 'next/router';
 import LogInDialog from "../src/components/LogInDialog";
 import SiteTour from "../src/components/SiteTour";
 
-const GITHUB_URL =
-  process.env.REACT_APP_GITHUB_URL || "https://github.com/YuqiGuo105";
-const LEETCODE_URL =
-  process.env.REACT_APP_LEETCODE_URL || "https://leetcode.com/u/Yuqi_Guo/";
-const INSTAGRAM_URL =
-  process.env.REACT_APP_INSTAGRAM_URL || "https://www.instagram.com/yuqi_guo17/";
+const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL;
+const LEETCODE_URL = process.env.NEXT_PUBLIC_LEETCODE_URL;
+const INSTAGRAM_URL = process.env.NEXT_PUBLIC_INSTAGRAM_URL;
 
 Modal.setAppElement('#__next');
 const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
