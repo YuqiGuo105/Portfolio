@@ -50,6 +50,7 @@ To get a local copy up and running follow these simple steps.
   ```
   NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL
   NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+  SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
   EMAIL_USER=USER_EMAIL
   EMAIL_PASS=YOUR_PASS
   EMAIL_TO=TO_USER
@@ -59,9 +60,11 @@ To get a local copy up and running follow these simple steps.
 
 1. **Create a project** at [app.supabase.com](https://app.supabase.com) and copy the **Project URL** and **anon (public) API key** from _Project Settings → API_. Paste them into `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in your `.env`.
 
-2. **Apply the database schema and RLS policies.** Open the Supabase SQL editor and run the contents of `create_sql.txt` located at the root of this repository. This script creates all required tables (e.g., `visitor_logs`) and configures the necessary Row Level Security (RLS) policies.
+2. **Add the service role key.** From _Project Settings → API_, copy the **service_role** key and set it as `SUPABASE_SERVICE_ROLE_KEY` in your `.env` (and in Vercel environment variables). This key is used exclusively by server-side API routes and is never exposed to the browser.
 
-3. **Deploy environment variables** to Vercel (or your hosting provider) so the serverless API routes can access Supabase in production.
+3. **Apply the database schema and RLS policies.** Open the Supabase SQL editor and run the contents of `create_sql.txt` located at the root of this repository. This script creates all required tables (e.g., `visitor_logs`) and configures the necessary Row Level Security (RLS) policies.
+
+4. **Deploy environment variables** to Vercel (or your hosting provider) so the serverless API routes can access Supabase in production.
 
 ## Usage
 - Browse the project portfolio and use the contact form to send messages directly to the project owner's email.

@@ -233,3 +233,30 @@ create policy "Owner can delete cv_comments"
   on public.cv_comments for delete
   to authenticated
   using (auth.jwt() ->> 'email' = 'yuqi.guo17@gmail.com');
+
+-- ============================================================
+-- visitor_logs: 启用 RLS，禁止 anon 直接 insert
+-- ============================================================
+alter table public.visitor_logs enable row level security;
+
+-- anon 可以 select（DashboardPanels 读取需要）
+create policy "Anyone can read visitor_logs"
+  on public.visitor_logs for select
+  using (true);
+
+-- 只有 service_role 可以 insert（API route 用 service_role key）
+-- service_role 默认绕过 RLS，所以不需要额外 policy
+
+-- Drop any pre-existing permissive insert policies
+drop policy if exists "Allow public inserts on visitor_logs" on public.visitor_logs;
+
+-- ============================================================
+-- visitor_clicks: 同上
+-- ============================================================
+alter table public.visitor_clicks enable row level security;
+
+create policy "Anyone can read visitor_clicks"
+  on public.visitor_clicks for select
+  using (true);
+
+drop policy if exists "Allow public insert on visitor_clicks" on public.visitor_clicks;

@@ -1,4 +1,24 @@
-import { supabase } from '../../src/supabase/supabaseClient';
+import { supabaseServer } from '../../src/supabase/supabaseServer';
+
+// 速率限制：每个 IP 每分钟最多 10 次
+const rateLimitMap = new Map(); // ip -> { count, resetAt }
+const RATE_LIMIT = 10;
+const RATE_WINDOW_MS = 60_000;
+
+function isRateLimited(ip) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return false;
+  }
+  if (entry.count >= RATE_LIMIT) return true;
+  entry.count += 1;
+  return false;
+}
+
+// 允许的来源域名
+const ALLOWED_ORIGINS = ['https://www.yuqi.site', 'https://yuqi.site'];
 
 // Helper to check if IP is private (local or LAN)
 const isPrivate = (ip) =>
@@ -63,6 +83,28 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // 1. Origin / Referer 检查
+  const origin = req.headers['origin'] || '';
+  const referer = req.headers['referer'] || '';
+  const originOk = ALLOWED_ORIGINS.some(o => origin.startsWith(o) || referer.startsWith(o));
+  const isDev = process.env.NODE_ENV === 'development';
+  if (!isDev && !originOk) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  // 2. User-Agent 过滤（拒绝明显的 bot/curl）
+  const ua = (req.headers['user-agent'] || '').slice(0, 255);
+  if (!ua || /^(curl|wget|python|go-http|java|scrapy)/i.test(ua) || /\b(bot|spider|crawl|scraper)\b/i.test(ua)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  // 3. IP 速率限制
+  const forwarded = req.headers['x-forwarded-for'] || '';
+  const ip = (forwarded.split(',')[0] || req.socket?.remoteAddress || '').trim();
+  if (isRateLimited(ip)) {
+    return res.status(429).json({ error: 'Too many requests' });
+  }
+
   // Parse request body safely
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
 
@@ -75,18 +117,13 @@ export default async function handler(req, res) {
   const targetUrl = body.targetUrl ?? null;
   const localTime = body.localTime ?? new Date().toISOString();
 
-  // Extract client IP
-  const forwarded = req.headers['x-forwarded-for'] || '';
-  const ip = (forwarded.split(',')[0] || req.socket?.remoteAddress || '').trim();
+  // ip and ua already extracted above for rate limiting / bot filtering
 
   // Extract Geo info
   let geo = (await geoFromHeaders(req.headers)) || {};
   if (!Object.keys(geo).length && !isPrivate(ip)) {
     geo = (await geoFromIpinfo(ip)) || {};
   }
-
-  // Extract User-Agent
-  const ua = (req.headers['user-agent'] || '').slice(0, 255);
 
   // Final payload for insertion
   const insertPayload = {
@@ -105,7 +142,7 @@ export default async function handler(req, res) {
 
   // Insert into Supabase
   try {
-    const { error } = await supabase.from('visitor_clicks').insert([insertPayload]);
+    const { error } = await supabaseServer.from('visitor_clicks').insert([insertPayload]);
     if (error) throw error;
 
     res.status(200).json({ ok: true });
