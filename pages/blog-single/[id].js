@@ -13,23 +13,13 @@ const BlogSingle = () => {
   const router = useRouter();
   const {id} = router.query;
 
-  // Log click events for analytics
-  const recordClick = async (clickEvent, targetUrl) => {
-    const localTime = new Date().toISOString();
-    const pageUrl   = targetUrl || window.location.href;
-    try {
-      await fetch('/api/click', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clickEvent, targetUrl: pageUrl, localTime })
-      });
-    } catch (err) {
-      console.error("Error logging click event:", err);
-    }
-  };
-
+  // Track page view via the dedicated tracking endpoint.
   useEffect(() => {
-    recordClick('page-load');
+    fetch('/api/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ localTime: new Date().toISOString() }),
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {

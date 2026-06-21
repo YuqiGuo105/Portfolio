@@ -25,6 +25,9 @@ function isRateLimited(ip) {
 // 允许的来源域名
 const ALLOWED_ORIGINS = ['https://www.yuqi.site', 'https://yuqi.site'];
 
+// Allowed event names — prevents arbitrary string injection into visitor_logs.event
+const ALLOWED_EVENTS = new Set(['page_view']);
+
 // --------------------------- Helper ----------------------------------------
 function safeParseFloat(val) {
   const n = parseFloat(val);
@@ -92,7 +95,11 @@ export default async function handler(req, res) {
   }
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
-  const { localTime = new Date().toISOString(), event = 'page_view' } = body;
+  const { localTime = new Date().toISOString() } = body;
+
+  // Validate event against allowlist to prevent arbitrary string injection.
+  const rawEvent = typeof body.event === 'string' ? body.event.trim() : '';
+  const event = ALLOWED_EVENTS.has(rawEvent) ? rawEvent : 'page_view';
 
   // IP already extracted above for rate limiting
 

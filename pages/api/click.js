@@ -20,12 +20,9 @@ function isRateLimited(ip) {
 // 允许的来源域名
 const ALLOWED_ORIGINS = ['https://www.yuqi.site', 'https://yuqi.site'];
 
-// Helper to check if IP is private (local or LAN)
-const isPrivate = (ip) =>
-  ip === '::1' || ip.startsWith('127.') || ip.startsWith('10.') || ip.startsWith('192.168.');
-
-// Extract geo info from known headers (Vercel, Cloudflare)
-async function geoFromHeaders(headers) {
+// Geo info from CDN/proxy headers only (Vercel or Cloudflare).
+// No external API calls — avoids latency and third-party data exposure.
+function geoFromHeaders(headers) {
   if (headers['x-vercel-ip-country']) {
     return {
       country: headers['x-vercel-ip-country'] || null,
@@ -36,7 +33,6 @@ async function geoFromHeaders(headers) {
       _src: 'vercel',
     };
   }
-
   if (headers['cf-ipcountry']) {
     return {
       country: headers['cf-ipcountry'] || null,
@@ -47,34 +43,11 @@ async function geoFromHeaders(headers) {
       _src: 'cloudflare',
     };
   }
-
-  return null;
+  return {};
 }
 
-// Fallback geo lookup using ipinfo.io
-async function geoFromIpinfo(ip) {
-  const token = process.env.IPINFO_TOKEN;
-  if (!token) return null;
-
-  try {
-    const response = await fetch(`https://ipinfo.io/${ip}?token=${token}`, { timeout: 1500 });
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    const [lat, lon] = (data.loc || '').split(',');
-
-    return {
-      country: data.country || null,
-      region: data.region || null,
-      city: data.city || null,
-      latitude: lat || null,
-      longitude: lon || null,
-      _src: 'ipinfo',
-    };
-  } catch (_) {
-    return null;
-  }
-}
+// Only these values are accepted for click_event to prevent arbitrary string injection.
+const ALLOWED_CLICK_EVENTS = new Set(['social-link', 'blog-item', 'work-item', 'project-link', 'nav-link']);
 
 export default async function handler(req, res) {
   const start = Date.now();
@@ -108,22 +81,27 @@ export default async function handler(req, res) {
   // Parse request body safely
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
 
-  // Extract and validate fields
-  let clickEvent = body.clickEvent;
-  if (typeof clickEvent !== 'string' || !clickEvent.trim()) {
-    clickEvent = 'click'; // Default fallback
+  // Validate clickEvent against allowlist to prevent arbitrary string injection.
+  const rawEvent = typeof body.clickEvent === 'string' ? body.clickEvent.trim() : '';
+  if (!ALLOWED_CLICK_EVENTS.has(rawEvent)) {
+    return res.status(400).json({ error: 'Invalid clickEvent' });
+  }
+  const clickEvent = rawEvent;
+
+  // targetUrl is NOT NULL in the schema — reject empty values.
+  const targetUrl = typeof body.targetUrl === 'string' && body.targetUrl.trim()
+    ? body.targetUrl.trim().slice(0, 2048)
+    : null;
+  if (!targetUrl) {
+    return res.status(400).json({ error: 'targetUrl is required' });
   }
 
-  const targetUrl = body.targetUrl ?? null;
   const localTime = body.localTime ?? new Date().toISOString();
 
   // ip and ua already extracted above for rate limiting / bot filtering
 
-  // Extract Geo info
-  let geo = (await geoFromHeaders(req.headers)) || {};
-  if (!Object.keys(geo).length && !isPrivate(ip)) {
-    geo = (await geoFromIpinfo(ip)) || {};
-  }
+  // Extract geo info from CDN headers (no external API calls).
+  const geo = geoFromHeaders(req.headers);
 
   // Final payload for insertion
   const insertPayload = {

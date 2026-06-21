@@ -14,20 +14,7 @@ const LifeBlog = () => {
   const [loggedIn,  setLoggedIn]  = useState(null);
   const [accessDenied, setAccessDenied] = useState(false);
 
-  // Log click events for analytics
-  const recordClick = async (clickEvent, targetUrl) => {
-    const localTime = new Date().toISOString();
-    const pageUrl   = targetUrl || (typeof window !== 'undefined' ? window.location.href : null);
-    try {
-      await fetch('/api/click', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clickEvent, targetUrl: pageUrl, localTime })
-      });
-    } catch (err) {
-      console.error("Error logging click event:", err);
-    }
-  };
+  // Track page view via the dedicated tracking endpoint (only after auth gate resolves).
 
   /* ────────── 1. one‑off session check ────────── */
   useEffect(() => {
@@ -75,12 +62,14 @@ const LifeBlog = () => {
     fetchBlog();
   }, [id, loggedIn, router]);
 
-  /* ────────── 3. record access after auth gate ────────── */
+  /* ────────── 3. track page view after auth gate ────────── */
   useEffect(() => {
-    if (loading || accessDenied) return;
-    if (blog) {
-      recordClick('page-load');
-    }
+    if (loading || accessDenied || !blog) return;
+    fetch('/api/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ localTime: new Date().toISOString() }),
+    }).catch(() => {});
   }, [accessDenied, blog, loading]);
 
   /* ────────── guard rails ────────── */
