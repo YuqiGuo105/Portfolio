@@ -6,10 +6,9 @@
 //   onSave: async (data, status) => void
 //   onBack: () => void
 
-import { useState, useRef } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import DOMPurify from 'dompurify';
 import { toast } from 'react-toastify';
 import SlugField from './SlugField';
 
@@ -88,6 +87,16 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
     setForm((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => ({ ...prev, [field]: undefined }));
   }
+
+  // Sanitize the same way the public blog-single / life-blog pages do so the
+  // preview reflects exactly what visitors will see. Guard for SSR — DOMPurify
+  // needs `window`, and ContentEditor is bundled into the static page shell.
+  const previewHtml = useMemo(() => {
+    const raw = form.content || '';
+    if (!raw.trim()) return '';
+    if (typeof window === 'undefined') return raw;
+    return DOMPurify.sanitize(raw, { ADD_ATTR: ['target'] });
+  }, [form.content]);
 
   function validate() {
     const errs = {};
@@ -240,11 +249,16 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
             </div>
           </div>
           {preview ? (
-            <div className="markdown-preview">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {form.content || '*Nothing to preview*'}
-              </ReactMarkdown>
-            </div>
+            previewHtml ? (
+              <div
+                className="html-preview"
+                dangerouslySetInnerHTML={{ __html: previewHtml }}
+              />
+            ) : (
+              <div className="html-preview html-preview--empty">
+                Nothing to preview
+              </div>
+            )
           ) : (
             <RichTextEditor
               value={form.content}
@@ -583,31 +597,61 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
           background: rgba(56, 189, 248, 0.15);
           color: #38bdf8;
         }
-        .markdown-preview {
+        .html-preview {
           background: #1e293b;
           border: 1px solid rgba(148, 163, 184, 0.25);
           border-radius: 8px;
           padding: 20px 24px;
-          min-height: 300px;
+          min-height: 320px;
           color: #e2e8f0;
           font-size: 0.95rem;
           line-height: 1.7;
+          overflow-wrap: break-word;
         }
-        .markdown-preview :global(h1),
-        .markdown-preview :global(h2),
-        .markdown-preview :global(h3) { color: #f1f5f9; margin-top: 1.5em; }
-        .markdown-preview :global(code) {
+        .html-preview--empty {
+          color: #64748b;
+          font-style: italic;
+        }
+        .html-preview :global(h1),
+        .html-preview :global(h2),
+        .html-preview :global(h3) {
+          color: #f1f5f9;
+          margin-top: 1.5em;
+          line-height: 1.3;
+        }
+        .html-preview :global(p) { margin: 0.75em 0; }
+        .html-preview :global(a) {
+          color: #38bdf8;
+          text-decoration: underline;
+        }
+        .html-preview :global(ul),
+        .html-preview :global(ol) {
+          padding-left: 1.4em;
+          margin: 0.75em 0;
+        }
+        .html-preview :global(blockquote) {
+          border-left: 3px solid #38bdf8;
+          padding-left: 12px;
+          color: #cbd5e1;
+          margin: 0.75em 0;
+        }
+        .html-preview :global(code) {
           background: rgba(56, 189, 248, 0.1);
           padding: 2px 6px;
           border-radius: 4px;
           font-size: 0.85em;
           color: #38bdf8;
         }
-        .markdown-preview :global(pre) {
-          background: #0f172a;
-          padding: 16px;
+        .html-preview :global(pre) {
+          background: #020617;
+          padding: 14px 16px;
           border-radius: 8px;
           overflow-x: auto;
+        }
+        .html-preview :global(img) {
+          max-width: 100%;
+          height: auto;
+          border-radius: 6px;
         }
         .toggle-switch {
           position: relative;

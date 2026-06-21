@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { saveSubscriber, loadSubscriber } from "../lib/notificationsClient";
 
 const TOPIC_OPTIONS = [
@@ -108,7 +109,16 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
   const sectionBg = isDark ? "#25253a" : "#f9f9fb";
   const accentBg = isDark ? "#4a90e2" : "#111";
 
-  return (
+  // Render the dialog through a portal mounted on document.body. The header
+  // becomes `position: fixed` + `transform: translateZ(0)` once the user
+  // scrolls past the hero — and any ancestor with a transform creates a new
+  // containing block, which makes a descendant `position: fixed` element be
+  // sized relative to that ancestor instead of the viewport. Without a portal
+  // the overlay collapses into the ~80px sticky header strip whenever the
+  // dialog is opened mid-page.
+  if (typeof document === "undefined") return null;
+
+  const dialog = (
     <div
       role="dialog"
       aria-modal="true"
@@ -285,4 +295,6 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
       </div>
     </div>
   );
+
+  return createPortal(dialog, document.body);
 }
