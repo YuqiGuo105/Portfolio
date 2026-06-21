@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+
+const NotificationBell = dynamic(() => import("../components/NotificationBell"), { ssr: false });
+const SubscribeDialog = dynamic(() => import("../components/SubscribeDialog"), { ssr: false });
 
 const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL;
 const INSTAGRAM_URL = process.env.NEXT_PUBLIC_INSTAGRAM_URL;
@@ -70,6 +74,7 @@ const Header = ({ onOpenSearch }) => {
   }, [day]);
 
   const [pageToggle, setPageToggle] = useState(false);
+  const [subscribeOpen, setSubscribeOpen] = useState(false);
 
   const handleOpenSearch = (event) => {
     event.preventDefault();
@@ -140,6 +145,10 @@ const Header = ({ onOpenSearch }) => {
             >
               <i className="fa fa-search" aria-hidden="true"></i>
             </button>
+            {/* notification bell */}
+            <NotificationBell onOpenSubscribe={() => setSubscribeOpen(true)} isDark={!day} />
+            {/* subscribe button — only shown when NOT already subscribed (Bell handles that case) */}
+            <SubscribeDialog open={subscribeOpen} onClose={() => setSubscribeOpen(false)} isDark={!day} />
             {/* switcher btn */}
             <a
               className={`switcher-btn ${day ? "active" : ""}`}
