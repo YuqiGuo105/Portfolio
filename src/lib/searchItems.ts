@@ -58,7 +58,12 @@ const SOURCE_FILTER_MAP: Record<string, string[]> = {
 
 function buildQuery(q: string, sourceFilter?: string, limit = 20, offset = 0) {
   const types = sourceFilter ? (SOURCE_FILTER_MAP[sourceFilter.toLowerCase()] ?? []) : [];
+  // Full field set for fuzzy matching (keyword fields are fine for term-based scoring).
   const fields = ['title^3', 'summary^2', 'content', 'tags^2', 'category'];
+  // phrase_prefix can only run on analyzed text fields — `tags` and `category`
+  // are mapped as `keyword` in portfolio_content_v1 and will throw
+  // query_shard_exception if included.
+  const textFields = ['title^3', 'summary^2', 'content'];
 
   // Combine full-token fuzzy matching with phrase-prefix matching so partial
   // words ("kub" → "Kubernetes") still surface results, instead of relying on
@@ -78,7 +83,7 @@ function buildQuery(q: string, sourceFilter?: string, limit = 20, offset = 0) {
         {
           multi_match: {
             query: q,
-            fields,
+            fields: textFields,
             type: 'phrase_prefix',
             slop: 2,
           },
