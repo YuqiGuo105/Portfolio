@@ -84,12 +84,10 @@ export default function AdminLayout({ children }) {
       );
     }
     return (
-      <Link
-        key={item.href}
-        href={item.href}
-        className={`admin-nav-link${isActive(item) ? ' active' : ''}`}
-      >
-        {item.label}
+      <Link key={item.href} href={item.href}>
+        <a className={`admin-nav-link${isActive(item) ? ' active' : ''}`}>
+          {item.label}
+        </a>
       </Link>
     );
   }

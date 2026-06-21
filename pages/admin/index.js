@@ -86,10 +86,12 @@ export default function AdminDashboard() {
       <h2 className="dash-section">Content</h2>
       <div className="dash-grid">
         {SECTIONS.map((s) => (
-          <Link key={s.key} href={s.href} className="dash-card">
-            <div className="dash-count">{counts[s.key] ?? '…'}</div>
-            <div className="dash-label">{s.label}</div>
-            <div className="dash-action">Manage →</div>
+          <Link key={s.key} href={s.href}>
+            <a className="dash-card">
+              <div className="dash-count">{counts[s.key] ?? '…'}</div>
+              <div className="dash-label">{s.label}</div>
+              <div className="dash-action">Manage →</div>
+            </a>
           </Link>
         ))}
       </div>
@@ -110,14 +112,12 @@ export default function AdminDashboard() {
               <div className="dash-action">Open ↗</div>
             </a>
           ) : (
-            <Link
-              key={action.key}
-              href={action.href}
-              className="dash-card dash-card--action"
-            >
-              <div className="dash-label">{action.label}</div>
-              <div className="dash-description">{action.description}</div>
-              <div className="dash-action">Open →</div>
+            <Link key={action.key} href={action.href}>
+              <a className="dash-card dash-card--action">
+                <div className="dash-label">{action.label}</div>
+                <div className="dash-description">{action.description}</div>
+                <div className="dash-action">Open →</div>
+              </a>
             </Link>
           )
         )}
