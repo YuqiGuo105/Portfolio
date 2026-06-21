@@ -1,15 +1,27 @@
 // src/components/admin/ContentList.js
-// Shared paginated list table for blogs, life-blogs, and projects.
+// Shared list table for blogs, life-blogs, and projects.
+//
+// Two backends are supported:
+//   1. Pass `type` ('BLOG' | 'LIFE_BLOG' | 'PROJECT' | 'EXPERIENCE') to load
+//      via the unified admin-service endpoint /api/admin/content?type=... .
+//      Returns ContentListItemDto so item identity is `sourceId`. Pagination
+//      is disabled (single bulk fetch up to 500) and row actions are hidden
+//      because admin-service does not yet expose DELETE on this surface.
+//   2. Pass `api` (writerApi.blogs | .lifeBlogs | .projects) for the legacy
+//      Spring-Page resources. These endpoints currently 404 on admin-service
+//      — kept only so the prop type doesn't break callers that still set it.
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { toast } from 'react-toastify';
+import { writerApi } from '../../lib/writerApi';
 
 export default function ContentList({
   title,
   newHref,
   editHref,   // function(id) => string
-  api,        // writerApi.blogs | writerApi.lifeBlogs | writerApi.projects
+  api,        // legacy: writerApi.blogs | writerApi.lifeBlogs | writerApi.projects
+  type,       // preferred: 'BLOG' | 'LIFE_BLOG' | 'PROJECT' | 'EXPERIENCE'
   columns,    // [{ key, label, render? }]
 }) {
   const router = useRouter();
@@ -19,19 +31,30 @@ export default function ContentList({
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
 
+  const useContentApi = Boolean(type);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.list(page);
-      // Spring Page response: { content, totalPages, totalElements, number }
-      setItems(data.content || data.results || []);
-      setTotalPages(data.totalPages || 1);
+      if (useContentApi) {
+        const data = await writerApi.content.list(type, { limit: 500 });
+        const raw = Array.isArray(data?.items) ? data.items : [];
+        // ContentListItemDto uses `sourceId`; expose as `id` so the existing
+        // editHref(item.id) and row key continue to work.
+        setItems(raw.map((it) => ({ ...it, id: it.sourceId })));
+        setTotalPages(1);
+      } else {
+        const data = await api.list(page);
+        // Spring Page response: { content, totalPages, totalElements, number }
+        setItems(data.content || data.results || []);
+        setTotalPages(data.totalPages || 1);
+      }
     } catch (err) {
       toast.error(`Failed to load: ${err.message}`);
     } finally {
       setLoading(false);
     }
-  }, [api, page]);
+  }, [api, page, type, useContentApi]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -74,7 +97,7 @@ export default function ContentList({
                 {columns.map((col) => (
                   <th key={col.key}>{col.label}</th>
                 ))}
-                <th>Actions</th>
+                {!useContentApi && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -85,21 +108,23 @@ export default function ContentList({
                       {col.render ? col.render(item[col.key], item) : (item[col.key] ?? '—')}
                     </td>
                   ))}
-                  <td className="actions-cell">
-                    <button
-                      className="btn-edit"
-                      onClick={() => router.push(editHref(item.id))}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="btn-delete"
-                      onClick={() => handleDelete(item)}
-                      disabled={deletingId === item.id}
-                    >
-                      {deletingId === item.id ? '…' : 'Delete'}
-                    </button>
-                  </td>
+                  {!useContentApi && (
+                    <td className="actions-cell">
+                      <button
+                        className="btn-edit"
+                        onClick={() => router.push(editHref(item.id))}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn-delete"
+                        onClick={() => handleDelete(item)}
+                        disabled={deletingId === item.id}
+                      >
+                        {deletingId === item.id ? '…' : 'Delete'}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

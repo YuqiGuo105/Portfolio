@@ -1,31 +1,19 @@
 // pages/admin/blogs/index.js
 import AdminLayout from '../../../src/components/admin/AdminLayout';
 import ContentList from '../../../src/components/admin/ContentList';
-import { writerApi } from '../../../src/lib/writerApi';
 
-function StatusBadge({ status }) {
-  const colors = {
-    PUBLISHED: '#4ade80',
-    DRAFT: '#94a3b8',
-    ARCHIVED: '#f59e0b',
-    DELETED: '#f87171',
-  };
-  return (
-    <span style={{
-      color: colors[status] || '#94a3b8',
-      fontSize: '0.8rem',
-      fontWeight: 600,
-    }}>
-      {status}
-    </span>
-  );
-}
-
+// Columns map to ContentListItemDto fields returned by /api/admin/content.
+// (Legacy `status` / `publishedAt` aren't part of that DTO; latestVersion +
+// updatedAt are the closest signals available today.)
 const COLUMNS = [
   { key: 'title', label: 'Title' },
-  { key: 'status', label: 'Status', render: (v) => <StatusBadge status={v} /> },
   { key: 'category', label: 'Category' },
-  { key: 'publishedAt', label: 'Published', render: (v) => v ? v.slice(0, 10) : '—' },
+  { key: 'latestVersion', label: 'Version', render: (v) => (v ?? '—') },
+  {
+    key: 'updatedAt',
+    label: 'Updated',
+    render: (v) => (typeof v === 'string' ? v.slice(0, 10) : '—'),
+  },
 ];
 
 export default function BlogsListPage() {
@@ -35,7 +23,7 @@ export default function BlogsListPage() {
         title="Blogs"
         newHref="/admin/blogs/new"
         editHref={(id) => `/admin/blogs/${id}`}
-        api={writerApi.blogs}
+        type="BLOG"
         columns={COLUMNS}
       />
     </AdminLayout>
