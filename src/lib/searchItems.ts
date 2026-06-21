@@ -58,24 +58,44 @@ const SOURCE_FILTER_MAP: Record<string, string[]> = {
 
 function buildQuery(q: string, sourceFilter?: string, limit = 20, offset = 0) {
   const types = sourceFilter ? (SOURCE_FILTER_MAP[sourceFilter.toLowerCase()] ?? []) : [];
+  const fields = ['title^3', 'summary^2', 'content', 'tags^2', 'category'];
 
-  const multiMatch = {
-    multi_match: {
-      query: q,
-      fields: ['title^3', 'summary^2', 'content', 'tags^2', 'category'],
-      type: 'best_fields',
-      fuzziness: 'AUTO',
+  // Combine full-token fuzzy matching with phrase-prefix matching so partial
+  // words ("kub" → "Kubernetes") still surface results, instead of relying on
+  // fuzziness alone (AUTO allows at most 2 edits and can never bridge a long
+  // prefix → full-word gap).
+  const matchQuery = {
+    bool: {
+      should: [
+        {
+          multi_match: {
+            query: q,
+            fields,
+            type: 'best_fields',
+            fuzziness: 'AUTO',
+          },
+        },
+        {
+          multi_match: {
+            query: q,
+            fields,
+            type: 'phrase_prefix',
+            slop: 2,
+          },
+        },
+      ],
+      minimum_should_match: 1,
     },
   };
 
   const query = types.length > 0
     ? {
         bool: {
-          must: multiMatch,
+          must: matchQuery,
           filter: [{ terms: { source_type: types } }],
         },
       }
-    : multiMatch;
+    : matchQuery;
 
   return {
     from: offset,
