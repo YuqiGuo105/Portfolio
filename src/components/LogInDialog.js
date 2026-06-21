@@ -12,12 +12,22 @@ export default function LogInDialog({
                                       onRegister,
                                       registerHref = '#contact-section',
                                       children,
+                                      showSignup = true,
+                                      signupHiddenMessage = 'Sign-up is disabled. Please contact the site owner for access.',
+                                      identifierLabel = 'Username',
+                                      identifierType = 'text',
+                                      identifierAutoComplete = 'username',
+                                      identifierPlaceholder = 'Enter your username',
+                                      submitLabel = 'LOG IN',
+                                      onGoogleSignIn,
+                                      googleButtonLabel = 'Continue with Google',
                                     }) {
   const ref = useRef(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
   // sync open -> <dialog> with graceful transitions
   useEffect(() => {
@@ -55,6 +65,7 @@ export default function LogInDialog({
       setPassword('');
       setErrorMessage('');
       setSubmitting(false);
+      setGoogleSubmitting(false);
     }
   }, [open]);
 
@@ -99,6 +110,24 @@ export default function LogInDialog({
     await handleLogin();
   };
 
+  const handleGoogleClick = async () => {
+    if (!onGoogleSignIn || googleSubmitting) return;
+    setErrorMessage('');
+    setGoogleSubmitting(true);
+    try {
+      const result = await onGoogleSignIn();
+      if (result?.error) {
+        setErrorMessage(result.error);
+      }
+      // On success the parent typically navigates away (OAuth redirect).
+      // We do not auto-close because Supabase OAuth may redirect mid-flow.
+    } catch (err) {
+      setErrorMessage(err?.message || 'Google sign-in failed.');
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  };
+
   const handleRegister = () => {
     if (onRegister) {
       onRegister();
@@ -138,12 +167,12 @@ export default function LogInDialog({
 
         <form onSubmit={handleSubmit} className="login-form">
           <label className="field">
-            <span>Username</span>
+            <span>{identifierLabel}</span>
             <input
-              type="text"
+              type={identifierType}
               name="username"
-              autoComplete="username"
-              placeholder="Enter your username"
+              autoComplete={identifierAutoComplete}
+              placeholder={identifierPlaceholder}
               value={username}
               onChange={(event) => setUsername(event.target.value)}
             />
@@ -160,17 +189,43 @@ export default function LogInDialog({
             />
           </label>
           {errorMessage && <p className="error-text">{errorMessage}</p>}
-          <button type="submit" className="login-button" disabled={submitting}>
-            {submitting ? 'LOGGING IN…' : 'LOG IN'}
+          <button type="submit" className="login-button" disabled={submitting || googleSubmitting}>
+            {submitting ? 'LOGGING IN…' : submitLabel}
           </button>
         </form>
 
-        <div className="signup-row">
-          <span>Don’t have an account?</span>
-          <button type="button" className="signup-button" onClick={handleRegister}>
-            Sign up
-          </button>
-        </div>
+        {onGoogleSignIn ? (
+          <div className="google-block">
+            <div className="divider"><span>or</span></div>
+            <button
+              type="button"
+              className="google-button"
+              onClick={handleGoogleClick}
+              disabled={submitting || googleSubmitting}
+            >
+              <svg className="google-icon" viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/>
+                <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 19 13 24 13c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.6 8.4 6.3 14.7z"/>
+                <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.3 35.3 26.8 36 24 36c-5.3 0-9.7-3.1-11.3-7.5l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
+                <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.1 5.6l6.2 5.2C42 35.3 44 30 44 24c0-1.2-.1-2.3-.4-3.5z"/>
+              </svg>
+              {googleSubmitting ? 'Redirecting…' : googleButtonLabel}
+            </button>
+          </div>
+        ) : null}
+
+        {showSignup ? (
+          <div className="signup-row">
+            <span>Don’t have an account?</span>
+            <button type="button" className="signup-button" onClick={handleRegister}>
+              Sign up
+            </button>
+          </div>
+        ) : (
+          <div className="signup-row signup-row-hidden">
+            <span>{signupHiddenMessage}</span>
+          </div>
+        )}
       </div>
 
       <style jsx>{`
@@ -377,6 +432,55 @@ export default function LogInDialog({
           color: #0369a1;
         }
 
+        .google-block {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .divider {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          color: var(--muted-text);
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+        }
+        .divider::before,
+        .divider::after {
+          content: '';
+          flex: 1;
+          height: 1px;
+          background: rgba(148, 163, 184, 0.35);
+        }
+
+        .google-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          height: 48px;
+          border-radius: 14px;
+          border: 1px solid rgba(148, 163, 184, 0.45);
+          background: #ffffff;
+          color: #0f172a;
+          font-weight: 600;
+          font-size: 15px;
+          cursor: pointer;
+          transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+        }
+        .google-button:hover:not(:disabled) {
+          background: #f8fafc;
+          border-color: rgba(56, 189, 248, 0.55);
+          box-shadow: 0 8px 18px rgba(14, 165, 233, 0.12);
+        }
+        .google-button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        .google-icon { width: 18px; height: 18px; }
+
         @keyframes dialog-in {
           from {
             opacity: 0;
@@ -436,6 +540,16 @@ export default function LogInDialog({
         :global(body.dark-skin) .field input {
           background: rgba(15, 23, 42, 0.6);
         }
+
+        :global(body.dark-skin) .google-button {
+          background: rgba(15, 23, 42, 0.85);
+          color: #f8fafc;
+          border-color: rgba(148, 163, 184, 0.35);
+        }
+        :global(body.dark-skin) .google-button:hover:not(:disabled) {
+          background: rgba(30, 41, 59, 0.95);
+          border-color: rgba(125, 211, 252, 0.55);
+        }
       `}</style>
     </dialog>
   );
@@ -449,4 +563,13 @@ LogInDialog.propTypes = {
   onRegister: PropTypes.func,
   registerHref: PropTypes.string,
   children: PropTypes.node,
+  showSignup: PropTypes.bool,
+  signupHiddenMessage: PropTypes.string,
+  identifierLabel: PropTypes.string,
+  identifierType: PropTypes.string,
+  identifierAutoComplete: PropTypes.string,
+  identifierPlaceholder: PropTypes.string,
+  submitLabel: PropTypes.string,
+  onGoogleSignIn: PropTypes.func,
+  googleButtonLabel: PropTypes.string,
 };

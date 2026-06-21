@@ -1,20 +1,42 @@
 // src/lib/writerApi.js
-// HTTP client for the Writer API Service.
-// Adds Authorization: Bearer <token>, Idempotency-Key, and X-Expected-Version headers.
+// HTTP client for the Writer API Service (admin-service / Cloud Run).
+//
+// Auth model: this client sends `Authorization: Bearer <Supabase JWT>` —
+// pulled live from the Supabase session — so every request uses the same
+// identity that the user logged in with at Portfolio. The admin-service
+// validates the JWT signature + the email allow-list (ADMIN_ALLOWED_EMAILS).
+//
+// The legacy `X-Admin-Secret` flow (`sessionStorage.admin_token`) is no
+// longer used by the browser. That header remains supported server-to-server
+// in the admin-service for internal scripts / CI only.
+
+import { supabase } from '../supabase/supabaseClient';
 
 const BASE =
   process.env.NEXT_PUBLIC_WRITER_API_URL || 'http://localhost:8081';
 
-function getToken() {
+/**
+ * Returns the live Supabase access token, or '' if no session.
+ * Always fetched fresh so we pick up the latest token after refresh.
+ */
+async function getAuthToken() {
   if (typeof window === 'undefined') return '';
-  return sessionStorage.getItem('admin_token') || '';
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data?.session?.access_token || '';
+  } catch {
+    return '';
+  }
 }
 
 async function request(method, path, body, idempotencyKey) {
+  const token = await getAuthToken();
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${getToken()}`,
   };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
   if (idempotencyKey) {
     headers['Idempotency-Key'] = idempotencyKey;
   }
@@ -34,6 +56,9 @@ async function request(method, path, body, idempotencyKey) {
     const err = await res.json().catch(() => ({}));
     const error = new Error(err.message || `Request failed: ${res.status}`);
     error.status = res.status;
+    // admin-service returns { error: 'missing_credentials' | 'invalid_token'
+    // | 'forbidden_email' | ... }. Expose that to callers so they can react.
+    error.code = err.error || null;
     error.body = err;
     throw error;
   }
@@ -61,13 +86,19 @@ export const writerApi = {
   projects: makeResource('/api/admin/projects'),
 };
 
-export function validateAdminToken(token) {
-  // Probe the API with the given token to verify it is valid.
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
-  return fetch(`${BASE}/api/admin/blogs?page=0&size=1`, { headers }).then(
-    (res) => res.ok
-  );
+/**
+ * Probe the admin API with the current Supabase session to verify the
+ * caller is authorized. Returns true on 2xx, false otherwise.
+ */
+export async function validateAdminSession() {
+  try {
+    await request('GET', '/api/admin/blogs?page=0&size=1');
+    return true;
+  } catch {
+    return false;
+  }
 }
+
+// Deprecated alias kept temporarily for any leftover importer. The new
+// admin login page no longer calls it.
+export const validateAdminToken = validateAdminSession;
