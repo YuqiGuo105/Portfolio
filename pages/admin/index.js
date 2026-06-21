@@ -9,9 +9,9 @@ import { supabase } from '../../src/supabase/supabaseClient';
 import Link from 'next/link';
 
 const SECTIONS = [
-  { key: 'blogs', label: 'Blogs', href: '/admin/blogs', api: 'blogs' },
-  { key: 'lifeBlogs', label: 'Life Blogs', href: '/admin/life-blogs', api: 'lifeBlogs' },
-  { key: 'projects', label: 'Projects', href: '/admin/projects', api: 'projects' },
+  { key: 'blogs',     label: 'Blogs',      href: '/admin/blogs',      type: 'BLOG' },
+  { key: 'lifeBlogs', label: 'Life Blogs', href: '/admin/life-blogs', type: 'LIFE_BLOG' },
+  { key: 'projects',  label: 'Projects',   href: '/admin/projects',   type: 'PROJECT' },
 ];
 
 const ADMIN_SERVICE_SWAGGER =
@@ -65,10 +65,13 @@ export default function AdminDashboard() {
   const [email, setEmail] = useState('');
 
   useEffect(() => {
-    SECTIONS.forEach(({ key, api }) => {
-      writerApi[api]
-        .list(0, 1)
-        .then((data) => setCounts((prev) => ({ ...prev, [key]: data.totalElements ?? '—' })))
+    SECTIONS.forEach(({ key, type }) => {
+      writerApi.content
+        .list(type, { limit: 500 })
+        .then((data) => {
+          const count = Array.isArray(data?.items) ? data.items.length : null;
+          setCounts((prev) => ({ ...prev, [key]: count ?? '—' }));
+        })
         .catch(() => setCounts((prev) => ({ ...prev, [key]: '—' })));
     });
     supabase.auth.getSession().then(({ data }) => {
@@ -79,7 +82,12 @@ export default function AdminDashboard() {
   return (
     <AdminLayout>
       <div className="dash-header">
-        <h1 className="dash-title">Dashboard</h1>
+        <div className="dash-header-row">
+          <h1 className="dash-title">Dashboard</h1>
+          <a href="https://www.yuqi.site" className="dash-back" target="_blank" rel="noreferrer noopener">
+            ← Back to yuqi.site
+          </a>
+        </div>
         {email && <p className="dash-greeting">Signed in as <strong>{email}</strong></p>}
       </div>
 
@@ -129,6 +137,26 @@ export default function AdminDashboard() {
           flex-direction: column;
           gap: 4px;
           margin: 0 0 28px;
+        }
+        .dash-header-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+        .dash-back {
+          font-size: 0.85rem;
+          color: #38bdf8;
+          text-decoration: none;
+          background: rgba(56, 189, 248, 0.1);
+          padding: 6px 14px;
+          border-radius: 8px;
+          border: 1px solid rgba(56, 189, 248, 0.25);
+          transition: background 150ms;
+        }
+        .dash-back:hover {
+          background: rgba(56, 189, 248, 0.2);
         }
         .dash-title {
           font-size: 1.6rem;

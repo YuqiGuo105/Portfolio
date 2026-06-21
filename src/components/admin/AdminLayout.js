@@ -105,6 +105,14 @@ export default function AdminLayout({ children }) {
               </div>
             ))}
           </nav>
+          <a
+            href="https://www.yuqi.site"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="admin-back-link"
+          >
+            ← Back to yuqi.site
+          </a>
           <button className="admin-logout-btn" onClick={handleLogout}>
             Sign out
           </button>
@@ -194,6 +202,22 @@ export default function AdminLayout({ children }) {
         .admin-logout-btn:hover {
           border-color: #f87171;
           color: #f87171;
+        }
+        .admin-back-link {
+          margin: 16px 12px 0;
+          padding: 10px 16px;
+          background: rgba(56, 189, 248, 0.1);
+          border: 1px solid rgba(56, 189, 248, 0.25);
+          border-radius: 8px;
+          color: #38bdf8;
+          font-size: 0.85rem;
+          text-align: center;
+          text-decoration: none;
+          transition: background 150ms;
+        }
+        .admin-back-link:hover {
+          background: rgba(56, 189, 248, 0.2);
+          color: #38bdf8;
         }
         .admin-main {
           margin-left: 240px;

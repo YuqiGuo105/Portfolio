@@ -84,6 +84,24 @@ export const writerApi = {
   blogs: makeResource('/api/admin/blogs'),
   lifeBlogs: makeResource('/api/admin/life-blogs'),
   projects: makeResource('/api/admin/projects'),
+
+  // Admin-service exposes a single content endpoint keyed by sourceType.
+  // Use this for dashboard counts and for any new code that doesn't need the
+  // legacy per-type Spring Page shape.
+  content: {
+    /** GET /api/admin/content?type=BLOG|LIFE_BLOG|PROJECT|EXPERIENCE
+     *  Returns { items: ContentListItemDto[] }. */
+    list: (type, { limit = 200, offset = 0, keyword, category } = {}) => {
+      const params = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+      });
+      if (type) params.set('type', type);
+      if (keyword) params.set('keyword', keyword);
+      if (category) params.set('category', category);
+      return request('GET', `/api/admin/content?${params.toString()}`);
+    },
+  },
 };
 
 /**
