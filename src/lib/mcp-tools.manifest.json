@@ -1,0 +1,147 @@
+{
+  "$schema": "https://yuqi.site/schema/mcp-tool-manifest-v1.json",
+  "version": "2026-06-22-1",
+  "notes": [
+    "Declarative contract for tools the portfolio Intent Router is allowed to propose.",
+    "Edit this file (or point INTENT_MANIFEST_URL at a hosted manifest / MCP /tools/list) — do NOT add per-tool keywords or regex in the router or the widget.",
+    "Risk levels: READ_ONLY (always auto-confirmed), WRITE (low-risk, may auto-execute when authenticated), RISKY_WRITE (always requires user confirmation).",
+    "requiredRole: null = public visitor, 'USER' = signed in, 'ADMIN' = site owner."
+  ],
+  "tools": [
+    {
+      "name": "admin.search_content",
+      "domain": "ADMIN_CONTENT",
+      "description": "Search portfolio content (blogs, projects, life-blog entries, experience entries) by keyword. Returns matching items with IDs, titles, and snippets.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "keyword": { "type": "string", "description": "Search query in any language." },
+          "sourceType": {
+            "type": "string",
+            "enum": ["BLOG", "PROJECT", "LIFE_BLOG", "EXPERIENCE", "ANY"],
+            "default": "ANY"
+          },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 }
+        },
+        "required": ["keyword"]
+      },
+      "riskLevel": "READ_ONLY",
+      "requiresConfirmation": false,
+      "requiredRole": null
+    },
+    {
+      "name": "admin.list_content",
+      "domain": "ADMIN_CONTENT",
+      "description": "List the most recent portfolio content items of a given type. Use this when the user asks to see/show their recent blogs, projects, life-blog entries, or experience entries.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sourceType": {
+            "type": "string",
+            "enum": ["BLOG", "PROJECT", "LIFE_BLOG", "EXPERIENCE"]
+          },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 }
+        },
+        "required": ["sourceType"]
+      },
+      "riskLevel": "READ_ONLY",
+      "requiresConfirmation": false,
+      "requiredRole": null
+    },
+    {
+      "name": "admin.publish_content",
+      "domain": "ADMIN_CONTENT",
+      "description": "Publish a portfolio content item by its exact sourceId. Triggers content versioning, Kafka outbox event, RAG re-indexing, OpenSearch re-indexing, and the notification pipeline. Owner-only and irreversible at this step.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sourceType": {
+            "type": "string",
+            "enum": ["BLOG", "PROJECT", "LIFE_BLOG", "EXPERIENCE"]
+          },
+          "sourceId": {
+            "type": "string",
+            "description": "Exact opaque resource ID. Must be resolved by a prior search/list call — NEVER invented by the classifier."
+          },
+          "changeNote": { "type": "string" }
+        },
+        "required": ["sourceType", "sourceId"]
+      },
+      "riskLevel": "RISKY_WRITE",
+      "requiresConfirmation": true,
+      "requiredRole": "ADMIN"
+    },
+    {
+      "name": "admin.unpublish_content",
+      "domain": "ADMIN_CONTENT",
+      "description": "Unpublish a previously-published content item by its exact sourceId. Owner-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sourceType": {
+            "type": "string",
+            "enum": ["BLOG", "PROJECT", "LIFE_BLOG", "EXPERIENCE"]
+          },
+          "sourceId": { "type": "string" },
+          "reason": { "type": "string" }
+        },
+        "required": ["sourceType", "sourceId"]
+      },
+      "riskLevel": "RISKY_WRITE",
+      "requiresConfirmation": true,
+      "requiredRole": "ADMIN"
+    },
+    {
+      "name": "notification.list_failed_deliveries",
+      "domain": "NOTIFICATION",
+      "description": "List failed or pending notification delivery attempts (email or web). Owner-only diagnostics.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "channel": { "type": "string", "enum": ["EMAIL", "WEB"] },
+          "status": { "type": "string", "enum": ["FAILED", "PENDING"] },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+        },
+        "required": []
+      },
+      "riskLevel": "READ_ONLY",
+      "requiresConfirmation": false,
+      "requiredRole": "ADMIN"
+    },
+    {
+      "name": "notification.send_test_notification",
+      "domain": "NOTIFICATION",
+      "description": "Send a TEST notification (email or web) to a recipient. Used to validate the notification pipeline. Owner-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "recipientEmail": { "type": "string", "description": "Exact target email address." },
+          "channel": { "type": "string", "enum": ["EMAIL", "WEB"], "default": "EMAIL" },
+          "subject": { "type": "string" },
+          "body": { "type": "string" }
+        },
+        "required": ["recipientEmail"]
+      },
+      "riskLevel": "RISKY_WRITE",
+      "requiresConfirmation": true,
+      "requiredRole": "ADMIN"
+    },
+    {
+      "name": "contact.email_owner",
+      "domain": "CONTACT",
+      "description": "PUBLIC: send a message from a visitor to the site owner via the contact form. Use this when an unauthenticated user wants to reach out, leave feedback, ask a question, or send their email. NEVER use this for notification testing or admin operations.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "Sender's name (may be inferred from the conversation; ask if unknown)." },
+          "email": { "type": "string", "description": "Sender's reply-to email." },
+          "message": { "type": "string", "description": "The body of the message the visitor wants to send to the owner." }
+        },
+        "required": ["name", "email", "message"]
+      },
+      "riskLevel": "WRITE",
+      "requiresConfirmation": true,
+      "requiredRole": null
+    }
+  ]
+}

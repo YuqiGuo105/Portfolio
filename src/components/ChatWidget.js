@@ -2630,6 +2630,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
   const fileInputRef = useRef(null)
   const textareaRef = useRef(null)
   const modeWrapRef = useRef(null)
+  // Holds the most recent CONFIRMATION_REQUIRED envelope so the next user
+  // message can be interpreted as "confirm" / "cancel" without re-classifying.
+  const pendingActionRef = useRef(null)
   const touchSession = () => {
     storageSafeSet("chatSessionLastActive", String(Date.now()))
   }
@@ -3027,7 +3030,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     onFinal?.(finalContent)
   }
 
-  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal, requestMode, currentSessionId, pageContext, userEmail }) => {
+  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal, requestMode, currentSessionId, pageContext, userEmail, conversationHistory }) => {
     const base = ragEndpointRef.current || (await resolveRagEndpoint())
     const streamUrl = ragStreamUrl(base)
 
@@ -3050,6 +3053,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       // Send pageContext inside ext map — no backend schema change needed
       ...(pageContext ? { ext: { currentPageUrl: pageContext.url, currentPagePattern: pageContext.pagePattern, pageContextText: pageContext.text, pageTitle: pageContext.pageTitle } } : {}),
       ...(userEmail ? { userEmail } : {}),
+      // Multi-turn: last 6 turns so Gemini can resolve pronouns / follow-ups.
+      ...(Array.isArray(conversationHistory) && conversationHistory.length > 0
+        ? { conversationHistory }
+        : {}),
     }
 
     await postSSE(streamUrl, body, {
@@ -3287,6 +3294,287 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     }
   }
 
+  /**
+   * Manifest-driven intent router.
+   *
+   * Calls /api/intent/route — Gemini structured classifier + deterministic
+   * validator + Supabase-backed tool manifest. Returns a normalized
+   * RouteDecision the rest of sendMessage can switch on:
+   *
+   *   { routeKind: "KB_QA" | "MCP_TOOL" | "GENERAL_CHAT" | "CLARIFICATION_NEEDED",
+   *     targetTool, toolArguments, missingArguments,
+   *     riskLevel, requiresConfirmation, requiredRole,
+   *     normalizedQuery, clarificationQuestion, language, confidence,
+   *     trace: { ... } }
+   *
+   * This replaces the old `looksLikeAction()` regex gate AND the
+   * agent-service pre-classifier on the hot path. The widget never
+   * inlines tool keywords or per-language verb tables — the manifest
+   * is the single source of truth for what tools exist.
+   *
+   * On any failure (network, timeout, malformed JSON), we degrade to
+   *   { routeKind: "KB_QA" }
+   * so the user always gets an answer.
+   */
+  const ROUTER_TIMEOUT_MS = 5000
+  const callIntentRouter = async ({ question, assistantId, recentMessages, currentSessionId }) => {
+    setStage(assistantId, "intent_classify", {
+      message: "Routing: asking intent router",
+      payload: { utterance: (question || "").slice(0, 200) },
+    })
+
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => { try { ctrl.abort() } catch {} }, ROUTER_TIMEOUT_MS)
+    let decision = null
+    try {
+      const res = await fetch("/api/intent/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          input: question,
+          conversationId: currentSessionId || null,
+          recentMessages: Array.isArray(recentMessages) ? recentMessages.slice(-6) : [],
+        }),
+        signal: ctrl.signal,
+      })
+      decision = await res.json().catch(() => null)
+      if (!res.ok || !decision || !decision.routeKind) {
+        throw new Error(`router HTTP ${res.status}`)
+      }
+    } catch (err) {
+      logger.warn("Intent router failed:", err?.message || err)
+      decision = {
+        routeKind: "KB_QA",
+        targetTool: null,
+        toolArguments: {},
+        missingArguments: [],
+        riskLevel: "READ_ONLY",
+        requiresConfirmation: false,
+        requiredRole: null,
+        normalizedQuery: question,
+        clarificationQuestion: null,
+        language: "en",
+        confidence: 0,
+        trace: { error: err?.message || String(err), fallback: "KB_QA" },
+      }
+    } finally {
+      clearTimeout(timer)
+    }
+
+    // Always record the decision in the timeline so the chain stays visible.
+    const routeMsg = (() => {
+      const t = decision.trace?.latencyMs ? ` (${decision.trace.latencyMs}ms)` : ""
+      switch (decision.routeKind) {
+        case "KB_QA":                 return `Routing: KB_QA → local RAG${t}`
+        case "GENERAL_CHAT":          return `Routing: GENERAL_CHAT → local RAG${t}`
+        case "CLARIFICATION_NEEDED":  return `Routing: CLARIFICATION_NEEDED${decision.targetTool ? ` (${decision.targetTool})` : ""}${t}`
+        case "MCP_TOOL":              return `Routing: MCP_TOOL → ${decision.targetTool}${t}`
+        default:                      return `Routing: ${decision.routeKind}${t}`
+      }
+    })()
+    setStage(assistantId, "intent_decided", {
+      message: routeMsg,
+      payload: {
+        intent: decision.routeKind,
+        tool: decision.targetTool,
+        toolArguments: decision.toolArguments,
+        missingArguments: decision.missingArguments,
+        riskLevel: decision.riskLevel,
+        requiresConfirmation: decision.requiresConfirmation,
+        confidence: decision.confidence,
+        normalizedQuery: decision.normalizedQuery,
+        trace: decision.trace,
+      },
+    })
+
+    return decision
+  }
+
+  /**
+   * Fast-mode MCP pre-classifier.
+   *
+   * Calls the portfolio-agent-service via the Next.js /api/agent/intent proxy.
+   * The agent returns a structured IntentResponse envelope; this helper
+   * renders it into the assistant bubble and tells the caller whether the
+   * RAG fallback should still run.
+   *
+   * Return value:
+   *   { handled: true }            — Envelope was rendered. Skip RAG.
+   *   { handled: false }           — Either GENERAL_CHAT or ERROR.
+   *                                  Fall through to existing RAG flow.
+   */
+  const tryAgentIntent = async ({ question, assistantId, currentSessionId, pageContext, body }) => {
+    let bearer = null
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      bearer = session?.access_token || null
+    } catch {}
+
+    // Surface the executor call in the logic-chain timeline. The router
+    // (callIntentRouter) has already decided this is MCP_TOOL — now we're
+    // asking the agent service to actually run it.
+    setStage(assistantId, "tool_invoke", {
+      message: "Tool: invoking agent service",
+      payload: {
+        utterance: (question || "").slice(0, 200),
+        signedIn: !!bearer,
+        ...(pageContext?.pagePattern ? { page: pageContext.pagePattern } : {}),
+      },
+    })
+
+    const reqBody = body || {
+      sessionId: currentSessionId,
+      utterance: question,
+      ...(pageContext
+        ? {
+            pageContext: {
+              url: pageContext.url,
+              pagePattern: pageContext.pagePattern,
+              pageTitle: pageContext.pageTitle,
+            },
+          }
+        : {}),
+    }
+
+    // Hard cap the classifier call. The agent can cold-start or its upstream
+    // MCP gateway can 502 for ~20+ seconds — we never want the user staring
+    // at a "Pre-classifying intent" spinner that long. If it exceeds this
+    // budget, abort and fall through to the RAG path immediately. The badge
+    // in the timeline will record the timeout so it's still visible.
+    const INTENT_TIMEOUT_MS = 4000
+    let env
+    let timedOut = false
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => {
+      timedOut = true
+      try { ctrl.abort() } catch {}
+    }, INTENT_TIMEOUT_MS)
+    try {
+      const res = await fetch("/api/agent/intent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+        },
+        body: JSON.stringify(reqBody),
+        signal: ctrl.signal,
+      })
+      env = await res.json().catch(() => null)
+      if (!res.ok || !env) {
+        logger.warn("Agent intent proxy returned", res.status, env)
+        setStage(assistantId, "tool_invoke_result", {
+          message: `Tool: agent HTTP ${res.status} → falling back to KB`,
+          payload: { result: "ERROR", httpStatus: res.status },
+        })
+        return { handled: false }
+      }
+    } catch (err) {
+      // Network / proxy / abort failure — let RAG handle it silently but
+      // surface the reason in the timeline.
+      const reason = timedOut
+        ? `timed out after ${INTENT_TIMEOUT_MS}ms`
+        : err?.message || String(err)
+      logger.warn("Agent intent proxy failed:", reason)
+      setStage(assistantId, "tool_invoke_result", {
+        message: `Tool: ${timedOut ? "agent timed out" : "agent unreachable"} → falling back to KB`,
+        payload: { result: timedOut ? "TIMEOUT" : "ERROR", reason },
+      })
+      return { handled: false }
+    } finally {
+      clearTimeout(timer)
+    }
+
+    // ----- Executor result card -------------------------------------------
+    // Record what the agent service actually did (or wants us to do next).
+    const resultLabel = (() => {
+      switch (env.type) {
+        case "OK":                    return "Direct tool call succeeded"
+        case "ASK":                   return "Needs clarification"
+        case "CONFIRMATION_REQUIRED": return `Awaiting confirm: ${env.tool || env.targetTool || "tool"}`
+        case "FORBIDDEN":             return "Blocked — admin-only tool"
+        case "GENERAL_CHAT":          return "General chat → falling back to KB"
+        case "ERROR":                 return "Executor error → falling back to KB"
+        default:                      return env.type || "unknown"
+      }
+    })()
+    setStage(assistantId, "tool_invoke_result", {
+      message: `Tool: ${resultLabel}`,
+      payload: {
+        result: env.type,
+        tool: env.tool || env.targetTool || null,
+        message: env.message || null,
+        arguments: env.arguments || null,
+        riskLevel: env.riskLevel || null,
+      },
+    })
+
+    // GENERAL_CHAT / ERROR → don't render the envelope itself; let the
+    // existing RAG flow take over so the user gets a real KB-grounded
+    // answer instead of the canned hint. The Routing card above stays in
+    // the timeline so they can still see what the classifier decided.
+    if (env.type === "GENERAL_CHAT" || env.type === "ERROR") {
+      return { handled: false }
+    }
+
+    // Render envelope into the assistant bubble.
+    const lines = []
+    if (env.type === "OK") {
+      if (env.message) lines.push(env.message)
+      if (env.result !== undefined) {
+        lines.push("```json\n" + JSON.stringify(env.result, null, 2) + "\n```")
+      }
+    } else if (env.type === "ASK") {
+      lines.push(env.clarificationQuestion || env.message || "Could you clarify?")
+      if (Array.isArray(env.options) && env.options.length > 0) {
+        const opts = env.options
+          .map((o) => (typeof o === "string" ? `• ${o}` : `• ${o.label || JSON.stringify(o)}`))
+          .join("\n")
+        lines.push(opts)
+      }
+    } else if (env.type === "CONFIRMATION_REQUIRED") {
+      const toolName = env.tool || env.targetTool || "tool"
+      lines.push(
+        env.message ||
+          `I can run **${toolName}** with the following arguments. Reply **confirm** to proceed or **cancel** to abort.`
+      )
+      if (env.arguments) {
+        lines.push("```json\n" + JSON.stringify(env.arguments, null, 2) + "\n```")
+      }
+      if (env.riskLevel) lines.push(`_Risk level: ${env.riskLevel}_`)
+      pendingActionRef.current = {
+        id: env.pendingActionId,
+        tool: toolName,
+        ts: Date.now(),
+      }
+    } else if (env.type === "FORBIDDEN") {
+      // Friendlier message + actionable fallback when the classifier wants
+      // an admin-only notification tool but the user is clearly trying to
+      // contact the site owner.
+      const rawMsg = env.message || "You don't have permission to run that action."
+      const looksLikeContact =
+        /contact|reach|message|email|notify/i.test(question || "") ||
+        /notification\./i.test(rawMsg)
+      if (looksLikeContact) {
+        lines.push(
+          `I can't send admin notifications from the chat (that's an owner-only tool).`,
+          `If you want to **reach Yuqi directly**, use the contact form at the bottom of the home page — it emails him right away. ` +
+            `Or send a note to **Yuqi.guo17@gmail.com**.`,
+          `_Original classifier reason: ${rawMsg}_`,
+        )
+      } else {
+        lines.push(rawMsg)
+      }
+    } else {
+      lines.push("```json\n" + JSON.stringify(env, null, 2) + "\n```")
+    }
+
+    const content = lines.filter(Boolean).join("\n\n")
+    clearStage(assistantId)
+    finalizeAssistant(assistantId, content || "[empty agent response]")
+    return { handled: true }
+  }
+
   const jumpToHighlightedPhrase = (phrase) => {
     return pageHighlightRef.current?.scrollToPhrase?.(phrase)
   }
@@ -3396,7 +3684,92 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     try {
       const { data: { session: activeSession } } = await supabase.auth.getSession()
       const ownerEmail = activeSession?.user?.email || null
-      await startRagSSE({ question: baseQuestion, fileUrls, assistantId, requestMode, currentSessionId: sessionId, onFinal: finalizeAndPersist, pageContext: pageCtx, userEmail: ownerEmail })
+
+      // ── Fast mode: try the agent (MCP tools) before RAG ─────────────────
+      // - If the user is responding to a pending confirmation, ship that
+      //   straight to /api/agent/intent/confirm.
+      // - Else pre-classify the utterance. If the agent owns it (OK / ASK /
+      //   CONFIRMATION_REQUIRED / FORBIDDEN), render the envelope. Otherwise
+      //   fall through to the existing Railway RAG SSE flow.
+      if (requestMode === "regular") {
+        if (pendingActionRef.current?.id) {
+          const lower = baseQuestion.trim().toLowerCase()
+          const isConfirm = /^(confirm|yes|y|go|proceed|ok|okay|do it|执行|确认|是的?|好的?)$/.test(lower)
+          const isCancel = /^(cancel|no|n|stop|abort|nevermind|取消|不要?|否)$/.test(lower)
+          if (isConfirm || isCancel) {
+            const pendingId = pendingActionRef.current.id
+            pendingActionRef.current = null
+            const { handled } = await tryAgentIntent({
+              question: baseQuestion,
+              assistantId,
+              currentSessionId: sessionId,
+              pageContext: pageCtx,
+              body: { sessionId, pendingActionId: pendingId, confirm: isConfirm },
+            })
+            if (handled) {
+              await finalizeAndPersist("[agent envelope]")
+              return
+            }
+          } else {
+            // Unrelated message — drop the pending action and proceed normally.
+            pendingActionRef.current = null
+          }
+        }
+
+        // ── Manifest-driven routing ─────────────────────────────────────
+        // No regex. No keyword list. The intent router (Gemini structured
+        // classifier + validator) decides where the message goes based on
+        // the live MCP tool manifest. Failure mode is "fall back to KB_QA"
+        // so the user always gets an answer.
+        const recentForRouter = messages
+          .slice(-6)
+          .map((m) => ({ role: m.role, content: typeof m.content === "string" ? m.content.slice(0, 600) : "" }))
+        const route = await callIntentRouter({
+          question: baseQuestion,
+          assistantId,
+          recentMessages: recentForRouter,
+          currentSessionId: sessionId,
+        })
+
+        if (route.routeKind === "CLARIFICATION_NEEDED") {
+          const q =
+            route.clarificationQuestion ||
+            (route.missingArguments?.length
+              ? `Could you tell me ${route.missingArguments.join(", ")}? I want to call **${route.targetTool}** but those fields are missing.`
+              : "Could you give me a bit more detail?")
+          clearStage(assistantId)
+          finalizeAssistant(assistantId, q)
+          await finalizeAndPersist(q)
+          return
+        }
+
+        if (route.routeKind === "MCP_TOOL") {
+          // Hand the original utterance to the existing agent service for
+          // actual execution. The router has already narrowed the set, so
+          // only ~10% of messages reach the agent — its cold-start latency
+          // no longer dominates the UX.
+          const agentRes = await tryAgentIntent({
+            question: baseQuestion,
+            assistantId,
+            currentSessionId: sessionId,
+            pageContext: pageCtx,
+          })
+          if (agentRes.handled) {
+            await finalizeAndPersist("[agent envelope]")
+            return
+          }
+          // Agent unreachable / disagreed → fall through to RAG below.
+        }
+        // KB_QA + GENERAL_CHAT + any unhandled MCP_TOOL → RAG.
+      }
+
+      // Pass last 6 turns so RAG can resolve pronouns / follow-up questions.
+      const historyForRag = messages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .filter((m) => typeof m.content === "string" && m.content.trim() && !m.streaming)
+        .slice(-6)
+        .map((m) => ({ role: m.role, content: m.content.trim().slice(0, 800) }))
+      await startRagSSE({ question: baseQuestion, fileUrls, assistantId, requestMode, currentSessionId: sessionId, onFinal: finalizeAndPersist, pageContext: pageCtx, userEmail: ownerEmail, conversationHistory: historyForRag })
     } catch (err) {
       if (err?.name === "AbortError") {
         // User stopped the stream — keep whatever partial content was buffered
@@ -3408,9 +3781,12 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       } else {
         console.error("[ChatWidget] SSE failed:", err)
         logger.error("SSE failed:", err)
+        const msg =
+          "⚠️ The chat backend isn't reachable right now. " +
+          "Try a specific portfolio action (e.g. \"search blogs about React\") or come back later."
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantId ? { ...m, content: "⚠️ Failed to contact assistant.", streaming: false, thinkingNow: null } : m,
+            m.id === assistantId ? { ...m, content: msg, streaming: false, thinkingNow: null } : m,
           ),
         )
       }

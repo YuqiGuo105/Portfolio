@@ -45,6 +45,13 @@ const QUICK_ACTIONS = [
     external: false,
   },
   {
+    key: 'agent',
+    label: 'Operate Console',
+    description: 'Natural-language ops console powered by portfolio-agent-service.',
+    href: '/admin/agent',
+    external: false,
+  },
+  {
     key: 'admin-swagger',
     label: 'Admin Swagger',
     description: 'OpenAPI docs for admin-service (content, jobs, audit).',
