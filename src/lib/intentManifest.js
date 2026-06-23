@@ -18,11 +18,26 @@ const TTL_MS = 5 * 60 * 1000;
 let cache = { manifest: null, ts: 0 };
 
 function readBundledManifest() {
-  // Resolve relative to this file so it works from both pages/api and tests.
-  const here = path.dirname(new URL(import.meta.url).pathname);
-  const filePath = path.join(here, "mcp-tools.manifest.json");
-  const raw = fs.readFileSync(filePath, "utf8");
-  return JSON.parse(raw);
+  // In Next.js (both dev and Vercel serverless), __dirname is not available in
+  // ESM, and import.meta.url resolves to a virtual path. Use process.cwd()
+  // (project root) which is reliable in both environments.
+  const candidates = [
+    path.join(process.cwd(), "src/lib/mcp-tools.manifest.json"),
+    path.join(process.cwd(), ".next/server/src/lib/mcp-tools.manifest.json"),
+  ];
+  // Also try relative to this file when running under plain Node (tests).
+  try {
+    const here = path.dirname(new URL(import.meta.url).pathname);
+    candidates.push(path.join(here, "mcp-tools.manifest.json"));
+  } catch {}
+
+  for (const filePath of candidates) {
+    try {
+      const raw = fs.readFileSync(filePath, "utf8");
+      return JSON.parse(raw);
+    } catch {}
+  }
+  throw new Error(`mcp-tools.manifest.json not found. Tried: ${candidates.join(", ")}`);
 }
 
 async function fetchRemoteManifest(url) {
