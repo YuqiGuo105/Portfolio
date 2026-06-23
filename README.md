@@ -4,18 +4,69 @@ This Next.js application showcases a dynamic portfolio with a contact form that 
 
 🌐: https://www.yuqi.site
 
-## Structure
+## Architecture
 
-![Structure](Structure.png)
+```mermaid
+flowchart TB
+    subgraph Frontend["Next.js Frontend · yuqi.site"]
+        UI["3D Globe / Projects / Blog / CV"]
+        Chat["AI Chat Widget"]
+        Admin["Admin Dashboard"]
+        Proxy["API Routes (proxy layer)"]
+    end
+
+    subgraph AI["portfolio-ai-platform"]
+        Agent["Agent Service\n(intent classification, LLM orchestration)"]
+        MCP["MCP Gateway\n(tool execution, RBAC)"]
+    end
+
+    subgraph AdminPlatform["portfolio-admin-service"]
+        AdminAPI["Admin Service\n(content CRUD, outbox)"]
+        Search["Search Indexer\n(Kafka → OpenSearch)"]
+        RAG["RAG Indexer\n(Kafka → embeddings → pgvector)"]
+    end
+
+    subgraph Notif["portfolio-notification-service"]
+        NotifSvc["Notification Service\n(fan-out, email dispatch)"]
+    end
+
+    subgraph Infra["Infrastructure"]
+        Kafka["Kafka"]
+        OS["OpenSearch"]
+        Supabase["Supabase\n(PostgreSQL + pgvector)"]
+    end
+
+    %% Frontend connections
+    Chat -->|/api/agent/*| Agent
+    Admin -->|/api/admin/*| AdminAPI
+    Proxy -->|/api/subscriptions & notifications| NotifSvc
+    UI -->|/api/search| OS
+
+    %% AI platform
+    Agent --> MCP
+    MCP -->|tool calls| AdminAPI
+
+    %% Admin publishes via Kafka
+    AdminAPI -->|ContentIndexEvent| Kafka
+    Kafka --> Search
+    Kafka --> RAG
+    Kafka --> NotifSvc
+
+    %% Indexers write to stores
+    Search --> OS
+    RAG --> Supabase
+    AdminAPI --> Supabase
+    NotifSvc --> Supabase
+```
 
 ## Features
 
-- Dynamic project pages with detailed information.
-- Contact form integrated with serverless API to send messages via email.
-- Navigation to the next project for seamless browsing experience.
-- Utilize Supabase as the database backend, enabling users to seamlessly manage their "Works" or "Blogs" directly through the Supabase console.
-- Parallax effect for project images.
-- Datalake to record visitor's operations for analysis.
+- AI chat with RAG retrieval and multi-round deep-reasoning mode (MCP tool calls visible in UI).
+- Admin dashboard for content CRUD with optimistic concurrency and publish-to-index pipeline.
+- Kafka-driven fan-out: content changes propagate to search, RAG, and notification consumers.
+- Subscription & notification system with email dispatch, proxied through Next.js API routes.
+- 3D geospatial visitor globe, parallax project pages, and guided site tour.
+- Supabase backend (PostgreSQL + pgvector) with RLS policies and real-time capabilities.
 
 ## Getting Started
 
