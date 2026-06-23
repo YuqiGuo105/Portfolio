@@ -1,83 +1,283 @@
 # Yuqi Guo's Portfolio Blog
 
-This Next.js application showcases a dynamic portfolio with a contact form that emails submissions directly to your inbox, utilizing serverless functions for backend operations. It features project detail pages with parallax images and navigational links to browse through projects sequentially.
+A modern Next.js portfolio application for showcasing projects, blogs, CV, visitor analytics, and an AI-powered portfolio assistant. The site is designed as both a personal portfolio and a microservice-backed engineering platform, with serverless frontend APIs, Supabase-backed content storage, Kafka-based event fan-out, OpenSearch search, pgvector RAG indexing, and notification delivery.
 
-🌐: https://www.yuqi.site
+🌐 Production: https://www.yuqi.site
 
-## Structure
+---
 
-![Structure](Structure.png)
+## Architecture
+
+```mermaid
+flowchart LR
+    %% =========================
+    %% Frontend
+    %% =========================
+    subgraph FE["🌐 Next.js Frontend · yuqi.site"]
+        UI["🧭 Portfolio UI<br/><small>3D Globe · Projects · Blog · CV</small>"]
+        Chat["💬 AI Chat Widget"]
+        AdminDash["🛠️ Admin Dashboard"]
+        Proxy["🔀 API Routes<br/><small>serverless proxy layer</small>"]
+    end
+
+    %% =========================
+    %% AI Platform
+    %% =========================
+    subgraph AI["🤖 portfolio-ai-platform"]
+        Agent["Agent Service<br/><small>intent classification · LLM orchestration · RAG planning</small>"]
+        MCP["MCP Gateway<br/><small>typed tools · RBAC · idempotency · audit</small>"]
+        Agent --> MCP
+    end
+
+    %% =========================
+    %% Admin Platform
+    %% =========================
+    subgraph ADMIN["🛡️ portfolio-admin-service"]
+        AdminAPI["Admin Service<br/><small>content CRUD · optimistic concurrency · transactional outbox</small>"]
+        OutboxPub["Outbox Publisher<br/><small>reliable event publishing</small>"]
+        SearchIndexer["Search Indexer<br/><small>Kafka consumer · OpenSearch projection</small>"]
+        RAGIndexer["RAG Indexer<br/><small>Kafka consumer · chunking · embeddings · pgvector</small>"]
+
+        AdminAPI --> OutboxPub
+    end
+
+    %% =========================
+    %% Notification Platform
+    %% =========================
+    subgraph NOTIF["🔔 portfolio-notification-service"]
+        NotifAPI["Subscription / Notification API<br/><small>subscribe · unsubscribe · preferences</small>"]
+        Dispatch["Dispatch Service<br/><small>fan-out · batching · dedupe · idempotency</small>"]
+        EmailWorker["Email Sender Worker<br/><small>retry · backoff · provider adapter</small>"]
+        Delivery["Delivery Tracking<br/><small>sent · failed · bounced · audit log</small>"]
+
+        NotifAPI --> Dispatch
+        Dispatch --> EmailWorker
+        EmailWorker --> Delivery
+    end
+
+    %% =========================
+    %% Event Streaming
+    %% =========================
+    subgraph STREAM["⚙️ Event Streaming Layer"]
+        Kafka[["Kafka<br/><small>event bus · queue semantics · partitions · consumer groups · replay</small>"]]
+        ContentTopic[["content.index.events<br/><small>content changed · project updated · blog published</small>"]]
+        NotificationTopic[["notification.dispatch.events<br/><small>subscriber fan-out jobs</small>"]]
+
+        Kafka --> ContentTopic
+        Kafka --> NotificationTopic
+    end
+
+    %% =========================
+    %% Data Stores
+    %% =========================
+    subgraph DATA["🗄️ Data Stores"]
+        Supabase[("Supabase PostgreSQL<br/><small>source of truth · pgvector · RLS</small>")]
+        OpenSearch[("OpenSearch<br/><small>search projection · ranking · analytics</small>")]
+    end
+
+    %% =========================
+    %% External Providers
+    %% =========================
+    EmailProvider["📧 Email Provider<br/><small>SMTP · SendGrid · SES</small>"]
+
+    %% =========================
+    %% Frontend traffic
+    %% =========================
+    UI -->|"/api/search"| OpenSearch
+    Chat -->|"/api/agent/*"| Agent
+    AdminDash -->|"/api/admin/*"| AdminAPI
+    Proxy -->|"/api/subscriptions & notifications"| NotifAPI
+
+    %% =========================
+    %% AI tool calls
+    %% =========================
+    MCP -->|"authorized tool calls"| AdminAPI
+
+    %% =========================
+    %% Writes and event publishing
+    %% =========================
+    AdminAPI -->|"primary content writes"| Supabase
+    OutboxPub -->|"ContentIndexEvent"| Kafka
+    NotifAPI -->|"subscription state"| Supabase
+
+    %% =========================
+    %% Async consumers
+    %% =========================
+    ContentTopic -->|"consume content events"| SearchIndexer
+    ContentTopic -->|"consume content events"| RAGIndexer
+    NotificationTopic -->|"consume dispatch jobs"| Dispatch
+
+    %% =========================
+    %% Projections / derived stores
+    %% =========================
+    SearchIndexer -->|"update search documents"| OpenSearch
+    RAGIndexer -->|"store chunks + embeddings"| Supabase
+
+    %% =========================
+    %% Notification delivery
+    %% =========================
+    Dispatch -->|"create delivery jobs"| NotificationTopic
+    EmailWorker -->|"send email"| EmailProvider
+    Delivery -->|"delivery status"| Supabase
+```
+
+---
+
+## Microservices GitHub Repositories
+
+| Service                            | Repository                                                                                                | Responsibility                                                                                                |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Portfolio Frontend**             | [YuqiGuo105/Portfolio](https://github.com/YuqiGuo105/Portfolio)                                           | Next.js frontend, project pages, blogs, API proxy routes, chat widget, visitor globe                          |
+| **portfolio-ai-platform**          | [YuqiGuo105/portfolio-ai-platform](https://github.com/YuqiGuo105/portfolio-ai-platform)                   | Agent service, intent classification, LLM orchestration, MCP gateway, typed tools, RBAC, idempotency, audit   |
+| **portfolio-admin-service**        | [YuqiGuo105/portfolio-admin-service](https://github.com/YuqiGuo105/portfolio-admin-service)               | Content CRUD, optimistic concurrency, transactional outbox, Kafka publishing, OpenSearch indexer, RAG indexer |
+| **portfolio-notification-service** | [YuqiGuo105/portfolio-notification-service](https://github.com/YuqiGuo105/portfolio-notification-service) | Subscription APIs, notification dispatch, email sender worker, retry handling, delivery tracking              |
+
+---
 
 ## Features
 
-- Dynamic project pages with detailed information.
-- Contact form integrated with serverless API to send messages via email.
-- Navigation to the next project for seamless browsing experience.
-- Utilize Supabase as the database backend, enabling users to seamlessly manage their "Works" or "Blogs" directly through the Supabase console.
-- Parallax effect for project images.
-- Datalake to record visitor's operations for analysis.
+* **Modern portfolio frontend** built with Next.js, including projects, blogs, CV, parallax project detail pages, and guided navigation.
+* **AI chat assistant** with RAG retrieval, multi-round reasoning, intent classification, and MCP tool execution.
+* **Admin dashboard** for managing blogs, projects, life posts, and portfolio content.
+* **Kafka-driven content pipeline** that publishes content change events to search, RAG, and notification consumers.
+* **Professional search stack** using OpenSearch for indexed portfolio search and ranking.
+* **RAG indexing pipeline** using embeddings stored in Supabase PostgreSQL with pgvector.
+* **Notification system** with subscription management, dispatch service, email sender worker, retry handling, and delivery tracking.
+* **Supabase backend** for PostgreSQL, pgvector, storage, RLS policies, and server-side API integration.
+* **3D geospatial visitor globe** and visitor analytics for portfolio traffic visualization.
+* **SEO support** with reusable metadata, `robots.txt`, and `sitemap.xml`.
+
+---
 
 ## Getting Started
 
-To get a local copy up and running follow these simple steps.
+Follow these steps to run the frontend locally.
 
 ### Prerequisites
 
-- npm
-  ```sh
-  npm install npm@latest -g
-  ```
+* Node.js
+* npm
+
+Install the latest npm globally if needed:
+
+```sh
+npm install npm@latest -g
+```
 
 ### Installation
-- Clone the repo
-  ```sh
-  git clone https://github.com/YuqiGuo105/Portfolio.git
-  ```
 
-- Install NPM packages
-  ```sh
-  npm install
-  ```
+Clone the repository:
 
-- Start the development server (Next.js defaults to http://localhost:3000)
-  ```sh
-  npm run dev
-  ```
+```sh
+git clone https://github.com/YuqiGuo105/Portfolio.git
+cd Portfolio
+```
 
-- Open the site locally in your browser at `http://localhost:3000`
+Install dependencies:
 
-- Set up environment variables in '.env'
-  ```
-  NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL
-  NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
-  SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
-  EMAIL_USER=USER_EMAIL
-  EMAIL_PASS=YOUR_PASS
-  EMAIL_TO=TO_USER
-  ```
+```sh
+npm install
+```
 
-### Supabase setup
+Start the local development server:
 
-1. **Create a project** at [app.supabase.com](https://app.supabase.com) and copy the **Project URL** and **anon (public) API key** from _Project Settings → API_. Paste them into `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in your `.env`.
+```sh
+npm run dev
+```
 
-2. **Add the service role key.** From _Project Settings → API_, copy the **service_role** key and set it as `SUPABASE_SERVICE_ROLE_KEY` in your `.env` (and in Vercel environment variables). This key is used exclusively by server-side API routes and is never exposed to the browser.
+Open the application at:
 
-3. **Apply the database schema and RLS policies.** Open the Supabase SQL editor and run the contents of `create_sql.txt` located at the root of this repository. This script creates all required tables (e.g., `visitor_logs`) and configures the necessary Row Level Security (RLS) policies.
+```txt
+http://localhost:3000
+```
 
-4. **Deploy environment variables** to Vercel (or your hosting provider) so the serverless API routes can access Supabase in production.
+To open the chat widget automatically, append `?openChat=1`:
+
+```txt
+http://localhost:3000/?openChat=1
+```
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env.local` and fill in your values:
+
+```sh
+cp .env.example .env.local
+```
+
+See [`.env.example`](.env.example) for all variables with descriptions. For production, configure the same variables in **Vercel → Project Settings → Environment Variables**.
+
+---
+
+## Supabase Setup
+
+1. Create a Supabase project at [app.supabase.com](https://app.supabase.com).
+2. Copy the Project URL and anon public API key from **Project Settings → API**.
+3. Add them to `.env` as `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+4. Copy the `service_role` key and set it as `SUPABASE_SERVICE_ROLE_KEY`.
+5. Open the Supabase SQL Editor.
+6. Run the schema and RLS policy script from `create_sql.txt` in the repository root.
+7. Confirm that required tables, policies, and server-side access patterns are configured correctly.
+
+---
 
 ## Usage
-- Browse the project portfolio and use the contact form to send messages directly to the project owner's email.
-- Utilize Supabase as database, so user can edit work/blog part.
-- Integrate WYSIWYG to web content that user can easily editor "Blogs"/"Work" content.
-- To open the chat widget automatically, use a URL with `?openChat=1` appended (`http://localhost:3000/?openChat=1`).
 
-## SEO Improvements
-This project includes basic search engine optimization features:
-- Meta tags for titles and descriptions using a reusable `SeoHead` component.
-- `robots.txt` and `sitemap.xml` are provided in the `public` folder for better crawling.
+* Browse projects, blogs, and portfolio details.
+* Use the contact form to send messages to the portfolio owner.
+* Use the AI chat widget to ask questions about the portfolio.
+* Use the Admin Dashboard to edit portfolio content.
+* Use Supabase as the source of truth for editable content.
+* Use OpenSearch for fast search experiences.
+* Use Kafka consumers to keep search, RAG, and notifications in sync.
+
+---
+
+## SEO
+
+This project includes basic SEO support:
+
+* Reusable SEO metadata component
+* Page-level titles and descriptions
+* `robots.txt`
+* `sitemap.xml`
+* Production site URL configuration
+
+---
+
 ## Contributing
-Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are greatly appreciated.
+
+Contributions are welcome. To contribute:
+
+1. Fork the repository.
+2. Create a feature branch.
+3. Commit your changes.
+4. Open a pull request with a clear description of the change.
+
+---
 
 ## License
-Distributed under the MIT License. See LICENSE for more information.
+
+MIT License
+
+Copyright (c) 2023 Yuqi Guo
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
