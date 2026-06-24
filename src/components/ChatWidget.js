@@ -2626,6 +2626,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
   const scrollRef = useRef(null)
   const ragEndpointRef = useRef(null)
   const abortRef = useRef(null)
+  // Assistant message ids whose turn was stopped by the user. Any in-flight
+  // setStage / finalize call for these ids becomes a no-op so async work that
+  // has already kicked off can't redraw the bubble after the user moved on.
+  const stoppedAssistantIdsRef = useRef(new Set())
   const uploadTimersRef = useRef([])
   const fileInputRef = useRef(null)
   const textareaRef = useRef(null)
@@ -2978,19 +2982,59 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     const title = formatStageTitle(stage, obj?.message)
     const keyInfo = summarizePayload(obj?.payload, 180)
     const now = Date.now()
+    // Suppress further timeline writes after the user stopped this turn.
+    if (stoppedAssistantIdsRef.current.has(assistantId)) return
+    const groupKey = typeof obj?.groupKey === "string" && obj.groupKey ? obj.groupKey : null
+    const isFinal = !!obj?.final
     const card = {
       id: `${String(stage || "stage")}-${now}-${Math.random().toString(36).slice(2, 6)}`,
       stage,
       title,
       keyInfo,
       rawPayload: obj?.payload,
+      groupKey,
       ts: now,
+      tsEnd: isFinal ? now : undefined,
     }
 
     setMessages((prev) =>
       prev.map((m) => {
         if (m.id !== assistantId) return m
         const existing = Array.isArray(m.toolCards) ? m.toolCards : []
+
+        // ── Group merge ──────────────────────────────────────────────
+        // When a card with the same groupKey exists, update it in place
+        // instead of pushing a new one. Lets one logical step (Routing,
+        // Tool call) render as a single card with a real start→end
+        // duration, and lets the "final" event provide the richer
+        // payload (toolName, intent, result) the dropdown needs.
+        if (groupKey) {
+          const idx = existing.findIndex((c) => c.groupKey === groupKey)
+          if (idx >= 0) {
+            const cur = existing[idx]
+            const mergedPayload =
+              cur.rawPayload && typeof cur.rawPayload === "object" &&
+              obj?.payload && typeof obj.payload === "object" && !Array.isArray(obj.payload)
+                ? { ...cur.rawPayload, ...obj.payload }
+                : (obj?.payload !== undefined ? obj.payload : cur.rawPayload)
+            const merged = {
+              ...cur,
+              title: title || cur.title,
+              keyInfo: summarizePayload(mergedPayload, 180) || cur.keyInfo,
+              rawPayload: mergedPayload,
+              stage,
+              tsEnd: isFinal ? now : cur.tsEnd,
+            }
+            const next = [...existing]
+            next[idx] = merged
+            return {
+              ...m,
+              thinkingNow: isFinal ? null : merged,
+              toolCards: next,
+            }
+          }
+        }
+
         const last = existing[existing.length - 1]
         // Close out the previous card with an end timestamp
         const closed = last && !last.tsEnd ? [...existing.slice(0, -1), { ...last, tsEnd: now }] : existing
@@ -2998,7 +3042,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         const isDup = last && last.stage === stage && last.title === title
         return {
           ...m,
-          thinkingNow: card,
+          thinkingNow: isFinal ? null : card,
           toolCards: isDup ? closed : [...closed, card],
         }
       }),
@@ -3019,6 +3063,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
   }
 
   const finalizeAssistant = (assistantId, rawFinal, onFinal) => {
+    // If the user already stopped this turn, swallow any late finalize
+    // attempts so partial RAG content can't overwrite the "Stopped." bubble.
+    if (stoppedAssistantIdsRef.current.has(assistantId)) return
     const finalContent = String(rawFinal || "")
 
     setMessages((prev) =>
@@ -3319,11 +3366,14 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
   const ROUTER_TIMEOUT_MS = 5000
   const callIntentRouter = async ({ question, assistantId, recentMessages, currentSessionId }) => {
     setStage(assistantId, "intent_classify", {
-      message: "Routing: asking intent router",
+      message: "Routing",
       payload: { utterance: (question || "").slice(0, 200) },
+      groupKey: "intent_route",
+      final: false,
     })
 
     const ctrl = new AbortController()
+    abortRef.current = ctrl
     const timer = setTimeout(() => { try { ctrl.abort() } catch {} }, ROUTER_TIMEOUT_MS)
     let decision = null
     try {
@@ -3377,6 +3427,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       payload: {
         intent: decision.routeKind,
         tool: decision.targetTool,
+        // toolName is the key humanizeStep looks for → makes the card expandable
+        toolName: decision.targetTool || undefined,
+        route: decision.routeKind,
         toolArguments: decision.toolArguments,
         missingArguments: decision.missingArguments,
         riskLevel: decision.riskLevel,
@@ -3385,6 +3438,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         normalizedQuery: decision.normalizedQuery,
         trace: decision.trace,
       },
+      groupKey: "intent_route",
+      final: true,
     })
 
     return decision
@@ -3426,22 +3481,40 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       return false
     }
 
+    const TOOL_GROUP = "tool_contact_email_owner"
     setStage(assistantId, "tool_call", {
-      message: "Tool: contact.email_owner → /api/contact",
-      payload: { name, email, messagePreview: message.slice(0, 80) },
+      message: "Tool call",
+      payload: {
+        toolName: "contact.email_owner",
+        route: "/api/contact",
+        from: `${name} <${email}>`,
+        messagePreview: message.length > 120 ? `${message.slice(0, 117)}…` : message,
+      },
+      groupKey: TOOL_GROUP,
+      final: false,
     })
+
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
 
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, message }),
+        signal: ctrl.signal,
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || data?.ok !== true) {
         setStage(assistantId, "tool_result", {
-          message: "Contact send FAILED",
-          payload: { status: res.status, error: data?.error || "unknown" },
+          message: "Tool call",
+          payload: {
+            toolName: "contact.email_owner",
+            route: "/api/contact",
+            result: `Failed (HTTP ${res.status}): ${data?.error || "unknown error"}`,
+          },
+          groupKey: TOOL_GROUP,
+          final: true,
         })
         const msg =
           "⚠️ Sorry — I couldn't send that contact message just now. " +
@@ -3451,8 +3524,14 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         return true
       }
       setStage(assistantId, "tool_result", {
-        message: "Contact sent",
-        payload: { to: "site owner", from: email },
+        message: "Tool call",
+        payload: {
+          toolName: "contact.email_owner",
+          route: "/api/contact",
+          result: `Sent to site owner (reply-to ${email})`,
+        },
+        groupKey: TOOL_GROUP,
+        final: true,
       })
       const confirm =
         `Done — your message has been sent to Yuqi. ✉️\n\n` +
@@ -3462,9 +3541,18 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       finalizeAssistant(assistantId, confirm)
       return true
     } catch (err) {
+      // User aborted via the Stop button — re-throw so sendMessage's catch
+      // can do its unified cleanup. Don't render a "failure" bubble.
+      if (err?.name === "AbortError") throw err
       setStage(assistantId, "tool_result", {
-        message: "Contact send threw",
-        payload: { error: err?.message || String(err) },
+        message: "Tool call",
+        payload: {
+          toolName: "contact.email_owner",
+          route: "/api/contact",
+          result: `Network error: ${err?.message || String(err)}`,
+        },
+        groupKey: TOOL_GROUP,
+        final: true,
       })
       const msg =
         "⚠️ The contact endpoint isn't reachable right now. " +
@@ -3518,6 +3606,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     let env
     let timedOut = false
     const ctrl = new AbortController()
+    abortRef.current = ctrl
     const timer = setTimeout(() => {
       timedOut = true
       try { ctrl.abort() } catch {}
@@ -4231,10 +4320,38 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               type="button"
               aria-label="Stop generating"
               onClick={() => {
+                // 1. Abort whichever phase's controller is in-flight
+                //    (router / agent / contact / RAG-SSE all register here).
                 if (abortRef.current) {
                   try { abortRef.current.abort() } catch {}
                   abortRef.current = null
                 }
+                // 2. Synchronous UI cleanup — never wait on the async catch
+                //    path, which may not fire for every phase. The user
+                //    expects the bubble to stop, the input to come back,
+                //    and the spinner to go away immediately.
+                setLoading(false)
+                setMessages((prev) =>
+                  prev.map((m) => {
+                    if (!m.streaming) return m
+                    stoppedAssistantIdsRef.current.add(m.id)
+                    const now = Date.now()
+                    const existing = Array.isArray(m.toolCards) ? m.toolCards : []
+                    // Close any open card so the timeline shows a final duration.
+                    const closedCards = existing.map((c) =>
+                      c.tsEnd ? c : { ...c, tsEnd: now },
+                    )
+                    const trimmed = typeof m.content === "string" ? m.content.trim() : ""
+                    return {
+                      ...m,
+                      streaming: false,
+                      thinkingNow: null,
+                      toolCards: closedCards,
+                      content: trimmed ? m.content : "_Stopped._",
+                      isHtml: trimmed ? m.isHtml : false,
+                    }
+                  }),
+                )
               }}
               style={{
                 width: "40px",
