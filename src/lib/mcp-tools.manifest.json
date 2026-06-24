@@ -1,6 +1,6 @@
 {
   "$schema": "https://yuqi.site/schema/mcp-tool-manifest-v1.json",
-  "version": "2026-06-22-1",
+  "version": "2026-06-23-1",
   "notes": [
     "Declarative contract for tools the portfolio Intent Router is allowed to propose.",
     "Edit this file (or point INTENT_MANIFEST_URL at a hosted manifest / MCP /tools/list) — do NOT add per-tool keywords or regex in the router or the widget.",
@@ -129,7 +129,7 @@
     {
       "name": "contact.email_owner",
       "domain": "CONTACT",
-      "description": "PUBLIC: send a message from a visitor to the site owner via the contact form. Use this when an unauthenticated user wants to reach out, leave feedback, ask a question, or send their email. NEVER use this for notification testing or admin operations.",
+      "description": "PUBLIC: send a message from a visitor to the site owner via the contact form. Use this when an unauthenticated user wants to reach out, leave feedback, ask a question, or send their email. NEVER use this for notification testing or admin operations. NEVER use this when the user only wants to SUBSCRIBE / receive updates — for that, use `subscription.create`.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -138,6 +138,63 @@
           "message": { "type": "string", "description": "The body of the message the visitor wants to send to the owner." }
         },
         "required": ["name", "email", "message"]
+      },
+      "riskLevel": "WRITE",
+      "requiresConfirmation": true,
+      "requiredRole": null
+    },
+    {
+      "name": "subscription.create",
+      "domain": "SUBSCRIPTION",
+      "description": "PUBLIC: subscribe a visitor's email to one or more site update topics (newsletter-style). Use this whenever the user says they want to SUBSCRIBE, get updates, follow the site, join the newsletter / mailing list, or be notified about new content (English: 'subscribe', 'subscribe for updates', 'sign me up', 'get updates'; Chinese: '订阅', '订阅更新', '关注更新'). Only an email is required — do NOT ask for a name or a message. This is NOT the same as `contact.email_owner` (which sends a one-off message to the site owner) and NOT the same as `notification.send_test_notification` (admin-only test).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "description": "Subscriber's email." },
+          "topics": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["ARTICLE_UPDATES", "FEATURE_UPDATES", "JOB_UPDATES"] },
+            "description": "Topic categories to subscribe to. Valid values: ARTICLE_UPDATES (new blog/life-blog articles), FEATURE_UPDATES (new site features/projects), JOB_UPDATES (job/opportunity updates). When the user says 'all updates' / 'everything' / '所有更新' / '全部', include all three. When unspecified, default to [\"ARTICLE_UPDATES\", \"FEATURE_UPDATES\"]."
+          }
+        },
+        "required": ["email"]
+      },
+      "riskLevel": "WRITE",
+      "requiresConfirmation": true,
+      "requiredRole": null
+    },
+    {
+      "name": "subscription.update",
+      "domain": "SUBSCRIPTION",
+      "description": "PUBLIC: update an existing subscriber's notification preferences (which topics they receive, or whether they're enabled). Use when the user says they want to change / update / adjust their subscription topics or preferences. NOT for first-time signup (use `subscription.create`) and NOT for unsubscribe (use `subscription.unsubscribe`).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "description": "Subscriber's email." },
+          "topics": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["ARTICLE_UPDATES", "FEATURE_UPDATES", "JOB_UPDATES"] },
+            "description": "New topic set to replace the existing preferences."
+          },
+          "enabled": { "type": "boolean", "description": "Pause/resume the subscription without deleting it." }
+        },
+        "required": ["email"]
+      },
+      "riskLevel": "WRITE",
+      "requiresConfirmation": true,
+      "requiredRole": null
+    },
+    {
+      "name": "subscription.unsubscribe",
+      "domain": "SUBSCRIPTION",
+      "description": "PUBLIC: unsubscribe a visitor's email from site updates. Use when the user says 'unsubscribe', 'stop emails', 'remove me', '退订', '取消订阅'. Only an email is required (a one-click token may optionally be passed through if the user provides one).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "description": "Subscriber's email." },
+          "token": { "type": "string", "description": "Optional one-click unsubscribe token from an email footer; pass through verbatim if supplied." }
+        },
+        "required": ["email"]
       },
       "riskLevel": "WRITE",
       "requiresConfirmation": true,

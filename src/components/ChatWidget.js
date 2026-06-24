@@ -3900,6 +3900,41 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               ? `Could you tell me ${route.missingArguments.join(", ")}? I want to call **${route.targetTool}** but those fields are missing.`
               : "Could you give me a bit more detail?")
           clearStage(assistantId)
+          // Typewriter-stream the clarification so it feels consistent with
+          // the RAG / agent paths (which both stream via SSE). The router
+          // returns the full string up-front, so we just chunk-feed it into
+          // the same setMessages({ content, streaming: true }) shape that
+          // answer_delta uses. Honors stop: stoppedAssistantIdsRef is
+          // checked on every tick so the Stop button cuts the typewriter
+          // mid-stream without leaking writes onto the "_Stopped._" bubble.
+          await new Promise((resolve) => {
+            // Chunk size tuned for a ChatGPT-ish feel without thrashing
+            // React state — ~6 chars every ~18ms ≈ 333 chars/sec.
+            const CHARS_PER_TICK = 6
+            const TICK_MS = 18
+            let i = 0
+            const step = () => {
+              if (stoppedAssistantIdsRef.current.has(assistantId)) {
+                resolve()
+                return
+              }
+              i = Math.min(q.length, i + CHARS_PER_TICK)
+              const partial = q.slice(0, i)
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, content: partial, streaming: true } : m,
+                ),
+              )
+              if (i >= q.length) {
+                resolve()
+                return
+              }
+              setTimeout(step, TICK_MS)
+            }
+            step()
+          })
+          // finalizeAssistant flips streaming:false and writes the final
+          // content. It already no-ops if the user stopped this turn.
           finalizeAssistant(assistantId, q)
           await finalizeAndPersist(q)
           return
