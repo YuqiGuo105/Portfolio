@@ -3403,7 +3403,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
    *   { handled: false }           — Either GENERAL_CHAT or ERROR.
    *                                  Fall through to existing RAG flow.
    */
-  const tryAgentIntent = async ({ question, assistantId, currentSessionId, pageContext, body }) => {
+  const tryAgentIntent = async ({ question, assistantId, currentSessionId, pageContext, body, recentMessages }) => {
     let bearer = null
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -3425,6 +3425,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     const reqBody = body || {
       sessionId: currentSessionId,
       utterance: question,
+      recentMessages: Array.isArray(recentMessages) ? recentMessages.slice(-6) : [],
       ...(pageContext
         ? {
             pageContext: {
@@ -3753,6 +3754,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
             assistantId,
             currentSessionId: sessionId,
             pageContext: pageCtx,
+            recentMessages: recentForRouter,
           })
           if (agentRes.handled) {
             await finalizeAndPersist("[agent envelope]")

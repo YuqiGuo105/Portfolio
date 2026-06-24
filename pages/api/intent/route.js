@@ -33,6 +33,15 @@ const RISK_LEVELS = ["READ_ONLY", "WRITE", "RISKY_WRITE"];
 
 // JSON schema we hand to Gemini's responseSchema so we get a guaranteed-shape
 // payload. (Gemini's structured output uses a JSON-Schema-ish subset.)
+//
+// IMPORTANT — `toolArguments` is declared as a STRING containing JSON, not a
+// raw object. Gemini's structured-output engine emits `{}` for any
+// `type: "object"` field that has no `properties` declared, because it has
+// no keys to fill. Since the property set of `toolArguments` is
+// tool-dependent and not known at schema-build time, we ask Gemini to emit a
+// JSON-stringified object instead, and parse it on our side. This is the
+// only reliable way to get free-form key/value output from Gemini
+// structured output.
 const ROUTE_SCHEMA = {
   type: "object",
   properties: {
@@ -41,7 +50,11 @@ const ROUTE_SCHEMA = {
     confidence: { type: "number" },
     language: { type: "string" },
     normalizedQuery: { type: "string" },
-    toolArguments: { type: "object" },
+    toolArgumentsJson: {
+      type: "string",
+      description:
+        'JSON-stringified object of arguments for the chosen tool. Use "{}" when no tool. Keys MUST match the selected tool inputSchema.properties keys exactly.',
+    },
     missingArguments: { type: "array", items: { type: "string" } },
     riskLevel: { type: "string", enum: RISK_LEVELS },
     requiresConfirmation: { type: "boolean" },
@@ -52,7 +65,7 @@ const ROUTE_SCHEMA = {
     "confidence",
     "language",
     "normalizedQuery",
-    "toolArguments",
+    "toolArgumentsJson",
     "missingArguments",
   ],
 };
@@ -66,10 +79,40 @@ function buildSystemPrompt() {
     "  - KB_QA: the user is asking a knowledge / portfolio question (about Yuqi Guo, his work, experience, blogs, projects, skills, or anything explainable from the knowledge base).",
     "  - MCP_TOOL: the user wants to OPERATE on live state via one of the tools in the manifest (search, list, publish, send, contact, etc.). Pick a tool ONLY from the manifest by `name`.",
     "  - GENERAL_CHAT: pure chit-chat / greetings / acknowledgements with no informational or operational need.",
-    "  - CLARIFICATION_NEEDED: maps to a manifest tool but a REQUIRED argument is missing, ambiguous, or would force you to invent an opaque ID.",
+    "  - CLARIFICATION_NEEDED: maps to a manifest tool but a REQUIRED argument is truly absent from BOTH `input` AND all of `recentMessages`.",
+    "",
+    "Filling toolArgumentsJson — CRITICAL:",
+    "  • `toolArgumentsJson` is a STRING containing a JSON object — e.g. `'{\"name\":\"Alice\",\"email\":\"a@b.c\",\"message\":\"hi\"}'`.",
+    "  • When routeKind is MCP_TOOL, populate it with EVERY argument you can find.",
+    "  • Key names inside the JSON MUST match the selected tool's `inputSchema.properties` keys exactly (case-sensitive).",
+    "  • Scan BOTH `input` (the current message) AND `recentMessages` (conversation history, newest last).",
+    "  • Plain user-supplied fields (name, email, message, subject, keyword, content, body, etc.)",
+    "    MAY be extracted from history even if they are absent from the current `input`.",
+    "  • Be tolerant of user formatting — labels like `name:`, `email:`, `Message:` (any case),",
+    "    bullet lists, separate lines, or JSON-ish snippets all yield the same fields. Strip the label.",
+    "  • Use `\"{}\"` for `toolArgumentsJson` when no tool is selected.",
+    "  • Return CLARIFICATION_NEEDED ONLY when a required field cannot be found in EITHER `input` OR `recentMessages`.",
+    "",
+    "Worked examples (CONTACT use case):",
+    "  INPUT: \"name: Alice\\nemail: alice@example.com\\nMessage: Hello world\"",
+    "  TOOL:  contact.email_owner  (required: name, email, message)",
+    "  OUTPUT: {",
+    "    \"routeKind\": \"MCP_TOOL\", \"targetTool\": \"contact.email_owner\",",
+    "    \"confidence\": 0.95, \"language\": \"en\",",
+    "    \"normalizedQuery\": \"send a contact message to the site owner\",",
+    "    \"toolArgumentsJson\": \"{\\\"name\\\":\\\"Alice\\\",\\\"email\\\":\\\"alice@example.com\\\",\\\"message\\\":\\\"Hello world\\\"}\",",
+    "    \"missingArguments\": [], \"riskLevel\": \"WRITE\", \"requiresConfirmation\": true,",
+    "    \"clarificationQuestion\": null",
+    "  }",
+    "",
+    "  INPUT (turn 1): \"name: Alice, email: alice@example.com, message: Hello\"",
+    "  INPUT (turn 2): \"send it\"",
+    "  → On turn 2, you STILL fill toolArgumentsJson from turn 1's recentMessages,",
+    "    output the same MCP_TOOL shape above. DO NOT return CLARIFICATION_NEEDED.",
     "",
     "Hard rules:",
-    "  • NEVER invent sourceId, recipientId, subscriberId, jobId, or any opaque identifier.",
+    "  • NEVER invent sourceId, recipientId, subscriberId, jobId, or any opaque internal identifier —",
+    "    even if something resembling one appears in history. Only verbatim user-provided plain values count.",
     "  • NEVER pick a tool name that is not in the manifest.",
     "  • NEVER execute a tool — you only ROUTE.",
     "  • NEVER set riskLevel or requiresConfirmation to values that disagree with the manifest. (A downstream validator will overwrite them anyway.)",
@@ -131,11 +174,34 @@ async function callGeminiRouter({ input, manifest, recentMessages }) {
   if (!text) {
     throw new Error("Gemini returned empty response");
   }
+  let parsed;
   try {
-    return JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch (err) {
     throw new Error(`Gemini returned non-JSON: ${text.slice(0, 200)}`);
   }
+
+  // The schema asks Gemini for a stringified `toolArgumentsJson`. Promote it
+  // to a real `toolArguments` object for the validator. Defensive: tolerate
+  // (a) string JSON, (b) an actual object if Gemini ignored the type, (c)
+  // missing / malformed → empty object.
+  let toolArguments = {};
+  const rawArgs = parsed.toolArgumentsJson ?? parsed.toolArguments;
+  if (typeof rawArgs === "string" && rawArgs.trim()) {
+    try {
+      const obj = JSON.parse(rawArgs);
+      if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+        toolArguments = obj;
+      }
+    } catch {
+      // leave as {}
+    }
+  } else if (rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs)) {
+    toolArguments = rawArgs;
+  }
+  parsed.toolArguments = toolArguments;
+  delete parsed.toolArgumentsJson;
+  return parsed;
 }
 
 export default async function handler(req, res) {
@@ -169,6 +235,24 @@ export default async function handler(req, res) {
       manifest,
       recentMessages,
     });
+    // Server-side trace: when MCP_TOOL was picked but toolArguments is empty
+    // we almost certainly have a prompt-following bug — log loudly so the
+    // next regression is easy to diagnose. We never leak this to the client.
+    if (
+      rawDecision?.routeKind === "MCP_TOOL" &&
+      rawDecision?.targetTool &&
+      (!rawDecision.toolArguments ||
+        Object.keys(rawDecision.toolArguments).length === 0)
+    ) {
+      console.warn(
+        "[intent/route] suspicious: MCP_TOOL picked but toolArguments empty",
+        {
+          tool: rawDecision.targetTool,
+          input: String(input).slice(0, 200),
+          historyTurns: Array.isArray(recentMessages) ? recentMessages.length : 0,
+        },
+      );
+    }
   } catch (err) {
     classifierError = err.message || String(err);
     console.error("[intent/route] classifier failed:", classifierError);
