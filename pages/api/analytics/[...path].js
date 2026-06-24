@@ -1,14 +1,17 @@
 // Same-origin proxy → portfolio-analytics-platform aggregator service.
 //
-// Why a proxy: the aggregator runs on Render and the Portfolio runs on
+// Why a proxy: the aggregator runs on Cloud Run and the Portfolio runs on
 // Vercel, so a direct browser call needs a CORS allow-list and exposes
 // the backend URL. Going through this Next.js route hides the upstream
 // origin, keeps cookies same-origin, and lets us add caching + auth later.
 //
-// Configure the upstream with `ANALYTICS_API_URL` (e.g.
-// `https://portfolio-analytics-aggregator.onrender.com`).
+// The deployed Cloud Run URL is baked in as the production default so a
+// fresh Vercel deploy works without any dashboard configuration. Override
+// with `ANALYTICS_API_URL` in `.env.local` for local development against
+// `http://localhost:8093`.
 
-const UPSTREAM = (process.env.ANALYTICS_API_URL || "http://localhost:8093").replace(/\/$/, "");
+const PROD_DEFAULT = "https://portfolio-analytics-aggregator-702193211434.us-central1.run.app";
+const UPSTREAM = (process.env.ANALYTICS_API_URL || PROD_DEFAULT).replace(/\/$/, "");
 
 export default async function handler(req, res) {
   const { path = [] } = req.query;
