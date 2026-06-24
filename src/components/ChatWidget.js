@@ -3403,6 +3403,78 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
    *   { handled: false }           — Either GENERAL_CHAT or ERROR.
    *                                  Fall through to existing RAG flow.
    */
+
+  /**
+   * Direct frontend handler for `contact.email_owner`.
+   *
+   * This tool is intentionally NOT registered in the agent-service
+   * ToolRegistry (admin/notification tools only). Visitor-facing contact
+   * lives entirely in the Next.js layer: the existing /api/contact
+   * nodemailer endpoint already does the work. Routing it through Cloud
+   * Run + MCP gateway would add cold-start latency, a new auth surface,
+   * and another deploy target for zero benefit.
+   *
+   * Returns true when the message was sent (skip RAG); false when the
+   * caller should fall through to RAG/other handling.
+   */
+  const handleContactEmailOwner = async ({ args, assistantId }) => {
+    const name = typeof args?.name === "string" ? args.name.trim() : ""
+    const email = typeof args?.email === "string" ? args.email.trim() : ""
+    const message = typeof args?.message === "string" ? args.message.trim() : ""
+    if (!name || !email || !message) {
+      // Validator should have caught this; defensive fallback.
+      return false
+    }
+
+    setStage(assistantId, "tool_call", {
+      message: "Tool: contact.email_owner → /api/contact",
+      payload: { name, email, messagePreview: message.slice(0, 80) },
+    })
+
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, message }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.ok !== true) {
+        setStage(assistantId, "tool_result", {
+          message: "Contact send FAILED",
+          payload: { status: res.status, error: data?.error || "unknown" },
+        })
+        const msg =
+          "⚠️ Sorry — I couldn't send that contact message just now. " +
+          "Please try again in a minute, or email yuqi.guo17@gmail.com directly."
+        clearStage(assistantId)
+        finalizeAssistant(assistantId, msg)
+        return true
+      }
+      setStage(assistantId, "tool_result", {
+        message: "Contact sent",
+        payload: { to: "site owner", from: email },
+      })
+      const confirm =
+        `Done — your message has been sent to Yuqi. ✉️\n\n` +
+        `**Name:** ${name}\n**Email:** ${email}\n**Message:** ${message}\n\n` +
+        `He'll usually reply within a day or two. Anything else I can help with?`
+      clearStage(assistantId)
+      finalizeAssistant(assistantId, confirm)
+      return true
+    } catch (err) {
+      setStage(assistantId, "tool_result", {
+        message: "Contact send threw",
+        payload: { error: err?.message || String(err) },
+      })
+      const msg =
+        "⚠️ The contact endpoint isn't reachable right now. " +
+        "Please try again later, or email yuqi.guo17@gmail.com directly."
+      clearStage(assistantId)
+      finalizeAssistant(assistantId, msg)
+      return true
+    }
+  }
+
   const tryAgentIntent = async ({ question, assistantId, currentSessionId, pageContext, body, recentMessages }) => {
     let bearer = null
     try {
@@ -3745,22 +3817,38 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         }
 
         if (route.routeKind === "MCP_TOOL") {
-          // Hand the original utterance to the existing agent service for
-          // actual execution. The router has already narrowed the set, so
-          // only ~10% of messages reach the agent — its cold-start latency
-          // no longer dominates the UX.
-          const agentRes = await tryAgentIntent({
-            question: baseQuestion,
-            assistantId,
-            currentSessionId: sessionId,
-            pageContext: pageCtx,
-            recentMessages: recentForRouter,
-          })
-          if (agentRes.handled) {
-            await finalizeAndPersist("[agent envelope]")
-            return
+          // Short-circuit: visitor-facing contact lives on the Next.js side
+          // (existing /api/contact nodemailer endpoint). Don't round-trip
+          // through Cloud Run for this — the agent-service ToolRegistry
+          // intentionally allowlists only admin/notification tools.
+          if (route.targetTool === "contact.email_owner") {
+            const sent = await handleContactEmailOwner({
+              args: route.toolArguments,
+              assistantId,
+            })
+            if (sent) {
+              await finalizeAndPersist("[contact sent]")
+              return
+            }
+            // Defensive: validator missed required args → fall through to RAG.
+          } else {
+            // Hand the original utterance to the existing agent service for
+            // actual execution. The router has already narrowed the set, so
+            // only ~10% of messages reach the agent — its cold-start latency
+            // no longer dominates the UX.
+            const agentRes = await tryAgentIntent({
+              question: baseQuestion,
+              assistantId,
+              currentSessionId: sessionId,
+              pageContext: pageCtx,
+              recentMessages: recentForRouter,
+            })
+            if (agentRes.handled) {
+              await finalizeAndPersist("[agent envelope]")
+              return
+            }
+            // Agent unreachable / disagreed → fall through to RAG below.
           }
-          // Agent unreachable / disagreed → fall through to RAG below.
         }
         // KB_QA + GENERAL_CHAT + any unhandled MCP_TOOL → RAG.
       }
