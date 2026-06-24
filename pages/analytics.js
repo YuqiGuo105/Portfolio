@@ -14,10 +14,13 @@ const RotatingGlobe = dynamic(() => import("../src/components/RotatingGlobe"), {
 // `NEXT_PUBLIC_ANALYTICS_API_URL` to point straight at Render in prod.
 const API_BASE = (process.env.NEXT_PUBLIC_ANALYTICS_API_URL || "/api/analytics").replace(/\/$/, "");
 
+// `days=0` is interpreted by the aggregator as "no time filter" → all-time
+// aggregate. The label is kept short so the tab row stays compact on mobile.
 const RANGE_OPTIONS = [
   { id: 7, label: "Last 7 days" },
   { id: 30, label: "Last 30 days" },
   { id: 90, label: "Last 90 days" },
+  { id: 0, label: "All time" },
 ];
 
 const num = (v) => (typeof v === "number" ? v : Number(v ?? 0));
@@ -144,8 +147,14 @@ export default function AnalyticsPage() {
               {/* Pass supabase={false} (not null) so RotatingGlobe doesn't
                   fall back to the global supabaseClient and overwrite our
                   aggregator-sourced pins with the legacy visitor_pin_cells
-                  table. */}
-              <RotatingGlobe pins={globePins} supabase={false} />
+                  table. `days` is forwarded so the in-globe area fetch
+                  uses the same time window as the rest of the dashboard. */}
+              <RotatingGlobe
+                pins={globePins}
+                supabase={false}
+                apiBase={API_BASE}
+                days={days}
+              />
             </div>
             <div className="globe-legend">
               <h3>Top countries</h3>

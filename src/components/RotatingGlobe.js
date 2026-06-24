@@ -226,8 +226,19 @@ const buildDisplayPins = (normalizedRawPins, zoomT) => {
   }));
 };
 
-const RotatingGlobe = ({ pins = [], supabase = null }) => {
+const RotatingGlobe = ({
+  pins = [],
+  supabase = null,
+  // Backend-served live pins. When apiBase is set (default), the globe
+  // calls the portfolio-analytics aggregator on every zoom / pan to fetch
+  // pins for just the currently visible window + zoom bucket. This replaces
+  // the legacy Supabase-direct fetch path. Set `apiBase={null}` to fall
+  // back to the prop-only client-side clustering behavior.
+  apiBase = "/api/analytics",
+  days = 30,
+}) => {
   const sb = supabase ?? supabaseClient;
+  const apiBaseClean = typeof apiBase === "string" ? apiBase.replace(/\/$/, "") : null;
 
   const DEBOUNCE_MS = 200;
 
@@ -248,6 +259,9 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
   const fetchingRef = useRef(false);
   const fetchTimerRef = useRef(null);
   const lastFetchKeyRef = useRef("");
+  // Coarse key of the last focused window we sampled (POV center + zoom
+  // bucket). Used to decide when a camera move warrants a re-fetch.
+  const lastFocusKeyRef = useRef("");
 
   // globe
   const globeRef = useRef(null);
@@ -633,9 +647,98 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
   };
 
   const scheduleFetchPins = (force = false) => {
-    if (!sb) return;
+    if (!apiBaseClean && !sb) return;
     if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
-    fetchTimerRef.current = setTimeout(() => fetchPinsForFocusedArea(force), 120);
+    fetchTimerRef.current = setTimeout(
+      () =>
+        apiBaseClean
+          ? fetchAreaPinsFromBackend(force)
+          : fetchPinsForFocusedArea(force),
+      120
+    );
+  };
+
+  // Fetch pins for the currently focused area from the analytics backend
+  // (`/api/public/visits/markers/area`). This is the live path used on every
+  // zoom / pan once the camera settles: it sends the visible lat/lng window
+  // plus the current zoom bucket (world / continent / local) and the server
+  // returns just the matching aggregated markers. The result replaces
+  // `serverPins`, so `displayPins` re-renders without a full prop reload.
+  const fetchAreaPinsFromBackend = async (force = false) => {
+    if (!apiBaseClean) return;
+    if (fetchingRef.current && !force) return;
+
+    const { lat, lng, altitude } = getCurrentPOV();
+    const level = computeLevelFromAltitude(altitude);
+    const delta = computeDeltaDeg(level);
+
+    const key = `api|${level}|${Math.round(lat * 10) / 10}|${Math.round(lng * 10) / 10}|${days}`;
+    if (!force && key === lastFetchKeyRef.current) return;
+    lastFetchKeyRef.current = key;
+
+    if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
+    loadingDelayRef.current = setTimeout(() => setPinsLoading(true), 120);
+    setServerPinsError(false);
+    fetchingRef.current = true;
+
+    const latMin = clamp(lat - delta, -89.9, 89.9);
+    const latMax = clamp(lat + delta, -89.9, 89.9);
+    // Preserve the antimeridian wrap so the backend knows to split the
+    // predicate. normalizeLng keeps each edge in [-180, 180]; if the camera
+    // straddles ±180 we end up with lngMin > lngMax, which the server
+    // interprets as `lng >= lngMin OR lng <= lngMax`.
+    const lngMin = normalizeLng(lng - delta);
+    const lngMax = normalizeLng(lng + delta);
+    const limit = level === "world" ? 220 : level === "continent" ? 700 : 1600;
+
+    const params = new URLSearchParams({
+      days: String(days),
+      latMin: String(latMin),
+      latMax: String(latMax),
+      lngMin: String(lngMin),
+      lngMax: String(lngMax),
+      level,
+      limit: String(limit),
+    });
+    const url = `${apiBaseClean}/visits/markers/area?${params.toString()}`;
+
+    try {
+      const res = await fetch(url, { headers: { accept: "application/json" } });
+      if (!res.ok) throw new Error(`area markers ${res.status}`);
+      const rows = await res.json();
+      const arr = Array.isArray(rows) ? rows : [];
+
+      // The backend returns {lat, lng, count, name, country, ...} which is
+      // the same shape pages/analytics.js already feeds into the `pins`
+      // prop, so reuse the same normalization path.
+      const nextPins = arr
+        .filter((m) => m && m.lat != null && m.lng != null)
+        .map((m) => ({
+          lat: Number(m.lat),
+          lng: Number(m.lng),
+          label: `${m.name || m.country || m.geoAreaId || ""}: ${Number(m.count) || 0}`,
+          weight: 1,
+          count: Number(m.count) || 0,
+        }));
+
+      log("fetched area pins:", arr.length, "=>", nextPins.length, "level=", level);
+      setServerPins(nextPins);
+    } catch (e) {
+      log("backend area fetch failed:", e?.message || e);
+      setServerPinsError(true);
+      setServerPins([]); // displayPins will fall back to the `pins` prop
+    } finally {
+      fetchingRef.current = false;
+      if (loadingDelayRef.current) {
+        clearTimeout(loadingDelayRef.current);
+        loadingDelayRef.current = null;
+      }
+      setPinsLoading(false);
+      if (!initialFetchDoneRef.current) {
+        initialFetchDoneRef.current = true;
+        setInitialServerPinsReady(true);
+      }
+    }
   };
 
   // Discover source + initial fetch
@@ -710,6 +813,12 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
     const onWheel = (e) => {
       if (e.ctrlKey) return;
       e.preventDefault();
+      // A wheel event is always a genuine user zoom (never auto-rotate or a
+      // programmatic camera move). OrbitControls does not reliably emit its
+      // "start" event for wheel zoom, so mark the interaction here; the
+      // change/sample handlers then re-focus and re-fetch pins for the new
+      // zoom level.
+      userInteractedRef.current = true;
     };
 
     // iOS Safari/Chrome fire non-standard `gesturestart/change/end` events for
@@ -734,7 +843,16 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
       }
     };
 
+    // A pointer drag (mouse / pen / single-finger touch) is a genuine user
+    // pan/rotate. Mark the interaction so the camera sampler starts re-fetching
+    // focused pins for the new area, even if OrbitControls' own "start" event
+    // never reaches us.
+    const onPointerDown = () => {
+      userInteractedRef.current = true;
+    };
+
     el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("pointerdown", onPointerDown, { passive: true });
     el.addEventListener("gesturestart", onGesture, { passive: false });
     el.addEventListener("gesturechange", onGesture, { passive: false });
     el.addEventListener("gestureend", onGesture, { passive: false });
@@ -742,6 +860,7 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
 
     return () => {
       el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("gesturestart", onGesture);
       el.removeEventListener("gesturechange", onGesture);
       el.removeEventListener("gestureend", onGesture);
@@ -812,6 +931,9 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
     const onTouchStart = (e) => {
       if (e.touches.length !== 2) return;
       pinchActive = true;
+      // A two-finger pinch is a genuine user zoom; mark the interaction so the
+      // zoom sampler re-focuses and re-fetches pins when the pinch ends.
+      userInteractedRef.current = true;
       initDist = getTouchDist(e.touches);
       const g = globeRef.current;
       initAlt = g?.pointOfView?.()?.altitude ?? 2.2;
@@ -913,9 +1035,30 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
 
     const zBucket = Math.round(z * 100) / 100;
 
-    if (liveZoomRef.current === zBucket) return;
-    liveZoomRef.current = zBucket;
-    scheduleStableCommit();
+    if (liveZoomRef.current !== zBucket) {
+      liveZoomRef.current = zBucket;
+      scheduleStableCommit();
+    }
+
+    // Re-fetch focused pins whenever the *visible window* changes — either the
+    // zoom bucket (wheel / pinch) or the camera center (drag / rotate). We
+    // build a coarse key from the current POV + zoom bucket and only act when
+    // it changes; the backend fetch itself also dedups by (level + rounded
+    // lat/lng), so this stays cheap. Guarded by userInteractedRef so the
+    // initial bootstrap view is left untouched until the user interacts.
+    if (userInteractedRef.current) {
+      const pov = getCurrentPOV();
+      const focusKey = `${Math.round(pov.lat * 10) / 10}|${Math.round(pov.lng * 10) / 10}|${zBucket}`;
+      if (focusKey !== lastFocusKeyRef.current) {
+        lastFocusKeyRef.current = focusKey;
+        if (pinModeRef.current !== "focused") {
+          pinModeRef.current = "focused";
+          setPinMode("focused");
+          setServerPins([]);
+        }
+        scheduleFetchPins(false);
+      }
+    }
   };
 
   // Setup controls + initial POV
@@ -992,13 +1135,18 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.55;
   }, [serverPins, sb]);
-  // Stop auto-rotate once user interacts, and sample on change
+  // Stop auto-rotate once user interacts, and continuously sample the camera
+  // so BOTH zoom (wheel / pinch) and pan (drag / rotate) re-fetch focused
+  // pins. react-globe.gl creates the OrbitControls instance asynchronously, so
+  // we poll until it exists before attaching listeners — otherwise the
+  // listeners would silently never attach (which is exactly why dragging
+  // previously never triggered a re-fetch). An always-on interval sampler is
+  // the version-independent safety net: it works even if OrbitControls never
+  // emits its start/change/end events.
   useEffect(() => {
-    const g = globeRef.current;
-    const controls = getControls(g);
-    if (!controls) return;
-
-    let autoTimer = null;
+    let attached = null;
+    let pollTimer = null;
+    let cancelled = false;
 
     const clearInactivityTimer = () => {
       if (inactivityTimerRef.current) {
@@ -1010,59 +1158,65 @@ const RotatingGlobe = ({ pins = [], supabase = null }) => {
     const scheduleAutoRotateResume = () => {
       clearInactivityTimer();
       inactivityTimerRef.current = setTimeout(() => {
-        controls.autoRotate = true;
-        controls.autoRotateSpeed = 0.55;
+        if (attached) {
+          attached.autoRotate = true;
+          attached.autoRotateSpeed = 0.55;
+        }
       }, 5000);
     };
 
-    if (!userInteractedRef.current) {
-      autoTimer = setInterval(() => sampleCameraToRefs(false), 220);
-    }
+    // Always-on sampler. sampleCameraToRefs is throttled (90ms) and early-exits
+    // when nothing changed, so this is cheap. It is the single source of truth
+    // for "camera moved -> maybe re-fetch".
+    const autoTimer = setInterval(() => sampleCameraToRefs(false), 200);
 
     const onStart = () => {
-      if (!userInteractedRef.current) {
-        userInteractedRef.current = true;
+      userInteractedRef.current = true;
+      if (attached) {
+        attached.autoRotate = false;
+        attached.autoRotateSpeed = 0;
       }
-
-      controls.autoRotate = false;
-      controls.autoRotateSpeed = 0;
-
       clearInactivityTimer();
-
-      if (autoTimer) {
-        clearInterval(autoTimer);
-        autoTimer = null;
-      }
-
       sampleCameraToRefs(true);
     };
 
     const onChange = () => {
       sampleCameraToRefs(false);
-      if (!userInteractedRef.current) return;
-
-      if (pinModeRef.current !== "focused") {
-        pinModeRef.current = "focused";
-        setPinMode("focused");
-        setServerPins([]);
-      }
-      scheduleFetchPins(false);
     };
 
     const onEnd = () => {
       if (!userInteractedRef.current) return;
+      sampleCameraToRefs(true);
       scheduleAutoRotateResume();
     };
 
-    controls.addEventListener("start", onStart);
-    controls.addEventListener("change", onChange);
-    controls.addEventListener("end", onEnd);
+    const attach = (controls) => {
+      attached = controls;
+      controls.addEventListener("start", onStart);
+      controls.addEventListener("change", onChange);
+      controls.addEventListener("end", onEnd);
+    };
+
+    const tryAttach = () => {
+      if (cancelled) return;
+      const controls = getControls(globeRef.current);
+      if (controls) {
+        attach(controls);
+        return;
+      }
+      pollTimer = setTimeout(tryAttach, 80);
+    };
+    tryAttach();
 
     return () => {
-      controls.removeEventListener("start", onStart);
-      controls.removeEventListener("change", onChange);
-      controls.removeEventListener("end", onEnd);
-      if (autoTimer) clearInterval(autoTimer);
+      cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
+      if (attached) {
+        attached.removeEventListener("start", onStart);
+        attached.removeEventListener("change", onChange);
+        attached.removeEventListener("end", onEnd);
+      }
+      clearInterval(autoTimer);
       clearInactivityTimer();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

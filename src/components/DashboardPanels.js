@@ -341,10 +341,16 @@ const DashboardPanels = () => {
   /* ============================================================
      ✅ Visitors — "pins first, stats later" (FIX)
      PHASE -1: restore cache instantly
-     PHASE 0: fetch latest located rows (VERY FAST) => pins immediately
-     PHASE 1: 30-day sample => top sources
-     PHASE 1b: counts + devices (estimated) => small payload
-     PHASE 2: all-time aggregation (idle)
+     PHASE 0: fetch ALL-TIME pins from the analytics aggregator
+              (`/api/analytics/visits/markers?days=0`). The backend
+              computes the geo aggregate from `geo_time_rollups`, so we
+              never SELECT raw `visitor_logs` rows from the browser.
+     PHASE 1: 30-day sample (Supabase) => top sources label list
+     PHASE 1b: counts + devices (Supabase, estimated) => small payload
+
+     Supabase remains the *write* destination for visitor events (see
+     `/api/track`); reads for pins now go through the backend so the
+     analytics aggregation lives in one place.
      ============================================================ */
   useEffect(() => {
     let mounted = true;
@@ -379,33 +385,47 @@ const DashboardPanels = () => {
         const start30Iso = start30.toISOString();
         const startTodayIso = startTodayLocal.toISOString();
 
-        // ---------------- PHASE 0 (CRITICAL): latest pins first ----------------
-        // ✅ no gte(), smallest select, uses created_at desc index best
-        const { data: latestRows, error: latestErr } = await supabase
-          .from("visitor_logs")
-          .select("latitude, longitude, region, country, created_at")
-          .not("latitude", "is", null)
-          .not("longitude", "is", null)
-          .order("created_at", { ascending: false })
-          .limit(120);
+        // ---------------- PHASE 0 (CRITICAL): backend-aggregated pins ----------------
+        // Hit the public aggregator endpoint instead of running a Supabase
+        // SELECT on visitor_logs. Returns one row per geo_area_id with the
+        // pre-computed lat/lng + event count, so no client-side rollup.
+        try {
+          const res = await fetch("/api/analytics/visits/markers?days=0", {
+            headers: { accept: "application/json" },
+          });
+          if (!res.ok) throw new Error(`markers ${res.status}`);
+          const rows = await res.json();
+          const arr = Array.isArray(rows) ? rows : [];
 
-        if (latestErr) throw latestErr;
+          const latestPins = arr
+            .filter((m) => m && m.lat != null && m.lng != null)
+            .map((m) => {
+              const lat = Number(m.lat);
+              const lng = Number(m.lng);
+              const label =
+                (m.name && String(m.name).trim()) ||
+                (m.country && String(m.country).trim()) ||
+                (m.geoAreaId && String(m.geoAreaId)) ||
+                "Unknown";
+              return { lat, lng, latitude: lat, longitude: lng, label };
+            });
 
-        const latestPins = aggregatePinsByRegion(latestRows || [], 320);
+          if (!mounted) return;
 
-        if (!mounted) return;
-
-        setVisitors((prev) => {
-          const next = {
-            ...prev,
-            pins: latestPins,
-            fetchedAt: Date.now(),
-          };
-          if (typeof window !== "undefined") {
-            localStorage.setItem(VISITOR_CACHE_KEY, JSON.stringify(next));
-          }
-          return next;
-        });
+          setVisitors((prev) => {
+            const next = {
+              ...prev,
+              pins: latestPins,
+              fetchedAt: Date.now(),
+            };
+            if (typeof window !== "undefined") {
+              localStorage.setItem(VISITOR_CACHE_KEY, JSON.stringify(next));
+            }
+            return next;
+          });
+        } catch (err) {
+          console.warn("backend pin fetch failed; globe will rely on cached pins:", err?.message || err);
+        }
 
         // yield so globe can paint pins immediately
         await yieldToBrowser();
@@ -511,79 +531,9 @@ const DashboardPanels = () => {
           return next;
         });
 
-        // ---------------- PHASE 2: all-time aggregated pins (idle) ----------------
-        runIdle(async () => {
-          if (!mounted) return;
-
-          const PAGE_SIZE = 900;
-          const MAX_PAGES = 12;
-          const MAX_LABELS = 1800;
-
-          let from = 0;
-          let pageCount = 0;
-
-          const merged = new Map();
-          // seed with latest pins so we never regress to "none"
-          for (const p of latestPins) {
-            merged.set(p.label, { sumLat: p.lat, sumLng: p.lng, n: 1 });
-          }
-
-          while (mounted) {
-            if (pageCount >= MAX_PAGES) break;
-            if (merged.size >= MAX_LABELS) break;
-
-            const { data: page, error: pageErr } = await supabase
-              .from("visitor_logs")
-              .select("latitude, longitude, region, country, created_at")
-              .not("latitude", "is", null)
-              .not("longitude", "is", null)
-              .order("created_at", { ascending: false })
-              .range(from, from + PAGE_SIZE - 1);
-
-            if (pageErr) throw pageErr;
-
-            const safePage = Array.isArray(page) ? page : [];
-            for (const r of safePage) {
-              const lat = Number(r?.latitude);
-              const lng = Number(r?.longitude);
-              if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-
-              const label = buildPinLabel(r);
-
-              let e = merged.get(label);
-              if (!e) {
-                if (merged.size >= MAX_LABELS) break;
-                e = { sumLat: 0, sumLng: 0, n: 0 };
-                merged.set(label, e);
-              }
-              e.sumLat += lat;
-              e.sumLng += lng;
-              e.n += 1;
-            }
-
-            if (safePage.length < PAGE_SIZE) break;
-
-            from += PAGE_SIZE;
-            pageCount += 1;
-            if (pageCount % 2 === 0) await yieldToBrowser();
-          }
-
-          if (!mounted) return;
-
-          const pinsAll = Array.from(merged.entries()).map(([label, e]) => {
-            const lat = e.n ? e.sumLat / e.n : 0;
-            const lng = e.n ? e.sumLng / e.n : 0;
-            return { lat, lng, latitude: lat, longitude: lng, label };
-          });
-
-          setVisitors((prev) => {
-            const next = { ...prev, pins: pinsAll, fetchedAt: Date.now() };
-            if (typeof window !== "undefined") {
-              localStorage.setItem(VISITOR_CACHE_KEY, JSON.stringify(next));
-            }
-            return next;
-          });
-        });
+        // PHASE 2 (legacy: paginated all-time visitor_logs scan) is gone:
+        // the backend `/visits/markers?days=0` call in PHASE 0 already
+        // returns the all-time aggregate.
       } catch (e) {
         console.error("Failed to load visitors from Supabase", e);
       } finally {
@@ -809,7 +759,12 @@ const DashboardPanels = () => {
           <div className="visitors-body">
             <div className="visitors-globe-pane">
               <div className="globe-frame">
-                <RotatingGlobe pins={visitors.pins} supabase={supabase} />
+                <RotatingGlobe
+                  pins={visitors.pins}
+                  supabase={false}
+                  apiBase="/api/analytics"
+                  days={0}
+                />
                 <Link href="/analytics" passHref>
                   <a className="globe-more" aria-label="Open analytics details">
                     <span>More</span>
