@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase/supabaseClient";
 const RotatingGlobe = dynamic(() => import("./RotatingGlobe"), { ssr: false });
@@ -807,8 +808,14 @@ const DashboardPanels = () => {
 
           <div className="visitors-body">
             <div className="visitors-globe-pane">
-              <div className="globe-frame" aria-hidden="true">
+              <div className="globe-frame">
                 <RotatingGlobe pins={visitors.pins} supabase={supabase} />
+                <Link href="/analytics" className="globe-more" aria-label="Open analytics details">
+                  <span>More</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </Link>
               </div>
 
               <div className="visitors-stats">
@@ -1367,6 +1374,35 @@ const DashboardPanels = () => {
 
         .globe-frame:active {
           cursor: grabbing;
+        }
+
+        .globe-more {
+          position: absolute;
+          top: 14px;
+          right: 14px;
+          z-index: 4;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 7px 12px;
+          font-size: 0.78rem;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: #fff;
+          background: rgba(15, 23, 42, 0.7);
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          border-radius: 999px;
+          backdrop-filter: blur(8px);
+          text-decoration: none;
+          transition: background 0.18s ease, transform 0.18s ease;
+        }
+
+        .globe-more:hover,
+        .globe-more:focus-visible {
+          background: rgba(79, 70, 229, 0.9);
+          transform: translateY(-1px);
+          outline: none;
         }
 
         .visitors-globe-pane {
