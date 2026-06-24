@@ -98,7 +98,9 @@ export default function AnalyticsPage() {
         <div className="container">
           <header className="analytics-header">
             <div>
-              <Link href="/" className="back-link">← Back to dashboard</Link>
+              <Link href="/" passHref>
+                <a className="back-link">← Back to dashboard</a>
+              </Link>
               <h1 className="page-title">Visitor Analytics</h1>
               <p className="page-sub">
                 Live rollups served by <code>portfolio-analytics-platform</code>.
