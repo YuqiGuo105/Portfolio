@@ -2,8 +2,13 @@
 // -----------------------------------------------------------------------------
 // • Vercel / Cloudflare header geolocation — no external API calls
 // • insertPayload lists each key explicitly (country, region, ...)
+// • Dual-write: Supabase visitor_logs (source of truth) + Kafka analytics.raw.events
+//   (real-time aggregation). Kafka produce is best-effort — failures do not block
+//   the 200 response and never lose the Supabase row.
 // -----------------------------------------------------------------------------
 import { supabaseServer } from '../../src/supabase/supabaseServer';
+import { produceRawEvent } from '../../src/lib/kafkaProducer';
+import { uuidv7 } from '../../src/lib/uuidv7';
 
 // 速率限制：每个 IP 每分钟最多 10 次
 const rateLimitMap = new Map(); // ip -> { count, resetAt }
@@ -123,8 +128,33 @@ export default async function handler(req, res) {
   };
 
   try {
+    const now = new Date().toISOString();
     const { error } = await supabaseServer.from('visitor_logs').insert([insertPayload]);
     if (error) throw error;
+
+    // Best-effort Kafka produce — does not block the response.
+    // Construct the RawEvent wire format expected by analytics-aggregator-service.
+    const rawEvent = {
+      eventId:    uuidv7(),           // UUIDv7 — global dedup key downstream
+      siteId:     'yuqi.site',
+      eventType:  event,              // page_view (or future click)
+      eventTime:  localTime,          // client wall-clock ISO string
+      serverTime: now,                // stamped by this handler
+      pageUrl:    body.page || null,
+      referrer:   body.referrer || null,
+      uaRaw:      ua,
+      ipRaw:      ip,                 // HMAC'd by enrichment; never persisted
+      geoHint: {
+        country: country ?? null,
+        region:  region  ?? null,
+        city:    city    ?? null,
+        lat:     latitude  ?? null,
+        lng:     longitude ?? null,
+        src:     _src,
+      },
+    };
+    produceRawEvent(rawEvent).catch(() => {/* already logged inside */});
+
     res.status(200).json({ ok: true });
   } catch (err) {
     console.error('[Track] insert error:', err);
