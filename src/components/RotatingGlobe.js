@@ -1305,7 +1305,34 @@ const RotatingGlobe = ({
     return buildDisplayPins(normalizedPins, stableZoomT);
   }, [normalizedPins, stableZoomT, serverPins]);
 
-  // HTML marker element (kept lightweight)
+  // HTML marker element (kept lightweight).
+  //
+  // Layout, in screen space, is a classic Apple-Maps "drop pin":
+  //
+  //          ●   ← coloured circle (the "head")
+  //          │   ← tail
+  //          ▼   ← tip touches the geo coord
+  //
+  // IMPORTANT anchoring detail: three-globe renders these via three.js'
+  // `CSS2DRenderer`, which sets the OUTER element's `transform` to
+  // `translate(-50%,-50%) translate(xpx,ypx)` on every frame — i.e. it
+  // force-centres the outer element on the projected (lat,lng) pixel and
+  // clobbers any `transform` we set on it. So we CANNOT move the anchor
+  // by transforming the wrapper.
+  //
+  // Instead we keep the wrapper centred (as the renderer insists) and put
+  // the actual pin graphic in an INNER element anchored by its BOTTOM at
+  // the wrapper's centre (`bottom: 50%`). That puts the tail tip exactly
+  // on the geo coord while the head + tail rise above it.
+  //
+  // The earlier versions centred the circle on the coord and dangled the
+  // tail BELOW it, so coastal-city pins (Shanghai, Hong Kong, Fulham,
+  // Driffield, the Florida metros, …) looked like they were floating in
+  // the adjacent sea because the visible tail extended ~15px past the
+  // coastline into the water.
+  const PIN_HEAD = 14; // diameter of the circle (px)
+  const PIN_TAIL = 16; // length of the tail / stem (px)
+
   const htmlElement = (d) => {
     const lat = Number(d?.lat);
     const lng = Number(d?.lng);
@@ -1316,30 +1343,51 @@ const RotatingGlobe = ({
 
     const label = String(d?.label || "Unknown");
 
+    // Outer wrapper: CSS2DRenderer centres THIS on the coord. Give it a
+    // zero footprint so it acts purely as the anchor point; the visible
+    // pin lives in `inner`, positioned relative to this centre.
     const wrap = document.createElement("div");
-    wrap.style.width = "14px";
-    wrap.style.height = "14px";
-    wrap.style.borderRadius = "999px";
-    wrap.style.background = "#f97316";
-    wrap.style.border = "2px solid rgba(255,255,255,0.95)";
-    wrap.style.boxShadow = "0 6px 14px rgba(0,0,0,0.25)";
     wrap.style.position = "relative";
-    wrap.style.transform = "translate(-50%, -50%)";
+    wrap.style.width = "0";
+    wrap.style.height = "0";
     wrap.style.pointerEvents = "none";
     wrap.title = label;
+
+    // Inner pin: anchored so its BOTTOM edge (the tail tip) sits on the
+    // wrapper centre == the geo coord, and horizontally centred.
+    const inner = document.createElement("div");
+    inner.style.position = "absolute";
+    inner.style.left = "0";
+    inner.style.bottom = "0"; // bottom edge at wrapper centre (the coord)
+    inner.style.width = `${PIN_HEAD}px`;
+    inner.style.height = `${PIN_HEAD + PIN_TAIL}px`;
+    inner.style.transform = "translateX(-50%)"; // centre horizontally on coord
+
+    const head = document.createElement("div");
+    head.style.position = "absolute";
+    head.style.left = "0";
+    head.style.top = "0";
+    head.style.width = `${PIN_HEAD}px`;
+    head.style.height = `${PIN_HEAD}px`;
+    head.style.borderRadius = "999px";
+    head.style.background = "#f97316";
+    head.style.border = "2px solid rgba(255,255,255,0.95)";
+    head.style.boxShadow = "0 6px 14px rgba(0,0,0,0.25)";
 
     const tail = document.createElement("div");
     tail.style.position = "absolute";
     tail.style.left = "50%";
-    tail.style.top = "14px";
+    tail.style.top = `${PIN_HEAD}px`;
     tail.style.width = "3px";
-    tail.style.height = "14px";
+    tail.style.height = `${PIN_TAIL}px`;
     tail.style.background = "rgba(249,115,22,0.85)";
     tail.style.borderRadius = "2px";
     tail.style.transform = "translateX(-50%)";
     tail.style.boxShadow = "0 6px 10px rgba(0,0,0,0.15)";
 
-    wrap.appendChild(tail);
+    inner.appendChild(head);
+    inner.appendChild(tail);
+    wrap.appendChild(inner);
 
     elCacheRef.current.set(key, wrap);
     return wrap;
