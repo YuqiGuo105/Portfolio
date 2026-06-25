@@ -52,21 +52,27 @@ const Header = ({ onOpenSearch }) => {
   useEffect(() => {
     const mood = localStorage.getItem("ober-mood");
     if (mood) {
+      // User has an explicit preference stored — honour it.
       setDay(mood === "day");
     } else {
-      localStorage.setItem("ober-mood", "day");
+      // No stored preference: mirror the OS / browser colour-scheme.
+      const mq = typeof window !== "undefined"
+        ? window.matchMedia("(prefers-color-scheme: dark)")
+        : null;
+      const prefersDark = mq?.matches ?? false;
+      setDay(!prefersDark);
+      // Track future OS changes while no explicit preference is saved.
+      const handler = (e) => {
+        if (!localStorage.getItem("ober-mood")) setDay(!e.matches);
+      };
+      mq?.addEventListener("change", handler);
+      return () => mq?.removeEventListener("change", handler);
     }
   }, []);
 
   const router = useRouter();
 
   useEffect(() => {
-    // Pages that manage their own body/skin class must not be overridden
-    // by the global day/night toggle. The analytics page forces dark-skin
-    // so the nav blends with its dark background.
-    const DARK_PAGES = ["/analytics"];
-    if (DARK_PAGES.includes(router.pathname)) return;
-
     if (day) {
       localStorage.setItem("ober-mood", "day");
       document
