@@ -235,10 +235,22 @@ const RotatingGlobe = ({
   // the legacy Supabase-direct fetch path. Set `apiBase={null}` to fall
   // back to the prop-only client-side clustering behavior.
   apiBase = "/api/analytics",
+  // Preferred time-window param ("7d" | "30d" | "90d" | "all"). `days`
+  // is still accepted for older callers and translated below.
+  window: windowProp = null,
   days = 30,
 }) => {
   const sb = supabase ?? supabaseClient;
   const apiBaseClean = typeof apiBase === "string" ? apiBase.replace(/\/$/, "") : null;
+  // Normalise to a single backend-friendly window string. If a caller
+  // gives us neither, fall back to days=30 so we don't accidentally
+  // request all-time data on first render.
+  const windowParam = (() => {
+    if (typeof windowProp === "string" && windowProp.length) return windowProp;
+    if (days === 0 || days === "0") return "all";
+    if (typeof days === "number" && Number.isFinite(days) && days > 0) return `${days}d`;
+    return "30d";
+  })();
 
   const DEBOUNCE_MS = 200;
 
@@ -672,7 +684,7 @@ const RotatingGlobe = ({
     const level = computeLevelFromAltitude(altitude);
     const delta = computeDeltaDeg(level);
 
-    const key = `api|${level}|${Math.round(lat * 10) / 10}|${Math.round(lng * 10) / 10}|${days}`;
+    const key = `api|${level}|${Math.round(lat * 10) / 10}|${Math.round(lng * 10) / 10}|${windowParam}`;
     if (!force && key === lastFetchKeyRef.current) return;
     lastFetchKeyRef.current = key;
 
@@ -692,7 +704,7 @@ const RotatingGlobe = ({
     const limit = level === "world" ? 220 : level === "continent" ? 700 : 1600;
 
     const params = new URLSearchParams({
-      days: String(days),
+      window: windowParam,
       latMin: String(latMin),
       latMax: String(latMax),
       lngMin: String(lngMin),

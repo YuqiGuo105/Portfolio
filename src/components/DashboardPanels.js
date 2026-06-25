@@ -342,7 +342,7 @@ const DashboardPanels = () => {
      ✅ Visitors — "pins first, stats later" (FIX)
      PHASE -1: restore cache instantly
      PHASE 0: fetch ALL-TIME pins from the analytics aggregator
-              (`/api/analytics/visits/markers?days=0`). The backend
+              (`/api/analytics/visits/markers?window=all`). The backend
               computes the geo aggregate from `geo_time_rollups`, so we
               never SELECT raw `visitor_logs` rows from the browser.
      PHASE 1: 30-day sample (Supabase) => top sources label list
@@ -390,7 +390,7 @@ const DashboardPanels = () => {
         // SELECT on visitor_logs. Returns one row per geo_area_id with the
         // pre-computed lat/lng + event count, so no client-side rollup.
         try {
-          const res = await fetch("/api/analytics/visits/markers?days=0", {
+          const res = await fetch("/api/analytics/visits/markers?window=all", {
             headers: { accept: "application/json" },
           });
           if (!res.ok) throw new Error(`markers ${res.status}`);
@@ -532,7 +532,7 @@ const DashboardPanels = () => {
         });
 
         // PHASE 2 (legacy: paginated all-time visitor_logs scan) is gone:
-        // the backend `/visits/markers?days=0` call in PHASE 0 already
+        // the backend `/visits/markers?window=all` call in PHASE 0 already
         // returns the all-time aggregate.
       } catch (e) {
         console.error("Failed to load visitors from Supabase", e);
@@ -763,7 +763,7 @@ const DashboardPanels = () => {
                   pins={visitors.pins}
                   supabase={false}
                   apiBase="/api/analytics"
-                  days={0}
+                  window="all"
                 />
                 <Link href="/analytics" passHref>
                   <a className="globe-more" aria-label="Open analytics details">

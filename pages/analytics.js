@@ -14,13 +14,14 @@ const RotatingGlobe = dynamic(() => import("../src/components/RotatingGlobe"), {
 // `NEXT_PUBLIC_ANALYTICS_API_URL` to point straight at Render in prod.
 const API_BASE = (process.env.NEXT_PUBLIC_ANALYTICS_API_URL || "/api/analytics").replace(/\/$/, "");
 
-// `days=0` is interpreted by the aggregator as "no time filter" → all-time
-// aggregate. The label is kept short so the tab row stays compact on mobile.
+// The aggregator now speaks `window=7d|30d|90d|all`. We send `days` only
+// as a fallback for older backend revisions; new code paths key on `window`.
+// The label is kept short so the tab row stays compact on mobile.
 const RANGE_OPTIONS = [
-  { id: 7, label: "Last 7 days" },
-  { id: 30, label: "Last 30 days" },
-  { id: 90, label: "Last 90 days" },
-  { id: 0, label: "All time" },
+  { id: "7d",  label: "Last 7 days" },
+  { id: "30d", label: "Last 30 days" },
+  { id: "90d", label: "Last 90 days" },
+  { id: "all", label: "All time" },
 ];
 
 const num = (v) => (typeof v === "number" ? v : Number(v ?? 0));
@@ -41,22 +42,23 @@ const formatDay = (iso) => {
 };
 
 export default function AnalyticsPage() {
-  const [days, setDays] = useState(30);
+  const [window, setWindow] = useState("30d");
   const [summary, setSummary] = useState(null);
   const [markers, setMarkers] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async (rangeDays) => {
+  const load = useCallback(async (rangeWindow) => {
     setLoading(true);
     setError(null);
     try {
+      const qs = `window=${encodeURIComponent(rangeWindow)}`;
       const [s, m] = await Promise.all([
-        fetch(`${API_BASE}/visits/summary?days=${rangeDays}`).then((r) => {
+        fetch(`${API_BASE}/visits/summary?${qs}`).then((r) => {
           if (!r.ok) throw new Error(`summary ${r.status}`);
           return r.json();
         }),
-        fetch(`${API_BASE}/visits/markers?days=${rangeDays}`).then((r) => {
+        fetch(`${API_BASE}/visits/markers?${qs}`).then((r) => {
           if (!r.ok) throw new Error(`markers ${r.status}`);
           return r.json();
         }),
@@ -73,8 +75,8 @@ export default function AnalyticsPage() {
   }, []);
 
   useEffect(() => {
-    load(days);
-  }, [days, load]);
+    load(window);
+  }, [window, load]);
 
   const globePins = useMemo(() => {
     return markers
@@ -118,9 +120,9 @@ export default function AnalyticsPage() {
                   type="button"
                   key={opt.id}
                   role="tab"
-                  aria-selected={days === opt.id}
-                  className={`range-tab${days === opt.id ? " is-active" : ""}`}
-                  onClick={() => setDays(opt.id)}
+                  aria-selected={window === opt.id}
+                  className={`range-tab${window === opt.id ? " is-active" : ""}`}
+                  onClick={() => setWindow(opt.id)}
                 >
                   {opt.label}
                 </button>
@@ -147,13 +149,14 @@ export default function AnalyticsPage() {
               {/* Pass supabase={false} (not null) so RotatingGlobe doesn't
                   fall back to the global supabaseClient and overwrite our
                   aggregator-sourced pins with the legacy visitor_pin_cells
-                  table. `days` is forwarded so the in-globe area fetch
-                  uses the same time window as the rest of the dashboard. */}
+                  table. `window` is forwarded so the in-globe viewport
+                  re-fetch uses the same time window as the rest of the
+                  dashboard. */}
               <RotatingGlobe
                 pins={globePins}
                 supabase={false}
                 apiBase={API_BASE}
-                days={days}
+                window={window}
               />
             </div>
             <div className="globe-legend">
