@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import dynamic from "next/dynamic";
 
 const NotificationBell = dynamic(() => import("../components/NotificationBell"), { ssr: false });
@@ -57,7 +58,15 @@ const Header = ({ onOpenSearch }) => {
     }
   }, []);
 
+  const router = useRouter();
+
   useEffect(() => {
+    // Pages that manage their own body/skin class must not be overridden
+    // by the global day/night toggle. The analytics page forces dark-skin
+    // so the nav blends with its dark background.
+    const DARK_PAGES = ["/analytics"];
+    if (DARK_PAGES.includes(router.pathname)) return;
+
     if (day) {
       localStorage.setItem("ober-mood", "day");
       document
@@ -71,7 +80,7 @@ const Header = ({ onOpenSearch }) => {
         .classList.remove("home", "page", "light-skin");
       document.querySelector("body").classList.add("dark-skin");
     }
-  }, [day]);
+  }, [day, router.pathname]);
 
   const [pageToggle, setPageToggle] = useState(false);
   const [subscribeOpen, setSubscribeOpen] = useState(false);

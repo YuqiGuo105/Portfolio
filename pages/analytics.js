@@ -48,6 +48,22 @@ export default function AnalyticsPage() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Force the global header into dark mode while on this page so it
+  // blends with the dark-navy analytics background instead of showing
+  // the jarring cream light-skin bar. Header.js skips its own body-class
+  // override on /analytics (see DARK_PAGES list there), so this is the
+  // sole controller of the body class while on this route.
+  useEffect(() => {
+    const body = document.body;
+    const prev = Array.from(body.classList);
+    body.classList.remove("home", "page", "light-skin");
+    body.classList.add("dark-skin");
+    return () => {
+      body.classList.remove("dark-skin");
+      prev.forEach((c) => body.classList.add(c));
+    };
+  }, []);
+
   const load = useCallback(async (rangeWindow) => {
     setLoading(true);
     setError(null);
@@ -208,6 +224,12 @@ export default function AnalyticsPage() {
           padding-top: 120px;
           padding-bottom: 80px;
         }
+        /* Global .container has no horizontal padding; add it here so
+           content doesn't touch the viewport edges on smaller screens. */
+        .analytics-section .container {
+          padding-left: 1.5rem;
+          padding-right: 1.5rem;
+        }
         .analytics-header {
           display: flex;
           justify-content: space-between;
@@ -215,6 +237,16 @@ export default function AnalyticsPage() {
           gap: 2rem;
           margin-bottom: 2.5rem;
           flex-wrap: wrap;
+        }
+        @media (max-width: 640px) {
+          .analytics-header {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          .range-tabs {
+            width: 100%;
+            justify-content: center;
+          }
         }
         .back-link {
           color: #94a3b8;
