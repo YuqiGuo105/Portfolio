@@ -105,7 +105,18 @@ const haversineMiles = (lat1, lng1, lat2, lng2) => {
 
 /**
  * Cluster points so that within `minMiles` only one pin appears.
- * Uses grid acceleration + nearest cluster merge.
+ *
+ * Uses grid acceleration + nearest-cluster merge. Each cluster is
+ * *anchored* at the coordinate of its single highest-weight input point
+ * (i.e. the city with the most visits), rather than the running mean of
+ * its members. This is deliberate: with arithmetic averaging, three
+ * coastal cities arranged in a triangle around water (e.g. Shanghai +
+ * Hangzhou + Beijing) end up rendering as one pin floating in the Yellow
+ * Sea. Anchoring at the dominant city guarantees every displayed pin
+ * lives on a real place that an actual visitor actually came from.
+ *
+ * Cluster `count` is the sum of all merged input visit counts so the
+ * top-N selection in `buildDisplayPins` still reflects real volume.
  */
 const clusterByMiles = (points, minMiles) => {
   const list = Array.isArray(points) ? points : [];
@@ -145,7 +156,16 @@ const clusterByMiles = (points, minMiles) => {
     else arr.push(idx);
   };
 
-  for (const p of list) {
+  // Process points in descending visit-count order so the very first
+  // point added to a cluster is already the strongest candidate to
+  // anchor it — subsequent merges can only displace the anchor if they
+  // beat the current top weight.
+  const ordered = list.slice().sort(
+    (a, b) => (Number(b.count) || 1) - (Number(a.count) || 1),
+  );
+
+  for (const p of ordered) {
+    const pWeight = Number(p.count) || 1;
     const candidates = neighborIdxs(p.lat, p.lng);
 
     let bestIdx = -1;
@@ -163,20 +183,30 @@ const clusterByMiles = (points, minMiles) => {
 
     if (bestIdx >= 0) {
       const c = clusters[bestIdx];
-      const n = c.count + 1;
-      c.lat = (c.lat * c.count + p.lat) / n;
-      // Longitude circular mean (fixes dateline averaging issues)
-      const toRad = (d) => (normalizeLng(d) * Math.PI) / 180;
-      const ang = toRad(p.lng);
-      c._sin = (c._sin ?? Math.sin(toRad(c.lng))) + Math.sin(ang);
-      c._cos = (c._cos ?? Math.cos(toRad(c.lng))) + Math.cos(ang);
-      c.lng = normalizeLng((Math.atan2(c._sin, c._cos) * 180) / Math.PI);
-      c.count = n;
+      // Anchor stays at whichever member has the largest visit count.
+      // Sums (count) and member-bookkeeping update unconditionally.
+      c.count += pWeight;
+      c.members += 1;
+      if (pWeight > c.anchorWeight) {
+        c.lat = p.lat;
+        c.lng = normalizeLng(p.lng);
+        c.label = p.label;
+        c.anchorWeight = pWeight;
+      }
     } else {
       const idx = clusters.length;
-      const toRad0 = (d) => (normalizeLng(d) * Math.PI) / 180;
-      const a0 = toRad0(p.lng);
-      clusters.push({ lat: p.lat, lng: normalizeLng(p.lng), count: 1, label: p.label, _sin: Math.sin(a0), _cos: Math.cos(a0) });
+      clusters.push({
+        lat: p.lat,
+        lng: normalizeLng(p.lng),
+        label: p.label,
+        // `count` keeps its prior meaning for downstream sort/rank: sum
+        // of visits aggregated into the cluster.
+        count: pWeight,
+        // Anchor metadata: which input point currently owns the (lat,
+        // lng) of this cluster. Only beaten when a heavier point joins.
+        anchorWeight: pWeight,
+        members: 1,
+      });
       addToGrid(p.lat, p.lng, idx);
     }
   }
