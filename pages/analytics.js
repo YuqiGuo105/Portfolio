@@ -122,7 +122,7 @@ export default function AnalyticsPage() {
               </Link>
               <h1 className="page-title">Visitor Analytics</h1>
               <p className="page-sub">
-                Live rollups served by <code>portfolio-analytics-platform</code>.
+                Live rollups served by <a href="https://github.com/YuqiGuo105/portfolio-analytics-platform" target="_blank" rel="noopener noreferrer" className="repo-link"><code>portfolio-analytics-platform</code></a>.
                 Data is enriched in-process, snapped to METRO floor, and stored at
                 5-minute + 1-day granularities. No raw IPs leave the aggregator.
               </p>
@@ -325,6 +325,14 @@ export default function AnalyticsPage() {
           padding: 1px 6px;
           border-radius: 4px;
           font-size: 0.85em;
+        }
+        .repo-link {
+          color: inherit;
+          text-decoration: none;
+        }
+        .repo-link:hover code {
+          background: #6366f1;
+          color: #ffffff;
         }
 
         .range-tabs {
