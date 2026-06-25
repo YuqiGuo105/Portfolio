@@ -1,6 +1,6 @@
 # Yuqi Guo's Portfolio Blog
 
-A modern Next.js portfolio application for showcasing projects, blogs, CV, visitor analytics, and an AI-powered portfolio assistant. The site is designed as both a personal portfolio and a microservice-backed engineering platform, with serverless frontend APIs, Supabase-backed content storage, Kafka-based event fan-out, OpenSearch search, pgvector RAG indexing, and notification delivery.
+A modern Next.js portfolio application for showcasing projects, blogs, CV, visitor analytics, and an AI-powered portfolio assistant. The site is designed as both a personal portfolio and a microservice-backed engineering platform, with serverless frontend APIs, Supabase-backed content storage, Kafka-based event fan-out, OpenSearch search, pgvector RAG indexing, notification delivery, and a real-time visitor analytics pipeline.
 
 🌐 Production: https://www.yuqi.site
 
@@ -14,9 +14,10 @@ flowchart LR
     %% Frontend
     %% =========================
     subgraph FE["🌐 Next.js Frontend · yuqi.site"]
-        UI["🧭 Portfolio UI<br/><small>3D Globe · Projects · Blog · CV</small>"]
+        UI["🧭 Portfolio UI<br/><small>3D Globe · Projects · Blog · CV · /analytics dashboard</small>"]
         Chat["💬 AI Chat Widget"]
         AdminDash["🛠️ Admin Dashboard"]
+        Track["📡 /api/track<br/><small>kafkajs producer · UUIDv7 dedup key · best-effort</small>"]
         Proxy["🔀 API Routes<br/><small>serverless proxy layer</small>"]
     end
 
@@ -56,23 +57,38 @@ flowchart LR
     end
 
     %% =========================
+    %% Analytics Platform
+    %% =========================
+    subgraph ANALYTICS["📊 portfolio-analytics-platform"]
+        Aggregator["Aggregator Service<br/><small>batch Kafka consumer · UA/IP/Geo enrichment · in-memory pre-aggregation · UPSERT batchUpdate</small>"]
+        Alerts["Alerts Service<br/><small>SLO checks · anomaly detection · notify hooks</small>"]
+        VisitsAPI["Public Visits API<br/><small>/api/public/visits/{summary,markers,markers/area}</small>"]
+        Aggregator --> VisitsAPI
+    end
+
+    %% =========================
     %% Event Streaming
     %% =========================
     subgraph STREAM["⚙️ Event Streaming Layer"]
         Kafka[["Kafka<br/><small>event bus · queue semantics · partitions · consumer groups · replay</small>"]]
         ContentTopic[["content.index.events<br/><small>content changed · project updated · blog published</small>"]]
         NotificationTopic[["notification.dispatch.events<br/><small>subscriber fan-out jobs</small>"]]
+        AnalyticsRaw[["analytics.raw.events<br/><small>page_view · click · 2 partitions · SASL_SSL/SCRAM-SHA-256</small>"]]
+        AnalyticsDLQ[["analytics.events.dlq<br/><small>malformed payloads · parse errors</small>"]]
 
         Kafka --> ContentTopic
         Kafka --> NotificationTopic
+        Kafka --> AnalyticsRaw
+        Kafka --> AnalyticsDLQ
     end
 
     %% =========================
     %% Data Stores
     %% =========================
     subgraph DATA["🗄️ Data Stores"]
-        Supabase[("Supabase PostgreSQL<br/><small>source of truth · pgvector · RLS</small>")]
+        Supabase[("Supabase PostgreSQL<br/><small>source of truth · pgvector · RLS · visitor_logs · geo_time_rollups</small>")]
         OpenSearch[("OpenSearch<br/><small>search projection · ranking · analytics</small>")]
+        Valkey[("Valkey (Redis)<br/><small>SETNX dedup · 24h TTL · geo cache</small>")]
     end
 
     %% =========================
@@ -84,6 +100,8 @@ flowchart LR
     %% Frontend traffic
     %% =========================
     UI -->|"/api/search"| OpenSearch
+    UI -->|"page_view beacon"| Track
+    UI -->|"/api/analytics/visits/* (proxied)"| VisitsAPI
     Chat -->|"/api/agent/*"| Agent
     AdminDash -->|"/api/admin/*"| AdminAPI
     Proxy -->|"/api/subscriptions & notifications"| NotifAPI
@@ -99,6 +117,8 @@ flowchart LR
     AdminAPI -->|"primary content writes"| Supabase
     OutboxPub -->|"ContentIndexEvent"| Kafka
     NotifAPI -->|"subscription state"| Supabase
+    Track -->|"visitor_logs row (source of truth)"| Supabase
+    Track -->|"RawEvent JSON (best-effort)"| AnalyticsRaw
 
     %% =========================
     %% Async consumers
@@ -106,6 +126,15 @@ flowchart LR
     ContentTopic -->|"consume content events"| SearchIndexer
     ContentTopic -->|"consume content events"| RAGIndexer
     NotificationTopic -->|"consume dispatch jobs"| Dispatch
+    AnalyticsRaw -->|"batch poll · max.poll.records=100"| Aggregator
+    Aggregator -.->|"malformed → DLQ"| AnalyticsDLQ
+
+    %% =========================
+    %% Analytics dedup + rollups
+    %% =========================
+    Aggregator -->|"SETNX eventId (24h TTL)"| Valkey
+    Aggregator -->|"batchUpdate geo_time_rollups (5m + 1d)"| Supabase
+    Alerts -->|"poll rollups"| Supabase
 
     %% =========================
     %% Projections / derived stores
@@ -121,6 +150,21 @@ flowchart LR
     Delivery -->|"delivery status"| Supabase
 ```
 
+Key properties:
+
+* **At-least-once with idempotency.** Kafka redelivers on DB failure (no ack);
+  Valkey `SETNX(eventId, 24h)` guarantees the rollup row is never
+  double-counted.
+* **One DB round-trip per Kafka poll.** The aggregator pre-aggregates a
+  100-record batch in memory keyed by the full UPSERT-conflict tuple, then
+  fires a single `jdbc.batchUpdate` per granularity tier (5m + 1d).
+* **Truth-data geo centroids.** Enrichment snaps each event to a `geo_areas`
+  row (continent / country / region / metro), so map markers use real
+  population-weighted centroids instead of raw lat/lng noise.
+* **Best-effort producer side.** The Vercel function uses kafkajs with a
+  warm-cached singleton producer, 5 s connect timeout, 8 s request timeout,
+  2 retries — any Kafka outage degrades to Supabase-only writes.
+
 ---
 
 ## Microservices GitHub Repositories
@@ -131,6 +175,7 @@ flowchart LR
 | **portfolio-ai-platform**          | [YuqiGuo105/portfolio-ai-platform](https://github.com/YuqiGuo105/portfolio-ai-platform)                   | Agent service, intent classification, LLM orchestration, MCP gateway, typed tools, RBAC, idempotency, audit   |
 | **portfolio-admin-service**        | [YuqiGuo105/portfolio-admin-service](https://github.com/YuqiGuo105/portfolio-admin-service)               | Content CRUD, optimistic concurrency, transactional outbox, Kafka publishing, OpenSearch indexer, RAG indexer |
 | **portfolio-notification-service** | [YuqiGuo105/portfolio-notification-service](https://github.com/YuqiGuo105/portfolio-notification-service) | Subscription APIs, notification dispatch, email sender worker, retry handling, delivery tracking              |
+| **portfolio-analytics-platform**   | [YuqiGuo105/portfolio-analytics-platform](https://github.com/YuqiGuo105/portfolio-analytics-platform)     | Spring Boot Kafka batch consumer, UA/IP/geo enrichment, Valkey dedup, pre-aggregated 5m + 1d rollups, public visits API, alerts service |
 
 ---
 
@@ -144,7 +189,7 @@ flowchart LR
 * **RAG indexing pipeline** using embeddings stored in Supabase PostgreSQL with pgvector.
 * **Notification system** with subscription management, dispatch service, email sender worker, retry handling, and delivery tracking.
 * **Supabase backend** for PostgreSQL, pgvector, storage, RLS policies, and server-side API integration.
-* **3D geospatial visitor globe** and visitor analytics for portfolio traffic visualization.
+* **3D geospatial visitor globe** and a real-time `/analytics` dashboard powered by a Kafka → Spring Boot aggregator pipeline (Valkey dedup, pre-aggregated `geo_time_rollups`, public visits API).
 * **SEO support** with reusable metadata, `robots.txt`, and `sitemap.xml`.
 
 ---
