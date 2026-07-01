@@ -1287,22 +1287,49 @@ const RotatingGlobe = ({
   }, [pinsSig]);
 
   const displayPins = useMemo(() => {
-    // If pins come from server-side bucket tables, they are already aggregated.
-    // Avoid re-clustering here to keep locations accurate.
-    if (serverPins && serverPins.length) {
-      const z = clamp(Number(stableZoomT) || 0.75, 0, 1);
-      const maxPins = z >= 0.78 ? 220 : z >= 0.48 ? 520 : 1100;
+    // Server-aggregated pins are already one-row-per-geo_area_id, but that
+    // is a *categorical* dedup — the metro of SF has one row for SF, one
+    // for Oakland, one for San Jose, one for Palo Alto, etc. Their
+    // centroids sit within 5–40 miles of each other so at max zoom they
+    // visually stack. Run them through the same proximity clusterer as
+    // the fallback path so nearby city pins merge into a single pin
+    // anchored on the heaviest city, while world/continent zooms keep
+    // countries visible via the wider mile threshold.
+    const z = clamp(Number(stableZoomT) || 0.75, 0, 1);
+    const isWorld = z >= 0.78;
+    const isContinent = z >= 0.48 && z < 0.78;
 
-      const sorted = [...normalizedPins].sort((a, b) => (b.count || 0) - (a.count || 0));
-      return sorted.slice(0, maxPins).map((p) => ({
-        lat: p.lat,
-        lng: p.lng,
-        label: p.label,
-        weight: 1,
-      }));
+    let clusterMiles;
+    let maxPins;
+    if (isWorld) {
+      const t = clamp((z - 0.78) / (1 - 0.78), 0, 1);
+      clusterMiles = 1700 + (2800 - 1700) * smoothstep(t);
+      maxPins = serverPins && serverPins.length ? 220 : 40;
+    } else if (isContinent) {
+      const t = clamp((z - 0.48) / (0.78 - 0.48), 0, 1);
+      clusterMiles = 650 + (1350 - 650) * smoothstep(t);
+      maxPins = serverPins && serverPins.length ? 520 : 110;
+    } else {
+      // Local. A ~30px pin at typical mobile-viewport altitudes covers
+      // ~20 visible miles; merging within 50 miles ensures neighboring
+      // cities inside one metro (SF/Oakland/San Jose, NYC/Newark/JC,
+      // LA/Long Beach/Anaheim, …) collapse to a single pin instead of a
+      // stacked blob.
+      clusterMiles = 50;
+      const localT = clamp(z / 0.48, 0, 1);
+      maxPins = serverPins && serverPins.length
+        ? 1100
+        : Math.round(160 + (360 - 160) * smoothstep(localT));
     }
 
-    return buildDisplayPins(normalizedPins, stableZoomT);
+    const clusters = clusterByMiles(normalizedPins, clusterMiles);
+    clusters.sort((a, b) => (b.count || 0) - (a.count || 0));
+    return clusters.slice(0, maxPins).map((c) => ({
+      lat: c.lat,
+      lng: c.lng,
+      label: c.label || "Unknown",
+      weight: 1,
+    }));
   }, [normalizedPins, stableZoomT, serverPins]);
 
   // HTML marker element (kept lightweight).
