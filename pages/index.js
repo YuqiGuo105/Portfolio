@@ -3,7 +3,7 @@ import Link from "next/link";
 import ContactForm from "../src/components/ContactForm";
 import TestimonialSlider from "../src/components/TestimonialSlider";
 import Layout from "../src/layout/Layout";
-import SeoHead from "../src/components/SeoHead";
+import SeoHead, { SITE_URL, absoluteUrl } from "../src/components/SeoHead";
 import DashboardPanels from "../src/components/DashboardPanels";
 import {useEffect, useState, useRef} from "react";
 import {supabase} from "../src/supabase/supabaseClient";
@@ -395,6 +395,37 @@ const Index = () => {
         title="Yuqi Guo Portfolio"
         description="Explore the software engineering portfolio of Yuqi Guo (郭育奇), featuring backend projects, professional experience, and technical articles."
         keywords="Yuqi Guo, 郭育奇, software engineer, portfolio, backend engineer, Goldman Sachs"
+        url={absoluteUrl('/')}
+        jsonLd={[
+          // Person schema — tells Google this site is authored by a
+          // real person and connects it to external profiles for the
+          // Knowledge Panel.
+          {
+            '@context': 'https://schema.org',
+            '@type': 'Person',
+            name: 'Yuqi Guo',
+            alternateName: '郭育奇',
+            url: SITE_URL,
+            jobTitle: 'Software Engineer',
+            sameAs: [
+              'https://github.com/YuqiGuo105',
+              'https://www.linkedin.com/in/yuqi-guo/',
+            ],
+          },
+          // WebSite schema — enables the sitelinks search box in SERPs
+          // pointing at the tag-search route on /blogs.
+          {
+            '@context': 'https://schema.org',
+            '@type': 'WebSite',
+            url: SITE_URL,
+            name: "Yuqi Guo's Portfolio",
+            potentialAction: {
+              '@type': 'SearchAction',
+              target: `${SITE_URL}/blogs?tag={search_term_string}`,
+              'query-input': 'required name=search_term_string',
+            },
+          },
+        ]}
       />
       <Layout>
         <Modal

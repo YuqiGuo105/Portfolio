@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import Layout from "../src/layout/Layout";
-import SeoHead from "../src/components/SeoHead";
+import SeoHead, { absoluteUrl } from "../src/components/SeoHead";
 
 const RotatingGlobe = dynamic(() => import("../src/components/RotatingGlobe"), {
   ssr: false,
@@ -13,6 +13,15 @@ const RotatingGlobe = dynamic(() => import("../src/components/RotatingGlobe"), {
 // out-of-the-box on Vercel without a public CORS exception. Override via
 // `NEXT_PUBLIC_ANALYTICS_API_URL` to point straight at Render in prod.
 const API_BASE = (process.env.NEXT_PUBLIC_ANALYTICS_API_URL || "/api/analytics").replace(/\/$/, "");
+
+// Server-side upstream: skip the /api/analytics proxy hop when SSR runs
+// (we are already on the server, calling out to a public URL is fine)
+// and hit the aggregator directly. Same default as the proxy so nothing
+// needs to be reconfigured.
+const SSR_UPSTREAM = (
+  process.env.ANALYTICS_API_URL
+  || "https://portfolio-analytics-aggregator-702193211434.us-central1.run.app"
+).replace(/\/$/, "");
 
 // The aggregator now speaks `window=7d|30d|90d|all`. We send `days` only
 // as a fallback for older backend revisions; new code paths key on `window`.
@@ -41,9 +50,49 @@ const formatDay = (iso) => {
   }
 };
 
-export default function AnalyticsPage() {
+/**
+ * Pre-render the "all time" summary on the server so the first byte
+ * carries real KPIs (total visits, top countries) instead of "…"
+ * placeholders. Two consequences worth calling out:
+ *   1. Googlebot now sees textual analytics content it can index — but
+ *      we still emit `noindex` below because a live-numbers dashboard
+ *      is not the kind of page we want ranking for random queries.
+ *   2. The client `load()` still runs on mount so switching windows and
+ *      loading the marker set stays interactive.
+ * Failures fall through with `initialSummary=null` — the page then
+ * behaves exactly like the old CSR version.
+ */
+export async function getServerSideProps({ res }) {
+  let initialSummary = null;
+  try {
+    const upstream = await fetch(`${SSR_UPSTREAM}/api/public/visits/summary?window=all`, {
+      headers: { accept: "application/json" },
+    });
+    if (upstream.ok) {
+      initialSummary = await upstream.json();
+    }
+  } catch (_err) {
+    // Aggregator cold-starts happen; leave initialSummary null and the
+    // client-side load() will retry.
+    initialSummary = null;
+  }
+
+  if (res) {
+    res.setHeader(
+      "Cache-Control",
+      "public, s-maxage=60, stale-while-revalidate=600"
+    );
+  }
+
+  return { props: { initialSummary } };
+}
+
+export default function AnalyticsPage({ initialSummary = null }) {
+  // Default window is "30d" for the interactive experience but the SSR
+  // snapshot is "all" — mismatch is fine because `load(window)` fires on
+  // mount and immediately refreshes to the currently-selected window.
   const [window, setWindow] = useState("30d");
-  const [summary, setSummary] = useState(null);
+  const [summary, setSummary] = useState(initialSummary);
   const [markers, setMarkers] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -112,7 +161,37 @@ export default function AnalyticsPage() {
       <SeoHead
         title="Visitor Analytics"
         description="Live analytics rollups for yuqi.site: top countries, devices, and a 30-day visitor time series."
+        url={absoluteUrl('/analytics')}
+        // Dashboards with live numbers should not compete with real content
+        // for search rankings. Flip this to false if we ever want the page
+        // to be indexable (and then also remove the noindex meta below).
+        noindex
       />
+      {/* Server-rendered summary snippet. Not shown to sighted users
+          (the KPI grid below covers the same numbers), but present in
+          the initial HTML so bots that ignore <meta noindex> still see
+          structured text and any user hitting "view source" gets a
+          readable snapshot of what the dashboard is about. */}
+      {initialSummary && (
+        <noscript>
+          <div>
+            <p>
+              Visitor analytics snapshot for yuqi.site — total events:
+              {' '}{formatCount(initialSummary?.totals?.events)},
+              page views: {formatCount(initialSummary?.totals?.pageViews)},
+              clicks: {formatCount(initialSummary?.totals?.clicks)}.
+            </p>
+            {Array.isArray(initialSummary?.topCountries) && initialSummary.topCountries.length > 0 && (
+              <p>
+                Top countries:{' '}
+                {initialSummary.topCountries.slice(0, 5).map((c) =>
+                  `${c.country || 'unknown'} (${formatCount(c.count)})`
+                ).join(', ')}.
+              </p>
+            )}
+          </div>
+        </noscript>
+      )}
       <section className={`analytics-section section-padding ${isLight ? "theme-light" : "theme-dark"}`}>
         <div className="container">
           <header className="analytics-header">

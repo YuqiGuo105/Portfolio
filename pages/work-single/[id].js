@@ -1,16 +1,68 @@
 import Layout from "../../src/layout/Layout";
 import Link from "next/link";
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
-import { supabase } from '../../src/supabase/supabaseClient';
-import DOMPurify from 'dompurify';
+import { useEffect } from 'react';
+import SeoHead, { absoluteUrl } from "../../src/components/SeoHead";
+import { supabaseServer } from '../../src/supabase/supabaseServer';
+import DOMPurify from 'isomorphic-dompurify';
 
-const WorkSingle = () => {
-  const [project, setProject] = useState(null);
-  const [nextProject, setNextProject] = useState(null);
-  const router = useRouter();
-  const { id } = router.query;
+/**
+ * Server-rendered project detail. Same rationale as blog-single: without
+ * SSR, Googlebot sees only `<div>Loading...</div>` on the first byte and
+ * never indexes any of the project copy. Fetching in getServerSideProps
+ * (plus a short CDN cache) pushes the real markup into the initial HTML.
+ */
+export async function getServerSideProps({ params, res }) {
+  const { id } = params;
 
+  const [{ data: project, error: projectErr }, { data: nextRows }] = await Promise.all([
+    supabaseServer
+      .from('Projects')
+      .select('id,title,year,technology,URL,content,description,image,updated_at,created_at')
+      .eq('id', id)
+      .single(),
+    supabaseServer
+      .from('Projects')
+      .select('id,title')
+      .gt('id', id)
+      .order('id', { ascending: true })
+      .limit(1),
+  ]);
+
+  if (projectErr || !project) {
+    return { notFound: true };
+  }
+
+  const sanitizedContent = DOMPurify.sanitize(project.content || '');
+
+  if (res) {
+    res.setHeader(
+      'Cache-Control',
+      'public, s-maxage=60, stale-while-revalidate=600'
+    );
+  }
+
+  return {
+    props: {
+      project: {
+        id: project.id,
+        title: project.title || '',
+        year: project.year || '',
+        technology: project.technology || '',
+        URL: project.URL || '',
+        content: sanitizedContent,
+        description: project.description || '',
+        image: project.image || null,
+        updatedAt: project.updated_at || null,
+        createdAt: project.created_at || null,
+      },
+      nextProject: (nextRows && nextRows[0])
+        ? { id: nextRows[0].id, title: nextRows[0].title || '' }
+        : null,
+    },
+  };
+}
+
+const WorkSingle = ({ project, nextProject }) => {
   // Track page view via the dedicated tracking endpoint.
   useEffect(() => {
     fetch('/api/track', {
@@ -20,54 +72,37 @@ const WorkSingle = () => {
     }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    const fetchProject = async () => {
-      if (!id) return; // Don't proceed if ID is not yet available
+  const metaDescription = (project.description
+    || (project.content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  ).slice(0, 200);
 
-      const { data, error } = await supabase
-          .from('Projects')
-          .select('*')
-          .eq('id', id)
-          .single();
+  const canonical = absoluteUrl(`/work-single/${project.id}`);
 
-      if (error) {
-        console.error('Error fetching project:', error);
-        return;
-      }
-
-      // Sanitize the HTML content
-      data.content = DOMPurify.sanitize(data.content);
-
-      setProject(data);
-    };
-
-    fetchProject();
-  }, [id]);
-
-  useEffect(() => {
-    const fetchNextProject = async () => {
-      const { data, error } = await supabase
-          .from('Projects')
-          .select('*')
-          .gt('id', id) // Assuming IDs are sequential and numeric
-          .order('id', { ascending: true })
-          .limit(1);
-
-      if (error) {
-        console.error('Error fetching next project:', error);
-        return;
-      }
-
-      setNextProject(data[0]); // Assuming the next project is the first in the returned array
-    };
-
-    if (id) fetchNextProject();
-  }, [id, project]);
-
-  if (!project) return <div>Loading...</div>;
+  // CreativeWork is the closest schema.org match for a portfolio project
+  // page (Google renders it as a rich result with title + author + date).
+  const projectLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CreativeWork',
+    name: project.title,
+    description: metaDescription,
+    author: { '@type': 'Person', name: 'Yuqi Guo' },
+    url: canonical,
+    dateModified: project.updatedAt || project.createdAt || undefined,
+    keywords: project.technology || undefined,
+    ...(project.URL ? { sameAs: [project.URL] } : {}),
+  };
 
   return (
-    <Layout extraWrapClass={"project-single"}>
+    <>
+      <SeoHead
+        title={project.title}
+        description={metaDescription}
+        url={canonical}
+        type="article"
+        image={project.image || undefined}
+        jsonLd={projectLd}
+      />
+      <Layout extraWrapClass={"project-single"}>
       {/* Section Started Heading */}
       <section className="section section-inner started-heading">
         <div className="container">
@@ -103,7 +138,7 @@ const WorkSingle = () => {
                 <div className="details-label">
                   <span>Link</span>
                   <strong>
-                    <Link href={project.URL}>
+                    <Link href={project.URL || '#'}>
                       <a
                         target="_blank"
                         rel="noopener noreferrer"
@@ -160,6 +195,7 @@ const WorkSingle = () => {
           </section>
       )}
     </Layout>
+    </>
   );
 };
 export default WorkSingle;

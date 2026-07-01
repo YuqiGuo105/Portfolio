@@ -8,164 +8,210 @@ A modern Next.js portfolio application for showcasing projects, blogs, CV, visit
 
 ## Architecture
 
-The diagram is grouped by **service boundary** and shows **explicit producer → Kafka topic → consumer** relationships. Data is modeled as **service-owned logical stores**; at smaller scale some of these may start in the same Postgres cluster or schema, then split into separate databases as throughput, ownership, and isolation needs grow.
-
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 90, "rankSpacing": 120, "curve": "basis", "htmlLabels": true}, "diagramPadding": 24, "themeVariables": {"fontSize": "18px"}}}%%
 flowchart LR
-
     %% =========================
     %% Frontend
     %% =========================
     subgraph FE["🌐 Next.js Frontend · yuqi.site"]
-        direction TB
-        UI["🧭 Portfolio UI<br/><small>Projects · Blogs · CV · visitor globe</small>"]
+        UI["🧭 Portfolio UI<br/><small>3D Globe · Projects · Blog · CV · /analytics dashboard</small>"]
         Chat["💬 AI Chat Widget"]
         AdminDash["🛠️ Admin Dashboard"]
-        Proxy["🔀 API Routes<br/><small>serverless proxy · auth boundary · rate limits</small>"]
-        Track["📡 Analytics Tracking API<br/><small>/api/tracking · Kafka producer · UUIDv7 eventId</small>"]
-
-        UI --> Proxy
-        UI -->|"page_view / click beacon"| Track
-        Chat --> Proxy
-        AdminDash --> Proxy
+        Track["📡 /api/track<br/><small>kafkajs producer · UUIDv7 dedup key · best-effort</small>"]
+        Proxy["🔀 API Routes<br/><small>serverless proxy layer</small>"]
     end
 
     %% =========================
     %% AI Platform
     %% =========================
     subgraph AI["🤖 portfolio-ai-platform"]
-        direction TB
-        Agent["Agent Service<br/><small>intent classification · retrieval planning · LLM orchestration</small>"]
+        Agent["Agent Service<br/><small>intent classification · LLM orchestration · RAG planning</small>"]
         MCP["MCP Gateway<br/><small>typed tools · RBAC · idempotency · audit</small>"]
-        ToolRegistry["MCP Tool Registry<br/><small>content_admin · analytics_read · subscribe · unsubscribe</small>"]
-        SessionCache[("Session Cache<br/><small>Redis / Valkey · chat state · TTL</small>")]
-
         Agent --> MCP
-        MCP --> ToolRegistry
-        Agent --> SessionCache
     end
 
     %% =========================
     %% Admin Platform
     %% =========================
     subgraph ADMIN["🛡️ portfolio-admin-service"]
-        direction TB
         AdminAPI["Admin Service<br/><small>content CRUD · optimistic concurrency · transactional outbox</small>"]
-        ContentDB[("Content DB<br/><small>projects · blogs · life posts · versions</small>")]
-        Outbox[("Outbox Table<br/><small>same DB transaction as content write</small>")]
         OutboxPub["Outbox Publisher<br/><small>reliable event publishing</small>"]
-        KContent@{ shape: h-cyl, label: "Kafka<br/><small>topic: content.index.events</small>" }
-        KDispatch@{ shape: h-cyl, label: "Kafka<br/><small>topic: notification.dispatch.events</small>" }
-        SearchIndexer["Search Indexer<br/><small>consumer · OpenSearch projection</small>"]
-        RAGIndexer["RAG Indexer<br/><small>consumer · chunking · embeddings</small>"]
+        SearchIndexer["Search Indexer<br/><small>Kafka consumer · OpenSearch projection</small>"]
+        RAGIndexer["RAG Indexer<br/><small>Kafka consumer · chunking · embeddings · pgvector</small>"]
 
-        AdminAPI --> ContentDB
-        AdminAPI --> Outbox
-        Outbox --> OutboxPub
-        OutboxPub -->|"producer"| KContent
-        OutboxPub -->|"producer"| KDispatch
+        AdminAPI --> OutboxPub
     end
 
     %% =========================
     %% Notification Platform
     %% =========================
     subgraph NOTIF["🔔 portfolio-notification-service"]
-        direction TB
         NotifAPI["Subscription / Notification API<br/><small>subscribe · unsubscribe · preferences</small>"]
-        SubscriptionDB[("Subscription DB<br/><small>subscribers · preferences · topic membership</small>")]
-        Dispatch["Dispatch Service<br/><small>consumer · fan-out · batching · dedupe</small>"]
-        DeliveryDB[("Delivery DB<br/><small>delivery rows · status · retries · audit</small>")]
-        KEmail@{ shape: h-cyl, label: "Kafka<br/><small>topic: notification.email.send</small>" }
-        EmailWorker["Email Sender Worker<br/><small>consumer · retry · backoff · provider adapter</small>"]
+        Dispatch["Dispatch Service<br/><small>fan-out · batching · dedupe · idempotency</small>"]
+        EmailWorker["Email Sender Worker<br/><small>retry · backoff · provider adapter</small>"]
+        Delivery["Delivery Tracking<br/><small>sent · failed · bounced · audit log</small>"]
 
-        NotifAPI --> SubscriptionDB
-        KDispatch -->|"consumer"| Dispatch
-        Dispatch --> SubscriptionDB
-        Dispatch --> DeliveryDB
-        Dispatch -->|"producer"| KEmail
+        NotifAPI --> Dispatch
+        Dispatch --> EmailWorker
+        EmailWorker --> Delivery
     end
 
     %% =========================
     %% Analytics Platform
     %% =========================
     subgraph ANALYTICS["📊 portfolio-analytics-platform"]
-        direction TB
-        VisitsAPI["Public Visits API<br/><small>/summary · /markers · /markers/area</small>"]
-        KRaw@{ shape: h-cyl, label: "Kafka<br/><small>topic: analytics.raw.events</small>" }
-        KDLQ@{ shape: h-cyl, label: "Kafka<br/><small>topic: analytics.events.dlq</small>" }
-        Aggregator["Aggregator Service<br/><small>consumer · dedup · UA/IP/Geo enrichment · 5m/1d rollups</small>"]
-        RawEventDB[("Raw Event Store<br/><small>visitor_logs · event trace</small>")]
-        RollupDB[("Rollup DB<br/><small>geo_time_rollups · aggregated read model</small>")]
-        DedupCache[("Dedup Cache<br/><small>Redis / Valkey · SETNX eventId · TTL</small>")]
-        AlertRulesDB[("Alert Rules DB<br/><small>thresholds · SLOs · cooldown policy</small>")]
-        IncidentDB[("Incident DB<br/><small>alert_incidents · alert_audit_log</small>")]
-        AlertEvaluator["Alert Evaluator<br/><small>rule evaluation · noise reduction · email alerts</small>"]
-
-        KRaw -->|"consumer"| Aggregator
-        Aggregator --> RawEventDB
-        Aggregator --> DedupCache
-        Aggregator --> RollupDB
-        Aggregator -.->|"producer (DLQ)"| KDLQ
-        VisitsAPI --> RollupDB
-        RollupDB --> AlertEvaluator
-        AlertRulesDB --> AlertEvaluator
-        AlertEvaluator --> IncidentDB
+        Aggregator["Aggregator Service<br/><small>batch Kafka consumer · UA/IP/Geo enrichment · in-memory pre-aggregation · UPSERT batchUpdate</small>"]
+        Alerts["Alerts Service<br/><small>SLO checks · anomaly detection · notify hooks</small>"]
+        VisitsAPI["Public Visits API<br/><small>/api/public/visits/{summary,markers,markers/area}</small>"]
+        Aggregator --> VisitsAPI
     end
 
     %% =========================
-    %% Shared Search / Vector / Email Infra
+    %% Event Streaming
     %% =========================
-    subgraph INFRA["🗄️ Shared Search / Vector / Delivery Infrastructure"]
-        direction TB
-        OpenSearch[("OpenSearch<br/><small>search read model · ranking</small>")]
-        VectorDB[("Vector DB<br/><small>pgvector / embeddings / retrieval chunks</small>")]
-        EmailProvider["📧 Email Provider<br/><small>SMTP · SendGrid · SES</small>"]
+    subgraph STREAM["⚙️ Event Streaming Layer"]
+        Kafka[["Kafka<br/><small>event bus · queue semantics · partitions · consumer groups · replay</small>"]]
+        ContentTopic[["content.index.events<br/><small>content changed · project updated · blog published</small>"]]
+        NotificationTopic[["notification.dispatch.events<br/><small>subscriber fan-out jobs</small>"]]
+        AnalyticsRaw[["analytics.raw.events<br/><small>page_view · click · 2 partitions · SASL_SSL/SCRAM-SHA-256</small>"]]
+        AnalyticsDLQ[["analytics.events.dlq<br/><small>malformed payloads · parse errors</small>"]]
+
+        Kafka --> ContentTopic
+        Kafka --> NotificationTopic
+        Kafka --> AnalyticsRaw
+        Kafka --> AnalyticsDLQ
     end
 
     %% =========================
-    %% Frontend to services
+    %% Data Stores
     %% =========================
-    Proxy -->|"/api/agent/*"| Agent
-    Proxy -->|"/api/admin/*"| AdminAPI
-    Proxy -->|"/api/subscriptions/*"| NotifAPI
-    Proxy -->|"/api/analytics/visits/*"| VisitsAPI
-    Proxy -->|"/api/search"| OpenSearch
-    MCP -->|"content_admin tool"| AdminAPI
-    MCP -->|"analytics_read tool"| VisitsAPI
-    MCP -->|"subscribe / unsubscribe tools"| NotifAPI
+    subgraph DATA["🗄️ Data Stores"]
+        Supabase[("Supabase PostgreSQL<br/><small>source of truth · pgvector · RLS · visitor_logs · geo_time_rollups</small>")]
+        OpenSearch[("OpenSearch<br/><small>search projection · ranking · analytics</small>")]
+        Valkey[("Valkey (Redis)<br/><small>SETNX dedup · 24h TTL · geo cache</small>")]
+    end
 
     %% =========================
-    %% Analytics producer path
+    %% External Providers
     %% =========================
-    Track -->|"producer: RawAnalyticsEvent"| KRaw
-    Track -->|"persist raw visitor event"| RawEventDB
+    EmailProvider["📧 Email Provider<br/><small>SMTP · SendGrid · SES</small>"]
 
     %% =========================
-    %% Consumers to data / providers
+    %% Frontend traffic
     %% =========================
-    KContent -->|"consumer"| SearchIndexer
-    KContent -->|"consumer"| RAGIndexer
-    SearchIndexer --> OpenSearch
-    RAGIndexer --> VectorDB
-    Agent --> VectorDB
+    UI -->|"/api/search"| OpenSearch
+    UI -->|"page_view beacon"| Track
+    UI -->|"/api/analytics/visits/* (proxied)"| VisitsAPI
+    Chat -->|"/api/agent/*"| Agent
+    AdminDash -->|"/api/admin/*"| AdminAPI
+    Proxy -->|"/api/subscriptions & notifications"| NotifAPI
 
-    KEmail -->|"consumer"| EmailWorker
-    EmailWorker --> EmailProvider
-    EmailWorker --> DeliveryDB
+    %% =========================
+    %% AI tool calls
+    %% =========================
+    MCP -->|"authorized tool calls"| AdminAPI
 
-    AlertEvaluator --> EmailProvider
+    %% =========================
+    %% Writes and event publishing
+    %% =========================
+    AdminAPI -->|"primary content writes"| Supabase
+    OutboxPub -->|"ContentIndexEvent"| Kafka
+    NotifAPI -->|"subscription state"| Supabase
+    Track -->|"visitor_logs row (source of truth)"| Supabase
+    Track -->|"RawEvent JSON (best-effort)"| AnalyticsRaw
+
+    %% =========================
+    %% Async consumers
+    %% =========================
+    ContentTopic -->|"consume content events"| SearchIndexer
+    ContentTopic -->|"consume content events"| RAGIndexer
+    NotificationTopic -->|"consume dispatch jobs"| Dispatch
+    AnalyticsRaw -->|"batch poll · max.poll.records=100"| Aggregator
+    Aggregator -.->|"malformed → DLQ"| AnalyticsDLQ
+
+    %% =========================
+    %% Analytics dedup + rollups
+    %% =========================
+    Aggregator -->|"SETNX eventId (24h TTL)"| Valkey
+    Aggregator -->|"batchUpdate geo_time_rollups (5m + 1d)"| Supabase
+    Alerts -->|"poll rollups"| Supabase
+
+    %% =========================
+    %% Projections / derived stores
+    %% =========================
+    SearchIndexer -->|"update search documents"| OpenSearch
+    RAGIndexer -->|"store chunks + embeddings"| Supabase
+
+    %% =========================
+    %% Notification delivery
+    %% =========================
+    Dispatch -->|"create delivery jobs"| NotificationTopic
+    EmailWorker -->|"send email"| EmailProvider
+    Delivery -->|"delivery status"| Supabase
+```
+
+### Visitor analytics pipeline (deep dive)
+
+The `/analytics` dashboard and the 3D visitor globe on the homepage are powered
+by a dedicated real-time pipeline that runs alongside the legacy Supabase
+`visitor_logs` write. Every page view results in a **dual-write**: a row in
+`visitor_logs` (source of truth) plus a best-effort RawEvent published to
+Kafka. A Kafka produce failure never blocks the 200 response or loses the
+Supabase row.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Visitor as 🧑 Visitor (browser)
+    participant Track as 📡 /api/track<br/>(Vercel serverless)
+    participant SB as 🗄️ Supabase<br/>visitor_logs
+    participant K as ⚙️ Kafka<br/>analytics.raw.events
+    participant Agg as 🧮 Aggregator<br/>batch consumer
+    participant V as 🔑 Valkey<br/>(dedup, 24h TTL)
+    participant R as 🗄️ Supabase<br/>geo_time_rollups
+    participant API as 🌐 /api/public/visits/summary
+    participant UI as 📊 /analytics dashboard
+
+    Visitor->>Track: POST page_view (Origin: yuqi.site)
+    Track->>SB: insert visitor_logs (sync)
+    Track-->>K: produce RawEvent {eventId: UUIDv7, geoHint, ua, ip}<br/>(fire-and-forget)
+    Track-->>Visitor: 200 {ok: true}
+
+    Note over Agg,K: poll · max.poll.records = 100 · manual ack
+    K->>Agg: batch of ConsumerRecord<String,String>
+    loop per record
+        Agg->>V: SETNX eventId (24h)
+        alt new event
+            Agg->>Agg: parse + enrich (UA, geo, IP-hash, bot-score)
+        else duplicate
+            Agg->>Agg: skip silently
+        end
+    end
+    Agg->>Agg: collapse by (siteId, bucket, granularity, geo, device, browser, os, isBot, country)
+    Agg->>R: batchUpdate UPSERT × 2 granularities (5m + 1d)
+    Agg->>K: ack batch (on DB success only)
+
+    Visitor->>UI: open /analytics
+    UI->>API: GET /api/public/visits/summary?window=7d
+    API->>R: SQL aggregation over geo_time_rollups
+    R-->>API: rows
+    API-->>UI: { totals, topCountries, topDevices, timeSeries }
 ```
 
 Key properties:
 
-* **Explicit event contracts.** Every Kafka path is modeled as **producer → topic → consumer**. For analytics, the frontend sends page-view / click beacons to `/api/tracking`, and that API route produces `RawAnalyticsEvent` messages into `analytics.raw.events` for the Aggregator consumer.
-* **MCP as a governed tool layer.** The Agent does not bypass service APIs. MCP exposes typed tools for `content_admin`, `analytics_read`, `subscribe`, and `unsubscribe`, then routes them through the owning services with RBAC, idempotency, and audit.
-* **Service-owned data domains.** Content, subscriptions, deliveries, raw events, rollups, alert rules, and incidents are shown as separate logical stores. This is a staff-level boundary model: you can begin with shared infrastructure, but evolve toward stronger isolation by workload and ownership.
-* **Transactional publishing for content changes.** `portfolio-admin-service` writes content and outbox rows in one transaction, then publishes asynchronously to indexing and notification topics.
-* **Separate operational and analytical stores.** Analytics keeps raw event trace, rollup read models, dedup cache, alert rules, and incident state distinct so query patterns, retention, and scaling can evolve independently.
-* **Read-model separation.** OpenSearch serves user-facing search, Vector DB serves RAG retrieval, and domain databases remain the system of record for writes and operational state.
-* **Built-in alerting.** `portfolio-analytics-platform` evaluates rules from `Alert Rules DB`, persists incident state, suppresses noise, and sends rule-based email alerts.
+* **At-least-once with idempotency.** Kafka redelivers on DB failure (no ack);
+  Valkey `SETNX(eventId, 24h)` guarantees the rollup row is never
+  double-counted.
+* **One DB round-trip per Kafka poll.** The aggregator pre-aggregates a
+  100-record batch in memory keyed by the full UPSERT-conflict tuple, then
+  fires a single `jdbc.batchUpdate` per granularity tier (5m + 1d).
+* **Truth-data geo centroids.** Enrichment snaps each event to a `geo_areas`
+  row (continent / country / region / metro), so map markers use real
+  population-weighted centroids instead of raw lat/lng noise.
+* **Best-effort producer side.** The Vercel function uses kafkajs with a
+  warm-cached singleton producer, 5 s connect timeout, 8 s request timeout,
+  2 retries — any Kafka outage degrades to Supabase-only writes.
 
 ---
 
@@ -174,24 +220,24 @@ Key properties:
 | Service                            | Repository                                                                                                | Responsibility                                                                                                |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | **Portfolio Frontend**             | [YuqiGuo105/Portfolio](https://github.com/YuqiGuo105/Portfolio)                                           | Next.js frontend, project pages, blogs, API proxy routes, chat widget, visitor globe                          |
-| **portfolio-ai-platform**          | [YuqiGuo105/portfolio-ai-platform](https://github.com/YuqiGuo105/portfolio-ai-platform)                   | Agent service, intent classification, LLM orchestration, MCP gateway, typed tools for content admin, analytics read, subscribe/unsubscribe, RBAC, idempotency, audit |
+| **portfolio-ai-platform**          | [YuqiGuo105/portfolio-ai-platform](https://github.com/YuqiGuo105/portfolio-ai-platform)                   | Agent service, intent classification, LLM orchestration, MCP gateway, typed tools, RBAC, idempotency, audit   |
 | **portfolio-admin-service**        | [YuqiGuo105/portfolio-admin-service](https://github.com/YuqiGuo105/portfolio-admin-service)               | Content CRUD, optimistic concurrency, transactional outbox, Kafka publishing, OpenSearch indexer, RAG indexer |
 | **portfolio-notification-service** | [YuqiGuo105/portfolio-notification-service](https://github.com/YuqiGuo105/portfolio-notification-service) | Subscription APIs, notification dispatch, email sender worker, retry handling, delivery tracking              |
-| **portfolio-analytics-platform**   | [YuqiGuo105/portfolio-analytics-platform](https://github.com/YuqiGuo105/portfolio-analytics-platform)     | Spring Boot Kafka batch consumer, UA/IP/geo enrichment, Valkey dedup, pre-aggregated 5m + 1d rollups, public visits API, rule-based alert evaluator, email alerting |
+| **portfolio-analytics-platform**   | [YuqiGuo105/portfolio-analytics-platform](https://github.com/YuqiGuo105/portfolio-analytics-platform)     | Spring Boot Kafka batch consumer, UA/IP/geo enrichment, Valkey dedup, pre-aggregated 5m + 1d rollups, public visits API, alerts service |
 
 ---
 
 ## Features
 
 * **Modern portfolio frontend** built with Next.js, including projects, blogs, CV, parallax project detail pages, and guided navigation.
-* **AI chat assistant** with RAG retrieval, multi-round reasoning, intent classification, and MCP tool execution for content/admin actions, analytics reads, subscribe, and unsubscribe.
+* **AI chat assistant** with RAG retrieval, multi-round reasoning, intent classification, and MCP tool execution.
 * **Admin dashboard** for managing blogs, projects, life posts, and portfolio content.
 * **Kafka-driven content pipeline** that publishes content change events to search, RAG, and notification consumers.
 * **Professional search stack** using OpenSearch for indexed portfolio search and ranking.
 * **RAG indexing pipeline** using embeddings stored in Supabase PostgreSQL with pgvector.
 * **Notification system** with subscription management, dispatch service, email sender worker, retry handling, and delivery tracking.
 * **Supabase backend** for PostgreSQL, pgvector, storage, RLS policies, and server-side API integration.
-* **3D geospatial visitor globe** and a real-time `/analytics` dashboard powered by a Kafka → Spring Boot aggregator pipeline (Valkey dedup, pre-aggregated `geo_time_rollups`, public visits API, rule-based email alerts).
+* **3D geospatial visitor globe** and a real-time `/analytics` dashboard powered by a Kafka → Spring Boot aggregator pipeline (Valkey dedup, pre-aggregated `geo_time_rollups`, public visits API).
 * **SEO support** with reusable metadata, `robots.txt`, and `sitemap.xml`.
 
 ---

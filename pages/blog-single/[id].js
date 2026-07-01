@@ -1,17 +1,67 @@
 import Layout from "../../src/layout/Layout";
-import {supabase} from '../../src/supabase/supabaseClient';
-import {useRouter} from 'next/router';
-import {useState, useEffect} from 'react';
-import SeoHead from "../../src/components/SeoHead";
+import { useRouter } from 'next/router';
+import { useEffect } from 'react';
+import SeoHead, { absoluteUrl } from "../../src/components/SeoHead";
 import BlogComments from "../../src/components/BlogComments";
-import DOMPurify from 'dompurify';
+import { supabaseServer } from '../../src/supabase/supabaseServer';
+// isomorphic-dompurify runs in Node (jsdom) on the server and in the
+// browser on hydrate, so we can sanitize before HTML ever hits the DOM.
+import DOMPurify from 'isomorphic-dompurify';
 
-const BlogSingle = () => {
-  const [blog, setBlog] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+/**
+ * Server-rendered blog detail. Fetching + sanitizing on the server means
+ * Googlebot receives the full article HTML on the first byte instead of
+ * a `<div>Loading...</div>` shell (the CSR version was invisible to the
+ * crawler).
+ */
+export async function getServerSideProps({ params, res }) {
+  const { id } = params;
+
+  const { data, error } = await supabaseServer
+    .from('Blogs')
+    .select('id,title,description,content,category,date,tags,created_at,updated_at')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    // Row missing → real 404 so Google drops the URL from the index
+    // (a soft 200 with "not found" body would keep it around).
+    return { notFound: true };
+  }
+
+  // Sanitize once on the server. The client component just prints the
+  // already-clean HTML, keeping DOMPurify out of the hydration path.
+  const sanitizedContent = DOMPurify.sanitize(data.content || '');
+
+  // Short cache on the CDN + stale-while-revalidate so a burst of hits
+  // does not spam Supabase, but publishing a fresh post shows up within
+  // ~1 minute anyway.
+  if (res) {
+    res.setHeader(
+      'Cache-Control',
+      'public, s-maxage=60, stale-while-revalidate=600'
+    );
+  }
+
+  return {
+    props: {
+      blog: {
+        id: data.id,
+        title: data.title || '',
+        description: data.description || '',
+        content: sanitizedContent,
+        category: data.category || '',
+        date: data.date || '',
+        tags: data.tags || '',
+        createdAt: data.created_at || null,
+        updatedAt: data.updated_at || null,
+      },
+    },
+  };
+}
+
+const BlogSingle = ({ blog }) => {
   const router = useRouter();
-  const {id} = router.query;
 
   // Track page view via the dedicated tracking endpoint.
   useEffect(() => {
@@ -22,38 +72,39 @@ const BlogSingle = () => {
     }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (!id) return; // Avoid fetching if the id isn't available yet
+  // Trim the sanitized HTML to a plain-text excerpt for the meta
+  // description when the row does not carry an explicit one.
+  const metaDescription = (blog.description
+    || (blog.content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  ).slice(0, 200);
 
-    const fetchBlog = async () => {
-      const {data, error} = await supabase
-        .from('Blogs') // Adjust this to your actual table name
-        .select('*')
-        .eq('id', id)
-        .single(); // Assumes 'id' is unique and returns a single item
+  const canonical = absoluteUrl(`/blog-single/${blog.id}`);
 
-      if (error) {
-        setError(error);
-        setLoading(false);
-      } else {
-        // Sanitize the HTML content
-        data.content = DOMPurify.sanitize(data.content);
-
-        setBlog(data);
-        setLoading(false);
-      }
-    };
-
-    fetchBlog();
-  }, [id]); // This effect depends on 'id' and runs again if 'id' changes
-
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error loading blog post.</div>;
-  if (!blog) return <div>Blog post not found.</div>;
+  // Article schema drives Google's article rich results (headline,
+  // author byline, publish date).
+  const articleLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: blog.title,
+    description: metaDescription,
+    author: { '@type': 'Person', name: 'Yuqi Guo' },
+    datePublished: blog.date || blog.createdAt || undefined,
+    dateModified: blog.updatedAt || blog.date || blog.createdAt || undefined,
+    mainEntityOfPage: canonical,
+    url: canonical,
+    articleSection: blog.category || undefined,
+    keywords: blog.tags || undefined,
+  };
 
   return (
     <>
-      <SeoHead title={blog.title} description={blog.description} />
+      <SeoHead
+        title={blog.title}
+        description={metaDescription}
+        url={canonical}
+        type="article"
+        jsonLd={articleLd}
+      />
       <Layout extraWrapClass={"single-post"}>
       {/* Section Started Heading */}
       <section className="section section-inner started-heading">
