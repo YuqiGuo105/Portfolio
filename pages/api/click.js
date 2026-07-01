@@ -1,21 +1,5 @@
 import { supabaseServer } from '../../src/supabase/supabaseServer';
-
-// 速率限制：每个 IP 每分钟最多 10 次
-const rateLimitMap = new Map(); // ip -> { count, resetAt }
-const RATE_LIMIT = 10;
-const RATE_WINDOW_MS = 60_000;
-
-function isRateLimited(ip) {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
-    return false;
-  }
-  if (entry.count >= RATE_LIMIT) return true;
-  entry.count += 1;
-  return false;
-}
+import { isRateLimited } from '../../src/lib/rateLimiter';
 
 // 允许的来源域名
 const ALLOWED_ORIGINS = ['https://www.yuqi.site', 'https://yuqi.site'];
@@ -71,10 +55,10 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  // 3. IP 速率限制
+  // 3. IP 速率限制 —— Valkey 共享存储；失联时降级为本进程内存限流并记日志
   const forwarded = req.headers['x-forwarded-for'] || '';
   const ip = (forwarded.split(',')[0] || req.socket?.remoteAddress || '').trim();
-  if (isRateLimited(ip)) {
+  if (await isRateLimited(ip, 'click')) {
     return res.status(429).json({ error: 'Too many requests' });
   }
 

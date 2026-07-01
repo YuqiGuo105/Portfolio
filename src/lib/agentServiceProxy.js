@@ -127,7 +127,18 @@ export async function forwardJson(req, res, { path, method = "POST", auth }) {
     Accept: "application/json",
   };
   const internal = process.env.AGENT_SERVICE_INTERNAL_TOKEN;
-  if (internal) headers["Authorization"] = `Bearer ${internal}`;
+  if (!internal) {
+    // Fail-closed: the agent's SupabaseJwtAuthFilter now rejects every
+    // /api/intent request that doesn't carry either a valid Supabase JWT
+    // or the shared internal token. Missing this env in prod means the
+    // proxy would 401 every user, so surface the misconfig loudly here.
+    res.status(500).json({
+      error: "config_missing",
+      message: "AGENT_SERVICE_INTERNAL_TOKEN is not set. Configure it to match agent.auth.internal-token.",
+    });
+    return;
+  }
+  headers["Authorization"] = `Bearer ${internal}`;
 
   let upstream;
   try {
@@ -160,7 +171,16 @@ export async function forwardSse(req, res, { auth }) {
     Accept: "text/event-stream",
   };
   const internal = process.env.AGENT_SERVICE_INTERNAL_TOKEN;
-  if (internal) headers["Authorization"] = `Bearer ${internal}`;
+  if (!internal) {
+    // See forwardJson for rationale — the agent filter is fail-closed and
+    // will 401 anything without a bearer.
+    res.status(500).json({
+      error: "config_missing",
+      message: "AGENT_SERVICE_INTERNAL_TOKEN is not set. Configure it to match agent.auth.internal-token.",
+    });
+    return;
+  }
+  headers["Authorization"] = `Bearer ${internal}`;
 
   // ChatRequest schema on the agent side requires `messages: [{role, content}]`
   // (not `utterance` like IntentRequest), and does NOT accept userRoles. So
@@ -180,6 +200,11 @@ export async function forwardSse(req, res, { auth }) {
   const upstreamBody = JSON.stringify({
     sessionId: inBody.sessionId,
     userEmail: auth.email,
+    // Send server-derived roles so the agent's PolicyGuard sees the same
+    // identity the proxy authenticated. The agent's INTERNAL_PROXY path
+    // trusts this field because it can only be reached with the shared
+    // internal token.
+    userRoles: auth.roles,
     messages,
     ...(inBody.pageContext ? { pageContext: inBody.pageContext } : {}),
   });
