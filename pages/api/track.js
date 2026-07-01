@@ -1,10 +1,19 @@
-// src/pages/api/track.js — explicit keys in payload (no spread)
+// pages/api/track.js — Kafka-primary visitor ingestion
 // -----------------------------------------------------------------------------
-// • Vercel / Cloudflare header geolocation — no external API calls
-// • insertPayload lists each key explicitly (country, region, ...)
-// • Dual-write: Supabase visitor_logs (source of truth) + Kafka analytics.raw.events
-//   (real-time aggregation). Kafka produce is best-effort — failures do not block
-//   the 200 response and never lose the Supabase row.
+// Kafka is now the PRIMARY ingestion path. The batched aggregator consumer
+// (portfolio-analytics-platform) is the source-of-truth writer for
+// public.visitor_logs — it drains one Kafka poll → one batchUpdate insert
+// per poll, so per-event DB write amplification collapses.
+//
+// This handler:
+//   1. Runs the usual guards (method / origin / UA / rate limit).
+//   2. Awaits produceRawEvent(rawEvent). If Kafka accepts the message we
+//      respond immediately with { via: "kafka" } and NEVER open a Supabase
+//      connection on the hot path.
+//   3. Only if Kafka is not configured or the produce fails do we fall
+//      back to a direct supabase insert so no event is ever lost. That
+//      response is { via: "supabase-fallback" }.
+//   4. If both fail we return 500.
 // -----------------------------------------------------------------------------
 import { supabaseServer } from '../../src/supabase/supabaseServer';
 import { produceRawEvent } from '../../src/lib/kafkaProducer';
@@ -49,6 +58,22 @@ function geoFromHeaders(h) {
   return { _src: 'none' };
 }
 
+// Fallback path: direct write to Supabase visitor_logs. Only invoked when
+// the Kafka produce is skipped (not configured) or errors out — the
+// aggregator consumer is normally the sole writer for this table.
+async function fallbackSupabaseInsert(insertPayload) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { ok: false, skipped: 'supabase-not-configured' };
+  }
+  try {
+    const { error } = await supabaseServer.from('visitor_logs').insert([insertPayload]);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+
 // --------------------------- Handler --------------------------------------
 export default async function handler(req, res) {
   const start = Date.now();
@@ -78,26 +103,44 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests' });
   }
 
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.warn('[Track] Supabase credentials missing – skipping insert');
-    return res.status(200).json({ ok: true, skipped: 'supabase-not-configured' });
-  }
-
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
   const { localTime = new Date().toISOString() } = body;
 
   // Validate event against allowlist to prevent arbitrary string injection.
-  const rawEvent = typeof body.event === 'string' ? body.event.trim() : '';
-  const event = ALLOWED_EVENTS.has(rawEvent) ? rawEvent : 'page_view';
-
-  // IP already extracted above for rate limiting
+  const rawEventName = typeof body.event === 'string' ? body.event.trim() : '';
+  const event = ALLOWED_EVENTS.has(rawEventName) ? rawEventName : 'page_view';
 
   // Geolocation -------------------------------------------------------------
   const geo = geoFromHeaders(req.headers);
   const { country, region, city, latitude, longitude, _src } = geo;
 
-  // UA & explicit payload ---------------------------------------------------
-  // ua already extracted above for bot filtering
+  const nowIso = new Date().toISOString();
+
+  // RawEvent wire format expected by analytics-aggregator-service. The
+  // eventId is a UUIDv7 used both as the Kafka dedup key AND as the
+  // ON CONFLICT DO NOTHING key inside VisitorLogPersistService, so a
+  // re-delivered batch never produces duplicate visitor_logs rows.
+  const rawEvent = {
+    eventId:    uuidv7(),
+    siteId:     'yuqi.site',
+    eventType:  event,
+    eventTime:  localTime,
+    serverTime: nowIso,
+    pageUrl:    body.page || null,
+    referrer:   body.referrer || null,
+    uaRaw:      ua,
+    ipRaw:      ip,
+    geoHint: {
+      country: country ?? null,
+      region:  region  ?? null,
+      city:    city    ?? null,
+      lat:     latitude  ?? null,
+      lng:     longitude ?? null,
+      src:     _src,
+    },
+  };
+
+  // Legacy insert payload only used on the fallback path.
   const insertPayload = {
     ip,
     local_time: localTime,
@@ -108,41 +151,35 @@ export default async function handler(req, res) {
     city,
     latitude,
     longitude,
-    created_at: new Date().toISOString(),
+    created_at: nowIso,
   };
 
   try {
-    const now = new Date().toISOString();
-    const { error } = await supabaseServer.from('visitor_logs').insert([insertPayload]);
-    if (error) throw error;
+    // ---- Primary path: Kafka ----
+    // produceRawEvent returns true on success, false when Kafka is not
+    // configured OR the produce failed (it never throws — the module
+    // catches internally). false means "try the fallback".
+    const kafkaOk = await produceRawEvent(rawEvent);
+    if (kafkaOk) {
+      return res.status(200).json({ ok: true, via: 'kafka' });
+    }
 
-    // Best-effort Kafka produce — does not block the response.
-    // Construct the RawEvent wire format expected by analytics-aggregator-service.
-    const rawEvent = {
-      eventId:    uuidv7(),           // UUIDv7 — global dedup key downstream
-      siteId:     'yuqi.site',
-      eventType:  event,              // page_view (or future click)
-      eventTime:  localTime,          // client wall-clock ISO string
-      serverTime: now,                // stamped by this handler
-      pageUrl:    body.page || null,
-      referrer:   body.referrer || null,
-      uaRaw:      ua,
-      ipRaw:      ip,                 // HMAC'd by enrichment; never persisted
-      geoHint: {
-        country: country ?? null,
-        region:  region  ?? null,
-        city:    city    ?? null,
-        lat:     latitude  ?? null,
-        lng:     longitude ?? null,
-        src:     _src,
-      },
-    };
-    produceRawEvent(rawEvent).catch(() => {/* already logged inside */});
+    // ---- Fallback path: Supabase direct insert ----
+    // Only runs when Kafka is missing/unreachable. Under normal load
+    // Supabase sees zero writes from this endpoint.
+    const fb = await fallbackSupabaseInsert(insertPayload);
+    if (fb.ok) {
+      return res.status(200).json({ ok: true, via: 'supabase-fallback' });
+    }
+    if (fb.skipped) {
+      // Nothing to write to — surface an operational error so the
+      // dashboard can alert on it, but do not 500 the browser.
+      console.warn('[Track] Kafka unavailable and Supabase not configured');
+      return res.status(200).json({ ok: true, skipped: fb.skipped });
+    }
 
-    res.status(200).json({ ok: true });
-  } catch (err) {
-    console.error('[Track] insert error:', err);
-    res.status(500).json({ ok: false, message: err.message, db: err.code });
+    console.error('[Track] both Kafka produce and Supabase insert failed:', fb.error);
+    return res.status(500).json({ ok: false, message: 'ingest_failed' });
   } finally {
     console.log(`[Track] done in ${Date.now() - start}ms src=${_src}`);
   }
