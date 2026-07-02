@@ -84,6 +84,24 @@ const WorkSingle = ({ project, nextProject }) => {
     }).catch(() => {});
   }, []);
 
+  // Render mermaid diagrams embedded in article content as SVGs.
+  // The script is loaded lazily only when the page actually contains
+  // .mermaid divs, so projects without diagrams pay no cost.
+  useEffect(() => {
+    if (!document.querySelector('div.mermaid')) return;
+    const SCRIPT_ID = '__mermaid_cdn';
+    const run = () => {
+      window.mermaid?.initialize({ startOnLoad: false, theme: 'dark' });
+      window.mermaid?.run?.();
+    };
+    if (document.getElementById(SCRIPT_ID)) { run(); return; }
+    const s = document.createElement('script');
+    s.id   = SCRIPT_ID;
+    s.src  = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+    s.onload = run;
+    document.body.appendChild(s);
+  }, []);
+
   const metaDescription = (project.description
     || (project.content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
   ).slice(0, 200);
