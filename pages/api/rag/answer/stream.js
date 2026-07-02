@@ -1,43 +1,16 @@
 /**
  * POST /api/rag/answer/stream
  *
- * Server-Sent-Events endpoint that grounds an arbitrary user question in
- * the Supabase `kb_documents` table and streams a Gemini answer back in
- * the shape the existing ChatWidget already consumes:
+ * SSE 端点：自动判断用户问题类型（通识 / 个人作品集），选择合适策略回答。
  *
- *   event: message
- *   data:  {"stage":"answer_delta","payload":{"delta":"..."}}
- *   ...
- *   event: message
- *   data:  {"stage":"answer_final","payload":{"answer":"..."}}
+ *   - OWNER_ONLY（个人相关）：用完整知识库回答，不联网。
+ *   - GENERAL（通识问题）：用 Gemini google_search grounding 联网回答，
+ *     不注入大量 KB 避免超限。
  *
- * Request body (matches the legacy Railway contract — extra fields are ignored):
- *   {
- *     "question":   string,
- *     "sessionId":  string,
- *     "mode":       "FAST" | "DEEPTHINKING",
- *     "scopeMode":  "OWNER_ONLY" | "GENERAL",
- *     "ext":        { currentPageUrl?, currentPagePattern?, pageContextText?, pageTitle? },
- *     "userEmail":  string?
- *   }
- *
- * Implementation notes:
- *  - The full `kb_documents` table (~45 KB, 106 rows) is fetched on demand
- *    and cached in process memory for 5 minutes. This costs one Supabase
- *    round-trip per cold start — trivial for our scale.
- *  - Gemini's `streamGenerateContent` endpoint is invoked with
- *    `alt=sse` so we can pipe its chunks through with minimal massaging.
- *  - Hidden "thinking" tokens are disabled (thinkingBudget=0) to make
- *    first-token latency match the user expectation for a chat widget.
- *
- * === 2026-07 新增功能 ===
- *  - scopeMode="GENERAL" (deep thinking) 时启用 Gemini google_search
- *    grounding，允许回答通识问题并附带来源卡片。
- *  - 流结束前通过 OpenSearch 检索相关博客/项目，以 related_links 帧
- *    推送给前端 RelatedLinks 组件展示。
+ * 流结束前通过 OpenSearch 检索相关博客/项目，以 related_links 帧推送。
  */
 import { createClient } from "@supabase/supabase-js";
-import { searchItems } from "../../src/lib/searchItems";
+import { searchItems } from "../../../../src/lib/searchItems";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -56,6 +29,26 @@ const WEB_SEARCH_ENABLED =
 const KB_CACHE_TTL_MS = 5 * 60 * 1000;
 let _kbCache = { rows: null, ts: 0 };
 
+// ─── 自动分类：判断问题是否与 Yuqi / 作品集相关 ───────────────────────
+const OWNER_PATTERNS = [
+  /\byuqi\b/i,
+  /\bguo\b/i,
+  /\byour\s+(project|portfolio|resume|cv|skill|experience|education|work|intern|blog|tech\s*stack)/i,
+  /\b(tell\s+me\s+about\s+you|who\s+are\s+you|introduce\s+yourself)\b/i,
+  /\b(portfolio|作品集|简历|履历)\b/i,
+  /\b(talknest|gift\s*galaxy|polyglotbot|curastone)\b/i,
+  /\b(你的|你做过|你会|你的经[历验]|你学)\b/,
+];
+
+function classifyQuestion(question) {
+  const q = question.trim();
+  for (const pat of OWNER_PATTERNS) {
+    if (pat.test(q)) return "OWNER_ONLY";
+  }
+  return "GENERAL";
+}
+
+// ─── Supabase helpers ─────────────────────────────────────────────────
 function getSupabase() {
   if (!SUPABASE_URL) throw new Error("SUPABASE_URL is not configured");
   const key = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
@@ -74,84 +67,62 @@ async function loadKbRows() {
   const { data, error } = await sb
     .from("kb_documents")
     .select("id,content,metadata");
-  if (error) throw new Error(`Supabase kb_documents fetch failed: ${error.message}`);
+  if (error) throw new Error("Supabase kb_documents fetch failed: " + error.message);
   _kbCache = { rows: data || [], ts: now };
   return _kbCache.rows;
 }
 
 function buildContextBlock(rows) {
-  // Each entry is short (avg ~430 chars); just enumerate them.
   const lines = [];
   rows.forEach((r, i) => {
     const meta = r.metadata || {};
     const tag = meta.type || meta.doc_type || "kb";
-    lines.push(`### [${i + 1}] type=${tag}`);
+    lines.push("### [" + (i + 1) + "] type=" + tag);
     lines.push(String(r.content || "").trim());
     lines.push("");
   });
   return lines.join("\n");
 }
 
-function buildSystemPrompt(rows, pageCtx, scopeMode) {
+// ─── System prompts ───────────────────────────────────────────────────
+function buildOwnerPrompt(rows, pageCtx) {
   const ctx = buildContextBlock(rows);
   const pageBlock = pageCtx
-    ? `\nThe user is currently viewing the page "${pageCtx.pageTitle || ""}" (${pageCtx.currentPageUrl || ""}). When relevant, refer to what is on that page.\n`
+    ? "\nThe user is currently viewing the page \"" + (pageCtx.pageTitle || "") + "\" (" + (pageCtx.currentPageUrl || "") + "). When relevant, refer to what is on that page.\n"
     : "";
 
-  // GENERAL 模式：允许用通用知识和联网检索回答任意问题，但对 Yuqi 相关内容仍以 KB 为准
-  if (scopeMode === "GENERAL") {
-    return `You are Yuqi Guo's portfolio assistant. You can answer both questions about Yuqi AND general knowledge questions.
-
-RULES:
-- For questions about Yuqi Guo (his projects, skills, experience, education): answer ONLY from the knowledge base below. Never invent facts about Yuqi that are not in the knowledge base.
-- For general questions unrelated to Yuqi (technology concepts, current events, explanations): use your general knowledge and web search results freely.
-- When you use web search results, naturally cite the source in your answer.
-- Reply in the SAME LANGUAGE the user used. If the user mixes languages, prefer English.
-- Be concise (1–3 short paragraphs). Use Markdown for structure when it helps.
-- Do not mention "knowledge base" or "context" explicitly — just answer naturally.
-${pageBlock}
-=== KNOWLEDGE BASE (${rows.length} entries) ===
-${ctx}
-=== END KNOWLEDGE BASE ===`;
-  }
-
-  // OWNER_ONLY 模式（默认/fast）：仅基于知识库回答
-  return `You are Yuqi Guo's portfolio assistant.
-
-Answer the user's question using ONLY the knowledge base entries below.
-- If the knowledge base does not contain the answer, say so politely (in the user's language) and suggest what the user could ask instead.
-- Reply in the SAME LANGUAGE the user used. If the user mixes languages, prefer English.
-- Be concise (1–3 short paragraphs). Use Markdown for structure when it helps.
-- Never invent facts about Yuqi that are not present in the knowledge base.
-- Do not mention "knowledge base" or "context" explicitly — just answer naturally.
-${pageBlock}
-=== KNOWLEDGE BASE (${rows.length} entries) ===
-${ctx}
-=== END KNOWLEDGE BASE ===`;
+  return "You are Yuqi Guo's portfolio assistant.\n\nAnswer the user's question using ONLY the knowledge base entries below.\n- If the knowledge base does not contain the answer, say so politely (in the user's language) and suggest what the user could ask instead.\n- Reply in the SAME LANGUAGE the user used. If the user mixes languages, prefer English.\n- Be concise (1-3 short paragraphs). Use Markdown for structure when it helps.\n- Never invent facts about Yuqi that are not present in the knowledge base.\n- Do not mention \"knowledge base\" or \"context\" explicitly - just answer naturally.\n" + pageBlock + "\n=== KNOWLEDGE BASE (" + rows.length + " entries) ===\n" + ctx + "\n=== END KNOWLEDGE BASE ===";
 }
 
+function buildGeneralPrompt(pageCtx) {
+  const pageBlock = pageCtx
+    ? "\nThe user is currently viewing Yuqi Guo's portfolio page \"" + (pageCtx.pageTitle || "") + "\" (" + (pageCtx.currentPageUrl || "") + "). Keep this context in mind.\n"
+    : "";
+
+  return "You are Yuqi Guo's portfolio assistant, but you can answer general knowledge questions too.\n\nRULES:\n- Use your general knowledge and web search results to answer the question.\n- When you use web search results, naturally cite the source in your answer.\n- Reply in the SAME LANGUAGE the user used. If the user mixes languages, prefer English.\n- Be concise (1-3 short paragraphs). Use Markdown for structure when it helps.\n- If the question is about Yuqi Guo specifically, say you'd be happy to answer portfolio-related questions and suggest they ask about his projects, skills, or experience.\n" + pageBlock;
+}
+
+// ─── SSE helpers ──────────────────────────────────────────────────────
 function sseWrite(res, payload) {
-  res.write(`event: message\n`);
-  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  res.write("event: message\n");
+  res.write("data: " + JSON.stringify(payload) + "\n\n");
 }
 
 export const config = {
   api: {
-    // Disable Next.js automatic response buffering for streaming.
     responseLimit: false,
     bodyParser: { sizeLimit: "1mb" },
   },
 };
 
+// ─── Handler ──────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { question, ext, conversationHistory, scopeMode: rawScope } = req.body || {};
-  // 默认 OWNER_ONLY 保持向后兼容
-  const scopeMode = rawScope === "GENERAL" ? "GENERAL" : "OWNER_ONLY";
+  const { question, ext, conversationHistory } = req.body || {};
 
   if (!question || typeof question !== "string" || !question.trim()) {
     return res.status(400).json({ error: "question is required" });
@@ -160,14 +131,17 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server" });
   }
 
+  // 自动分类
+  const scopeMode = classifyQuestion(question);
+  const useWebSearch = scopeMode === "GENERAL" && WEB_SEARCH_ENABLED;
+
   // SSE response headers
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
-    "X-Accel-Buffering": "no", // disable proxy buffering
+    "X-Accel-Buffering": "no",
   });
-  // Force-flush headers
   res.write(": ok\n\n");
   if (typeof res.flush === "function") res.flush();
 
@@ -176,7 +150,6 @@ export default async function handler(req, res) {
 
   try {
     // --- Stage: retrieval -------------------------------------------------
-    // Surface the KB load in the widget's logic-chain timeline.
     const cacheHit =
       _kbCache.rows && Date.now() - _kbCache.ts < KB_CACHE_TTL_MS;
     const rows = await loadKbRows();
@@ -186,31 +159,31 @@ export default async function handler(req, res) {
     );
     sseWrite(res, {
       stage: "retrieval",
-      message: `Loaded ${rows.length} knowledge-base entries (${(
-        totalChars / 1024
-      ).toFixed(1)} KB) ${cacheHit ? "from cache" : "from Supabase"}`,
+      message: scopeMode === "OWNER_ONLY"
+        ? "Loaded " + rows.length + " knowledge-base entries (" + (totalChars / 1024).toFixed(1) + " KB) " + (cacheHit ? "from cache" : "from Supabase")
+        : "General question detected - using web search" + (cacheHit ? "" : " (KB cached)"),
       payload: {
         docCount: rows.length,
         totalChars,
         cached: !!cacheHit,
         source: "supabase:kb_documents",
+        scopeMode,
       },
     });
     if (typeof res.flush === "function") res.flush();
 
-    const systemPrompt = buildSystemPrompt(rows, ext || null, scopeMode);
+    // 根据分类结果构建不同的 system prompt
+    const systemPrompt = scopeMode === "OWNER_ONLY"
+      ? buildOwnerPrompt(rows, ext || null)
+      : buildGeneralPrompt(ext || null);
 
-    // Build multi-turn contents[]. History turns go first so Gemini can
-    // resolve pronouns and follow-up questions ("what about his education?").
-    // Gemini requires alternating user/model turns — filter out back-to-back
-    // same roles to stay within the API contract.
+    // Build multi-turn contents[]
     const historyTurns = [];
     if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
       for (const turn of conversationHistory) {
         const role = turn.role === "assistant" ? "model" : "user";
         const text = String(turn.content || "").trim();
         if (!text) continue;
-        // Merge consecutive same-role turns into one part.
         const last = historyTurns[historyTurns.length - 1];
         if (last && last.role === role) {
           last.parts[0].text += "\n" + text;
@@ -219,7 +192,6 @@ export default async function handler(req, res) {
         }
       }
     }
-    // Gemini requires the final turn to be role=user.
     const contents = [
       ...historyTurns,
       { role: "user", parts: [{ text: question }] },
@@ -231,26 +203,20 @@ export default async function handler(req, res) {
       generationConfig: {
         temperature: 0.4,
         maxOutputTokens: 2048,
-        // GENERAL 模式启用 grounding 时不能同时用 thinkingConfig
-        ...(scopeMode === "GENERAL" && WEB_SEARCH_ENABLED
-          ? {}
-          : { thinkingConfig: { thinkingBudget: 0 } }),
+        thinkingConfig: { thinkingBudget: 0 },
       },
-      // GENERAL 模式且联网开启时，添加 google_search grounding 工具
-      ...(scopeMode === "GENERAL" && WEB_SEARCH_ENABLED
-        ? { tools: [{ google_search: {} }] }
-        : {}),
+      ...(useWebSearch ? { tools: [{ google_search: {} }] } : {}),
     };
 
     const url =
-      `${GEMINI_BASE_URL}/models/${encodeURIComponent(GEMINI_MODEL)}` +
-      `:streamGenerateContent?alt=sse&key=${encodeURIComponent(GEMINI_API_KEY)}`;
+      GEMINI_BASE_URL + "/models/" + encodeURIComponent(GEMINI_MODEL) +
+      ":streamGenerateContent?alt=sse&key=" + encodeURIComponent(GEMINI_API_KEY);
 
     // --- Stage: generating ------------------------------------------------
     sseWrite(res, {
       stage: "generating",
-      message: `Streaming answer from ${GEMINI_MODEL}`,
-      payload: { model: GEMINI_MODEL, provider: "gemini" },
+      message: "Streaming answer from " + GEMINI_MODEL + (useWebSearch ? " + web search" : ""),
+      payload: { model: GEMINI_MODEL, provider: "gemini", webSearch: useWebSearch },
     });
     if (typeof res.flush === "function") res.flush();
 
@@ -262,19 +228,16 @@ export default async function handler(req, res) {
 
     if (!upstream.ok || !upstream.body) {
       const errBody = await upstream.text().catch(() => "");
-      throw new Error(`Gemini HTTP ${upstream.status}: ${errBody.slice(0, 400)}`);
+      throw new Error("Gemini HTTP " + upstream.status + ": " + errBody.slice(0, 400));
     }
 
     const reader = upstream.body.getReader();
     const decoder = new TextDecoder("utf-8");
     let buffer = "";
 
-    // 收集 Gemini grounding 来源元数据（联网检索时返回）
+    // 收集 Gemini grounding 来源元数据
     const groundingSources = [];
 
-    // Gemini's `alt=sse` stream uses CRLF SSE framing:
-    //   data: { ...GenerateContentResponse... }\r\n\r\n
-    // Normalize to LF before splitting on the blank-line frame separator.
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -297,6 +260,7 @@ export default async function handler(req, res) {
           const candidate = chunk?.candidates?.[0];
           const parts = candidate?.content?.parts || [];
           for (const p of parts) {
+            if (p.thought) continue;
             const delta = typeof p?.text === "string" ? p.text : "";
             if (delta) {
               finalText += delta;
@@ -304,7 +268,7 @@ export default async function handler(req, res) {
               if (typeof res.flush === "function") res.flush();
             }
           }
-          // 提取 grounding 元数据（Gemini google_search 返回的网页来源）
+          // 提取 grounding 元数据
           const gm = candidate?.groundingMetadata;
           if (gm?.groundingChunks) {
             for (const gc of gm.groundingChunks) {
@@ -325,14 +289,13 @@ export default async function handler(req, res) {
 
     // --- 发送 sources_found 帧：Gemini 联网来源卡片 ---
     if (groundingSources.length > 0) {
-      // 去重（按 URI）
       const seen = new Set();
       const dedupedSources = [];
       for (const s of groundingSources) {
         if (seen.has(s.uri)) continue;
         seen.add(s.uri);
         dedupedSources.push({
-          id: `web-${dedupedSources.length}`,
+          id: "web-" + dedupedSources.length,
           type: "web",
           title: s.title || new URL(s.uri).hostname,
           url: s.uri,
@@ -350,8 +313,7 @@ export default async function handler(req, res) {
     // --- 发送 related_links 帧：从 OpenSearch 检索相关博客/项目 ---
     try {
       const { results } = await searchItems({ q: question, limit: 5 });
-      // 只保留博客和项目类型，且有有效 URL
-      const MIN_SCORE = 1.0; // 最低相关性阈值，低于此分不推荐
+      const MIN_SCORE = 1.0;
       const links = results
         .filter((r) => {
           const st = (r.source || "").toLowerCase();
@@ -375,21 +337,20 @@ export default async function handler(req, res) {
         if (typeof res.flush === "function") res.flush();
       }
     } catch (searchErr) {
-      // fail-open：OpenSearch 不可用时不影响正常答案
-      console.warn("[rag/stream] OpenSearch related_links 检索失败:", searchErr?.message);
+      console.warn("[rag/stream] OpenSearch related_links failed:", searchErr?.message);
     }
 
     sseWrite(res, { stage: "answer_final", payload: { answer: finalText } });
   } catch (err) {
     console.error("[rag/answer/stream]", err);
-    const msg = `⚠️ RAG failed: ${err?.message || String(err)}`;
+    const msg = "\u26a0\ufe0f RAG failed: " + (err?.message || String(err));
     try {
       sseWrite(res, { stage: "answer_delta", payload: { delta: msg } });
       sseWrite(res, { stage: "answer_final", payload: { answer: msg } });
     } catch {}
   } finally {
     try {
-      res.write(`event: end\ndata: {}\n\n`);
+      res.write("event: end\ndata: {}\n\n");
       res.end();
     } catch {}
   }
