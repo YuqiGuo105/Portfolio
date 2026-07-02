@@ -185,6 +185,15 @@ export default function SiteTour() {
         }
         window.addEventListener("cw:site-tour:start", onStart)
         window.addEventListener("cw:site-tour:dynamic", onDynamic)
+
+        // 从其他页面跳转过来时，检查是否有待启动的 tour
+        try {
+            if (sessionStorage.getItem("__pending_site_tour") === "1") {
+                sessionStorage.removeItem("__pending_site_tour")
+                setTimeout(() => onStart({}), 600) // 等页面渲染完成
+            }
+        } catch {}
+
         return () => {
             window.removeEventListener("cw:site-tour:start", onStart)
             window.removeEventListener("cw:site-tour:dynamic", onDynamic)
