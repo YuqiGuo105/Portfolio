@@ -1169,11 +1169,39 @@ body.dark-skin .tool-header-collapsible:hover,
 /* ────────────────────────────────────────────
    Source Cards Row — shown below assistant answer
    ──────────────────────────────────────────── */
+.cw-source-cards-wrapper {
+  margin-top: 12px;
+}
+.cw-source-cards-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(100, 116, 139, 0.85);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.cw-source-cards-toggle:hover {
+  color: rgba(71, 85, 105, 1);
+}
+.cw-source-cards-chevron {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s;
+  transform: rotate(-90deg);
+}
+.cw-source-cards-chevron.open {
+  transform: rotate(0deg);
+}
 .cw-source-cards {
   display: flex;
   flex-direction: row;
   gap: 10px;
-  margin-top: 12px;
   overflow-x: auto;
   padding-bottom: 4px;
   scrollbar-width: thin;
@@ -1210,6 +1238,12 @@ body.dark-skin .tool-header-collapsible:hover,
   justify-content: center;
   font-size: 24px;
 }
+.cw-source-card-favicon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: contain;
+}
 .cw-source-card-body {
   padding: 8px 10px 9px;
 }
@@ -1231,6 +1265,14 @@ body.dark-skin .tool-header-collapsible:hover,
   overflow: hidden;
 }
 /* Dark mode */
+body.dark-skin .cw-source-cards-toggle,
+.dark .cw-source-cards-toggle {
+  color: rgba(148, 163, 184, 0.85);
+}
+body.dark-skin .cw-source-cards-toggle:hover,
+.dark .cw-source-cards-toggle:hover {
+  color: rgba(203, 213, 225, 1);
+}
 body.dark-skin .cw-source-card,
 .dark .cw-source-card {
   background: #1e1e2e;
