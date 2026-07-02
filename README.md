@@ -10,208 +10,142 @@ A modern Next.js portfolio application for showcasing projects, blogs, CV, visit
 
 ```mermaid
 flowchart LR
-    %% =========================
-    %% Frontend
-    %% =========================
-    subgraph FE["🌐 Next.js Frontend · yuqi.site"]
-        UI["🧭 Portfolio UI<br/><small>3D Globe · Projects · Blog · CV · /analytics dashboard</small>"]
-        Chat["💬 AI Chat Widget"]
-        AdminDash["🛠️ Admin Dashboard"]
-        Track["📡 /api/track<br/><small>kafkajs producer · UUIDv7 dedup key · best-effort</small>"]
-        Proxy["🔀 API Routes<br/><small>serverless proxy layer</small>"]
+    subgraph FRONTEND["<span style='font-size:22px;font-weight:800'>▲ Portfolio (Vercel)</span>"]
+        direction TB
+        UI["<img src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/nextjs/nextjs-original.svg' width='40' height='40' style='width:40px;height:40px' /><br/><b>Portfolio UI</b><br/><small>Next.js pages · blog · CV</small><br/><small>chat widget · 3D globe</small>"]
+        JWT["🔐 <b>JWT Auth</b><br/><small>Supabase JWT verify</small>"]
+        APIR["<img src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/nginx/nginx-original.svg' width='56' height='56' style='width:56px;height:56px' /><br/><b>API Proxy</b><br/><small>/api/track · /api/click</small><br/><small>/api/agent · /api/rag · /api/admin</small><br/><small>/api/subscriptions · /api/analytics</small>"]
+        UI --> APIR
+        JWT -.-> APIR
     end
 
-    %% =========================
-    %% AI Platform
-    %% =========================
-    subgraph AI["🤖 portfolio-ai-platform"]
-        Agent["Agent Service<br/><small>intent classification · LLM orchestration · RAG planning</small>"]
-        MCP["MCP Gateway<br/><small>typed tools · RBAC · idempotency · audit</small>"]
-        Agent --> MCP
-    end
+    subgraph VPC["<span style='font-size:22px;font-weight:800'>☁️ Google Cloud VPC</span>"]
+        direction LR
 
-    %% =========================
-    %% Admin Platform
-    %% =========================
-    subgraph ADMIN["🛡️ portfolio-admin-service"]
-        AdminAPI["Admin Service<br/><small>content CRUD · optimistic concurrency · transactional outbox</small>"]
-        OutboxPub["Outbox Publisher<br/><small>reliable event publishing</small>"]
-        SearchIndexer["Search Indexer<br/><small>Kafka consumer · OpenSearch projection</small>"]
-        RAGIndexer["RAG Indexer<br/><small>Kafka consumer · chunking · embeddings · pgvector</small>"]
+        REDIS_SESS["<img src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/redis/redis-original.svg' width='16' height='16' style='width:16px;height:16px' /> <b>Redis</b><br/><small>session store</small>"]
 
-        AdminAPI --> OutboxPub
-    end
-
-    %% =========================
-    %% Notification Platform
-    %% =========================
-    subgraph NOTIF["🔔 portfolio-notification-service"]
-        NotifAPI["Subscription / Notification API<br/><small>subscribe · unsubscribe · preferences</small>"]
-        Dispatch["Dispatch Service<br/><small>fan-out · batching · dedupe · idempotency</small>"]
-        EmailWorker["Email Sender Worker<br/><small>retry · backoff · provider adapter</small>"]
-        Delivery["Delivery Tracking<br/><small>sent · failed · bounced · audit log</small>"]
-
-        NotifAPI --> Dispatch
-        Dispatch --> EmailWorker
-        EmailWorker --> Delivery
-    end
-
-    %% =========================
-    %% Analytics Platform
-    %% =========================
-    subgraph ANALYTICS["📊 portfolio-analytics-platform"]
-        Aggregator["Aggregator Service<br/><small>batch Kafka consumer · UA/IP/Geo enrichment · in-memory pre-aggregation · UPSERT batchUpdate</small>"]
-        Alerts["Alerts Service<br/><small>SLO checks · anomaly detection · notify hooks</small>"]
-        VisitsAPI["Public Visits API<br/><small>/api/public/visits/{summary,markers,markers/area}</small>"]
-        Aggregator --> VisitsAPI
-    end
-
-    %% =========================
-    %% Event Streaming
-    %% =========================
-    subgraph STREAM["⚙️ Event Streaming Layer"]
-        Kafka[["Kafka<br/><small>event bus · queue semantics · partitions · consumer groups · replay</small>"]]
-        ContentTopic[["content.index.events<br/><small>content changed · project updated · blog published</small>"]]
-        NotificationTopic[["notification.dispatch.events<br/><small>subscriber fan-out jobs</small>"]]
-        AnalyticsRaw[["analytics.raw.events<br/><small>page_view · click · 2 partitions · SASL_SSL/SCRAM-SHA-256</small>"]]
-        AnalyticsDLQ[["analytics.events.dlq<br/><small>malformed payloads · parse errors</small>"]]
-
-        Kafka --> ContentTopic
-        Kafka --> NotificationTopic
-        Kafka --> AnalyticsRaw
-        Kafka --> AnalyticsDLQ
-    end
-
-    %% =========================
-    %% Data Stores
-    %% =========================
-    subgraph DATA["🗄️ Data Stores"]
-        Supabase[("Supabase PostgreSQL<br/><small>source of truth · pgvector · RLS · visitor_logs · geo_time_rollups</small>")]
-        OpenSearch[("OpenSearch<br/><small>search projection · ranking · analytics</small>")]
-        Valkey[("Valkey (Redis)<br/><small>SETNX dedup · 24h TTL · geo cache</small>")]
-    end
-
-    %% =========================
-    %% External Providers
-    %% =========================
-    EmailProvider["📧 Email Provider<br/><small>SMTP · SendGrid · SES</small>"]
-
-    %% =========================
-    %% Frontend traffic
-    %% =========================
-    UI -->|"/api/search"| OpenSearch
-    UI -->|"page_view beacon"| Track
-    UI -->|"/api/analytics/visits/* (proxied)"| VisitsAPI
-    Chat -->|"/api/agent/*"| Agent
-    AdminDash -->|"/api/admin/*"| AdminAPI
-    Proxy -->|"/api/subscriptions & notifications"| NotifAPI
-
-    %% =========================
-    %% AI tool calls
-    %% =========================
-    MCP -->|"authorized tool calls"| AdminAPI
-
-    %% =========================
-    %% Writes and event publishing
-    %% =========================
-    AdminAPI -->|"primary content writes"| Supabase
-    OutboxPub -->|"ContentIndexEvent"| Kafka
-    NotifAPI -->|"subscription state"| Supabase
-    Track -->|"visitor_logs row (source of truth)"| Supabase
-    Track -->|"RawEvent JSON (best-effort)"| AnalyticsRaw
-
-    %% =========================
-    %% Async consumers
-    %% =========================
-    ContentTopic -->|"consume content events"| SearchIndexer
-    ContentTopic -->|"consume content events"| RAGIndexer
-    NotificationTopic -->|"consume dispatch jobs"| Dispatch
-    AnalyticsRaw -->|"batch poll · max.poll.records=100"| Aggregator
-    Aggregator -.->|"malformed → DLQ"| AnalyticsDLQ
-
-    %% =========================
-    %% Analytics dedup + rollups
-    %% =========================
-    Aggregator -->|"SETNX eventId (24h TTL)"| Valkey
-    Aggregator -->|"batchUpdate geo_time_rollups (5m + 1d)"| Supabase
-    Alerts -->|"poll rollups"| Supabase
-
-    %% =========================
-    %% Projections / derived stores
-    %% =========================
-    SearchIndexer -->|"update search documents"| OpenSearch
-    RAGIndexer -->|"store chunks + embeddings"| Supabase
-
-    %% =========================
-    %% Notification delivery
-    %% =========================
-    Dispatch -->|"create delivery jobs"| NotificationTopic
-    EmailWorker -->|"send email"| EmailProvider
-    Delivery -->|"delivery status"| Supabase
-```
-
-### Visitor analytics pipeline (deep dive)
-
-The `/analytics` dashboard and the 3D visitor globe on the homepage are powered
-by a dedicated real-time pipeline that runs alongside the legacy Supabase
-`visitor_logs` write. Every page view results in a **dual-write**: a row in
-`visitor_logs` (source of truth) plus a best-effort RawEvent published to
-Kafka. A Kafka produce failure never blocks the 200 response or loses the
-Supabase row.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Visitor as 🧑 Visitor (browser)
-    participant Track as 📡 /api/track<br/>(Vercel serverless)
-    participant SB as 🗄️ Supabase<br/>visitor_logs
-    participant K as ⚙️ Kafka<br/>analytics.raw.events
-    participant Agg as 🧮 Aggregator<br/>batch consumer
-    participant V as 🔑 Valkey<br/>(dedup, 24h TTL)
-    participant R as 🗄️ Supabase<br/>geo_time_rollups
-    participant API as 🌐 /api/public/visits/summary
-    participant UI as 📊 /analytics dashboard
-
-    Visitor->>Track: POST page_view (Origin: yuqi.site)
-    Track->>SB: insert visitor_logs (sync)
-    Track-->>K: produce RawEvent {eventId: UUIDv7, geoHint, ua, ip}<br/>(fire-and-forget)
-    Track-->>Visitor: 200 {ok: true}
-
-    Note over Agg,K: poll · max.poll.records = 100 · manual ack
-    K->>Agg: batch of ConsumerRecord<String,String>
-    loop per record
-        Agg->>V: SETNX eventId (24h)
-        alt new event
-            Agg->>Agg: parse + enrich (UA, geo, IP-hash, bot-score)
-        else duplicate
-            Agg->>Agg: skip silently
+        %% ================= AI Platform · portfolio-ai-platform =================
+        subgraph AI_SYS["<span style='font-size:22px;font-weight:800'>🧠 AI Platform · portfolio-ai-platform</span>"]
+            direction LR
+            AGENT["<b>Agent Service</b><br/><small>intent · LLM orchestration</small>"]
+            MCP["<b>MCP Gateway</b><br/><small>typed tools · RBAC · audit</small>"]
+            RAGR["<b>RAG Retriever</b><br/><small>pgvector search · rerank</small>"]
+            subgraph LLM["<span style='font-size:9px'>LLM</span>"]
+                direction TB
+                GEMINI["<img src='https://cdn.jsdelivr.net/npm/simple-icons@v13/icons/googlegemini.svg' width='8' height='8' style='width:8px;height:8px' /> <span style='font-size:9px'>Gemini</span>"]
+                OPENAI["<img src='https://cdn.jsdelivr.net/npm/simple-icons@v13/icons/openai.svg' width='8' height='8' style='width:8px;height:8px' /> <span style='font-size:9px'>OpenAI</span>"]
+            end
+            AGENT <--> MCP
+            AGENT --> RAGR
+            AGENT -.->|Resilience4j: circuit breaker · retry| GEMINI
+            AGENT -.->|Resilience4j: circuit breaker · retry| OPENAI
         end
+
+        %% ================= Content Platform · portfolio-admin-service =================
+        subgraph CONTENT_SYS["<span style='font-size:22px;font-weight:800'>🛡️ Content Platform · portfolio-admin-service</span>"]
+            direction LR
+            ADMIN_API["<b>Admin API</b><br/><small>content CRUD · optimistic lock</small>"]
+            OUTBOX["<b>Outbox Publisher</b><br/><small>transactional outbox</small>"]
+            KAC@{ shape: das, label: "<img src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/apachekafka/apachekafka-original.svg' width='16' height='16' style='width:16px;height:16px' /> content-index" }
+            SIDX["<b>Search Indexer</b><br/><small>OpenSearch projection</small>"]
+            RIDX["<b>RAG Indexer</b><br/><small>chunk · embed</small>"]
+            AOS["<img src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/elasticsearch/elasticsearch-original.svg' width='16' height='16' style='width:16px;height:16px' /> <b>OpenSearch</b><br/><small>search index</small>"]
+            RAGDB@{ shape: cyl, label: "<img src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original.svg' width='16' height='16' style='width:16px;height:16px' /> <b>PostgreSQL</b><br/>rag_db" }
+            ADMIN_API --> OUTBOX --> KAC
+            KAC --> SIDX --> AOS
+            KAC --> RIDX --> RAGDB
+        end
+
+        %% ================= Notification Platform · portfolio-notification-service =================
+        subgraph NOTIF_SYS["<span style='font-size:22px;font-weight:800'>🔔 Notification Platform · portfolio-notification-service</span>"]
+            direction LR
+            SUB["<b>Subscription API</b><br/><small>subscribe · prefs</small>"]
+            CEC["📥 <b>Content Subscriber</b><br/><small>@KafkaListener · portfolio.content-events</small>"]
+            KNO@{ shape: das, label: "<img src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/apachekafka/apachekafka-original.svg' width='16' height='16' style='width:16px;height:16px' /> notification-dispatch" }
+            EMW["<b>Email Worker</b><br/><small>template · retry · backoff</small>"]
+            DTR["<b>Delivery Tracker</b><br/><small>sent · delivered · bounced</small>"]
+            NPG@{ shape: cyl, label: "<img src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original.svg' width='16' height='16' style='width:16px;height:16px' /> <b>PostgreSQL</b><br/>notif_db" }
+            SUB --> KNO
+            CEC --> KNO
+            KNO --> EMW --> DTR --> NPG
+        end
+
+        %% ================= Analytics Platform · portfolio-analytics-platform =================
+        %% modules: analytics-aggregator-service (consumer, enrich, rollup, session, backfill, Visits API)
+        %%          + analytics-alerts-service + analytics-common
+        subgraph ANALYTICS_SYS["<span style='font-size:22px;font-weight:800'>📊 Analytics Platform · portfolio-analytics-platform</span>"]
+            direction LR
+            KAN@{ shape: das, label: "<img src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/apachekafka/apachekafka-original.svg' width='16' height='16' style='width:16px;height:16px' /> analytics.events.raw" }
+            AGG["<b>Aggregator</b><br/><small>RawEventConsumer · UA/IP/geo · rollups</small>"]
+            SESS["<b>Session Aggregator</b><br/><small>funnel · sessions</small>"]
+            BACKFILL["<b>Backfill Job</b><br/><small>rollup replay · retention</small>"]
+            DLQ@{ shape: das, label: "<img src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/apachekafka/apachekafka-original.svg' width='16' height='16' style='width:16px;height:16px' /> analytics.events.dlq" }
+            VIS["<b>Visits API</b><br/><small>cache · ETag · 304</small>"]
+            ALERTS["<b>Alerts Service</b><br/><small>SLO · anomaly · email</small>"]
+            ANPG@{ shape: cyl, label: "<img src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original.svg' width='16' height='16' style='width:16px;height:16px' /> <b>PostgreSQL</b><br/>analytics_db" }
+            AVALK["<img src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/redis/redis-original.svg' width='16' height='16' style='width:16px;height:16px' /> <b>Redis</b><br/><small>dedup cache</small>"]
+            KAN --> AGG
+            AGG -.->|bad records| DLQ
+            AGG --> SESS
+            AGG --> BACKFILL
+            AGG --> AVALK
+            AGG --> ANPG
+            SESS --> ANPG
+            BACKFILL --> ANPG
+            VIS --> ANPG
+            VIS --> AVALK
+            ALERTS --> ANPG
+        end
+
+        %% ================= External =================
+        MAIL["✉️<br/><b>Email Provider</b><br/><small>SMTP · Resend · SES</small>"]
+
+        %% ================= Edges =================
+        APIR --> AGENT
+        APIR --> REDIS_SESS
+        APIR --> ADMIN_API
+        APIR --> SUB
+        APIR --> KAN
+        APIR --> VIS
+
+        MCP --> ADMIN_API
+        MCP --> SUB
+        MCP --> VIS
+        RAGR --> RAGDB
+        KAC -->|content-events → subscription update| CEC
+        DTR --> MAIL
+        ALERTS --> MAIL
     end
-    Agg->>Agg: collapse by (siteId, bucket, granularity, geo, device, browser, os, isBot, country)
-    Agg->>R: batchUpdate UPSERT × 2 granularities (5m + 1d)
-    Agg->>K: ack batch (on DB success only)
 
-    Visitor->>UI: open /analytics
-    UI->>API: GET /api/public/visits/summary?window=7d
-    API->>R: SQL aggregation over geo_time_rollups
-    R-->>API: rows
-    API-->>UI: { totals, topCountries, topDevices, timeSeries }
+    UI --> APIR
+
+    %% ================= Styling =================
+    classDef edge    fill:#ffffff,stroke:#0f766e,stroke-width:1.4px,color:#0f172a;
+    classDef svc     fill:#ffffff,stroke:#334155,stroke-width:1.1px,color:#111827;
+    classDef kafka   fill:#faf5ff,stroke:#7c3aed,stroke-width:1.4px,color:#4c1d95;
+    classDef db      fill:#eff6ff,stroke:#1e40af,stroke-width:1.1px,color:#1e3a8a;
+    classDef redis   fill:#fef2f2,stroke:#dc2626,stroke-width:1.2px,color:#7f1d1d;
+    classDef ext     fill:#f9fafb,stroke:#4b5563,stroke-width:1px,color:#111827;
+    classDef client  fill:#eef2ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b,font-size:14px;
+    classDef ui      fill:#f0fdfa,stroke:#0d9488,stroke-width:2px,color:#134e4a,font-size:14px;
+
+    class UI ui;
+    class APIR,JWT edge;
+    %% Client class removed
+    class AGENT,MCP,RAGR,ADMIN_API,OUTBOX,SIDX,RIDX,SUB,CEC,EMW,DTR,AGG,SESS,BACKFILL,ALERTS,VIS svc;
+    class KAC,KNO,KAN,DLQ kafka;
+    class AOS,RAGDB,NPG,ANPG db;
+    class REDIS_SESS,AVALK redis;
+    class GEMINI,OPENAI,MAIL ext;
+
+    style FRONTEND      fill:#f0fdfa,stroke:#0d9488,stroke-width:1.5px,color:#134e4a;
+    style VPC           fill:#eff6ff,stroke:#93c5fd,stroke-width:1.5px,color:#1e3a8a;
+    style AI_SYS        fill:#f5f3ff,stroke:#8b5cf6,stroke-dasharray:4 3;
+    style LLM           fill:#f8fafc,stroke:#94a3b8,stroke-dasharray:4 3;
+    style CONTENT_SYS   fill:#fffbeb,stroke:#d97706,stroke-dasharray:4 3;
+    style NOTIF_SYS     fill:#fef2f2,stroke:#ef4444,stroke-dasharray:4 3;
+    style ANALYTICS_SYS fill:#ecfdf5,stroke:#059669,stroke-dasharray:4 3;
 ```
-
-Key properties:
-
-* **At-least-once with idempotency.** Kafka redelivers on DB failure (no ack);
-  Valkey `SETNX(eventId, 24h)` guarantees the rollup row is never
-  double-counted.
-* **One DB round-trip per Kafka poll.** The aggregator pre-aggregates a
-  100-record batch in memory keyed by the full UPSERT-conflict tuple, then
-  fires a single `jdbc.batchUpdate` per granularity tier (5m + 1d).
-* **Truth-data geo centroids.** Enrichment snaps each event to a `geo_areas`
-  row (continent / country / region / metro), so map markers use real
-  population-weighted centroids instead of raw lat/lng noise.
-* **Best-effort producer side.** The Vercel function uses kafkajs with a
-  warm-cached singleton producer, 5 s connect timeout, 8 s request timeout,
-  2 retries — any Kafka outage degrades to Supabase-only writes.
 
 ---
 
