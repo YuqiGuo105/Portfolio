@@ -42,7 +42,34 @@ export async function getServerSideProps({ params, res }) {
     return { notFound: true };
   }
 
-  const sanitizedContent = sanitize(project.content);
+  // Sanitize project content while preserving mermaid diagram blocks.
+  // sanitize-html encodes > as &gt; which breaks mermaid arrows (->> becomes -&gt;&gt;).
+  // Fix: extract mermaid blocks first, sanitize the rest, then restore blocks
+  // with only & and < encoded (> is valid unescaped in HTML5 text content).
+  function sanitizeWithMermaid(html) {
+    if (!html) return '';
+    const blocks = [];
+    const marked = html.replace(
+      /<div\s+class="mermaid">[\s\S]*?<\/div>/g,
+      (match) => {
+        // strip outer div tags, keep raw mermaid syntax
+        const inner = match.replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '');
+        blocks.push(inner);
+        return `<div class="mermaid" id="mermaid-block-${blocks.length - 1}"></div>`;
+      }
+    );
+    const sanitized = sanitize(marked);
+    return sanitized.replace(
+      /<div[^>]+id="mermaid-block-(\d+)"[^>]*>[\s\S]*?<\/div>/g,
+      (_, idx) => {
+        const code = blocks[parseInt(idx)];
+        // Encode & and < only; > is left as-is (valid HTML5 text, needed for arrows)
+        const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        return `<div class="mermaid">${escaped}</div>`;
+      }
+    );
+  }
+  const sanitizedContent = sanitizeWithMermaid(project.content);
 
   if (res) {
     res.setHeader(
@@ -85,33 +112,11 @@ const WorkSingle = ({ project, nextProject }) => {
   }, []);
 
   // Render mermaid diagrams embedded in article content as SVGs.
-  // The script is loaded lazily only when the page actually contains
-  // .mermaid divs, so projects without diagrams pay no cost.
+  // The server-side sanitizeWithMermaid() already ensures the mermaid div content
+  // has correct arrow syntax (>> and --> not entity-encoded). We just need to
+  // load mermaid.js and run it.
   useEffect(() => {
-    const divs = document.querySelectorAll('div.mermaid');
-    if (!divs.length) return;
-    // sanitize-html encodes > → &gt;, so ->> becomes -&gt;&gt; and --> becomes --&gt;.
-    // Instead of trying to decode innerHTML, walk the DOM tree directly:
-    //   • text nodes have entities already decoded by the HTML parser (->> restored)
-    //   • <br> elements → restored to mermaid's label line-break syntax <br/>
-    divs.forEach((el) => {
-      if (el.dataset.processed) return;
-      let text = '';
-      const walk = (node) => {
-        for (const child of node.childNodes) {
-          if (child.nodeType === 3) { // TEXT_NODE
-            text += child.textContent;
-          } else if (child.nodeName === 'BR') {
-            text += '<br/>';
-          } else {
-            walk(child);
-          }
-        }
-      };
-      walk(el);
-      el.textContent = text;
-      el.dataset.processed = '1';
-    });
+    if (!document.querySelector('div.mermaid')) return;
     const SCRIPT_ID = '__mermaid_cdn';
     const run = () => {
       window.mermaid?.initialize({ startOnLoad: false, theme: 'dark' });
