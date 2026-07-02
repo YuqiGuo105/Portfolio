@@ -88,7 +88,22 @@ const WorkSingle = ({ project, nextProject }) => {
   // The script is loaded lazily only when the page actually contains
   // .mermaid divs, so projects without diagrams pay no cost.
   useEffect(() => {
-    if (!document.querySelector('div.mermaid')) return;
+    const divs = document.querySelectorAll('div.mermaid');
+    if (!divs.length) return;
+    // sanitize-html 会把 --> 转义为 --&gt;，同时 <br/> 保留为 DOM 元素。
+    // mermaid 需要原始文本（含 <br/> 作为标签内换行语法），因此在运行前
+    // 先从 innerHTML 还原为 mermaid 可解析的纯文本。
+    divs.forEach((el) => {
+      if (el.dataset.processed) return;
+      let raw = el.innerHTML;
+      // 把 <br /> 或 <br> 还原为 mermaid 的标签内换行语法 <br/>
+      raw = raw.replace(/<br\s*\/?>/gi, '<br/>');
+      // 解码 HTML 实体（&gt; → > , &lt; → < , &amp; → & 等）
+      const tmp = document.createElement('textarea');
+      tmp.innerHTML = raw;
+      el.textContent = tmp.value;
+      el.dataset.processed = '1';
+    });
     const SCRIPT_ID = '__mermaid_cdn';
     const run = () => {
       window.mermaid?.initialize({ startOnLoad: false, theme: 'dark' });
