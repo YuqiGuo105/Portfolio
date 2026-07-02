@@ -35,6 +35,7 @@
     "rehype-mathjax": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "sanitize-html": "^2.17.5",
     "skrollr": "^0.6.26",
     "slick-carousel": "^1.8.1",
     "swiper": "^8.4.3",

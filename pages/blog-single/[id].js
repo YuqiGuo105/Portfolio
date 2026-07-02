@@ -4,9 +4,11 @@ import { useEffect } from 'react';
 import SeoHead, { absoluteUrl } from "../../src/components/SeoHead";
 import BlogComments from "../../src/components/BlogComments";
 import { supabaseServer } from '../../src/supabase/supabaseServer';
-// isomorphic-dompurify runs in Node (jsdom) on the server and in the
-// browser on hydrate, so we can sanitize before HTML ever hits the DOM.
-import DOMPurify from 'isomorphic-dompurify';
+// isomorphic-dompurify pulls in jsdom, whose optional native deps are not
+// available in Vercel's Node.js serverless runtime — loading it threw at
+// request time and served 500s for every blog-single view. sanitize-html
+// is pure JS and works identically in local Node and on Vercel.
+import { sanitize } from '../../src/lib/sanitizeHtml';
 
 /**
  * Server-rendered blog detail. Fetching + sanitizing on the server means
@@ -30,8 +32,8 @@ export async function getServerSideProps({ params, res }) {
   }
 
   // Sanitize once on the server. The client component just prints the
-  // already-clean HTML, keeping DOMPurify out of the hydration path.
-  const sanitizedContent = DOMPurify.sanitize(data.content || '');
+  // already-clean HTML, keeping the sanitizer out of the hydration path.
+  const sanitizedContent = sanitize(data.content);
 
   // Short cache on the CDN + stale-while-revalidate so a burst of hits
   // does not spam Supabase, but publishing a fresh post shows up within

@@ -3,7 +3,11 @@ import Link from "next/link";
 import { useEffect } from 'react';
 import SeoHead, { absoluteUrl } from "../../src/components/SeoHead";
 import { supabaseServer } from '../../src/supabase/supabaseServer';
-import DOMPurify from 'isomorphic-dompurify';
+// isomorphic-dompurify pulls in jsdom + native optional deps that Vercel's
+// serverless Node runtime cannot resolve; loading it throws at request time
+// and served 500s for every /work-single/[id] view. sanitize-html is a
+// pure-JS sanitizer that works identically in local Node and Vercel.
+import { sanitize } from '../../src/lib/sanitizeHtml';
 
 /**
  * Server-rendered project detail. Same rationale as blog-single: without
@@ -38,7 +42,7 @@ export async function getServerSideProps({ params, res }) {
     return { notFound: true };
   }
 
-  const sanitizedContent = DOMPurify.sanitize(project.content || '');
+  const sanitizedContent = sanitize(project.content);
 
   if (res) {
     res.setHeader(
