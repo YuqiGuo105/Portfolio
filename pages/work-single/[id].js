@@ -166,6 +166,18 @@ const WorkSingle = ({ project, nextProject }) => {
           </div>
         </div>
       </section>
+      {/* Cover Image — only rendered when the project has an absolute image URL */}
+      {project.image && project.image.startsWith('http') && (
+        <section className="m-image-large">
+          <div className="image">
+            <div
+              className="img js-parallax"
+              style={{ backgroundImage: `url(${project.image})` }}
+            />
+          </div>
+        </section>
+      )}
+
       {/* Description */}
       <section className="section section-bg">
         <div className="container">
