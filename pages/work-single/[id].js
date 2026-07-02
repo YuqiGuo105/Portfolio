@@ -90,18 +90,26 @@ const WorkSingle = ({ project, nextProject }) => {
   useEffect(() => {
     const divs = document.querySelectorAll('div.mermaid');
     if (!divs.length) return;
-    // sanitize-html 会把 --> 转义为 --&gt;，同时 <br/> 保留为 DOM 元素。
-    // mermaid 需要原始文本（含 <br/> 作为标签内换行语法），因此在运行前
-    // 先从 innerHTML 还原为 mermaid 可解析的纯文本。
+    // sanitize-html encodes > → &gt;, so ->> becomes -&gt;&gt; and --> becomes --&gt;.
+    // Instead of trying to decode innerHTML, walk the DOM tree directly:
+    //   • text nodes have entities already decoded by the HTML parser (->> restored)
+    //   • <br> elements → restored to mermaid's label line-break syntax <br/>
     divs.forEach((el) => {
       if (el.dataset.processed) return;
-      let raw = el.innerHTML;
-      // 把 <br /> 或 <br> 还原为 mermaid 的标签内换行语法 <br/>
-      raw = raw.replace(/<br\s*\/?>/gi, '<br/>');
-      // 解码 HTML 实体（&gt; → > , &lt; → < , &amp; → & 等）
-      const tmp = document.createElement('textarea');
-      tmp.innerHTML = raw;
-      el.textContent = tmp.value;
+      let text = '';
+      const walk = (node) => {
+        for (const child of node.childNodes) {
+          if (child.nodeType === 3) { // TEXT_NODE
+            text += child.textContent;
+          } else if (child.nodeName === 'BR') {
+            text += '<br/>';
+          } else {
+            walk(child);
+          }
+        }
+      };
+      walk(el);
+      el.textContent = text;
       el.dataset.processed = '1';
     });
     const SCRIPT_ID = '__mermaid_cdn';
