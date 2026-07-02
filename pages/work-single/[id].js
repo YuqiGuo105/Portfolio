@@ -14,10 +14,16 @@ import DOMPurify from 'isomorphic-dompurify';
 export async function getServerSideProps({ params, res }) {
   const { id } = params;
 
+  // Column set must match the actual Projects table schema:
+  //   id, title, content, published_at, updated_at, image_url, URL,
+  //   category, year, technology, num
+  // (No `description`, no `image`, no `created_at`.) Selecting non-existent
+  // columns returns HTTP 400 from PostgREST and previously caused this page
+  // to 500 in production.
   const [{ data: project, error: projectErr }, { data: nextRows }] = await Promise.all([
     supabaseServer
       .from('Projects')
-      .select('id,title,year,technology,URL,content,description,image,updated_at,created_at')
+      .select('id,title,year,technology,URL,content,image_url,updated_at,published_at')
       .eq('id', id)
       .single(),
     supabaseServer
@@ -50,10 +56,12 @@ export async function getServerSideProps({ params, res }) {
         technology: project.technology || '',
         URL: project.URL || '',
         content: sanitizedContent,
-        description: project.description || '',
-        image: project.image || null,
+        // Projects table has no `description` column; the render code derives
+        // meta description from content when this is empty.
+        description: '',
+        image: project.image_url || null,
         updatedAt: project.updated_at || null,
-        createdAt: project.created_at || null,
+        createdAt: project.published_at || null,
       },
       nextProject: (nextRows && nextRows[0])
         ? { id: nextRows[0].id, title: nextRows[0].title || '' }

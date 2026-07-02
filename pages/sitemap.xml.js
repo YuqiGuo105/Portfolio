@@ -64,7 +64,7 @@ export async function getServerSideProps({ res }) {
         .limit(5000),
       supabaseServer
         .from('Projects')
-        .select('id,updated_at,created_at')
+        .select('id,updated_at,published_at')
         .order('id', { ascending: false })
         .limit(5000),
     ]);
@@ -97,7 +97,7 @@ export async function getServerSideProps({ res }) {
   for (const row of projectRows) {
     entries.push({
       loc: `${SITE_URL}/work-single/${row.id}`,
-      lastmod: toIsoDate(row.updated_at || row.created_at),
+      lastmod: toIsoDate(row.updated_at || row.published_at),
       changefreq: 'monthly',
       priority: '0.7',
     });
