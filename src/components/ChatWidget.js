@@ -2678,7 +2678,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
   const triggerSiteTour = () => {
     try {
-      window.dispatchEvent(new CustomEvent("cw:site-tour:start"))
+      if (routerPathname === "/" || window.location.pathname === "/") {
+        window.dispatchEvent(new CustomEvent("cw:site-tour:start"))
+      } else {
+        // 不在首页时先跳转，到达后自动开始 guide
+        sessionStorage.setItem("__pending_site_tour", "1")
+        window.location.href = "/"
+      }
     } catch {}
   }
 
