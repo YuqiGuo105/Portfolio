@@ -294,11 +294,13 @@ export default async function handler(req, res) {
       for (const s of groundingSources) {
         if (seen.has(s.uri)) continue;
         seen.add(s.uri);
+        const domain = s.title || new URL(s.uri).hostname;
         dedupedSources.push({
           id: "web-" + dedupedSources.length,
           type: "web",
-          title: s.title || new URL(s.uri).hostname,
+          title: domain,
           url: s.uri,
+          favicon: "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(domain) + "&sz=64",
         });
       }
       if (dedupedSources.length > 0) {

@@ -1491,6 +1491,7 @@ function KeyConceptsBar({ concepts }) {
 }
 
 function SourceCardsRow({ cards }) {
+  const [collapsed, setCollapsed] = useState(false)
   if (!cards?.length) return null
   const badgeLabel = (type) => {
     if (type === "life_blog") return "Life Blog"
@@ -1504,26 +1505,36 @@ function SourceCardsRow({ cards }) {
     return "🗂️"
   }
   return (
-    <div className="cw-source-cards">
-      {cards.map((c) => (
-        <a
-          key={c.id}
-          href={c.url}
-          className="cw-source-card"
-          target="_blank"
-          rel="noopener noreferrer"
-          title={c.title}
-        >
-          {c.imageUrl
-            ? <img src={c.imageUrl} alt={c.title} className="cw-source-card-img" loading="lazy" />
-            : <div className="cw-source-card-img-placeholder">{emoji(c.type)}</div>
-          }
-          <div className="cw-source-card-body">
-            <div className="cw-source-card-badge">{badgeLabel(c.type)}</div>
-            <div className="cw-source-card-title">{c.title}</div>
-          </div>
-        </a>
-      ))}
+    <div className="cw-source-cards-wrapper">
+      <button className="cw-source-cards-toggle" onClick={() => setCollapsed(!collapsed)}>
+        <span>Sources ({cards.length})</span>
+        <ChevronDown className={`cw-source-cards-chevron${collapsed ? "" : " open"}`} />
+      </button>
+      {!collapsed && (
+        <div className="cw-source-cards">
+          {cards.map((c) => (
+            <a
+              key={c.id}
+              href={c.url}
+              className="cw-source-card"
+              target="_blank"
+              rel="noopener noreferrer"
+              title={c.title}
+            >
+              {c.imageUrl
+                ? <img src={c.imageUrl} alt={c.title} className="cw-source-card-img" loading="lazy" />
+                : c.favicon
+                  ? <div className="cw-source-card-img-placeholder"><img src={c.favicon} alt="" className="cw-source-card-favicon" loading="lazy" /></div>
+                  : <div className="cw-source-card-img-placeholder">{emoji(c.type)}</div>
+              }
+              <div className="cw-source-card-body">
+                <div className="cw-source-card-badge">{badgeLabel(c.type)}</div>
+                <div className="cw-source-card-title">{c.title}</div>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
