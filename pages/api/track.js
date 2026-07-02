@@ -126,8 +126,6 @@ export default async function handler(req, res) {
     eventType:  event,
     eventTime:  localTime,
     serverTime: nowIso,
-    sessionId:  body.sessionId || null,
-    anonId:     body.anonId || null,
     pageUrl:    body.page || null,
     referrer:   body.referrer || null,
     uaRaw:      ua,

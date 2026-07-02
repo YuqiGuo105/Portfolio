@@ -59,11 +59,16 @@ const SOURCE_FILTER_MAP: Record<string, string[]> = {
 function buildQuery(q: string, sourceFilter?: string, limit = 20, offset = 0) {
   const types = sourceFilter ? (SOURCE_FILTER_MAP[sourceFilter.toLowerCase()] ?? []) : [];
   // Full field set for fuzzy matching (keyword fields are fine for term-based scoring).
-  const fields = ['title^3', 'summary^2', 'content', 'tags^2', 'category'];
+  // `search_terms` is the document-expansion field populated offline by the
+  // search-indexer (doc2query): keywords/synonyms/related concepts/question
+  // phrasings. It carries a medium weight — below title, enough to recall
+  // semantically-related docs — and adds ZERO query-time API cost (pure BM25).
+  const fields = ['title^3', 'summary^2', 'content', 'tags^2', 'category', 'search_terms^1.5'];
   // phrase_prefix can only run on analyzed text fields — `tags` and `category`
   // are mapped as `keyword` in portfolio_content_v1 and will throw
-  // query_shard_exception if included.
-  const textFields = ['title^3', 'summary^2', 'content'];
+  // query_shard_exception if included. `search_terms` is analyzed text, so it
+  // is safe to include here.
+  const textFields = ['title^3', 'summary^2', 'content', 'search_terms^1.5'];
 
   // Combine full-token fuzzy matching with phrase-prefix matching so partial
   // words ("kub" → "Kubernetes") still surface results, instead of relying on

@@ -11,8 +11,8 @@
  * Exit 0 = all cases passed, non-zero = at least one failed.
  */
 
-import { loadManifest } from "./src/lib/intentManifest.js";
-import { validateRouteDecision } from "./src/lib/intentValidator.js";
+import { loadManifest } from "../src/lib/intentManifest.js";
+import { validateRouteDecision } from "../src/lib/intentValidator.js";
 
 const ROUTER_URL = process.env.ROUTER_URL || "http://localhost:3000/api/intent/route";
 
