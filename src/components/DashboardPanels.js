@@ -831,25 +831,31 @@ const DashboardPanels = () => {
             <span className="badge">live</span>
           </header>
           <p className="card-subtitle">
-            Real-time metrics from 8 microservices — JVM, HTTP latency, connection pools &amp; more.
+            Real-time metrics from 8 microservices — JVM, HTTP latency, connection pools &amp; more. Snapshot refreshes every 5 minutes.
           </p>
-          <div className="grafana-embed">
-            <iframe
-              src="https://loyalcaravan951.grafana.net/public-dashboards/154eccd6136f4daebe70faf015600aa9"
-              width="100%"
-              height="450"
-              frameBorder="0"
-              title="Grafana Cloud Dashboard"
+          <a
+            href="https://loyalcaravan951.grafana.net/public-dashboards/154eccd6136f4daebe70faf015600aa9"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="grafana-preview"
+            aria-label="Open live Grafana dashboard in a new tab"
+          >
+            <img
+              src="/api/monitoring-snapshot?width=1400&height=900"
+              alt="Grafana dashboard snapshot showing JVM, heap, CPU and GC metrics from portfolio microservices"
               loading="lazy"
             />
-          </div>
+            <span className="grafana-overlay">
+              <span className="grafana-overlay-badge">Open Live Dashboard ↗</span>
+            </span>
+          </a>
           <div className="grafana-links">
             <a
               href="https://loyalcaravan951.grafana.net/public-dashboards/154eccd6136f4daebe70faf015600aa9"
               target="_blank"
               rel="noopener noreferrer"
             >
-              Open Full Dashboard ↗
+              View Full Interactive Dashboard ↗
             </a>
           </div>
         </div>
@@ -1558,15 +1564,60 @@ const DashboardPanels = () => {
           color: var(--text-muted);
         }
 
-        .grafana-embed {
+        .grafana-preview {
+          position: relative;
+          display: block;
           border-radius: 12px;
           overflow: hidden;
           border: 1px solid var(--card-border);
+          background: #0b1120;
+          line-height: 0;
+          text-decoration: none;
+          transition: transform 0.25s ease, box-shadow 0.25s ease;
         }
 
-        .grafana-embed iframe {
+        .grafana-preview:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 30px rgba(99, 102, 241, 0.25);
+        }
+
+        .grafana-preview img {
           display: block;
-          border: none;
+          width: 100%;
+          height: auto;
+          max-height: 600px;
+          object-fit: cover;
+          object-position: top center;
+        }
+
+        .grafana-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: flex-end;
+          justify-content: flex-end;
+          padding: 14px;
+          background: linear-gradient(
+            180deg,
+            rgba(0, 0, 0, 0) 55%,
+            rgba(0, 0, 0, 0.55) 100%
+          );
+          opacity: 0;
+          transition: opacity 0.25s ease;
+        }
+
+        .grafana-preview:hover .grafana-overlay {
+          opacity: 1;
+        }
+
+        .grafana-overlay-badge {
+          background: rgba(99, 102, 241, 0.95);
+          color: #ffffff;
+          padding: 6px 12px;
+          border-radius: 8px;
+          font-size: 0.8rem;
+          font-weight: 600;
+          letter-spacing: 0.01em;
         }
 
         .grafana-links {
