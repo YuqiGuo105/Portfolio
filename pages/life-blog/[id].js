@@ -62,16 +62,6 @@ const LifeBlog = () => {
     fetchBlog();
   }, [id, loggedIn, router]);
 
-  /* ────────── 3. track page view after auth gate ────────── */
-  useEffect(() => {
-    if (loading || accessDenied || !blog) return;
-    fetch('/api/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ localTime: new Date().toISOString() }),
-    }).catch(() => {});
-  }, [accessDenied, blog, loading]);
-
   /* ────────── guard rails ────────── */
   if (accessDenied) {
     return (

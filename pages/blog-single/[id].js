@@ -65,15 +65,6 @@ export async function getServerSideProps({ params, res }) {
 const BlogSingle = ({ blog }) => {
   const router = useRouter();
 
-  // Track page view via the dedicated tracking endpoint.
-  useEffect(() => {
-    fetch('/api/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ localTime: new Date().toISOString() }),
-    }).catch(() => {});
-  }, []);
-
   // Trim the sanitized HTML to a plain-text excerpt for the meta
   // description when the row does not carry an explicit one.
   const metaDescription = (blog.description

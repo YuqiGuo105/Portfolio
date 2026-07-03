@@ -585,8 +585,8 @@ const DashboardPanels = () => {
 
         await yieldToBrowser();
 
-        // ---------------- PHASE 1b: counts + devices (estimated, small) ----------------
-        const COUNT_MODE = "estimated";
+        // ---------------- PHASE 1b: counts + devices ----------------
+        const COUNT_MODE = "exact";
 
         const [total30Res, totalTodayRes, located30Res, deviceRes] = await Promise.all([
           supabase

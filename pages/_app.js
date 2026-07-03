@@ -1,10 +1,42 @@
 import Head from "next/head";
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef } from "react";
+import { useRouter } from "next/router";
 import SeoHead from "../src/components/SeoHead";
 import "../styles/globals.css";
 import "../styles/carousel.css";
 import "../styles/chatWidget.css";
+
 function MyApp({ Component, pageProps }) {
+  const router = useRouter();
+  const tracked = useRef(false);
+
+  // Global page_view tracking — fires on initial load + every client-side
+  // route change. Replaces per-page useEffect calls.
+  useEffect(() => {
+    const track = (url) => {
+      fetch("/api/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          localTime: new Date().toISOString(),
+          page: url,
+          event: "page_view",
+        }),
+      }).catch(() => {});
+    };
+
+    // First load
+    if (!tracked.current) {
+      tracked.current = true;
+      track(window.location.pathname);
+    }
+
+    // Subsequent client-side navigations
+    const handleRouteChange = (url) => track(url);
+    router.events.on("routeChangeComplete", handleRouteChange);
+    return () => router.events.off("routeChangeComplete", handleRouteChange);
+  }, [router.events]);
+
   return (
     <Fragment>
       <Head>

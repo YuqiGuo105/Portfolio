@@ -102,15 +102,6 @@ export async function getServerSideProps({ params, res }) {
 }
 
 const WorkSingle = ({ project, nextProject }) => {
-  // Track page view via the dedicated tracking endpoint.
-  useEffect(() => {
-    fetch('/api/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ localTime: new Date().toISOString() }),
-    }).catch(() => {});
-  }, []);
-
   // Render mermaid diagrams embedded in article content as SVGs.
   // The server-side sanitizeWithMermaid() already ensures the mermaid div content
   // has correct arrow syntax (>> and --> not entity-encoded). We just need to
