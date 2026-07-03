@@ -823,6 +823,36 @@ const DashboardPanels = () => {
             </aside>
           </div>
         </div>
+
+        {/* Live Grafana Dashboard */}
+        <div className="dashboard-card-5 grafana-card">
+          <header>
+            <h3>Platform Monitoring</h3>
+            <span className="badge">live</span>
+          </header>
+          <p className="card-subtitle">
+            Real-time metrics from 8 microservices — JVM, HTTP latency, connection pools &amp; more.
+          </p>
+          <div className="grafana-embed">
+            <iframe
+              src="https://loyalcaravan951.grafana.net/public-dashboards/154eccd6136f4daebe70faf015600aa9"
+              width="100%"
+              height="450"
+              frameBorder="0"
+              title="Grafana Cloud Dashboard"
+              loading="lazy"
+            />
+          </div>
+          <div className="grafana-links">
+            <a
+              href="https://loyalcaravan951.grafana.net/public-dashboards/154eccd6136f4daebe70faf015600aa9"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Full Dashboard ↗
+            </a>
+          </div>
+        </div>
       </div>
 
       <style jsx>{`
@@ -1476,6 +1506,88 @@ const DashboardPanels = () => {
           justify-content: center;
         }
 
+        /* Grafana Monitoring */
+        .dashboard-card-5 {
+          flex: 1 1 100%;
+          width: 100%;
+          max-width: 1500px;
+          background: var(--card-bg);
+          border: 1px solid var(--card-border);
+          border-radius: 18px;
+          padding: 20px;
+          box-shadow: var(--card-shadow);
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          color: var(--text-primary);
+        }
+
+        .dashboard-card-5 header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        .dashboard-card-5 header h3 {
+          margin: 0;
+          font-size: 1.1rem;
+          font-weight: 700;
+          color: var(--text-primary);
+        }
+
+        .dashboard-card-5 header .badge {
+          font-size: 0.65rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          padding: 2px 8px;
+          border-radius: 6px;
+          color: #16a34a;
+          background: rgba(22, 163, 74, 0.12);
+          animation: pulse-live 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-live {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+
+        .dashboard-card-5 .card-subtitle {
+          margin: 0;
+          font-size: 0.85rem;
+          color: var(--text-muted);
+        }
+
+        .grafana-embed {
+          border-radius: 12px;
+          overflow: hidden;
+          border: 1px solid var(--card-border);
+        }
+
+        .grafana-embed iframe {
+          display: block;
+          border: none;
+        }
+
+        .grafana-links {
+          display: flex;
+          justify-content: flex-end;
+          padding-top: 0.25rem;
+        }
+
+        .grafana-links a {
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: #6366f1;
+          text-decoration: none;
+          transition: color 0.2s;
+        }
+
+        .grafana-links a:hover {
+          color: #4f46e5;
+          text-decoration: underline;
+        }
+
         @media (max-width: 1024px) {
           .dashboard-wrapper {
             padding: 2rem 0;
@@ -1490,7 +1602,8 @@ const DashboardPanels = () => {
           .dashboard-card-2,
           .dashboard-card-3,
           .column-container,
-          .dashboard-card-4 {
+          .dashboard-card-4,
+          .dashboard-card-5 {
             width: 100%;
             max-width: 100%;
           }
