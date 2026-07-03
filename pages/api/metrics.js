@@ -49,6 +49,41 @@ async function promQuery(query, token) {
   }
 }
 
+// Range query -> array of { t (ms), v (number) } for the first series.
+async function promRange(query, token, windowSeconds = 3600, step = 120) {
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - windowSeconds;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), QUERY_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${PROM_BASE}/query_range`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        query,
+        start: String(start),
+        end: String(end),
+        step: String(step),
+      }).toString(),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const series = data?.data?.result?.[0]?.values || [];
+    return series.map(([t, v]) => ({
+      t: t * 1000,
+      v: Math.round(Number.parseFloat(v) * 100) / 100,
+    }));
+  } catch {
+    clearTimeout(timer);
+    return [];
+  }
+}
+
 // Turn a Prometheus vector result into a map keyed by the `job` label.
 function byJob(result) {
   const map = {};
@@ -117,6 +152,32 @@ export default async function handler(req, res) {
     const upCount = services.filter((s) => s.up).length;
     const totalReq = services.reduce((sum, s) => sum + (s.reqPerSec || 0), 0);
 
+    // Aggregate gauges (instant) + time-series (range) for a Grafana-like view.
+    const [heapGauge, nonHeapGauge, cpuGauge, heapSeries, reqSeries, threadSeries] =
+      await Promise.all([
+        promQuery(
+          `sum(jvm_memory_used_bytes{area="heap"})/sum(jvm_memory_max_bytes{area="heap"})*100`,
+          token
+        ),
+        promQuery(
+          `sum(jvm_memory_used_bytes{area="nonheap"})/sum(jvm_memory_committed_bytes{area="nonheap"})*100`,
+          token
+        ),
+        promQuery(`avg(process_cpu_usage)*100`, token),
+        promRange(
+          `sum(jvm_memory_used_bytes{area="heap"})/sum(jvm_memory_max_bytes{area="heap"})*100`,
+          token
+        ),
+        promRange(`sum(rate(http_server_requests_seconds_count[5m]))`, token),
+        promRange(`sum(jvm_threads_live_threads)`, token),
+      ]);
+
+    const firstVal = (r) => {
+      const v = r?.[0]?.value?.[1];
+      const n = Number.parseFloat(v);
+      return Number.isNaN(n) ? null : Math.round(n * 10) / 10;
+    };
+
     const payload = {
       updatedAt: new Date().toISOString(),
       summary: {
@@ -124,6 +185,19 @@ export default async function handler(req, res) {
         up: upCount,
         down: services.length - upCount,
         requestsPerSec: Math.round(totalReq * 100) / 100,
+      },
+      gauges: {
+        heapPct: firstVal(heapGauge),
+        nonHeapPct: firstVal(nonHeapGauge),
+        cpuPct: (() => {
+          const v = firstVal(cpuGauge);
+          return v == null || v < 0 ? null : v;
+        })(),
+      },
+      timeseries: {
+        heap: heapSeries,
+        requests: reqSeries,
+        threads: threadSeries,
       },
       services,
     };

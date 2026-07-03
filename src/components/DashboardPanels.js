@@ -58,6 +58,110 @@ const buildPinLabel = (r) => {
   return country || "Unknown";
 };
 
+/* ============================================================
+   Grafana-style monitoring visuals (SVG gauges + sparklines)
+   ============================================================ */
+
+// Semicircular gauge (like Grafana's gauge panel).
+const GaugeArc = ({ value, label, unit = "%", max = 100 }) => {
+  const pct = value == null ? 0 : Math.max(0, Math.min(value / max, 1));
+  const startAngle = -220;
+  const endAngle = 40;
+  const angle = startAngle + (endAngle - startAngle) * pct;
+  const r = 52;
+  const cx = 70;
+  const cy = 70;
+  const toXY = (deg) => {
+    const rad = (deg * Math.PI) / 180;
+    return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+  };
+  const [sx, sy] = toXY(startAngle);
+  const [ex, ey] = toXY(endAngle);
+  const [vx, vy] = toXY(angle);
+  const largeTrack = endAngle - startAngle > 180 ? 1 : 0;
+  const valueSweep = angle - startAngle > 180 ? 1 : 0;
+  // Color by threshold, mimicking Grafana green/orange/red.
+  const color = value == null ? "#6b7280" : value < 60 ? "#22c55e" : value < 85 ? "#f59e0b" : "#ef4444";
+  return (
+    <div className="gauge">
+      <svg viewBox="0 0 140 118" className="gauge-svg" role="img" aria-label={`${label} ${value ?? "no data"}${unit}`}>
+        <path
+          d={`M ${sx} ${sy} A ${r} ${r} 0 ${largeTrack} 1 ${ex} ${ey}`}
+          fill="none"
+          stroke="rgba(148,163,184,0.25)"
+          strokeWidth="12"
+          strokeLinecap="round"
+        />
+        <path
+          d={`M ${sx} ${sy} A ${r} ${r} 0 ${valueSweep} 1 ${vx} ${vy}`}
+          fill="none"
+          stroke={color}
+          strokeWidth="12"
+          strokeLinecap="round"
+        />
+        <text x={cx} y={cy + 2} textAnchor="middle" className="gauge-value" fill={color}>
+          {value == null ? "N/A" : `${Math.round(value)}`}
+          {value != null && <tspan className="gauge-unit">{unit}</tspan>}
+        </text>
+      </svg>
+      <span className="gauge-label">{label}</span>
+    </div>
+  );
+};
+
+// Area sparkline (like a Grafana time-series panel).
+const Sparkline = ({ data, title, color = "#6366f1", unit = "", height = 90 }) => {
+  const points = Array.isArray(data) ? data.filter((d) => d && !Number.isNaN(d.v)) : [];
+  const w = 320;
+  const h = height;
+  const pad = 6;
+  if (points.length < 2) {
+    return (
+      <div className="spark">
+        <div className="spark-head">
+          <span className="spark-title">{title}</span>
+        </div>
+        <div className="spark-empty">Collecting data…</div>
+      </div>
+    );
+  }
+  const xs = points.map((d) => d.t);
+  const ys = points.map((d) => d.v);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const spanX = maxX - minX || 1;
+  const spanY = maxY - minY || 1;
+  const sx = (x) => pad + ((x - minX) / spanX) * (w - pad * 2);
+  const sy = (y) => h - pad - ((y - minY) / spanY) * (h - pad * 2);
+  const line = points.map((d, i) => `${i === 0 ? "M" : "L"} ${sx(d.t).toFixed(1)} ${sy(d.v).toFixed(1)}`).join(" ");
+  const area = `${line} L ${sx(maxX).toFixed(1)} ${h - pad} L ${sx(minX).toFixed(1)} ${h - pad} Z`;
+  const last = ys[ys.length - 1];
+  const gid = `sparkgrad-${title.replace(/\s+/g, "")}`;
+  return (
+    <div className="spark">
+      <div className="spark-head">
+        <span className="spark-title">{title}</span>
+        <span className="spark-last" style={{ color }}>
+          {last.toFixed(unit === "%" ? 1 : 2)}
+          {unit}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="spark-svg">
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill={`url(#${gid})`} />
+        <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+    </div>
+  );
+};
+
 // derive "device" from UA
 const buildDeviceLabelFromUa = (uaRaw) => {
   const ua = String(uaRaw || "").trim();
@@ -913,6 +1017,34 @@ const DashboardPanels = () => {
             </div>
           </div>
 
+          {/* Gauges + time-series (Grafana-style) */}
+          <div className="monitor-visuals">
+            <div className="monitor-gauges">
+              <GaugeArc value={metrics?.gauges?.heapPct ?? null} label="Heap Used" />
+              <GaugeArc value={metrics?.gauges?.nonHeapPct ?? null} label="Non-Heap" />
+              <GaugeArc value={metrics?.gauges?.cpuPct ?? null} label="CPU" />
+            </div>
+            <div className="monitor-charts">
+              <Sparkline
+                data={metrics?.timeseries?.heap}
+                title="Heap Usage (1h)"
+                unit="%"
+                color="#8b5cf6"
+              />
+              <Sparkline
+                data={metrics?.timeseries?.requests}
+                title="Request Rate (1h)"
+                unit="/s"
+                color="#22c55e"
+              />
+              <Sparkline
+                data={metrics?.timeseries?.threads}
+                title="Live Threads (1h)"
+                color="#38bdf8"
+              />
+            </div>
+          </div>
+
           {/* Per-service grid */}
           <div className="monitor-grid">
             {(metrics?.services || []).map((svc) => (
@@ -1710,6 +1842,106 @@ const DashboardPanels = () => {
           color: var(--text-muted);
         }
 
+        /* Grafana-style gauges + charts */
+        .monitor-visuals {
+          display: grid;
+          grid-template-columns: minmax(240px, 0.9fr) 2fr;
+          gap: 14px;
+        }
+
+        .monitor-gauges {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+          padding: 12px;
+          border-radius: 12px;
+          background: rgba(99, 102, 241, 0.04);
+          border: 1px solid var(--card-border);
+        }
+
+        .gauge {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+        }
+
+        .gauge-svg {
+          width: 100%;
+          height: auto;
+        }
+
+        :global(.gauge-value) {
+          font-size: 26px;
+          font-weight: 750;
+          font-variant-numeric: tabular-nums;
+        }
+
+        :global(.gauge-unit) {
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+        .gauge-label {
+          font-size: 0.72rem;
+          color: var(--text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+        }
+
+        .monitor-charts {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 10px;
+        }
+
+        .spark {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 10px 12px;
+          border-radius: 12px;
+          background: var(--input-bg);
+          border: 1px solid var(--card-border);
+          min-width: 0;
+        }
+
+        .spark-head {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .spark-title {
+          font-size: 0.72rem;
+          color: var(--text-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .spark-last {
+          font-size: 0.82rem;
+          font-weight: 700;
+          font-variant-numeric: tabular-nums;
+        }
+
+        .spark-svg {
+          width: 100%;
+          height: 64px;
+        }
+
+        .spark-empty {
+          height: 64px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.75rem;
+          color: var(--text-subtle);
+          font-style: italic;
+        }
+
         /* Per-service grid */
         .monitor-grid {
           display: grid;
@@ -1918,6 +2150,10 @@ const DashboardPanels = () => {
           .monitor-grid {
             grid-template-columns: repeat(2, 1fr);
           }
+
+          .monitor-visuals {
+            grid-template-columns: 1fr;
+          }
         }
 
         @media (max-width: 768px) {
@@ -1994,6 +2230,10 @@ const DashboardPanels = () => {
           }
 
           .monitor-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .monitor-charts {
             grid-template-columns: 1fr;
           }
         }
