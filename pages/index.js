@@ -870,7 +870,7 @@ const Index = () => {
                     />
 
                   <img
-                    src="/assets/images/profile_guyuqi.jpg"
+                    src="/assets/images/profile.png"
                     alt="avatar"
                     style={{
                       width: "100%",
