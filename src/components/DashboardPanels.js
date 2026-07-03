@@ -212,6 +212,10 @@ const DashboardPanels = () => {
   });
   const [isVisitorsLoading, setIsVisitorsLoading] = useState(true);
 
+  // Platform monitoring (Grafana Cloud / Prometheus)
+  const [metrics, setMetrics] = useState(null);
+  const [isMetricsLoading, setIsMetricsLoading] = useState(true);
+
   const hoursAgoLabel = (timestamp) => {
     const hours = getHoursSince(timestamp);
     if (hours === null) return "Updated just now";
@@ -227,6 +231,16 @@ const DashboardPanels = () => {
     const date = typeof value === "number" ? new Date(value) : new Date(value);
     if (Number.isNaN(date.getTime())) return "—";
     return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  };
+
+  const formatUptime = (seconds) => {
+    if (seconds === null || seconds === undefined) return "—";
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
   };
 
   /* ============================================================
@@ -548,6 +562,36 @@ const DashboardPanels = () => {
     };
   }, []);
 
+  /* ============================================================
+     Platform Monitoring (Grafana Cloud / Prometheus)
+     ============================================================ */
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchMetrics = async () => {
+      try {
+        const res = await fetch("/api/metrics");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (mounted && json?.services) {
+          setMetrics(json);
+        }
+      } catch (error) {
+        console.error("Failed to load platform metrics", error);
+      } finally {
+        if (mounted) setIsMetricsLoading(false);
+      }
+    };
+
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 30000); // refresh every 30s
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   const convertedAmount = useMemo(() => {
     const amt = Number.parseFloat(amount);
     if (Number.isNaN(amt) || !currency?.rate) return null;
@@ -831,25 +875,93 @@ const DashboardPanels = () => {
             <span className="badge">live</span>
           </header>
           <p className="card-subtitle">
-            Real-time metrics from 8 microservices — JVM, HTTP latency, connection pools &amp; more. Snapshot refreshes every 5 minutes.
+            Real-time metrics from 8 microservices — powered by Prometheus &amp; Grafana Cloud. Auto-refreshes every 30s.
           </p>
-          <a
-            href="https://loyalcaravan951.grafana.net/public-dashboards/154eccd6136f4daebe70faf015600aa9"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="grafana-preview"
-            aria-label="Open live Grafana dashboard in a new tab"
-          >
-            <img
-              src="/api/monitoring-snapshot?width=1400&height=900"
-              alt="Grafana dashboard snapshot showing JVM, heap, CPU and GC metrics from portfolio microservices"
-              loading="lazy"
-            />
-            <span className="grafana-overlay">
-              <span className="grafana-overlay-badge">Open Live Dashboard ↗</span>
-            </span>
-          </a>
+
+          {/* Summary tiles */}
+          <div className="monitor-summary">
+            <div className="monitor-tile">
+              <span className="monitor-tile-value">
+                {metrics ? `${metrics.summary.up}/${metrics.summary.total}` : "—"}
+              </span>
+              <span className="monitor-tile-label">Services Up</span>
+            </div>
+            <div className="monitor-tile">
+              <span className="monitor-tile-value">
+                {metrics ? metrics.summary.requestsPerSec.toFixed(2) : "—"}
+              </span>
+              <span className="monitor-tile-label">Requests / sec</span>
+            </div>
+            <div className="monitor-tile">
+              <span className="monitor-tile-value">
+                {metrics
+                  ? `${Math.round(
+                      (metrics.services.reduce((a, s) => a + (s.heapPct || 0), 0) /
+                        Math.max(metrics.services.filter((s) => s.heapPct != null).length, 1))
+                    )}%`
+                  : "—"}
+              </span>
+              <span className="monitor-tile-label">Avg Heap</span>
+            </div>
+            <div className="monitor-tile">
+              <span className="monitor-tile-value">
+                {metrics
+                  ? metrics.services.reduce((a, s) => a + (s.threads || 0), 0)
+                  : "—"}
+              </span>
+              <span className="monitor-tile-label">Live Threads</span>
+            </div>
+          </div>
+
+          {/* Per-service grid */}
+          <div className="monitor-grid">
+            {(metrics?.services || []).map((svc) => (
+              <div className={`monitor-service ${svc.up ? "is-up" : "is-down"}`} key={svc.job}>
+                <div className="monitor-service-head">
+                  <span className={`status-dot ${svc.up ? "up" : "down"}`} aria-hidden="true" />
+                  <span className="monitor-service-name">{svc.name}</span>
+                  <span className="monitor-service-status">{svc.up ? "UP" : "DOWN"}</span>
+                </div>
+                {svc.up ? (
+                  <div className="monitor-service-metrics">
+                    <div className="msm">
+                      <span className="msm-label">Heap</span>
+                      <div className="msm-bar">
+                        <div
+                          className="msm-bar-fill"
+                          style={{ width: `${Math.min(svc.heapPct || 0, 100)}%` }}
+                        />
+                      </div>
+                      <span className="msm-value">
+                        {svc.heapPct != null ? `${svc.heapPct}%` : "—"}
+                      </span>
+                    </div>
+                    <div className="msm-row">
+                      <span>Uptime {formatUptime(svc.uptimeSeconds)}</span>
+                      <span>{svc.threads ?? "—"} thr</span>
+                      <span>{(svc.reqPerSec || 0).toFixed(2)}/s</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="monitor-service-metrics dim">
+                    <span className="msm-idle">Scaled to zero</span>
+                  </div>
+                )}
+              </div>
+            ))}
+            {isMetricsLoading &&
+              !metrics &&
+              Array.from({ length: 8 }).map((_, i) => (
+                <div className="monitor-service skeleton" key={`sk-${i}`} />
+              ))}
+          </div>
+
           <div className="grafana-links">
+            {metrics?.updatedAt && (
+              <span className="monitor-updated">
+                Updated {new Date(metrics.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}
+              </span>
+            )}
             <a
               href="https://loyalcaravan951.grafana.net/public-dashboards/154eccd6136f4daebe70faf015600aa9"
               target="_blank"
@@ -1564,66 +1676,201 @@ const DashboardPanels = () => {
           color: var(--text-muted);
         }
 
-        .grafana-preview {
-          position: relative;
-          display: block;
-          border-radius: 12px;
-          overflow: hidden;
-          border: 1px solid var(--card-border);
-          background: #0b1120;
-          line-height: 0;
-          text-decoration: none;
-          transition: transform 0.25s ease, box-shadow 0.25s ease;
+        /* Summary tiles */
+        .monitor-summary {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
         }
 
-        .grafana-preview:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 12px 30px rgba(99, 102, 241, 0.25);
-        }
-
-        .grafana-preview img {
-          display: block;
-          width: 100%;
-          height: auto;
-          max-height: 600px;
-          object-fit: cover;
-          object-position: top center;
-        }
-
-        .grafana-overlay {
-          position: absolute;
-          inset: 0;
+        .monitor-tile {
           display: flex;
-          align-items: flex-end;
-          justify-content: flex-end;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          padding: 14px 8px;
+          border-radius: 12px;
+          background: rgba(99, 102, 241, 0.06);
+          border: 1px solid var(--card-border);
+        }
+
+        .monitor-tile-value {
+          font-size: 1.5rem;
+          font-weight: 750;
+          color: var(--text-primary);
+          font-variant-numeric: tabular-nums;
+          line-height: 1;
+        }
+
+        .monitor-tile-label {
+          font-size: 0.72rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--text-muted);
+        }
+
+        /* Per-service grid */
+        .monitor-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
+        }
+
+        .monitor-service {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
           padding: 14px;
+          border-radius: 12px;
+          background: var(--input-bg);
+          border: 1px solid var(--card-border);
+          min-height: 96px;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .monitor-service.is-up:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+        }
+
+        .monitor-service.is-down {
+          opacity: 0.72;
+        }
+
+        .monitor-service.skeleton {
           background: linear-gradient(
-            180deg,
-            rgba(0, 0, 0, 0) 55%,
-            rgba(0, 0, 0, 0.55) 100%
+            90deg,
+            var(--input-bg) 25%,
+            rgba(148, 163, 184, 0.15) 50%,
+            var(--input-bg) 75%
           );
-          opacity: 0;
-          transition: opacity 0.25s ease;
+          background-size: 200% 100%;
+          animation: monitor-shimmer 1.4s ease-in-out infinite;
         }
 
-        .grafana-preview:hover .grafana-overlay {
-          opacity: 1;
+        @keyframes monitor-shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
         }
 
-        .grafana-overlay-badge {
-          background: rgba(99, 102, 241, 0.95);
-          color: #ffffff;
-          padding: 6px 12px;
-          border-radius: 8px;
-          font-size: 0.8rem;
-          font-weight: 600;
-          letter-spacing: 0.01em;
+        .monitor-service-head {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .status-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .status-dot.up {
+          background: #16a34a;
+          box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+          animation: pulse-live 2s ease-in-out infinite;
+        }
+
+        .status-dot.down {
+          background: #9ca3af;
+        }
+
+        .monitor-service-name {
+          font-size: 0.85rem;
+          font-weight: 650;
+          color: var(--text-primary);
+          flex: 1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .monitor-service-status {
+          font-size: 0.62rem;
+          font-weight: 700;
+          letter-spacing: 0.05em;
+          color: var(--text-muted);
+        }
+
+        .monitor-service.is-up .monitor-service-status {
+          color: #16a34a;
+        }
+
+        .monitor-service-metrics {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .monitor-service-metrics.dim {
+          justify-content: center;
+          align-items: center;
+          flex: 1;
+        }
+
+        .msm-idle {
+          font-size: 0.75rem;
+          color: var(--text-subtle);
+          font-style: italic;
+        }
+
+        .msm {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .msm-label {
+          font-size: 0.7rem;
+          color: var(--text-muted);
+          width: 34px;
+        }
+
+        .msm-bar {
+          flex: 1;
+          height: 6px;
+          border-radius: 4px;
+          background: rgba(148, 163, 184, 0.25);
+          overflow: hidden;
+        }
+
+        .msm-bar-fill {
+          height: 100%;
+          border-radius: 4px;
+          background: linear-gradient(90deg, #6366f1, #8b5cf6);
+          transition: width 0.6s ease;
+        }
+
+        .msm-value {
+          font-size: 0.72rem;
+          font-weight: 650;
+          color: var(--text-primary);
+          font-variant-numeric: tabular-nums;
+          width: 38px;
+          text-align: right;
+        }
+
+        .msm-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.7rem;
+          color: var(--text-muted);
+          font-variant-numeric: tabular-nums;
         }
 
         .grafana-links {
           display: flex;
-          justify-content: flex-end;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
           padding-top: 0.25rem;
+        }
+
+        .monitor-updated {
+          font-size: 0.72rem;
+          color: var(--text-subtle);
         }
 
         .grafana-links a {
@@ -1632,6 +1879,7 @@ const DashboardPanels = () => {
           color: #6366f1;
           text-decoration: none;
           transition: color 0.2s;
+          margin-left: auto;
         }
 
         .grafana-links a:hover {
@@ -1665,6 +1913,10 @@ const DashboardPanels = () => {
 
           .visitors-side {
             min-height: auto;
+          }
+
+          .monitor-grid {
+            grid-template-columns: repeat(2, 1fr);
           }
         }
 
@@ -1735,6 +1987,14 @@ const DashboardPanels = () => {
           .change {
             grid-area: change;
             justify-self: end;
+          }
+
+          .monitor-summary {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .monitor-grid {
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
