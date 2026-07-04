@@ -33,11 +33,13 @@ let _kbCache = { rows: null, ts: 0 };
 const OWNER_PATTERNS = [
   /\byuqi\b/i,
   /\bguo\b/i,
+  /郭育奇/,
   /\byour\s+(project|portfolio|resume|cv|skill|experience|education|work|intern|blog|tech\s*stack)/i,
   /\b(tell\s+me\s+about\s+you|who\s+are\s+you|introduce\s+yourself)\b/i,
   /\b(portfolio|作品集|简历|履历)\b/i,
   /\b(talknest|gift\s*galaxy|polyglotbot|curastone)\b/i,
   /\b(你的|你做过|你会|你的经[历验]|你学)\b/,
+  /(介绍|关于|自我介绍|个人).{0,4}(你|自己|本人)/,
 ];
 
 function classifyQuestion(question) {
@@ -319,8 +321,8 @@ export default async function handler(req, res) {
       sseWrite(res, { stage: "answer_delta", payload: { delta: finalText } });
     }
 
-    // --- 发送 sources_found 帧：Gemini 联网来源卡片 ---
-    if (groundingSources.length > 0) {
+    // --- 发送 sources_found 帧：Gemini 联网来源卡片 (仅 GENERAL 模式) ---
+    if (groundingSources.length > 0 && scopeMode !== "OWNER_ONLY") {
       const seen = new Set();
       const dedupedSources = [];
       for (const s of groundingSources) {
