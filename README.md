@@ -30,14 +30,24 @@ flowchart LR
             MCP["🧰 MCP Gateway\ntyped tool catalog · risk gating\nidempotency · audit log"]
             KNOWLEDGE["🔎 Knowledge Service\nhybrid BM25+kNN · RRF merge\nOpenAI embed · /internal/v1/knowledge/search"]
             LLM["✨ LLM Providers\nGemini 2.5 Flash/Pro (safety + gen)\nOpenAI text-embedding-3-small"]
-            AI_EVENTS@{ shape: cyl, label: "📡 OpenSearch Event Store\nai-agent-runs · ai-answers\nai-safety · ai-retrieval\nai-model-calls" }
-            OS_KB@{ shape: cyl, label: "🔎 OpenSearch KB\nportfolio-knowledge-*\nBM25 + kNN chunks" }
+            OS_KB@{ shape: cyl, label: "🔎 OpenSearch KB · Aiven\nportfolio-knowledge-*\nBM25 + kNN chunks" }
+
+            %% ---- Event-driven observability path ----
+            OUTBOX_DB@{ shape: cyl, label: "🐘 Supabase Postgres\nagent_event_outbox\nstatus: pending · sent · failed · dead_letter\nnext_retry_at (exponential backoff)" }
+            OUTBOX_PUB["📤 Outbox Publisher\n@Scheduled every 5s\nclaim batch · POST OpenSearch bulk\nretry with backoff · dead_letter after N"]
+            AI_EVENTS@{ shape: cyl, label: "📡 OpenSearch Event Store · Aiven\nai-agent-runs-* · ai-answers-*\nai-safety-* · ai-retrieval-*\nai-model-calls-*" }
+            KIBANA["📊 OpenSearch Dashboards (Kibana)\nDiscover · filter by runId\nlatency · zeroHit · verdicts"]
 
             AGENT <--> MCP
             AGENT --> KNOWLEDGE
+            KNOWLEDGE --> OS_KB
             KNOWLEDGE -.-> LLM
             AGENT -.-> LLM
-            AGENT -. "event outbox" .-> AI_EVENTS
+
+            AGENT -->|"emit PlatformEvent<br/>(6 types per run)"| OUTBOX_DB
+            OUTBOX_DB --> OUTBOX_PUB
+            OUTBOX_PUB -->|bulk index HTTPS| AI_EVENTS
+            AI_EVENTS --> KIBANA
         end
 
         %% ================= Content Platform =================
@@ -163,8 +173,8 @@ flowchart LR
     classDef external fill:#f9fafb,stroke:#6b7280,stroke-width:1.1px,color:#111827
 
     class UI,AUTH,API_PROXY frontend
-    class AGENT,MCP,KNOWLEDGE,ADMIN_API,SEARCH_INDEXER,RAG_INDEXER,SUB_API,EMAIL_WORKER,DELIVERY_TRACKER,ANALYTICS_CONSUMER,SESSION_AGG,ROLLUP_JOB,VISITS_API,ALERTS service
-    class CONTENT_DB,RAG_DB,NOTIF_DB,ANALYTICS_DB,OPENSEARCH,OS_KB,AI_EVENTS database
+    class AGENT,MCP,KNOWLEDGE,OUTBOX_PUB,KIBANA,ADMIN_API,SEARCH_INDEXER,RAG_INDEXER,SUB_API,EMAIL_WORKER,DELIVERY_TRACKER,ANALYTICS_CONSUMER,SESSION_AGG,ROLLUP_JOB,VISITS_API,ALERTS service
+    class CONTENT_DB,RAG_DB,NOTIF_DB,ANALYTICS_DB,OPENSEARCH,OS_KB,AI_EVENTS,OUTBOX_DB database
     class CONTENT_TOPIC,DISPATCH_TOPIC,RAW_TOPIC,DLQ kafka
     class SESSION_CACHE,DEDUP_CACHE cache
     class LLM,EMAIL_PROVIDER external
