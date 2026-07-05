@@ -137,10 +137,12 @@ export default async function handler(req, res) {
     const jobs = Object.keys(SERVICE_LABELS);
     const services = jobs.map((job) => {
       const isUp = upMap[job] === 1;
+      const noMetrics = upMap[job] == null;
       return {
         job,
         name: SERVICE_LABELS[job] || job,
         up: isUp,
+        noMetrics,
         heapPct: heapMap[job] != null ? Math.round(heapMap[job] * 10) / 10 : null,
         uptimeSeconds: uptimeMap[job] != null ? Math.round(uptimeMap[job]) : null,
         threads: threadsMap[job] != null ? Math.round(threadsMap[job]) : null,
@@ -150,10 +152,11 @@ export default async function handler(req, res) {
     });
 
     const upCount = services.filter((s) => s.up).length;
+    const idleCount = services.filter((s) => s.noMetrics).length;
     const totalReq = services.reduce((sum, s) => sum + (s.reqPerSec || 0), 0);
 
     // Aggregate gauges (instant) + time-series (range) for a Grafana-like view.
-    const [heapGauge, nonHeapGauge, cpuGauge, heapSeries, reqSeries, threadSeries] =
+    const [heapGauge, nonHeapGauge, cpuGauge, sysCpuGauge, heapSeries, reqSeries, threadSeries] =
       await Promise.all([
         promQuery(
           `sum(jvm_memory_used_bytes{area="heap"})/sum(jvm_memory_max_bytes{area="heap"})*100`,
@@ -164,6 +167,7 @@ export default async function handler(req, res) {
           token
         ),
         promQuery(`avg(process_cpu_usage)*100`, token),
+        promQuery(`avg(system_cpu_usage)*100`, token),
         promRange(
           `sum(jvm_memory_used_bytes{area="heap"})/sum(jvm_memory_max_bytes{area="heap"})*100`,
           token
@@ -183,14 +187,15 @@ export default async function handler(req, res) {
       summary: {
         total: services.length,
         up: upCount,
-        down: services.length - upCount,
+        idle: idleCount,
+        down: services.length - upCount - idleCount,
         requestsPerSec: Math.round(totalReq * 100) / 100,
       },
       gauges: {
         heapPct: firstVal(heapGauge),
         nonHeapPct: firstVal(nonHeapGauge),
         cpuPct: (() => {
-          const v = firstVal(cpuGauge);
+          const v = firstVal(cpuGauge) ?? firstVal(sysCpuGauge);
           return v == null || v < 0 ? null : v;
         })(),
       },

@@ -1048,11 +1048,11 @@ const DashboardPanels = () => {
           {/* Per-service grid */}
           <div className="monitor-grid">
             {(metrics?.services || []).map((svc) => (
-              <div className={`monitor-service ${svc.up ? "is-up" : "is-down"}`} key={svc.job}>
+              <div className={`monitor-service ${svc.up ? "is-up" : svc.noMetrics ? "is-idle" : "is-down"}`} key={svc.job}>
                 <div className="monitor-service-head">
-                  <span className={`status-dot ${svc.up ? "up" : "down"}`} aria-hidden="true" />
+                  <span className={`status-dot ${svc.up ? "up" : svc.noMetrics ? "idle" : "down"}`} aria-hidden="true" />
                   <span className="monitor-service-name">{svc.name}</span>
-                  <span className="monitor-service-status">{svc.up ? "UP" : "DOWN"}</span>
+                  <span className="monitor-service-status">{svc.up ? "UP" : svc.noMetrics ? "IDLE" : "DOWN"}</span>
                 </div>
                 {svc.up ? (
                   <div className="monitor-service-metrics">
@@ -1076,7 +1076,7 @@ const DashboardPanels = () => {
                   </div>
                 ) : (
                   <div className="monitor-service-metrics dim">
-                    <span className="msm-idle">Scaled to zero</span>
+                    <span className="msm-idle">{svc.noMetrics ? "No metrics (Cloud Run idle)" : "Scaled to zero"}</span>
                   </div>
                 )}
               </div>
@@ -1970,6 +1970,10 @@ const DashboardPanels = () => {
           opacity: 0.72;
         }
 
+        .monitor-service.is-idle {
+          opacity: 0.8;
+        }
+
         .monitor-service.skeleton {
           background: linear-gradient(
             90deg,
@@ -2007,6 +2011,11 @@ const DashboardPanels = () => {
 
         .status-dot.down {
           background: #9ca3af;
+        }
+
+        .status-dot.idle {
+          background: #f59e0b;
+          box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
         }
 
         .monitor-service-name {
