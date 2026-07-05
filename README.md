@@ -26,14 +26,18 @@ flowchart LR
 
         %% ================= AI Platform =================
         subgraph AI_SYS["🧠 AI PLATFORM · portfolio-ai-platform"]
-            AGENT["🤖 Agent Service\nintent classify · entity resolve\nRBAC gating · SSE /api/chat"]
+            AGENT["🤖 Agent Service\nsafety → retrieval → generation\nintent classify · RBAC · SSE /api/chat"]
             MCP["🧰 MCP Gateway\ntyped tool catalog · risk gating\nidempotency · audit log"]
-            RAG_RETRIEVER["🔎 RAG Retrieval\nsemantic search · kb_documents\n/api/rag/answer/stream"]
-            LLM["✨ LLM Providers\nGemini 2.5 Flash · OpenAI gpt-4o-mini\n15s timeout · model escalation"]
+            KNOWLEDGE["🔎 Knowledge Service\nhybrid BM25+kNN · RRF merge\nOpenAI embed · /internal/v1/knowledge/search"]
+            LLM["✨ LLM Providers\nGemini 2.5 Flash/Pro (safety + gen)\nOpenAI text-embedding-3-small"]
+            AI_EVENTS@{ shape: cyl, label: "📡 OpenSearch Event Store\nai-agent-runs · ai-answers\nai-safety · ai-retrieval\nai-model-calls" }
+            OS_KB@{ shape: cyl, label: "🔎 OpenSearch KB\nportfolio-knowledge-*\nBM25 + kNN chunks" }
 
             AGENT <--> MCP
-            AGENT --> RAG_RETRIEVER
+            AGENT --> KNOWLEDGE
+            KNOWLEDGE -.-> LLM
             AGENT -.-> LLM
+            AGENT -. "event outbox" .-> AI_EVENTS
         end
 
         %% ================= Content Platform =================
@@ -133,9 +137,6 @@ flowchart LR
         MCP -->|admin.* tools| ADMIN_API
         MCP -->|notification.* tools| SUB_API
 
-        RAG_RETRIEVER --> RAG_DB
-        RAG_RETRIEVER -.->|answer synthesis| LLM
-
         SEARCH_INDEXER -.->|Gemini doc2query| LLM
         RAG_INDEXER -.->|OpenAI embeddings| LLM
 
@@ -150,7 +151,7 @@ flowchart LR
     API_PROXY -->|/api/analytics /visits/*| VISITS_API
     API_PROXY -->|rate limit| SESSION_CACHE
     API_PROXY -->|/api/search| OPENSEARCH
-    API_PROXY -->|/api/rag/answer/stream| RAG_RETRIEVER
+    API_PROXY -->|/api/rag/answer/stream (serverless)\nGemini + pgvector direct| RAG_DB
     API_PROXY -.->|Kafka down fallback| ANALYTICS_DB
 
     %% ================= Styles =================
@@ -162,8 +163,8 @@ flowchart LR
     classDef external fill:#f9fafb,stroke:#6b7280,stroke-width:1.1px,color:#111827
 
     class UI,AUTH,API_PROXY frontend
-    class AGENT,MCP,RAG_RETRIEVER,ADMIN_API,SEARCH_INDEXER,RAG_INDEXER,SUB_API,EMAIL_WORKER,DELIVERY_TRACKER,ANALYTICS_CONSUMER,SESSION_AGG,ROLLUP_JOB,VISITS_API,ALERTS service
-    class CONTENT_DB,RAG_DB,NOTIF_DB,ANALYTICS_DB,OPENSEARCH database
+    class AGENT,MCP,KNOWLEDGE,ADMIN_API,SEARCH_INDEXER,RAG_INDEXER,SUB_API,EMAIL_WORKER,DELIVERY_TRACKER,ANALYTICS_CONSUMER,SESSION_AGG,ROLLUP_JOB,VISITS_API,ALERTS service
+    class CONTENT_DB,RAG_DB,NOTIF_DB,ANALYTICS_DB,OPENSEARCH,OS_KB,AI_EVENTS database
     class CONTENT_TOPIC,DISPATCH_TOPIC,RAW_TOPIC,DLQ kafka
     class SESSION_CACHE,DEDUP_CACHE cache
     class LLM,EMAIL_PROVIDER external
@@ -183,7 +184,7 @@ flowchart LR
 | Service                            | Repository                                                                                                | Responsibility                                                                                                |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | **Portfolio Frontend**             | [YuqiGuo105/Portfolio](https://github.com/YuqiGuo105/Portfolio)                                           | Next.js frontend, project pages, blogs, API proxy routes, chat widget, visitor globe                          |
-| **portfolio-ai-platform**          | [YuqiGuo105/portfolio-ai-platform](https://github.com/YuqiGuo105/portfolio-ai-platform)                   | Agent service, intent classification, LLM orchestration, MCP gateway, typed tools, RBAC, idempotency, audit   |
+| **portfolio-ai-platform**          | [YuqiGuo105/portfolio-ai-platform](https://github.com/YuqiGuo105/portfolio-ai-platform)                   | Agent service (safety → retrieval → generation pipeline, event observability), knowledge service (hybrid BM25+kNN, RRF, OpenAI embed), MCP gateway (typed tools, RBAC, idempotency, audit) |
 | **portfolio-admin-service**        | [YuqiGuo105/portfolio-admin-service](https://github.com/YuqiGuo105/portfolio-admin-service)               | Content CRUD, optimistic concurrency, transactional outbox, Kafka publishing, OpenSearch indexer, RAG indexer |
 | **portfolio-notification-service** | [YuqiGuo105/portfolio-notification-service](https://github.com/YuqiGuo105/portfolio-notification-service) | Subscription APIs, notification dispatch, email sender worker, retry handling, delivery tracking              |
 | **portfolio-analytics-platform**   | [YuqiGuo105/portfolio-analytics-platform](https://github.com/YuqiGuo105/portfolio-analytics-platform)     | Spring Boot Kafka batch consumer, UA/IP/geo enrichment, Valkey dedup, pre-aggregated 5m + 1d rollups, public visits API, alerts service |
