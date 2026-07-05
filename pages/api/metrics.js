@@ -24,6 +24,13 @@ const SERVICE_LABELS = {
   "analytics-alerts-service": "Analytics Alerts",
 };
 
+// Event-driven consumers that scale to zero between Kafka messages.
+// When up=0 these are idle, not down.
+const EVENT_DRIVEN_JOBS = new Set([
+  "portfolio-search-indexer",
+  "portfolio-rag-indexer",
+]);
+
 let cache = { payload: null, fetchedAtMs: 0 };
 
 async function promQuery(query, token) {
@@ -137,7 +144,8 @@ export default async function handler(req, res) {
     const jobs = Object.keys(SERVICE_LABELS);
     const services = jobs.map((job) => {
       const isUp = upMap[job] === 1;
-      const noMetrics = upMap[job] == null;
+      // Event-driven consumers: up=0 or missing means idle (scaled to zero), not broken
+      const noMetrics = upMap[job] == null || (!isUp && EVENT_DRIVEN_JOBS.has(job));
       return {
         job,
         name: SERVICE_LABELS[job] || job,
@@ -156,7 +164,7 @@ export default async function handler(req, res) {
     const totalReq = services.reduce((sum, s) => sum + (s.reqPerSec || 0), 0);
 
     // Aggregate gauges (instant) + time-series (range) for a Grafana-like view.
-    const [heapGauge, nonHeapGauge, cpuGauge, sysCpuGauge, heapSeries, reqSeries, threadSeries] =
+    const [heapGauge, nonHeapGauge, cpuGauge, sysCpuGauge, loadAvgGauge, heapSeries, reqSeries, threadSeries] =
       await Promise.all([
         promQuery(
           `sum(jvm_memory_used_bytes{area="heap"})/sum(jvm_memory_max_bytes{area="heap"})*100`,
@@ -168,6 +176,7 @@ export default async function handler(req, res) {
         ),
         promQuery(`avg(process_cpu_usage)*100`, token),
         promQuery(`avg(system_cpu_usage)*100`, token),
+        promQuery(`avg(system_load_average_1m) / avg(system_cpu_count) * 100`, token),
         promRange(
           `sum(jvm_memory_used_bytes{area="heap"})/sum(jvm_memory_max_bytes{area="heap"})*100`,
           token
@@ -195,7 +204,7 @@ export default async function handler(req, res) {
         heapPct: firstVal(heapGauge),
         nonHeapPct: firstVal(nonHeapGauge),
         cpuPct: (() => {
-          const v = firstVal(cpuGauge) ?? firstVal(sysCpuGauge);
+          const v = firstVal(cpuGauge) ?? firstVal(sysCpuGauge) ?? firstVal(loadAvgGauge);
           return v == null || v < 0 ? null : v;
         })(),
       },
