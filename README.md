@@ -33,8 +33,10 @@ flowchart LR
             OS_KB@{ shape: cyl, label: "🔎 OpenSearch KB · Aiven\nportfolio-knowledge-*\nBM25 + kNN chunks" }
 
             %% ---- Event-driven observability path ----
-            OUTBOX_DB@{ shape: cyl, label: "🐘 Supabase Postgres\nagent_event_outbox\nstatus: pending · sent · failed · dead_letter\nnext_retry_at (exponential backoff)" }
-            OUTBOX_PUB["📤 Outbox Publisher\n@Scheduled every 5s\nclaim batch · POST OpenSearch bulk\nretry with backoff · dead_letter after N"]
+            AI_TOPIC@{ shape: das, label: "🟣 Kafka · Aiven\nai.agent.events.v1\nkey = runId · 6 event types\nsafety · retrieval · model_call\nanswer · agent_run.*" }
+            RECORDS_CONSUMER["📥 Records Consumer\n@KafkaListener · manual ack\npersist immutable audit row"]
+            RECORDS_DB@{ shape: cyl, label: "🐘 Supabase Postgres\nai_event_records\ndurable audit · replay source\nrunId · eventType · payload jsonb" }
+            OS_CONSUMER["📥 OpenSearch Consumer\n@KafkaListener · bulk index\nroute by eventType → index family"]
             AI_EVENTS@{ shape: cyl, label: "📡 OpenSearch Event Store · Aiven\nai-agent-runs-* · ai-answers-*\nai-safety-* · ai-retrieval-*\nai-model-calls-*" }
             KIBANA["📊 OpenSearch Dashboards (Kibana)\nDiscover · filter by runId\nlatency · zeroHit · verdicts"]
 
@@ -44,10 +46,13 @@ flowchart LR
             KNOWLEDGE -.-> LLM
             AGENT -.-> LLM
 
-            AGENT -->|"emit PlatformEvent<br/>(6 types per run)"| OUTBOX_DB
-            OUTBOX_DB --> OUTBOX_PUB
-            OUTBOX_PUB -->|bulk index HTTPS| AI_EVENTS
+            AGENT -->|"emit PlatformEvent<br/>(6 types per run)"| AI_TOPIC
+            AI_TOPIC -->|consume| RECORDS_CONSUMER
+            RECORDS_CONSUMER --> RECORDS_DB
+            AI_TOPIC -->|consume| OS_CONSUMER
+            OS_CONSUMER -->|bulk index HTTPS| AI_EVENTS
             AI_EVENTS --> KIBANA
+            RECORDS_DB -.->|replay to OpenSearch<br/>on schema/index rebuild| OS_CONSUMER
         end
 
         %% ================= Content Platform =================
@@ -173,9 +178,9 @@ flowchart LR
     classDef external fill:#f9fafb,stroke:#6b7280,stroke-width:1.1px,color:#111827
 
     class UI,AUTH,API_PROXY frontend
-    class AGENT,MCP,KNOWLEDGE,OUTBOX_PUB,KIBANA,ADMIN_API,SEARCH_INDEXER,RAG_INDEXER,SUB_API,EMAIL_WORKER,DELIVERY_TRACKER,ANALYTICS_CONSUMER,SESSION_AGG,ROLLUP_JOB,VISITS_API,ALERTS service
-    class CONTENT_DB,RAG_DB,NOTIF_DB,ANALYTICS_DB,OPENSEARCH,OS_KB,AI_EVENTS,OUTBOX_DB database
-    class CONTENT_TOPIC,DISPATCH_TOPIC,RAW_TOPIC,DLQ kafka
+    class AGENT,MCP,KNOWLEDGE,RECORDS_CONSUMER,OS_CONSUMER,KIBANA,ADMIN_API,SEARCH_INDEXER,RAG_INDEXER,SUB_API,EMAIL_WORKER,DELIVERY_TRACKER,ANALYTICS_CONSUMER,SESSION_AGG,ROLLUP_JOB,VISITS_API,ALERTS service
+    class CONTENT_DB,RAG_DB,NOTIF_DB,ANALYTICS_DB,OPENSEARCH,OS_KB,AI_EVENTS,RECORDS_DB database
+    class CONTENT_TOPIC,DISPATCH_TOPIC,RAW_TOPIC,DLQ,AI_TOPIC kafka
     class SESSION_CACHE,DEDUP_CACHE cache
     class LLM,EMAIL_PROVIDER external
 
