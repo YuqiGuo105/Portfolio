@@ -151,7 +151,7 @@ flowchart LR
     API_PROXY -->|/api/analytics /visits/*| VISITS_API
     API_PROXY -->|rate limit| SESSION_CACHE
     API_PROXY -->|/api/search| OPENSEARCH
-    API_PROXY -->|/api/rag/answer/stream (serverless)\nGemini + pgvector direct| RAG_DB
+    API_PROXY -->|/api/rag/answer/stream · Gemini + pgvector| RAG_DB
     API_PROXY -.->|Kafka down fallback| ANALYTICS_DB
 
     %% ================= Styles =================
