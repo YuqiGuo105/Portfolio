@@ -199,6 +199,48 @@
       "riskLevel": "WRITE",
       "requiresConfirmation": true,
       "requiredRole": null
+    },
+    {
+      "name": "analytics.get_visitor_summary",
+      "domain": "ANALYTICS",
+      "description": "OWNER: Get aggregate site visitor metrics — total events, page views, clicks, top countries, top devices. Use for questions like '最近的访客', 'recent visitors', 'site traffic', 'how many people visited', '访客统计', '流量', '访问量'. The result is aggregate-only (no individual visitor data). Default window is 7 days.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer",
+            "description": "Number of days to look back. Minimum 7 for privacy. Default 7. Use 30 for 'last month', 7 for 'recent' / 'last week'.",
+            "minimum": 7,
+            "maximum": 90,
+            "default": 7
+          }
+        },
+        "required": []
+      },
+      "riskLevel": "READ_ONLY",
+      "requiresConfirmation": false,
+      "requiredRole": "ADMIN"
+    },
+    {
+      "name": "analytics.get_top_pages",
+      "domain": "ANALYTICS",
+      "description": "OWNER: Get top pages by aggregate visit count. Use when the user asks about 'top pages', 'most visited pages', 'popular content', '热门页面', '访问最多的页面'.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer",
+            "description": "Number of days to look back. Minimum 7. Default 7.",
+            "minimum": 7,
+            "maximum": 90,
+            "default": 7
+          }
+        },
+        "required": []
+      },
+      "riskLevel": "READ_ONLY",
+      "requiresConfirmation": false,
+      "requiredRole": "ADMIN"
     }
   ]
 }

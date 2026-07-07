@@ -3580,6 +3580,87 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     }
   }
 
+  /**
+   * Inline handler for analytics.get_visitor_summary / analytics.get_top_pages.
+   *
+   * Fetches the public analytics proxy, then PASSES THE RAW DATA + original
+   * question through the existing RAG/LLM stream so the model can summarise
+   * it in whatever language the user asked in — no hardcoded strings.
+   *
+   * Returns true when handled (skip RAG); throws AbortError if stopped.
+   */
+  const handleAnalyticsTool = async ({
+    toolName, args, assistantId,
+    originalQuestion, onFinal, requestMode, currentSessionId, pageContext, userEmail,
+  }) => {
+    const days = Math.max(7, parseInt(args?.days || "7") || 7)
+
+    const TOOL_GROUP = "tool_analytics"
+    setStage(assistantId, "tool_call", {
+      message: "Tool call",
+      payload: { toolName, days },
+      groupKey: TOOL_GROUP,
+      final: false,
+    })
+
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
+
+    let data
+    try {
+      const res = await fetch(`/api/analytics/visits/summary?days=${days}`, {
+        method: "GET",
+        signal: ctrl.signal,
+      })
+      data = await res.json().catch(() => ({}))
+
+      setStage(assistantId, "tool_call", {
+        message: "Tool call",
+        payload: { toolName, days, result: res.ok ? "ok" : `HTTP ${res.status}` },
+        groupKey: TOOL_GROUP,
+        final: true,
+      })
+
+      if (!res.ok) {
+        clearStage(assistantId)
+        finalizeAssistant(assistantId,
+          "⚠️ Unable to fetch analytics data right now. Try again in a moment.")
+        return true
+      }
+    } catch (err) {
+      if (err?.name === "AbortError") throw err
+      clearStage(assistantId)
+      finalizeAssistant(assistantId, "⚠️ Analytics service unreachable.")
+      return true
+    }
+
+    // Hand the raw data + original question to the LLM stream so it formats
+    // the response in the user's own language (no hardcoded labels).
+    const augmented = [
+      originalQuestion,
+      ``,
+      `[Live site analytics — last ${days} days]:`,
+      "```json",
+      JSON.stringify(data, null, 2),
+      "```",
+      ``,
+      `Summarise the key metrics above clearly and concisely. Respond in the SAME LANGUAGE as the user's question. Focus on total events, page views, clicks, and top locations if available. Do NOT repeat the raw JSON.`,
+    ].join("\n")
+
+    await startRagSSE({
+      question: augmented,
+      fileUrls: [],
+      assistantId,
+      onFinal,
+      requestMode,
+      currentSessionId,
+      pageContext,
+      userEmail,
+      conversationHistory: [],
+    })
+    return true
+  }
+
   const tryAgentIntent = async ({ question, assistantId, currentSessionId, pageContext, body, recentMessages }) => {
     let bearer = null
     try {
@@ -3972,6 +4053,23 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               return
             }
             // Defensive: validator missed required args → fall through to RAG.
+          } else if (route.targetTool?.startsWith("analytics.")) {
+            // Analytics tools are READ_ONLY and use the public analytics proxy
+            // directly — no agent service round-trip needed. The raw data is
+            // passed to the LLM stream so it formats the response in the
+            // user's language (no hardcoded strings).
+            const handled = await handleAnalyticsTool({
+              toolName: route.targetTool,
+              args: route.toolArguments,
+              assistantId,
+              originalQuestion: baseQuestion,
+              onFinal: finalizeAndPersist,
+              requestMode,
+              currentSessionId: sessionId,
+              pageContext: pageCtx,
+              userEmail: ownerEmail,
+            })
+            if (handled) return
           } else {
             // Hand the original utterance to the existing agent service for
             // actual execution. The router has already narrowed the set, so
