@@ -3094,7 +3094,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     onFinal?.(finalContent)
   }
 
-  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal, requestMode, currentSessionId, pageContext, userEmail, conversationHistory }) => {
+  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal, requestMode, currentSessionId, pageContext, userEmail, conversationHistory, pendingActionId, confirm }) => {
     const base = ragEndpointRef.current || (await resolveRagEndpoint())
     const streamUrl = ragStreamUrl(base)
 
@@ -3121,6 +3121,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       ...(Array.isArray(conversationHistory) && conversationHistory.length > 0
         ? { conversationHistory }
         : {}),
+      // Backend confirmation of a previously staged pending action.
+      ...(pendingActionId ? { pendingActionId } : {}),
+      ...(typeof confirm === "boolean" ? { confirm } : {}),
     }
 
     await postSSE(streamUrl, body, {
@@ -3149,10 +3152,24 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         if (stage === "answer_final") {
           finalized = true
           clearStage(assistantId)
-          // Backend sends { payload: { answer: "..." } }
+          // Backend sends { payload: { answer: "...", responseType, pendingActionId, targetTool } }
           const rawFinalAnswer = typeof obj.payload?.answer === "string" ? obj.payload.answer : answerBuf
           // Strip [QA] prefix markers from final answer
           const strippedQA = stripQAPrefix(rawFinalAnswer)
+
+          // Backend may return a pendingActionId when a tool needs user
+          // confirmation before executing. Stash it so the next user
+          // message ("confirm" / "cancel") can be forwarded via the same
+          // SSE endpoint with pendingActionId + confirm flags.
+          const backendPendingId = obj.payload?.pendingActionId
+          const backendResponseType = obj.payload?.responseType
+          if (backendPendingId && backendResponseType === "CONFIRMATION_REQUIRED") {
+            pendingActionRef.current = {
+              id: backendPendingId,
+              tool: obj.payload?.targetTool || "tool",
+              ts: Date.now(),
+            }
+          }
           
           // Parse and extract [KEYWORDS_EN] section (bilingual keyword explanations)
           const { cleanedText: finalAnswer, keywords: keywordsEN } = parseKeywordsEN(strippedQA)
@@ -3959,137 +3976,45 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           if (isConfirm || isCancel) {
             const pendingId = pendingActionRef.current.id
             pendingActionRef.current = null
-            const { handled } = await tryAgentIntent({
+            // Route the confirmation through the same backend SSE stream —
+            // the agent-service pipeline detects pendingActionId + confirm and
+            // hands directly to IntentOrchestrator.handle(...) without
+            // re-running the LLM route planner.
+            const historyForConfirm = messages
+              .filter((m) => m.role === "user" || m.role === "assistant")
+              .filter((m) => typeof m.content === "string" && m.content.trim() && !m.streaming)
+              .slice(-6)
+              .map((m) => ({ role: m.role, content: m.content.trim().slice(0, 800) }))
+            await startRagSSE({
               question: baseQuestion,
+              fileUrls: [],
               assistantId,
-              currentSessionId: sessionId,
-              pageContext: pageCtx,
-              body: { sessionId, pendingActionId: pendingId, confirm: isConfirm },
-            })
-            if (handled) {
-              await finalizeAndPersist("[agent envelope]")
-              return
-            }
-          } else {
-            // Unrelated message — drop the pending action and proceed normally.
-            pendingActionRef.current = null
-          }
-        }
-
-        // ── Manifest-driven routing ─────────────────────────────────────
-        // No regex. No keyword list. The intent router (Gemini structured
-        // classifier + validator) decides where the message goes based on
-        // the live MCP tool manifest. Failure mode is "fall back to KB_QA"
-        // so the user always gets an answer.
-        const recentForRouter = messages
-          .slice(-6)
-          .map((m) => ({ role: m.role, content: typeof m.content === "string" ? m.content.slice(0, 600) : "" }))
-        const route = await callIntentRouter({
-          question: baseQuestion,
-          assistantId,
-          recentMessages: recentForRouter,
-          currentSessionId: sessionId,
-        })
-
-        if (route.routeKind === "CLARIFICATION_NEEDED") {
-          const q =
-            route.clarificationQuestion ||
-            (route.missingArguments?.length
-              ? `Could you tell me ${route.missingArguments.join(", ")}? I want to call **${route.targetTool}** but those fields are missing.`
-              : "Could you give me a bit more detail?")
-          clearStage(assistantId)
-          // Typewriter-stream the clarification so it feels consistent with
-          // the RAG / agent paths (which both stream via SSE). The router
-          // returns the full string up-front, so we just chunk-feed it into
-          // the same setMessages({ content, streaming: true }) shape that
-          // answer_delta uses. Honors stop: stoppedAssistantIdsRef is
-          // checked on every tick so the Stop button cuts the typewriter
-          // mid-stream without leaking writes onto the "_Stopped._" bubble.
-          await new Promise((resolve) => {
-            // Chunk size tuned for a ChatGPT-ish feel without thrashing
-            // React state — ~6 chars every ~18ms ≈ 333 chars/sec.
-            const CHARS_PER_TICK = 6
-            const TICK_MS = 18
-            let i = 0
-            const step = () => {
-              if (stoppedAssistantIdsRef.current.has(assistantId)) {
-                resolve()
-                return
-              }
-              i = Math.min(q.length, i + CHARS_PER_TICK)
-              const partial = q.slice(0, i)
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId ? { ...m, content: partial, streaming: true } : m,
-                ),
-              )
-              if (i >= q.length) {
-                resolve()
-                return
-              }
-              setTimeout(step, TICK_MS)
-            }
-            step()
-          })
-          // finalizeAssistant flips streaming:false and writes the final
-          // content. It already no-ops if the user stopped this turn.
-          finalizeAssistant(assistantId, q)
-          await finalizeAndPersist(q)
-          return
-        }
-
-        if (route.routeKind === "MCP_TOOL") {
-          // Short-circuit: visitor-facing contact lives on the Next.js side
-          // (existing /api/contact nodemailer endpoint). Don't round-trip
-          // through Cloud Run for this — the agent-service ToolRegistry
-          // intentionally allowlists only admin/notification tools.
-          if (route.targetTool === "contact.email_owner") {
-            const sent = await handleContactEmailOwner({
-              args: route.toolArguments,
-              assistantId,
-            })
-            if (sent) {
-              await finalizeAndPersist("[contact sent]")
-              return
-            }
-            // Defensive: validator missed required args → fall through to RAG.
-          } else if (route.targetTool?.startsWith("analytics.")) {
-            // Analytics tools are READ_ONLY and use the public analytics proxy
-            // directly — no agent service round-trip needed. The raw data is
-            // passed to the LLM stream so it formats the response in the
-            // user's language (no hardcoded strings).
-            const handled = await handleAnalyticsTool({
-              toolName: route.targetTool,
-              args: route.toolArguments,
-              assistantId,
-              originalQuestion: baseQuestion,
-              onFinal: finalizeAndPersist,
               requestMode,
               currentSessionId: sessionId,
+              onFinal: finalizeAndPersist,
               pageContext: pageCtx,
               userEmail: ownerEmail,
+              conversationHistory: historyForConfirm,
+              pendingActionId: pendingId,
+              confirm: isConfirm,
             })
-            if (handled) return
-          } else {
-            // Hand the original utterance to the existing agent service for
-            // actual execution. The router has already narrowed the set, so
-            // only ~10% of messages reach the agent — its cold-start latency
-            // no longer dominates the UX.
-            const agentRes = await tryAgentIntent({
-              question: baseQuestion,
-              assistantId,
-              currentSessionId: sessionId,
-              pageContext: pageCtx,
-              recentMessages: recentForRouter,
-            })
-            if (agentRes.handled) {
-              await finalizeAndPersist("[agent envelope]")
-              return
-            }
-            // Agent unreachable / disagreed → fall through to RAG below.
+            return
           }
+          // Unrelated message — drop the pending action and proceed normally.
+          pendingActionRef.current = null
         }
-        // KB_QA + GENERAL_CHAT + any unhandled MCP_TOOL → RAG.
+
+        // ── Backend owns all routing ───────────────────────────────────
+        // No frontend classifier, no keyword gate. The agent-service's
+        // /api/rag/answer/stream endpoint runs the LLM route planner with
+        // Redis conversation memory and dispatches to MCP tools, RAG,
+        // clarification, or handoff. This block used to short-circuit the
+        // decision here; that caused analytics follow-ups to be misrouted
+        // and duplicated the routing logic across services. See:
+        //   portfolio-ai-platform/portfolio-agent-service/src/main/java/
+        //     site/yuqi/agent/generation/AgentPipelineService.java
+        //   portfolio-ai-platform/portfolio-agent-service/src/main/java/
+        //     site/yuqi/agent/generation/LlmAgentRoutePlanner.java
       }
 
       // Pass last 6 turns so RAG can resolve pronouns / follow-up questions.
