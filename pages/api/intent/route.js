@@ -22,12 +22,6 @@
  */
 import { loadManifest, manifestForLLM } from "../../../src/lib/intentManifest.js";
 import { validateRouteDecision } from "../../../src/lib/intentValidator.js";
-import { deriveConversationIdentity } from "../../../src/lib/conversationIdentity.js";
-import {
-  appendConversationTurn,
-  contextForPlanner,
-  loadConversationContext,
-} from "../../../src/lib/conversationMemory.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_ROUTER_MODEL || "gemini-2.5-flash";
@@ -94,7 +88,6 @@ function buildSystemPrompt() {
     "  • If static portfolio knowledge is enough, choose KB_QA.",
     "  • For follow-up turns, treat conversationState, compactSummary, and recentMessages.toolContext as trusted backend memory.",
     "  • If the user asks for more detail, a breakdown, a narrower slice, or a related field from the previous live result, keep the active tool or choose the closest matching manifest tool unless the topic clearly changed.",
-    "  • ANALYTICS FOLLOW-UP (CRITICAL): If any recentMessages (especially the last assistant turn) contains site-analytics numbers — visitor counts, event counts, page views, click counts, country breakdowns, or device counts — then a short follow-up asking for more detail (cities, devices, referrers, pages, sources, a specific country, 'break it down', '具体哪些城市', '哪些设备', '设备', '城市', 'which devices', 'what devices', 'by city') MUST stay on the analytics tool (analytics.get_visitor_summary) with the appropriate dimensions argument. These are analytics follow-ups, NOT knowledge-base questions. NEVER route them to KB_QA.",
     "  • Reuse compatible optional arguments from backend memory when the current input omits them.",
     "  • For aggregate analytics/privacy-sensitive tools, request only aggregate buckets allowed by the schema. Never ask for individual visitor/person identifiers.",
     "",
@@ -231,12 +224,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "`input` is required" });
   }
 
-  const identity = deriveConversationIdentity(req, req.body || {});
-  const memoryContext = await loadConversationContext(identity.conversationId);
-  const plannerContext = contextForPlanner({
-    clientRecentMessages: recentMessages,
-    memoryContext,
-  });
+  const plannerContext = {
+    recentMessages: Array.isArray(recentMessages) ? recentMessages.slice(-6) : [],
+    conversationState: null,
+    compactSummary: null,
+  };
 
   const t0 = Date.now();
   let manifest;
@@ -296,12 +288,6 @@ export default async function handler(req, res) {
 
   const { decision, errors } = validateRouteDecision(rawDecision, manifest);
 
-  await appendConversationTurn(identity.conversationId, {
-    role: "user",
-    content: input,
-    routeKind: decision.routeKind,
-  });
-
   return res.status(200).json({
     ...decision,
     trace: {
@@ -311,15 +297,7 @@ export default async function handler(req, res) {
       validation: errors.length === 0 ? "PASSED" : "FIXED",
       validationErrors: errors,
       latencyMs: Date.now() - t0,
-      conversationId: identity.conversationId,
-      memory: {
-        source:
-          memoryContext.state || memoryContext.compactSummary || memoryContext.recentTurns?.length
-            ? "loaded"
-            : "empty",
-        recentTurns: plannerContext.recentMessages.length,
-        hasConversationState: !!plannerContext.conversationState,
-      },
+      recentTurns: plannerContext.recentMessages.length,
     },
   });
 }

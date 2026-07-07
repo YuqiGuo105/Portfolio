@@ -27,6 +27,8 @@ flowchart LR
         %% ================= AI Platform =================
         subgraph AI_SYS["🧠 AI PLATFORM · portfolio-ai-platform"]
             AGENT["🤖 Agent Service\nsafety → retrieval → generation\nintent classify · RBAC · SSE /api/chat"]
+            REDIS_MEMORY@{ shape: lin-cyl, label: "⚡ Redis Conversation Memory\n30m sliding TTL\nsummary + state + last turns" }
+            COMPACTOR["🧠 Conversation Compactor\nstructured summary · state\nretain recent turns"]
             MCP["🧰 MCP Gateway\ntyped tool catalog · risk gating\nidempotency · audit log"]
             KNOWLEDGE["🔎 Knowledge Service\nhybrid BM25+kNN · RRF merge\nOpenAI embed · /internal/v1/knowledge/search"]
             LLM["✨ LLM Providers\nGemini 2.5 Flash/Pro (safety + gen)\nOpenAI text-embedding-3-small"]
@@ -41,12 +43,16 @@ flowchart LR
             KIBANA["📊 OpenSearch Dashboards (Kibana)\nDiscover · filter by runId\nlatency · zeroHit · verdicts"]
 
             AGENT <--> MCP
+            AGENT --> REDIS_MEMORY
+            AGENT --> COMPACTOR
+            COMPACTOR --> REDIS_MEMORY
             AGENT --> KNOWLEDGE
             KNOWLEDGE --> OS_KB
             KNOWLEDGE -.-> LLM
             AGENT -.-> LLM
 
             AGENT -->|"emit PlatformEvent<br/>(6 types per run)"| AI_TOPIC
+            COMPACTOR -.->|"memory events"| AI_TOPIC
             AI_TOPIC -->|consume| RECORDS_CONSUMER
             RECORDS_CONSUMER --> RECORDS_DB
             AI_TOPIC -->|consume| OS_CONSUMER
@@ -178,10 +184,10 @@ flowchart LR
     classDef external fill:#f9fafb,stroke:#6b7280,stroke-width:1.1px,color:#111827
 
     class UI,AUTH,API_PROXY frontend
-    class AGENT,MCP,KNOWLEDGE,RECORDS_CONSUMER,OS_CONSUMER,KIBANA,ADMIN_API,SEARCH_INDEXER,RAG_INDEXER,SUB_API,EMAIL_WORKER,DELIVERY_TRACKER,ANALYTICS_CONSUMER,SESSION_AGG,ROLLUP_JOB,VISITS_API,ALERTS service
+    class AGENT,COMPACTOR,MCP,KNOWLEDGE,RECORDS_CONSUMER,OS_CONSUMER,KIBANA,ADMIN_API,SEARCH_INDEXER,RAG_INDEXER,SUB_API,EMAIL_WORKER,DELIVERY_TRACKER,ANALYTICS_CONSUMER,SESSION_AGG,ROLLUP_JOB,VISITS_API,ALERTS service
     class CONTENT_DB,RAG_DB,NOTIF_DB,ANALYTICS_DB,OPENSEARCH,OS_KB,AI_EVENTS,RECORDS_DB database
     class CONTENT_TOPIC,DISPATCH_TOPIC,RAW_TOPIC,DLQ,AI_TOPIC kafka
-    class SESSION_CACHE,DEDUP_CACHE cache
+    class SESSION_CACHE,REDIS_MEMORY,DEDUP_CACHE cache
     class LLM,EMAIL_PROVIDER external
 
     style FRONTEND fill:#ecfeff,stroke:#0891b2,stroke-width:2px,color:#164e63
