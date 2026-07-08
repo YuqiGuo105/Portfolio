@@ -23,33 +23,23 @@ Modal.setAppElement('#__next');
 const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
   ssr: false,
 });
-// Slick slider settings
-const settings = {
-  dots: true,            // Dots for navigation
-  infinite: true,        // Infinite loop sliding
-  speed: 500,            // Transition speed
-  slidesToShow: 3,       // Number of slides to show at a time
-  slidesToScroll: 1,     // Number of slides to scroll on click
-  responsive: [
-    {
-      breakpoint: 1024,
-      settings: {
-        slidesToShow: 2,
-        slidesToScroll: 1,
-        infinite: true,
-        dots: true,
-      },
-    },
-    {
-      breakpoint: 600,
-      settings: {
-        slidesToShow: 1,
-        slidesToScroll: 1,
-      },
-    },
-  ],
-};
 
+const BlogSliderArrow = ({ className = "", onClick, direction }) => {
+  const isPrev = direction === "prev";
+  const disabled = className.includes("slick-disabled");
+
+  return (
+    <button
+      type="button"
+      className={`${className} blog-slider-arrow blog-slider-arrow-${direction}`}
+      aria-label={isPrev ? "Previous blog" : "Next blog"}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <span aria-hidden="true">{isPrev ? "‹" : "›"}</span>
+    </button>
+  );
+};
 
 const Index = () => {
   const [blogs, setBlogs] = useState([]);
@@ -72,6 +62,10 @@ const Index = () => {
   const [githubCommits, setGithubCommits] = useState("600+");
   const [githubModalOpen, setGithubModalOpen] = useState(false);
   const [isLightSkin, setIsLightSkin] = useState(false);
+  const [blogTab, setBlogTab] = useState("tech");
+  const [techSlide, setTechSlide] = useState(0);
+  const blogSliderRef = useRef(null);
+  const blogSliderSettingsRef = useRef(null);
 
   // Detect light/dark skin from body class
   useEffect(() => {
@@ -263,16 +257,25 @@ const Index = () => {
     }
   };
 
+  if (!blogSliderSettingsRef.current) {
+    blogSliderSettingsRef.current = {
+      arrows: true,
+      dots: false,
+      infinite: true,
+      speed: 500,
+      slidesToShow: 1,
+      slidesToScroll: 1,
+      autoplay: false,
+      prevArrow: <BlogSliderArrow direction="prev" />,
+      nextArrow: <BlogSliderArrow direction="next" />,
+      afterChange: setTechSlide,
+    };
+  }
+
+  const settings = blogSliderSettingsRef.current;
+
   if (error) return <div>Error loading blogs: {error}</div>;
   if (!blogs.length) return <div>Loading...</div>;
-
-  const settings = {
-    infinite: true,
-    speed: 500,
-    slidesToShow: 1,
-    slidesToScroll: 1,
-    autoplay: true,
-  };
   const openStoryModal = () => {
     if (!stories.length) {
       setGithubModalOpen(true);
@@ -1110,147 +1113,176 @@ const Index = () => {
         </section>
 
         <section id="Blog-section" className="section section-parallax section-parallax-5">
-          <div className="container space-y-16">
-            {/* My Technical Blogs */}
+          <div className="container space-y-8">
+            {/* My Blogs — Tech / Life toggle */}
             <div className="m-titles">
-              <h2 className="m-title" id="tour-techblogs">My Technical Blogs</h2>
+              <h2 className="m-title">My Blogs</h2>
             </div>
 
-            <div className="blog-items">
-              <Slider {...settings}>
-                {blogs.map((blog) => (
-                  <div key={blog.id} className="archive-item">
-                    <div className="image">
-                      <Link href={`/blog-single/${blog.id}`} legacyBehavior>
-                        <a onClick={() => recordClick("blog-item", `/blog-single/${blog.id}`)}>
-                          <img src={blog.image_url} alt={blog.title} />
-                        </a>
-                      </Link>
-                    </div>
+            <div className="blog-switch" role="tablist" aria-label="Blog categories">
+              <button
+                type="button"
+                role="tab"
+                id="tour-techblogs"
+                aria-selected={blogTab === "tech"}
+                className={`blog-switch-btn ${blogTab === "tech" ? "is-active" : ""}`}
+                onClick={() => setBlogTab("tech")}
+              >
+                Tech Blogs
+              </button>
+              <span className="blog-switch-sep" aria-hidden="true">/</span>
+              <button
+                type="button"
+                role="tab"
+                id="tour-life"
+                aria-selected={blogTab === "life"}
+                className={`blog-switch-btn ${blogTab === "life" ? "is-active" : ""}`}
+                onClick={() => setBlogTab("life")}
+              >
+                Life Blogs
+              </button>
+            </div>
 
-                    <div className="desc">
-                      <div className="category">
-                        {blog.category}
-                        <br />
-                        <span>{blog.date}</span>
-                      </div>
+            {blogTab === "tech" ? (
+              <div className="blog-panel" key="tech-panel">
+                <div className="blog-items">
+                  <div className="blog-slider-shell">
+                    <Slider ref={blogSliderRef} {...settings}>
+                      {blogs.map((blog) => (
+                        <div key={blog.id} className="archive-item">
+                          <div className="image">
+                            <Link href={`/blog-single/${blog.id}`} legacyBehavior>
+                              <a onClick={() => recordClick("blog-item", `/blog-single/${blog.id}`)}>
+                                <img src={blog.image_url} alt={blog.title} />
+                              </a>
+                            </Link>
+                          </div>
 
-                      <h3 className="title">
-                        <Link href={`/blog-single/${blog.id}`} legacyBehavior>
-                          <a onClick={() => recordClick("blog-item", `/blog-single/${blog.id}`)}>
-                            {blog.title}
-                          </a>
-                        </Link>
-                      </h3>
+                          <div className="desc">
+                            <div className="category">
+                              {blog.category}
+                              <br />
+                              <span>{blog.date}</span>
+                            </div>
 
-                      <div className="text">
-                        <p>{blog.description}</p>
-                        <div className="readmore">
-                          <Link href={`/blog-single/${blog.id}`} legacyBehavior>
-                            <a className="lnk">Read more</a>
-                          </Link>
+                            <h3 className="title">
+                              <Link href={`/blog-single/${blog.id}`} legacyBehavior>
+                                <a onClick={() => recordClick("blog-item", `/blog-single/${blog.id}`)}>
+                                  {blog.title}
+                                </a>
+                              </Link>
+                            </h3>
+
+                            <div className="text">
+                              <p>{blog.description}</p>
+                              <div className="readmore">
+                                <Link href={`/blog-single/${blog.id}`} legacyBehavior>
+                                  <a className="lnk">Read more</a>
+                                </Link>
+                              </div>
+                            </div>
+                          </div>
                         </div>
+                      ))}
+                    </Slider>
+                    {blogs.length > 1 && (
+                      <div className="blog-slider-pagination" aria-label="Blog carousel pagination">
+                        {blogs.map((blog, index) => (
+                          <button
+                            key={blog.id || index}
+                            type="button"
+                            className={`blog-slider-page ${index === techSlide ? "is-active" : ""}`}
+                            aria-label={`Go to blog ${index + 1}`}
+                            aria-current={index === techSlide ? "true" : undefined}
+                            onClick={() => blogSliderRef.current?.slickGoTo(index)}
+                          >
+                            <span>{String(index + 1).padStart(2, "0")}</span>
+                          </button>
+                        ))}
                       </div>
-                    </div>
+                    )}
                   </div>
-                ))}
-              </Slider>
-            </div>
+                </div>
 
-            <div className="blog-more-link">
-              <Link href="/blogs?type=technical" legacyBehavior>
-                <a className="btn">
-                  <span>View Blogs</span>
-                </a>
-              </Link>
-            </div>
-
-            {/* Gap Between Sections */}
-            <section className="section section-parallax section-parallax-5">
-              <div className="container"></div>
-            </section>
-
-            {/* My Life */}
-            <div className="m-titles">
-              <h2 className="m-title" id="tour-life">My Vibrant Life</h2>
-            </div>
-
-            <div className="row row-custom">
-              <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3" />
-              <div className="col-xs-12 col-sm-12 col-md-9 col-lg-9 vertical-line">
-                <div className="text">
-                  <p>Study Hard. Work Smart. Build the Future!</p>
+                <div className="blog-more-link">
+                  <Link href="/blogs?type=technical" legacyBehavior>
+                    <a className="btn">
+                      <span>View Blogs</span>
+                    </a>
+                  </Link>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="blog-panel" key="life-panel">
+                <div className="blog-items grid gap-8 lg:grid-cols-3">
+                  {lifeBlogs.slice(0, 3).map((blog) => {
+                    const {
+                      id,
+                      title,
+                      image_url,
+                      category,
+                      published_at,
+                      description,
+                      require_login,
+                    } = blog;
 
-            <div className="blog-items grid gap-16 lg:grid-cols-3">
-              {lifeBlogs.slice(0, 3).map((blog) => {
-                const {
-                  id,
-                  title,
-                  image_url,
-                  category,
-                  published_at,
-                  description,
-                  require_login,
-                } = blog;
+                    const nextHref = `/life-blog/${id}`;
 
-                const nextHref = `/life-blog/${id}`;
-
-                return (
-                  <div key={id} className="archive-item">
-                    <div className="image">
-                      <Link href={nextHref} legacyBehavior>
-                        <a onClick={(e) => handleProtectedClick(e, require_login, nextHref)}>
-                          <img src={image_url} alt={title} />
-                        </a>
-                      </Link>
-                    </div>
-
-                    <div className="desc">
-                      <div className="category">
-                        {category}
-                        <br />
-                        <span>{published_at}</span>
-                      </div>
-
-                      <h3 className="title">
-                        <Link href={nextHref} legacyBehavior>
-                          <a onClick={(e) => handleProtectedClick(e, require_login, nextHref)}>
-                            {title}
-                            {require_login && " (login required)"}
-                          </a>
-                        </Link>
-                      </h3>
-
-                      <div className="text">
-                        <p>{description}</p>
-
-                        <div className="readmore">
+                    return (
+                      <div key={id} className="archive-item">
+                        <div className="image">
                           <Link href={nextHref} legacyBehavior>
-                            <a
-                              className="lnk"
-                              onClick={(e) => handleProtectedClick(e, require_login, nextHref)}
-                            >
-                              {require_login ? "Log in to read" : "Read more"}
+                            <a onClick={(e) => handleProtectedClick(e, require_login, nextHref)}>
+                              <img src={image_url} alt={title} />
                             </a>
                           </Link>
                         </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
 
-            <div className="blog-more-link">
-              <Link href="/blogs?type=life" legacyBehavior>
-                <a className="btn">
-                  <span>View Blog</span>
-                </a>
-              </Link>
-            </div>
+                        <div className="desc">
+                          <div className="category">
+                            {category}
+                            <br />
+                            <span>{published_at}</span>
+                          </div>
+
+                          <h3 className="title">
+                            <Link href={nextHref} legacyBehavior>
+                              <a onClick={(e) => handleProtectedClick(e, require_login, nextHref)}>
+                                {title}
+                                {require_login && " (login required)"}
+                              </a>
+                            </Link>
+                          </h3>
+
+                          <div className="text">
+                            <p>{description}</p>
+
+                            <div className="readmore">
+                              <Link href={nextHref} legacyBehavior>
+                                <a
+                                  className="lnk"
+                                  onClick={(e) => handleProtectedClick(e, require_login, nextHref)}
+                                >
+                                  {require_login ? "Log in to read" : "Read more"}
+                                </a>
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="blog-more-link">
+                  <Link href="/blogs?type=life" legacyBehavior>
+                    <a className="btn">
+                      <span>View Blogs</span>
+                    </a>
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Ellipsis trimming for over‑long titles */}
@@ -1265,6 +1297,366 @@ const Index = () => {
           
           {/* Border styling for blogs */}
           <style jsx global>{`
+            /* ── Tech / Life script text toggle ── */
+            #Blog-section .blog-switch {
+              display: flex;
+              align-items: flex-start;
+              justify-content: flex-start;
+              gap: 20px;
+              flex-wrap: wrap;
+              min-height: 84px;
+              margin-bottom: 24px;
+            }
+
+            #Blog-section .blog-switch-sep {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              height: 56px;
+              font-family: "Sorts Mill Goudy", "Cormorant Garamond",
+                "Bodoni 72", "Didot", Georgia, serif;
+              font-size: 38px;
+              font-style: italic;
+              font-weight: 200;
+              line-height: 1;
+              color: rgba(88, 104, 112, 0.24);
+              transform: translateY(13px);
+              user-select: none;
+            }
+
+            #Blog-section .blog-switch-btn {
+              appearance: none;
+              border: 0;
+              background: transparent;
+              cursor: pointer;
+              margin: 0;
+              padding: 0;
+
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              height: 56px;
+              line-height: 1;
+
+              --switch-y: 0px;
+              position: relative;
+              font-family: "Sorts Mill Goudy", "Cormorant Garamond",
+                "Bodoni 72", "Didot", Georgia, serif;
+              font-size: 50px;
+              font-style: italic;
+              font-weight: 600;
+              letter-spacing: 0.005em;
+              font-variant-ligatures: discretionary-ligatures;
+
+              color: rgba(92, 103, 109, 0.34);
+              transform: translateY(var(--switch-y));
+              transform-origin: left center;
+              transition:
+                color 0.25s ease,
+                opacity 0.25s ease,
+                transform 0.25s ease,
+                text-shadow 0.25s ease;
+            }
+
+            #Blog-section .blog-switch-btn:first-of-type {
+              --switch-y: -8px;
+            }
+
+            #Blog-section .blog-switch-btn:last-of-type {
+              --switch-y: 17px;
+            }
+
+            #Blog-section .blog-switch-btn:hover {
+              color: rgba(61, 91, 99, 0.58);
+              transform: translateY(calc(var(--switch-y) - 2px));
+            }
+
+            #Blog-section .blog-switch-btn.is-active {
+              color: transparent;
+              background: linear-gradient(
+                105deg,
+                #5aa9a3 0%,
+                #78b7d7 42%,
+                #d5a95d 100%
+              );
+              -webkit-background-clip: text;
+              background-clip: text;
+              -webkit-text-fill-color: transparent;
+              text-shadow: 0 12px 30px rgba(90, 169, 163, 0.14);
+            }
+
+            #Blog-section .blog-switch-btn::after {
+              content: "";
+              position: absolute;
+              left: 4px;
+              right: 4px;
+              bottom: 2px;
+              height: 3px;
+              border-radius: 999px;
+              transform: scaleX(0.55);
+              background: linear-gradient(
+                90deg,
+                rgba(90, 169, 163, 0.85),
+                rgba(120, 183, 215, 0.75),
+                rgba(213, 169, 93, 0.78)
+              );
+              opacity: 0;
+              transform-origin: left;
+              transition:
+                opacity 0.25s ease,
+                transform 0.25s ease;
+            }
+
+            #Blog-section .blog-switch-btn.is-active::after {
+              opacity: 1;
+              transform: scaleX(1);
+            }
+
+            @media (max-width: 600px) {
+              #Blog-section .blog-switch {
+                gap: 10px;
+                min-height: 72px;
+              }
+
+              #Blog-section .blog-switch-btn {
+                height: 46px;
+                font-size: 40px;
+              }
+
+              #Blog-section .blog-switch-btn:first-of-type {
+                --switch-y: -5px;
+              }
+
+              #Blog-section .blog-switch-btn:last-of-type {
+                --switch-y: 13px;
+              }
+
+              #Blog-section .blog-switch-sep {
+                height: 46px;
+                font-size: 30px;
+                transform: translateY(10px);
+              }
+            }
+
+            /* Panel fade/slide-in */
+            #Blog-section .blog-panel {
+              animation: blogPanelIn 0.4s ease both;
+            }
+
+            @keyframes blogPanelIn {
+              from {
+                opacity: 0;
+                transform: translateY(10px);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+
+            /* Dark mode toggle */
+            body.dark-skin #Blog-section .blog-switch-sep {
+              color: rgba(255, 255, 255, 0.24);
+            }
+
+            body.dark-skin #Blog-section .blog-switch-btn {
+              color: rgba(255, 255, 255, 0.34);
+            }
+
+            body.dark-skin #Blog-section .blog-switch-btn:hover {
+              color: rgba(224, 242, 241, 0.68);
+            }
+
+            body.dark-skin #Blog-section .blog-switch-btn.is-active {
+              -webkit-text-fill-color: transparent;
+              text-shadow: 0 10px 28px rgba(120, 183, 215, 0.14);
+            }
+
+            /* Tech blog carousel controls */
+            #Blog-section .blog-panel > .blog-items {
+              position: relative;
+            }
+
+            #Blog-section .blog-slider-shell {
+              position: relative;
+            }
+
+            #Blog-section .blog-items .slick-slider {
+              position: relative;
+              padding-bottom: 0;
+            }
+
+            #Blog-section .blog-items .blog-slider-arrow {
+              position: absolute;
+              top: calc(50% - 27px);
+              z-index: 4;
+              width: 46px;
+              height: 46px;
+              border: 1px solid rgba(24, 34, 38, 0.14);
+              border-radius: 999px;
+              background: rgba(255, 255, 255, 0.72);
+              color: rgba(24, 34, 38, 0.72);
+              box-shadow: 0 14px 38px rgba(24, 34, 38, 0.12);
+              backdrop-filter: blur(10px);
+              cursor: pointer;
+              display: inline-flex !important;
+              align-items: center;
+              justify-content: center;
+              transition:
+                background 0.2s ease,
+                border-color 0.2s ease,
+                color 0.2s ease,
+                transform 0.2s ease,
+                box-shadow 0.2s ease;
+            }
+
+            #Blog-section .blog-items .blog-slider-arrow::before {
+              content: none;
+            }
+
+            #Blog-section .blog-items .blog-slider-arrow span {
+              display: block;
+              font-family: Georgia, serif;
+              font-size: 34px;
+              font-weight: 300;
+              line-height: 1;
+              transform: translateY(-2px);
+            }
+
+            #Blog-section .blog-items .blog-slider-arrow-prev {
+              left: 18px;
+            }
+
+            #Blog-section .blog-items .blog-slider-arrow-next {
+              right: 18px;
+            }
+
+            #Blog-section .blog-items .blog-slider-arrow:hover {
+              background: rgba(255, 255, 255, 0.9);
+              border-color: rgba(90, 169, 163, 0.38);
+              color: rgba(46, 95, 99, 0.9);
+              box-shadow: 0 18px 46px rgba(90, 169, 163, 0.18);
+            }
+
+            #Blog-section .blog-items .blog-slider-arrow-prev:hover {
+              transform: translateX(-2px);
+            }
+
+            #Blog-section .blog-items .blog-slider-arrow-next:hover {
+              transform: translateX(2px);
+            }
+
+            #Blog-section .blog-slider-pagination {
+              position: absolute;
+              left: 50%;
+              bottom: 30px;
+              z-index: 8;
+              display: flex !important;
+              align-items: center;
+              justify-content: center;
+              gap: 10px;
+              transform: translateX(-50%);
+              pointer-events: auto;
+            }
+
+            #Blog-section .blog-slider-page {
+              width: 9px;
+              height: 9px;
+              padding: 0;
+              border: 0;
+              border-radius: 999px;
+              background: rgba(65, 86, 88, 0.38);
+              color: transparent;
+              font-size: 0;
+              line-height: 0;
+              opacity: 0.72;
+              box-shadow: 0 1px 5px rgba(24, 34, 38, 0.08);
+              cursor: pointer;
+              transition:
+                background 0.2s ease,
+                box-shadow 0.2s ease,
+                opacity 0.2s ease,
+                transform 0.2s ease;
+            }
+
+            #Blog-section .blog-slider-page.is-active {
+              width: 18px;
+              height: 18px;
+              background: #ff7a59;
+              opacity: 1;
+              box-shadow:
+                0 0 0 4px rgba(255, 255, 255, 0.86),
+                0 8px 22px rgba(255, 122, 89, 0.34);
+              transform: translateY(-1px);
+            }
+
+            #Blog-section .blog-slider-page span {
+              display: none;
+            }
+
+            @media (max-width: 600px) {
+              #Blog-section .blog-items .slick-slider {
+                padding-bottom: 0;
+              }
+
+              #Blog-section .blog-items .blog-slider-arrow {
+                width: 38px;
+                height: 38px;
+              }
+
+              #Blog-section .blog-items .blog-slider-arrow span {
+                font-size: 28px;
+              }
+
+              #Blog-section .blog-items .blog-slider-arrow-prev {
+                left: 10px;
+              }
+
+              #Blog-section .blog-items .blog-slider-arrow-next {
+                right: 10px;
+              }
+
+              #Blog-section .blog-slider-pagination {
+                left: 50%;
+                bottom: 20px;
+                gap: 9px;
+              }
+
+              #Blog-section .blog-slider-page {
+                width: 8px;
+                height: 8px;
+              }
+
+              #Blog-section .blog-slider-page.is-active {
+                width: 15px;
+                height: 15px;
+              }
+            }
+
+            body.dark-skin #Blog-section .blog-items .blog-slider-arrow {
+              background: rgba(17, 24, 28, 0.68);
+              border-color: rgba(255, 255, 255, 0.16);
+              color: rgba(255, 255, 255, 0.76);
+              box-shadow: 0 14px 38px rgba(0, 0, 0, 0.22);
+            }
+
+            body.dark-skin #Blog-section .blog-items .blog-slider-arrow:hover {
+              background: rgba(23, 35, 39, 0.9);
+              border-color: rgba(120, 183, 215, 0.4);
+              color: rgba(224, 242, 241, 0.94);
+            }
+
+            body.dark-skin #Blog-section .blog-slider-page {
+              background: rgba(255, 255, 255, 0.38);
+            }
+
+            body.dark-skin #Blog-section .blog-slider-page.is-active {
+              background: #78d6d0;
+              box-shadow:
+                0 0 0 4px rgba(17, 24, 28, 0.78),
+                0 8px 22px rgba(120, 214, 208, 0.3);
+            }
+
             /* ── Blog card base ── */
             #Blog-section .blog-items .archive-item,
             #Blog-section .blog-items.grid .archive-item {

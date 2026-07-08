@@ -30,6 +30,10 @@ const getHoursSince = (timestamp) => {
   return Math.max(hours, 0);
 };
 
+const isAbortError = (error) =>
+  error?.name === "AbortError" ||
+  String(error?.message || "").toLowerCase().includes("aborted");
+
 const useDebouncedValue = (value, delayMs) => {
   const [debounced, setDebounced] = useState(value);
 
@@ -367,6 +371,7 @@ const DashboardPanels = () => {
         setMarketFallback(Boolean(json?.fallback));
         setMarketMeta(json?.meta ?? null);
       } catch (error) {
+        if (isAbortError(error)) return;
         console.error("Failed to load market data", error);
       } finally {
         if (mounted) setIsMarketLoading(false);
@@ -408,6 +413,7 @@ const DashboardPanels = () => {
         if (!mounted) return;
         if (json?.rate) setCurrency(json);
       } catch (error) {
+        if (isAbortError(error)) return;
         console.error("Failed to load currency data", error);
       } finally {
         if (mounted) setIsCurrencyLoading(false);
@@ -441,6 +447,7 @@ const DashboardPanels = () => {
         if (!mounted) return;
         if (json) setWeather(json);
       } catch (error) {
+        if (isAbortError(error)) return;
         console.error("Failed to load weather data", error);
       } finally {
         if (mounted) setIsWeatherLoading(false);
