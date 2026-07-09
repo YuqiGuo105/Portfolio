@@ -1206,12 +1206,11 @@ const DashboardPanels = () => {
         }
 
         .dashboard-container {
-          display: flex;
-          justify-content: center;
+          display: grid;
+          grid-template-columns: 1fr 2fr;
           gap: 1.5rem;
           margin: 0 auto;
           padding: 0 1.5rem;
-          flex-wrap: wrap;
           max-width: 1500px;
         }
 
@@ -1222,7 +1221,7 @@ const DashboardPanels = () => {
           padding: 20px;
           box-shadow: var(--card-shadow);
           display: flex;
-          width: 400px;
+          width: 100%;
           max-width: 100%;
           flex-direction: column;
           gap: 1.25rem;
@@ -1264,7 +1263,7 @@ const DashboardPanels = () => {
 
         .dashboard-card-2 {
           background: var(--card-bg);
-          width: 800px;
+          width: 100%;
           max-width: 100%;
           height: 300px;
           border: 1px solid var(--card-border);
@@ -1278,8 +1277,7 @@ const DashboardPanels = () => {
 
         .dashboard-card-2 header {
           display: flex;
-          width: 550px;
-          max-width: 100%;
+          flex: 0 0 35%;
           border-radius: 30px;
           align-items: center;
           justify-content: center;
@@ -1301,7 +1299,7 @@ const DashboardPanels = () => {
         }
 
         .dashboard-card-3 {
-          width: 800px;
+          width: 100%;
           max-width: 100%;
           height: 300px;
           background: var(--card-bg);
@@ -1310,14 +1308,13 @@ const DashboardPanels = () => {
           padding: 20px;
           box-shadow: var(--card-shadow);
           display: flex;
-          justify-content: space-between;
+          gap: 15px;
           color: var(--text-primary);
         }
 
         .dashboard-card-3 header {
           display: flex;
-          width: 303px;
-          max-width: 100%;
+          flex: 0 0 35%;
           border-radius: 30px;
           align-items: center;
           justify-content: center;
@@ -1462,15 +1459,16 @@ const DashboardPanels = () => {
           display: flex;
           flex-direction: column;
           gap: 10px;
+          flex: 1;
         }
 
         .weather-main {
           display: flex;
-          justify-content: center;
-          width: 400px;
+          justify-content: flex-start;
+          width: 100%;
           max-width: 100%;
-          gap: 1.25rem;
-          align-items: center;
+          gap: 1rem;
+          align-items: flex-start;
         }
 
         .icon-wrapper {
@@ -1545,7 +1543,7 @@ const DashboardPanels = () => {
 
         /* Visitors */
         .dashboard-card-4 {
-          flex: 1 1 100%;
+          grid-column: 1 / -1;
           width: 100%;
           max-width: 1500px;
           background: var(--card-bg);
@@ -1765,7 +1763,7 @@ const DashboardPanels = () => {
 
         /* Grafana Monitoring */
         .dashboard-card-5 {
-          flex: 1 1 100%;
+          grid-column: 1 / -1;
           width: 100%;
           max-width: 1500px;
           background: var(--card-bg);
@@ -2141,7 +2139,7 @@ const DashboardPanels = () => {
           }
 
           .dashboard-container {
-            justify-content: center;
+            grid-template-columns: 1fr;
             padding: 0 1rem;
           }
 
@@ -2178,8 +2176,7 @@ const DashboardPanels = () => {
           }
 
           .dashboard-container {
-            flex-direction: column;
-            align-items: stretch;
+            grid-template-columns: 1fr;
             gap: 1rem;
           }
 
@@ -2194,12 +2191,17 @@ const DashboardPanels = () => {
             height: 100px;
           }
 
-          .dashboard-card-2 header,
-          .dashboard-card-3 header {
+          .dashboard-card-2 header {
             width: 100%;
             height: 100px;
             max-width: 100%;
             margin-bottom: 0.75rem;
+          }
+
+          .dashboard-card-3 header {
+            width: 100%;
+            min-width: unset;
+            height: 70px;
           }
 
           .conversion-output {
