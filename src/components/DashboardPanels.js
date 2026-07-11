@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../supabase/supabaseClient";
 const RotatingGlobe = dynamic(() => import("./RotatingGlobe"), { ssr: false });
 
 /* ============================================================
@@ -43,16 +42,6 @@ const useDebouncedValue = (value, delayMs) => {
   }, [value, delayMs]);
 
   return debounced;
-};
-
-const buildLocationLabel = (r) => {
-  const city = r?.city ? String(r.city).trim() : "";
-  const region = r?.region ? String(r.region).trim() : "";
-  const country = r?.country ? String(r.country).trim() : "";
-  if (city && region) return `${city}, ${region}`;
-  if (city && country) return `${city}, ${country}`;
-  if (region && country) return `${region}, ${country}`;
-  return country || "Unknown";
 };
 
 const buildPinLabel = (r) => {
@@ -164,27 +153,6 @@ const Sparkline = ({ data, title, color = "#6366f1", unit = "", height = 90 }) =
       </svg>
     </div>
   );
-};
-
-// derive "device" from UA
-const buildDeviceLabelFromUa = (uaRaw) => {
-  const ua = String(uaRaw || "").trim();
-  if (!ua) return "Unknown";
-
-  if (/vercel-screenshot/i.test(ua)) return "Vercel Screenshot";
-  if (/googlebot/i.test(ua)) return "Googlebot";
-  if (/ahrefsbot/i.test(ua)) return "AhrefsBot";
-  if (/bytespider/i.test(ua)) return "Bytespider";
-  if (/\b(bot|spider|crawler)\b/i.test(ua)) return "Bot/Crawler";
-
-  if (/iphone/i.test(ua)) return "iPhone";
-  if (/ipad/i.test(ua)) return "iPad";
-  if (/android/i.test(ua)) return "Android";
-  if (/macintosh/i.test(ua)) return "macOS";
-  if (/windows nt/i.test(ua)) return "Windows";
-  if (/linux/i.test(ua)) return "Linux";
-
-  return "Other";
 };
 
 /* ============================================================
@@ -470,12 +438,9 @@ const DashboardPanels = () => {
               (`/api/analytics/visits/markers?window=all`). The backend
               computes the geo aggregate from `geo_time_rollups`, so we
               never SELECT raw `visitor_logs` rows from the browser.
-     PHASE 1: 30-day sample (Supabase) => top sources label list
-     PHASE 1b: counts + devices (Supabase, estimated) => small payload
+     PHASE 1: public aggregate summary => sources, counts and devices
 
-     Supabase remains the *write* destination for visitor events (see
-     `/api/track`); reads for pins now go through the backend so the
-     analytics aggregation lives in one place.
+     The browser never reads `visitor_logs`; exact rows remain private.
      ============================================================ */
   useEffect(() => {
     let mounted = true;
@@ -502,14 +467,6 @@ const DashboardPanels = () => {
       setIsVisitorsLoading(true);
 
       try {
-        const now = new Date();
-        const start30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        const startTodayLocal = new Date(now);
-        startTodayLocal.setHours(0, 0, 0, 0);
-
-        const start30Iso = start30.toISOString();
-        const startTodayIso = startTodayLocal.toISOString();
-
         // ---------------- PHASE 0 (CRITICAL): backend-aggregated pins ----------------
         // Hit the public aggregator endpoint instead of running a Supabase
         // SELECT on visitor_logs. Returns one row per geo_area_id with the
@@ -555,89 +512,25 @@ const DashboardPanels = () => {
         // yield so globe can paint pins immediately
         await yieldToBrowser();
 
-        // ---------------- PHASE 1: 30-day sample for Top sources ----------------
-        // keep light: fewer columns, smaller limit
-        const { data: sample30, error: sample30Err } = await supabase
-          .from("visitor_logs")
-          .select("latitude, longitude, country, region, city, created_at")
-          .gte("created_at", start30Iso)
-          .not("latitude", "is", null)
-          .not("longitude", "is", null)
-          .order("created_at", { ascending: false })
-          .limit(360);
-
-        if (sample30Err) throw sample30Err;
-
-        const safeSample = Array.isArray(sample30) ? sample30 : [];
-
-        const sourceCounts = new Map();
-        for (const r of safeSample) {
-          const label = buildLocationLabel(r);
-          sourceCounts.set(label, (sourceCounts.get(label) || 0) + 1);
-        }
-        const topSources = Array.from(sourceCounts.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([label, count]) => ({ label, count }));
-
-        if (!mounted) return;
-
-        setVisitors((prev) => {
-          const next = { ...prev, topSources, fetchedAt: Date.now() };
-          if (typeof window !== "undefined") {
-            localStorage.setItem(VISITOR_CACHE_KEY, JSON.stringify(next));
-          }
-          return next;
-        });
-
-        await yieldToBrowser();
-
-        // ---------------- PHASE 1b: counts + devices ----------------
-        const COUNT_MODE = "exact";
-
-        const [total30Res, totalTodayRes, located30Res, deviceRes] = await Promise.all([
-          supabase
-            .from("visitor_logs")
-            .select("id", { count: COUNT_MODE, head: true })
-            .gte("created_at", start30Iso),
-          supabase
-            .from("visitor_logs")
-            .select("id", { count: COUNT_MODE, head: true })
-            .gte("created_at", startTodayIso),
-          supabase
-            .from("visitor_logs")
-            .select("id", { count: COUNT_MODE, head: true })
-            .gte("created_at", start30Iso)
-            .not("latitude", "is", null)
-            .not("longitude", "is", null),
-          supabase
-            .from("visitor_logs")
-            .select("ua, created_at")
-            .gte("created_at", start30Iso)
-            .order("created_at", { ascending: false })
-            .limit(900),
+        // ---------------- PHASE 1: aggregate summary only ----------------
+        const [summary30Res, summaryTodayRes] = await Promise.all([
+          fetch("/api/analytics/visits/summary?window=30d"),
+          fetch("/api/analytics/visits/summary?days=1"),
         ]);
+        if (!summary30Res.ok || !summaryTodayRes.ok) throw new Error("analytics summary unavailable");
 
-        if (total30Res.error) throw total30Res.error;
-        if (totalTodayRes.error) throw totalTodayRes.error;
-        if (located30Res.error) throw located30Res.error;
-        if (deviceRes.error) throw deviceRes.error;
-
-        const total30 = Number(total30Res.count || 0);
-        const totalToday = Number(totalTodayRes.count || 0);
-        const located30 = Number(located30Res.count || 0);
+        const summary30 = await summary30Res.json();
+        const summaryToday = await summaryTodayRes.json();
+        const total30 = Number(summary30?.totals?.pageViews || 0);
+        const totalToday = Number(summaryToday?.totals?.pageViews || 0);
+        const topSources = (Array.isArray(summary30?.topCountries) ? summary30.topCountries : [])
+          .slice(0, 5)
+          .map((row) => ({ label: row.country || "Unknown", count: Number(row.count || 0) }));
+        const located30 = topSources.reduce((sum, row) => sum + row.count, 0);
         const unknownLocation = Math.max(total30 - located30, 0);
-
-        const deviceRows = Array.isArray(deviceRes.data) ? deviceRes.data : [];
-        const deviceCounts = new Map();
-        for (const r of deviceRows) {
-          const label = buildDeviceLabelFromUa(r?.ua);
-          deviceCounts.set(label, (deviceCounts.get(label) || 0) + 1);
-        }
-        const topDevices = Array.from(deviceCounts.entries())
-          .sort((a, b) => b[1] - a[1])
+        const topDevices = (Array.isArray(summary30?.topDevices) ? summary30.topDevices : [])
           .slice(0, 4)
-          .map(([label, count]) => ({ label, count }));
+          .map((row) => ({ label: row.deviceType || "Unknown", count: Number(row.count || 0) }));
 
         if (!mounted) return;
 
@@ -647,6 +540,7 @@ const DashboardPanels = () => {
             last30: total30,
             today: totalToday,
             unknownLocation,
+            topSources,
             topDevices,
             fetchedAt: Date.now(),
           };
@@ -656,11 +550,8 @@ const DashboardPanels = () => {
           return next;
         });
 
-        // PHASE 2 (legacy: paginated all-time visitor_logs scan) is gone:
-        // the backend `/visits/markers?window=all` call in PHASE 0 already
-        // returns the all-time aggregate.
       } catch (e) {
-        console.error("Failed to load visitors from Supabase", e);
+        console.error("Failed to load aggregate visitor analytics", e);
       } finally {
         if (mounted) setIsVisitorsLoading(false);
       }

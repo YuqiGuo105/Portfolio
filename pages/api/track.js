@@ -19,17 +19,66 @@ import { supabaseServer } from '../../src/supabase/supabaseServer';
 import { produceRawEvent } from '../../src/lib/kafkaProducer';
 import { uuidv7 } from '../../src/lib/uuidv7';
 import { isRateLimited } from '../../src/lib/rateLimiter';
+import crypto from 'crypto';
 
 // 允许的来源域名
 const ALLOWED_ORIGINS = ['https://www.yuqi.site', 'https://yuqi.site'];
 
 // Allowed event names — prevents arbitrary string injection into visitor_logs.event
-const ALLOWED_EVENTS = new Set(['page_view']);
+const ALLOWED_EVENTS = new Set([
+  'page_view', 'content_impression', 'content_open', 'read_progress', 'engaged_time',
+  'project_open', 'outbound_link_clicked', 'search_performed', 'search_result_clicked',
+  'subscribe_started', 'subscribe_verified', 'unsubscribe_completed',
+  'recommendation_impression', 'recommendation_click', 'recommendation_dismiss',
+  'chat_started', 'chat_completed', 'tool_used',
+]);
+
+const PROPERTY_ALLOWLIST = new Set([
+  'contentId', 'contentType', 'category', 'progressPercent', 'engagedSeconds',
+  'component', 'action', 'campaign', 'experimentId', 'variant',
+  'recommendationRequestId', 'rank', 'modelVersion', 'resultCount',
+]);
+
+export const config = {
+  api: { bodyParser: { sizeLimit: '16kb' } },
+};
 
 // --------------------------- Helper ----------------------------------------
-function safeParseFloat(val) {
-  const n = parseFloat(val);
-  return Number.isFinite(n) ? n : null;
+function hmac(value, namespace) {
+  const key = process.env.ANALYTICS_INGEST_HMAC_KEY || process.env.ANALYTICS_HMAC_SALT;
+  if (!key || !value) return null;
+  return crypto.createHmac('sha256', key).update(`${namespace}:${value}`).digest('hex');
+}
+
+function pseudonymousId(value, namespace) {
+  const candidate = typeof value === 'string' ? value.trim() : '';
+  if (!candidate || !/^[a-zA-Z0-9-]{12,100}$/.test(candidate)) return null;
+  return hmac(candidate, namespace) || candidate;
+}
+
+function safePath(value) {
+  if (!value) return null;
+  try {
+    return new URL(value, 'https://yuqi.site').pathname.slice(0, 512);
+  } catch (_) {
+    return String(value).split(/[?#]/)[0].slice(0, 512);
+  }
+}
+
+function sanitizeProperties(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key, item]) => PROPERTY_ALLOWLIST.has(key)
+      && ['string', 'number', 'boolean'].includes(typeof item))
+    .map(([key, item]) => [key, typeof item === 'string' ? item.slice(0, 255) : item]));
+}
+
+function normalizeEventTime(value, nowMs = Date.now()) {
+  const parsed = Date.parse(value);
+  // Reject clock-skew and forged timestamps outside a one-day envelope.
+  return Number.isFinite(parsed) && Math.abs(parsed - nowMs) <= 24 * 60 * 60 * 1000
+    ? new Date(parsed).toISOString()
+    : new Date(nowMs).toISOString();
 }
 
 function geoFromHeaders(h) {
@@ -39,8 +88,8 @@ function geoFromHeaders(h) {
       country: h['x-vercel-ip-country'] || null,
       region: h['x-vercel-ip-country-region'] || null,
       city: h['x-vercel-ip-city'] ? decodeURIComponent(h['x-vercel-ip-city']) : null,
-      latitude: safeParseFloat(h['x-vercel-ip-latitude']),
-      longitude: safeParseFloat(h['x-vercel-ip-longitude']),
+      latitude: Number.isFinite(Number(h['x-vercel-ip-latitude'])) ? Number(h['x-vercel-ip-latitude']) : null,
+      longitude: Number.isFinite(Number(h['x-vercel-ip-longitude'])) ? Number(h['x-vercel-ip-longitude']) : null,
       _src: 'vercel',
     };
   }
@@ -50,8 +99,8 @@ function geoFromHeaders(h) {
       country: h['cf-ipcountry'] || null,
       region: h['cf-region'] || null,
       city: h['cf-ipcity'] ? decodeURIComponent(h['cf-ipcity']) : null,
-      latitude: safeParseFloat(h['cf-latitude']),
-      longitude: safeParseFloat(h['cf-longitude']),
+      latitude: Number.isFinite(Number(h['cf-latitude'])) ? Number(h['cf-latitude']) : null,
+      longitude: Number.isFinite(Number(h['cf-longitude'])) ? Number(h['cf-longitude']) : null,
       _src: 'cloudflare',
     };
   }
@@ -104,15 +153,23 @@ export default async function handler(req, res) {
   }
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
-  const { localTime = new Date().toISOString() } = body;
+  const eventTime = normalizeEventTime(body.localTime);
 
   // Validate event against allowlist to prevent arbitrary string injection.
   const rawEventName = typeof body.event === 'string' ? body.event.trim() : '';
-  const event = ALLOWED_EVENTS.has(rawEventName) ? rawEventName : 'page_view';
+  if (!ALLOWED_EVENTS.has(rawEventName)) {
+    return res.status(400).json({ error: 'Unsupported event' });
+  }
+  const event = rawEventName;
 
   // Geolocation -------------------------------------------------------------
   const geo = geoFromHeaders(req.headers);
   const { country, region, city, latitude, longitude, _src } = geo;
+  const consentState = ['granted', 'denied', 'unknown'].includes(body.consentState)
+    ? body.consentState : 'unknown';
+  if (consentState === 'denied') return res.status(204).end();
+  const identified = consentState === 'granted';
+  const ipHash = hmac(ip, 'ip');
 
   const nowIso = new Date().toISOString();
 
@@ -122,14 +179,21 @@ export default async function handler(req, res) {
   // re-delivered batch never produces duplicate visitor_logs rows.
   const rawEvent = {
     eventId:    uuidv7(),
+    schemaVersion: Number(body.schemaVersion) === 2 ? 2 : 1,
     siteId:     'yuqi.site',
     eventType:  event,
-    eventTime:  localTime,
+    eventTime,
     serverTime: nowIso,
-    pageUrl:    body.page || null,
-    referrer:   body.referrer || null,
+    sessionId:  identified ? pseudonymousId(body.sessionId, 'session') : null,
+    anonId:     identified ? pseudonymousId(body.anonymousId, 'anonymous') : null,
+    consentState,
+    pageUrl:    safePath(body.page),
+    targetUrl:  safePath(body.target),
+    referrer:   typeof body.referrer === 'string' ? body.referrer.slice(0, 2048) : null,
     uaRaw:      ua,
     ipRaw:      ip,
+    ipHash,
+    properties: sanitizeProperties(body.properties),
     geoHint: {
       country: country ?? null,
       region:  region  ?? null,
@@ -142,15 +206,15 @@ export default async function handler(req, res) {
 
   // Legacy insert payload only used on the fallback path.
   const insertPayload = {
-    ip,
-    local_time: localTime,
+    ip: ipHash || 'redacted',
+    local_time: eventTime,
     event,
-    ua,
+    ua: 'server-fallback',
     country,
     region,
-    city,
-    latitude,
-    longitude,
+    city: null,
+    latitude: null,
+    longitude: null,
     created_at: nowIso,
   };
 
