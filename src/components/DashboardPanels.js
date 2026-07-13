@@ -29,6 +29,33 @@ const getHoursSince = (timestamp) => {
   return Math.max(hours, 0);
 };
 
+const formatRelativeUpdate = (timestamp, now = Date.now()) => {
+  if (!timestamp) return null;
+
+  const elapsedSeconds = Math.max(Math.floor((now - timestamp) / 1000), 0);
+  if (elapsedSeconds < 60) return "Updated just now";
+
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  if (elapsedMinutes < 60) {
+    return `Updated ${elapsedMinutes} ${elapsedMinutes === 1 ? "minute" : "minutes"} ago`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  return `Updated ${elapsedHours} ${elapsedHours === 1 ? "hour" : "hours"} ago`;
+};
+
+const RelativeUpdateTime = ({ timestamp }) => {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (!timestamp) return null;
+  return <span>{formatRelativeUpdate(timestamp, now)}</span>;
+};
+
 const isAbortError = (error) =>
   error?.name === "AbortError" ||
   String(error?.message || "").toLowerCase().includes("aborted");
@@ -284,7 +311,7 @@ const DashboardPanels = () => {
     pins: [],
     topSources: [],
     topDevices: [],
-    fetchedAt: Date.now(),
+    fetchedAt: null,
   });
   const [isVisitorsLoading, setIsVisitorsLoading] = useState(true);
 
@@ -454,7 +481,7 @@ const DashboardPanels = () => {
     // PHASE -1: cache restore (instant)
     if (typeof window !== "undefined") {
       const cached = safeParseJson(localStorage.getItem(VISITOR_CACHE_KEY));
-      if (cached?.pins?.length) {
+      if (cached?.fetchedAt) {
         setVisitors((prev) => ({
           ...prev,
           ...cached,
@@ -498,7 +525,6 @@ const DashboardPanels = () => {
             const next = {
               ...prev,
               pins: latestPins,
-              fetchedAt: Date.now(),
             };
             if (typeof window !== "undefined") {
               localStorage.setItem(VISITOR_CACHE_KEY, JSON.stringify(next));
@@ -834,7 +860,13 @@ const DashboardPanels = () => {
 
                 <div className="stat-sub">
                   <span className="timestamp">
-                    {isVisitorsLoading ? "Updating…" : hoursAgoLabel(visitors.fetchedAt)}
+                    {visitors.fetchedAt ? (
+                      <RelativeUpdateTime timestamp={visitors.fetchedAt} />
+                    ) : isVisitorsLoading ? (
+                      "Loading…"
+                    ) : (
+                      "Update unavailable"
+                    )}
                   </span>
                 </div>
               </div>
