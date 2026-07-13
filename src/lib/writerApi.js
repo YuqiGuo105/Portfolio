@@ -104,17 +104,24 @@ export const writerApi = {
   },
 };
 
-/**
- * Probe the admin API with the current Supabase session to verify the
- * caller is authorized. Returns true on 2xx, false otherwise.
- */
-export async function validateAdminSession() {
+/** Probe the admin API; authorization remains owned by the admin service. */
+export async function verifyAdminSession() {
   try {
-    await request('GET', '/api/admin/blogs?page=0&size=1');
-    return true;
-  } catch {
-    return false;
+    await request('GET', '/api/admin/content?type=BLOG&limit=1&offset=0');
+    return { authorized: true, status: 200, code: null };
+  } catch (error) {
+    return {
+      authorized: false,
+      status: Number(error?.status) || 0,
+      code: error?.code || (error?.status ? 'admin_api_error' : 'admin_api_unavailable'),
+    };
   }
+}
+
+/** Backwards-compatible boolean helper for existing callers. */
+export async function validateAdminSession() {
+  const result = await verifyAdminSession();
+  return result.authorized;
 }
 
 // Deprecated alias kept temporarily for any leftover importer. The new

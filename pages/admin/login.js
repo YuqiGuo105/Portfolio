@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../../src/supabase/supabaseClient';
+import { verifyAdminSession } from '../../src/lib/writerApi';
 
 function sanitizeRedirect(target) {
   if (typeof target !== 'string') return '/admin';
@@ -26,22 +27,53 @@ export default function AdminLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  // If we already have a Supabase session, skip the form.
+  async function routeAuthorizedSession() {
+    const result = await verifyAdminSession();
+    if (result.authorized) {
+      await router.replace(sanitizeRedirect(router.query.redirect));
+      return true;
+    }
+
+    if (result.status === 401 || result.status === 403) {
+      await supabase.auth.signOut().catch(() => {});
+      setError('This account is not authorized to access the admin panel.');
+      return false;
+    }
+
+    setError('The admin service is unavailable, so access could not be verified. Please try again.');
+    return false;
+  }
+
+  // Existing OAuth/password sessions must still pass the backend allow-list.
   useEffect(() => {
+    if (!router.isReady) return undefined;
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      if (data?.session) {
-        router.replace(sanitizeRedirect(router.query.redirect));
+
+    async function checkExistingSession() {
+      setCheckingSession(true);
+      if (router.query.reason === 'unauthorized') {
+        setError('This account is not authorized to access the admin panel.');
       }
-    });
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!active || !data?.session) return;
+        await routeAuthorizedSession();
+      } catch {
+        if (active) setError('Could not verify your session. Please try again.');
+      } finally {
+        if (active) setCheckingSession(false);
+      }
+    }
+
+    checkExistingSession();
     return () => {
       active = false;
     };
-  }, [router]);
+  }, [router.isReady, router.query.redirect, router.query.reason]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -60,7 +92,7 @@ export default function AdminLogin() {
         setError(signInError.message || 'Invalid email or password');
         return;
       }
-      router.replace(sanitizeRedirect(router.query.redirect));
+      await routeAuthorizedSession();
     } catch (err) {
       setError(err?.message || 'Could not reach Supabase. Please try again.');
     } finally {
@@ -122,8 +154,8 @@ export default function AdminLogin() {
             />
           </label>
           {error && <p className="error-text">{error}</p>}
-          <button type="submit" className="login-button" disabled={loading || googleLoading}>
-            {loading ? 'Signing in…' : 'Sign In'}
+          <button type="submit" className="login-button" disabled={checkingSession || loading || googleLoading}>
+            {checkingSession ? 'Checking session…' : loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
 
@@ -133,7 +165,7 @@ export default function AdminLogin() {
           type="button"
           className="google-button"
           onClick={handleGoogleSignIn}
-          disabled={loading || googleLoading}
+          disabled={checkingSession || loading || googleLoading}
         >
           <svg className="google-icon" viewBox="0 0 48 48" aria-hidden="true">
             <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/>
