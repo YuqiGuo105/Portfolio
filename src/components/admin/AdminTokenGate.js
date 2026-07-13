@@ -110,6 +110,39 @@ export default function AdminTokenGate({ children }) {
       </div>
     );
   }
-  if (!ready) return null;
+  if (!ready) {
+    return (
+      <div className="admin-gate-loading" role="status" aria-live="polite">
+        <span className="admin-gate-spinner" aria-hidden="true" />
+        <strong>Checking admin access</strong>
+        <span>Verifying your session and permissions.</span>
+        <style jsx>{`
+          .admin-gate-loading {
+            min-height: 100vh;
+            display: grid;
+            place-content: center;
+            justify-items: center;
+            gap: 9px;
+            padding: 24px;
+            background: #f5f7f8;
+            color: #66717d;
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 13px;
+          }
+          .admin-gate-loading strong { color: #17212b; font-size: 14px; }
+          .admin-gate-spinner {
+            width: 24px;
+            height: 24px;
+            margin-bottom: 4px;
+            border: 2px solid #d5dcdf;
+            border-top-color: #0f766e;
+            border-radius: 50%;
+            animation: adminGateSpin 700ms linear infinite;
+          }
+          @keyframes adminGateSpin { to { transform: rotate(360deg); } }
+        `}</style>
+      </div>
+    );
+  }
   return children;
 }

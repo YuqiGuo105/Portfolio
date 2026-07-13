@@ -66,24 +66,81 @@ async function request(method, path, body, idempotencyKey) {
   return res.status === 204 ? null : res.json();
 }
 
-function makeResource(basePath) {
+function normalizeContentMutation(type, input = {}) {
+  const { status, visibility, slug, _expectedVersion, ...data } = input;
+  const normalized = {
+    ...data,
+    summary: input.description ?? input.summary ?? "",
+  };
+  if (type === "PROJECT") {
+    normalized.externalUrl = input.url || input.externalUrl || "";
+  }
   return {
-    list: (page = 0, size = 20) =>
-      request('GET', `${basePath}?page=${page}&size=${size}&sort=createdAt,desc`),
-    get: (id) => request('GET', `${basePath}/${id}`),
+    data: normalized,
+    publish: status === "PUBLISHED",
+    changeNote: status === "PUBLISHED" ? "Published from admin console" : "Updated from admin console",
+  };
+}
+
+function flattenContentDetail(response) {
+  const content = response?.content && typeof response.content === 'object'
+    ? response.content
+    : (response || {});
+  const raw = content.raw || {};
+  const tags = Array.isArray(content.tags) ? content.tags.join(", ") : (content.tags || raw.tags || "");
+  return {
+    ...raw,
+    id: content.sourceId,
+    sourceId: content.sourceId,
+    sourceType: content.sourceType,
+    title: content.title || "",
+    description: content.summary || "",
+    content: content.content || "",
+    category: content.category || "",
+    tags,
+    imageUrl: content.imageUrl || raw.image_url || "",
+    url: raw.URL || content.externalUrl || content.url || "",
+    date: raw.date || "",
+    requireLogin: Boolean(raw.require_login),
+    publishedAt: raw.published_at || "",
+    technology: raw.technology || tags,
+    year: raw.year || "",
+    num: raw.num ?? "",
+    status: response?.latestVersion ? "PUBLISHED" : "DRAFT",
+    visibility: "PUBLIC",
+    version: response?.latestVersion?.version || 0,
+  };
+}
+
+function makeContentResource(type) {
+  return {
+    list: ({ limit = 200, offset = 0, keyword, category } = {}) => {
+      const params = new URLSearchParams({ type, limit: String(limit), offset: String(offset) });
+      if (keyword) params.set('keyword', keyword);
+      if (category) params.set('category', category);
+      return request('GET', `/api/admin/content?${params.toString()}`);
+    },
+    get: async (id) => flattenContentDetail(
+      await request('GET', `/api/admin/content/${type}/${encodeURIComponent(id)}`)
+    ),
     create: (data, idempotencyKey) =>
-      request('POST', basePath, data, idempotencyKey),
-    update: (id, data) =>
-      request('PUT', `${basePath}/${id}`, data),
-    delete: (id, version) =>
-      request('DELETE', `${basePath}/${id}`, { _expectedVersion: version }),
+      request('POST', `/api/admin/content/${type}`, normalizeContentMutation(type, data), idempotencyKey),
+    update: async (id, data) => flattenContentDetail(
+      await request('PUT', `/api/admin/content/${type}/${encodeURIComponent(id)}`,
+        normalizeContentMutation(type, data))
+    ),
+    publish: (id, changeNote) => request(
+      'POST',
+      `/api/admin/content/${type}/${encodeURIComponent(id)}/publish`,
+      { changeNote }
+    ),
   };
 }
 
 export const writerApi = {
-  blogs: makeResource('/api/admin/blogs'),
-  lifeBlogs: makeResource('/api/admin/life-blogs'),
-  projects: makeResource('/api/admin/projects'),
+  blogs: makeContentResource('BLOG'),
+  lifeBlogs: makeContentResource('LIFE_BLOG'),
+  projects: makeContentResource('PROJECT'),
 
   // Admin-service exposes a single content endpoint keyed by sourceType.
   // Use this for dashboard counts and for any new code that doesn't need the

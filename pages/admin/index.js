@@ -1,235 +1,130 @@
-// pages/admin/index.js
-// Admin dashboard — content stats + quick-action cards for subscriptions,
-// notifications, Swagger entry points, and jobs/audit.
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  Bell,
+  Bot,
+  BookOpen,
+  BriefcaseBusiness,
+  ExternalLink,
+  FileText,
+  History,
+  Users,
+} from "lucide-react";
+import AdminLayout from "../../src/components/admin/AdminLayout";
+import { PageHeader, adminStyles as ui } from "../../src/components/admin/AdminUI";
+import { writerApi } from "../../src/lib/writerApi";
+import { adminApi } from "../../src/lib/adminApi";
+import { supabase } from "../../src/supabase/supabaseClient";
 
-import { useState, useEffect } from 'react';
-import AdminLayout from '../../src/components/admin/AdminLayout';
-import { writerApi } from '../../src/lib/writerApi';
-import { supabase } from '../../src/supabase/supabaseClient';
-import Link from 'next/link';
-
-const SECTIONS = [
-  { key: 'blogs',     label: 'Blogs',      href: '/admin/blogs',      type: 'BLOG' },
-  { key: 'lifeBlogs', label: 'Life Blogs', href: '/admin/life-blogs', type: 'LIFE_BLOG' },
-  { key: 'projects',  label: 'Projects',   href: '/admin/projects',   type: 'PROJECT' },
+const CONTENT = [
+  { key: "blogs", type: "BLOG", label: "Tech blogs", href: "/admin/blogs", icon: FileText },
+  { key: "lifeBlogs", type: "LIFE_BLOG", label: "Life blogs", href: "/admin/life-blogs", icon: BookOpen },
+  { key: "projects", type: "PROJECT", label: "Projects", href: "/admin/projects", icon: BriefcaseBusiness },
 ];
 
-const ADMIN_SERVICE_SWAGGER =
-  process.env.NEXT_PUBLIC_ADMIN_SERVICE_SWAGGER_URL ||
-  'https://portfolio-admin-service-y45c2mnbja-uc.a.run.app/swagger-ui.html';
-
-const NOTIFICATION_SERVICE_SWAGGER =
-  process.env.NEXT_PUBLIC_NOTIFICATION_SERVICE_SWAGGER_URL ||
-  'https://portfolio-notification-service-y45c2mnbja-uc.a.run.app/swagger-ui.html';
-
-const QUICK_ACTIONS = [
-  {
-    key: 'subscriptions',
-    label: 'Subscriptions',
-    description: 'View and manage notification subscribers.',
-    href: '/admin/subscriptions',
-    external: false,
-  },
-  {
-    key: 'notifications',
-    label: 'Notifications',
-    description: 'Inspect the per-user notification feed.',
-    href: '/admin/notifications',
-    external: false,
-  },
-  {
-    key: 'jobs',
-    label: 'Jobs / Audit',
-    description: 'Indexing jobs, outbox events, and admin audit log.',
-    href: '/admin/jobs',
-    external: false,
-  },
-  {
-    key: 'agent',
-    label: 'Operate Console',
-    description: 'Natural-language ops console powered by portfolio-agent-service.',
-    href: '/admin/agent',
-    external: false,
-  },
-  {
-    key: 'admin-swagger',
-    label: 'Admin Swagger',
-    description: 'OpenAPI docs for admin-service (content, jobs, audit).',
-    href: ADMIN_SERVICE_SWAGGER,
-    external: true,
-  },
-  {
-    key: 'notif-swagger',
-    label: 'Notification Swagger',
-    description: 'OpenAPI docs for the notification service.',
-    href: NOTIFICATION_SERVICE_SWAGGER,
-    external: true,
-  },
+const ACTIONS = [
+  { label: "Subscribers", text: "Search subscribers and update lifecycle status.", href: "/admin/subscriptions", icon: Users },
+  { label: "Notifications", text: "Review notification fan-out and delivery outcomes.", href: "/admin/notifications", icon: Bell },
+  { label: "Conversations", text: "Inspect recent Agent runs and final responses.", href: "/admin/conversations", icon: History },
+  { label: "Operate console", text: "Run authenticated natural-language operations.", href: "/admin/agent", icon: Bot },
 ];
 
 export default function AdminDashboard() {
-  const [counts, setCounts] = useState({});
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState("");
+  const [metrics, setMetrics] = useState({ content: "…", active: "…", notifications: "…", conversations: "…" });
 
   useEffect(() => {
-    SECTIONS.forEach(({ key, type }) => {
-      writerApi.content
-        .list(type, { limit: 500 })
-        .then((data) => {
-          const count = Array.isArray(data?.items) ? data.items.length : null;
-          setCounts((prev) => ({ ...prev, [key]: count ?? '—' }));
-        })
-        .catch(() => setCounts((prev) => ({ ...prev, [key]: '—' })));
-    });
+    let active = true;
     supabase.auth.getSession().then(({ data }) => {
-      setEmail(data?.session?.user?.email || '');
+      if (active) setEmail(data?.session?.user?.email || "");
     });
+
+    Promise.allSettled(CONTENT.map((section) => writerApi.content.list(section.type, { limit: 200 })))
+      .then((results) => {
+        if (!active) return;
+        const total = results.reduce((sum, result) => sum + (
+          result.status === "fulfilled" && Array.isArray(result.value?.items)
+            ? result.value.items.length : 0
+        ), 0);
+        setMetrics((current) => ({ ...current, content: total }));
+      });
+
+    adminApi.subscribers.list({ status: "ACTIVE", limit: 1 }).then((data) => {
+      if (active) setMetrics((current) => ({ ...current, active: data.total ?? 0 }));
+    }).catch(() => active && setMetrics((current) => ({ ...current, active: "—" })));
+
+    adminApi.notifications.list({ limit: 1 }).then((data) => {
+      if (active) setMetrics((current) => ({ ...current, notifications: data.total ?? 0 }));
+    }).catch(() => active && setMetrics((current) => ({ ...current, notifications: "—" })));
+
+    adminApi.conversations.list({ hours: 24, limit: 100 }).then((data) => {
+      if (active) setMetrics((current) => ({ ...current, conversations: data.total ?? 0 }));
+    }).catch(() => active && setMetrics((current) => ({ ...current, conversations: "—" })));
+
+    return () => { active = false; };
   }, []);
 
   return (
     <AdminLayout>
-      <div className="dash-header">
-        <div className="dash-header-row">
-          <h1 className="dash-title">Dashboard</h1>
-          <a href="https://www.yuqi.site" className="dash-back" target="_blank" rel="noreferrer noopener">
-            ← Back to yuqi.site
-          </a>
-        </div>
-        {email && <p className="dash-greeting">Signed in as <strong>{email}</strong></p>}
-      </div>
-
-      <h2 className="dash-section">Content</h2>
-      <div className="dash-grid">
-        {SECTIONS.map((s) => (
-          <Link key={s.key} href={s.href}>
-            <a className="dash-card">
-              <div className="dash-count">{counts[s.key] ?? '…'}</div>
-              <div className="dash-label">{s.label}</div>
-              <div className="dash-action">Manage →</div>
+      <div className={ui.page}>
+        <PageHeader
+          title="Dashboard"
+          subtitle={email ? `Operational overview for ${email}` : "Portfolio operations overview"}
+          actions={(
+            <a href="https://www.yuqi.site" target="_blank" rel="noreferrer" className={ui.buttonSecondary}>
+              View site <ExternalLink size={15} />
             </a>
-          </Link>
-        ))}
-      </div>
+          )}
+        />
 
-      <h2 className="dash-section">Quick actions</h2>
-      <div className="dash-grid">
-        {QUICK_ACTIONS.map((action) =>
-          action.external ? (
-            <a
-              key={action.key}
-              href={action.href}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="dash-card dash-card--action"
-            >
-              <div className="dash-label">{action.label}</div>
-              <div className="dash-description">{action.description}</div>
-              <div className="dash-action">Open ↗</div>
-            </a>
-          ) : (
-            <Link key={action.key} href={action.href}>
-              <a className="dash-card dash-card--action">
-                <div className="dash-label">{action.label}</div>
-                <div className="dash-description">{action.description}</div>
-                <div className="dash-action">Open →</div>
-              </a>
-            </Link>
-          )
-        )}
-      </div>
+        <section className={ui.metrics} aria-label="Admin summary">
+          <Metric label="Managed content" value={metrics.content} hint="Across three content types" />
+          <Metric label="Active subscribers" value={metrics.active} hint="Current email audience" />
+          <Metric label="Notifications" value={metrics.notifications} hint="All published events" />
+          <Metric label="Agent runs today" value={metrics.conversations} hint="Last 24 hours" />
+        </section>
 
-      <style jsx>{`
-        .dash-header {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          margin: 0 0 28px;
-        }
-        .dash-header-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-          flex-wrap: wrap;
-        }
-        .dash-back {
-          font-size: 0.85rem;
-          color: #38bdf8;
-          text-decoration: none;
-          background: rgba(56, 189, 248, 0.1);
-          padding: 6px 14px;
-          border-radius: 8px;
-          border: 1px solid rgba(56, 189, 248, 0.25);
-          transition: background 150ms;
-        }
-        .dash-back:hover {
-          background: rgba(56, 189, 248, 0.2);
-        }
-        .dash-title {
-          font-size: 1.6rem;
-          font-weight: 700;
-          color: #f1f5f9;
-          margin: 0;
-        }
-        .dash-greeting {
-          color: #94a3b8;
-          font-size: 0.9rem;
-          margin: 0;
-        }
-        .dash-greeting strong {
-          color: #38bdf8;
-          font-weight: 600;
-        }
-        .dash-section {
-          font-size: 1.0rem;
-          font-weight: 600;
-          color: #94a3b8;
-          margin: 28px 0 16px;
-          text-transform: uppercase;
-          letter-spacing: 0.06em;
-        }
-        .dash-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-          gap: 20px;
-        }
-        .dash-grid :global(.dash-card) {
-          background: #1e293b;
-          border-radius: 16px;
-          padding: 24px;
-          text-decoration: none;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          border: 1px solid rgba(148, 163, 184, 0.1);
-          transition: border-color 150ms, transform 150ms;
-        }
-        .dash-grid :global(.dash-card:hover) {
-          border-color: rgba(56, 189, 248, 0.4);
-          transform: translateY(-2px);
-        }
-        .dash-count {
-          font-size: 2.4rem;
-          font-weight: 700;
-          color: #38bdf8;
-        }
-        .dash-label {
-          font-size: 1rem;
-          font-weight: 600;
-          color: #e2e8f0;
-        }
-        .dash-description {
-          font-size: 0.85rem;
-          color: #94a3b8;
-          line-height: 1.4;
-          min-height: 36px;
-        }
-        .dash-action {
-          font-size: 0.8rem;
-          color: #64748b;
-          margin-top: 4px;
-        }
-      `}</style>
+        <section className={ui.section}>
+          <div className={ui.sectionHeader}>
+            <h2 className={ui.sectionTitle}>Content workspace</h2>
+          </div>
+          <div className={ui.actionGrid}>
+            {CONTENT.map((item) => <ActionCard key={item.key} {...item} text="Create, edit and publish content." />)}
+          </div>
+        </section>
+
+        <section className={ui.section}>
+          <div className={ui.sectionHeader}>
+            <h2 className={ui.sectionTitle}>Operations</h2>
+          </div>
+          <div className={ui.actionGrid}>
+            {ACTIONS.map((item) => <ActionCard key={item.href} {...item} />)}
+          </div>
+        </section>
+      </div>
     </AdminLayout>
+  );
+}
+
+function Metric({ label, value, hint }) {
+  return (
+    <div className={ui.metric}>
+      <div className={ui.metricLabel}>{label}</div>
+      <div className={ui.metricValue}>{value}</div>
+      <div className={ui.metricHint}>{hint}</div>
+    </div>
+  );
+}
+
+function ActionCard({ label, text, href, icon: Icon }) {
+  return (
+    <Link href={href}>
+      <a className={ui.actionCard}>
+        <span className={ui.actionIcon}><Icon size={18} /></span>
+        <span className={ui.actionTitle}>{label}</span>
+        <span className={ui.actionText}>{text}</span>
+        <span className={ui.actionLink}>Open workspace →</span>
+      </a>
+    </Link>
   );
 }

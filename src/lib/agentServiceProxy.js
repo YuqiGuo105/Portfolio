@@ -99,6 +99,20 @@ export async function requireSupabaseUser(req, res, { allowAnonymous = false } =
   return { email, roles, anonymous: false };
 }
 
+/** Require an authenticated user whose server-derived roles include ADMIN. */
+export async function requireAdminUser(req, res) {
+  const auth = await requireSupabaseUser(req, res);
+  if (!auth) return null;
+  const roles = String(auth.roles || "")
+    .split(",")
+    .map((role) => role.trim().toUpperCase());
+  if (!roles.includes("ADMIN")) {
+    res.status(403).json({ error: "forbidden", message: "Admin access required." });
+    return null;
+  }
+  return auth;
+}
+
 /**
  * Forward a JSON request to the agent service. Used for sync endpoints like
  * /api/intent and /api/intent/confirm.

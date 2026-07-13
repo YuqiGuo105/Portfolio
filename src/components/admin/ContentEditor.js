@@ -10,18 +10,16 @@ import { useMemo, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import DOMPurify from 'dompurify';
 import { toast } from 'react-toastify';
-import SlugField from './SlugField';
 
 const RichTextEditor = dynamic(() => import('./RichTextEditor'), { ssr: false });
 
-const STATUS_OPTIONS = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
-const VISIBILITY_OPTIONS = ['PUBLIC', 'PRIVATE', 'LOGIN_REQUIRED'];
+const STATUS_OPTIONS = ['DRAFT', 'PUBLISHED'];
 
 // Fields shown per content type
 const TYPE_FIELDS = {
-  blog: ['title', 'slug', 'description', 'content', 'tags', 'category', 'imageUrl', 'url', 'date', 'status', 'visibility', 'publishedAt'],
-  'life-blog': ['title', 'slug', 'description', 'content', 'tags', 'category', 'imageUrl', 'url', 'requireLogin', 'status', 'visibility', 'publishedAt'],
-  project: ['title', 'slug', 'description', 'content', 'tags', 'category', 'imageUrl', 'url', 'technology', 'year', 'num', 'status', 'visibility', 'publishedAt'],
+  blog: ['title', 'description', 'content', 'tags', 'category', 'imageUrl', 'date', 'status'],
+  'life-blog': ['title', 'description', 'content', 'tags', 'category', 'imageUrl', 'requireLogin', 'status', 'publishedAt'],
+  project: ['title', 'description', 'content', 'category', 'imageUrl', 'url', 'technology', 'year', 'num', 'status'],
 };
 
 function hasField(contentType, field) {
@@ -101,8 +99,6 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
   function validate() {
     const errs = {};
     if (!form.title.trim()) errs.title = 'Title is required';
-    if (!form.slug.trim()) errs.slug = 'Slug is required';
-    else if (!/^[a-z0-9-]+$/.test(form.slug)) errs.slug = 'Slug must be lowercase alphanumeric with hyphens';
     return errs;
   }
 
@@ -204,17 +200,6 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
           {errors.title && <span className="field-error">{errors.title}</span>}
         </div>
 
-        {/* Slug */}
-        <div className="field-group">
-          <label className="field-label">Slug *</label>
-          <SlugField
-            title={form.title}
-            value={form.slug}
-            onChange={(v) => set('slug', v)}
-            error={errors.slug}
-          />
-        </div>
-
         {/* Description */}
         <div className="field-group">
           <label className="field-label">Description</label>
@@ -283,18 +268,6 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
             </select>
           </div>
           <div className="field-group">
-            <label className="field-label">Visibility</label>
-            <select
-              className="admin-select"
-              value={form.visibility}
-              onChange={(e) => set('visibility', e.target.value)}
-            >
-              {VISIBILITY_OPTIONS.map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field-group">
             <label className="field-label">Category</label>
             <input
               type="text"
@@ -307,7 +280,7 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
         </div>
 
         {/* Tags */}
-        <div className="field-group">
+        {show('tags') && <div className="field-group">
           <label className="field-label">Tags <span className="field-hint">(comma-separated)</span></label>
           <input
             type="text"
@@ -316,10 +289,10 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
             onChange={(e) => set('tags', e.target.value)}
             placeholder="rust, spring-boot, microservices"
           />
-        </div>
+        </div>}
 
         {/* Image URL */}
-        <div className="field-group">
+        {show('imageUrl') && <div className="field-group">
           <label className="field-label">Image URL</label>
           <input
             type="text"
@@ -328,22 +301,22 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
             onChange={(e) => set('imageUrl', e.target.value)}
             placeholder="https://..."
           />
-        </div>
+        </div>}
 
         {/* URL */}
-        <div className="field-group">
+        {show('url') && <div className="field-group">
           <label className="field-label">URL</label>
           <input
             type="text"
             className="admin-input"
             value={form.url}
             onChange={(e) => set('url', e.target.value)}
-            placeholder="/blog/my-post"
+            placeholder="https://..."
           />
-        </div>
+        </div>}
 
         {/* Published At */}
-        <div className="field-group">
+        {show('publishedAt') && <div className="field-group">
           <label className="field-label">Published At</label>
           <input
             type="date"
@@ -351,7 +324,7 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
             value={form.publishedAt}
             onChange={(e) => set('publishedAt', e.target.value)}
           />
-        </div>
+        </div>}
 
         {/* Blog-only: date */}
         {show('date') && (
@@ -420,25 +393,25 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
       </div>
 
       <style jsx>{`
-        .content-editor { width: 100%; max-width: 900px; }
+        .content-editor { width: 100%; max-width: 980px; }
         .editor-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
           margin-bottom: 32px;
           padding-bottom: 20px;
-          border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+          border-bottom: 1px solid #dfe4e8;
         }
         .back-btn {
           background: transparent;
           border: none;
-          color: #94a3b8;
+          color: #66717d;
           font-size: 0.9rem;
           cursor: pointer;
           padding: 8px 0;
           transition: color 150ms;
         }
-        .back-btn:hover { color: #e2e8f0; }
+        .back-btn:hover { color: #17212b; }
         .editor-actions {
           display: flex;
           align-items: center;
@@ -446,45 +419,45 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
         }
         .version-badge {
           font-size: 0.75rem;
-          color: #64748b;
-          background: #1e293b;
+          color: #66717d;
+          background: #e9edef;
           padding: 4px 10px;
-          border-radius: 20px;
+          border-radius: 999px;
         }
         .btn-draft {
           padding: 10px 20px;
           background: transparent;
-          border: 1px solid rgba(148, 163, 184, 0.4);
-          border-radius: 8px;
-          color: #94a3b8;
+          border: 1px solid #cfd6db;
+          border-radius: 6px;
+          color: #46525c;
           font-size: 0.9rem;
           cursor: pointer;
           transition: border-color 150ms, color 150ms;
         }
         .btn-draft:hover:not(:disabled) {
-          border-color: #e2e8f0;
-          color: #e2e8f0;
+          border-color: #8d999f;
+          color: #17212b;
         }
         .btn-publish {
           padding: 10px 20px;
-          background: #38bdf8;
+          background: #0f766e;
           border: none;
-          border-radius: 8px;
-          color: #0f172a;
+          border-radius: 6px;
+          color: #ffffff;
           font-weight: 600;
           font-size: 0.9rem;
           cursor: pointer;
           transition: background 150ms;
         }
-        .btn-publish:hover:not(:disabled) { background: #0ea5e9; }
+        .btn-publish:hover:not(:disabled) { background: #0b625b; }
         .btn-draft:disabled,
         .btn-publish:disabled { opacity: 0.5; cursor: not-allowed; }
         .conflict-banner {
-          background: rgba(251, 191, 36, 0.1);
-          border: 1px solid rgba(251, 191, 36, 0.4);
-          border-radius: 8px;
+          background: #fff7df;
+          border: 1px solid #ead69a;
+          border-radius: 6px;
           padding: 14px 18px;
-          color: #fbbf24;
+          color: #775b14;
           font-size: 0.9rem;
           margin-bottom: 24px;
         }
@@ -511,7 +484,7 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
         .field-label {
           font-size: 0.85rem;
           font-weight: 600;
-          color: #94a3b8;
+          color: #52606b;
           text-transform: uppercase;
           letter-spacing: 0.04em;
         }
@@ -519,7 +492,7 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
           font-weight: 400;
           text-transform: none;
           letter-spacing: 0;
-          color: #64748b;
+          color: #7a858e;
         }
         .field-error {
           font-size: 0.8rem;
@@ -528,17 +501,17 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
         :global(.admin-input) {
           width: 100%;
           padding: 10px 14px;
-          background: #1e293b;
-          border: 1px solid rgba(148, 163, 184, 0.25);
-          border-radius: 8px;
-          color: #e2e8f0;
+          background: #ffffff;
+          border: 1px solid #cfd6db;
+          border-radius: 6px;
+          color: #17212b;
           font-size: 0.9rem;
           outline: none;
           transition: border-color 150ms;
           box-sizing: border-box;
         }
         :global(.admin-input:focus) {
-          border-color: #38bdf8;
+          border-color: #0f766e;
         }
         :global(.admin-input.input-error) {
           border-color: #f87171;
@@ -546,31 +519,31 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
         :global(.admin-textarea) {
           width: 100%;
           padding: 10px 14px;
-          background: #1e293b;
-          border: 1px solid rgba(148, 163, 184, 0.25);
-          border-radius: 8px;
-          color: #e2e8f0;
+          background: #ffffff;
+          border: 1px solid #cfd6db;
+          border-radius: 6px;
+          color: #17212b;
           font-size: 0.9rem;
           outline: none;
           resize: vertical;
           transition: border-color 150ms;
           box-sizing: border-box;
         }
-        :global(.admin-textarea:focus) { border-color: #38bdf8; }
+        :global(.admin-textarea:focus) { border-color: #0f766e; }
         :global(.admin-select) {
           width: 100%;
           padding: 10px 14px;
-          background: #1e293b;
-          border: 1px solid rgba(148, 163, 184, 0.25);
-          border-radius: 8px;
-          color: #e2e8f0;
+          background: #ffffff;
+          border: 1px solid #cfd6db;
+          border-radius: 6px;
+          color: #17212b;
           font-size: 0.9rem;
           outline: none;
           cursor: pointer;
           transition: border-color 150ms;
           box-sizing: border-box;
         }
-        :global(.admin-select:focus) { border-color: #38bdf8; }
+        :global(.admin-select:focus) { border-color: #0f766e; }
         .content-label-row {
           display: flex;
           align-items: center;
@@ -579,7 +552,7 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
         .preview-toggle {
           display: flex;
           gap: 4px;
-          background: #1e293b;
+          background: #edf0f2;
           border-radius: 6px;
           padding: 3px;
         }
@@ -588,40 +561,40 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
           background: transparent;
           border: none;
           border-radius: 4px;
-          color: #64748b;
+          color: #66717d;
           font-size: 0.8rem;
           cursor: pointer;
           transition: background 150ms, color 150ms;
         }
         .toggle-btn.active {
-          background: rgba(56, 189, 248, 0.15);
-          color: #38bdf8;
+          background: #ffffff;
+          color: #0f766e;
         }
         .html-preview {
-          background: #1e293b;
-          border: 1px solid rgba(148, 163, 184, 0.25);
-          border-radius: 8px;
+          background: #ffffff;
+          border: 1px solid #cfd6db;
+          border-radius: 6px;
           padding: 20px 24px;
           min-height: 320px;
-          color: #e2e8f0;
+          color: #28343e;
           font-size: 0.95rem;
           line-height: 1.7;
           overflow-wrap: break-word;
         }
         .html-preview--empty {
-          color: #64748b;
+          color: #7a858e;
           font-style: italic;
         }
         .html-preview :global(h1),
         .html-preview :global(h2),
         .html-preview :global(h3) {
-          color: #f1f5f9;
+          color: #17212b;
           margin-top: 1.5em;
           line-height: 1.3;
         }
         .html-preview :global(p) { margin: 0.75em 0; }
         .html-preview :global(a) {
-          color: #38bdf8;
+          color: #0f766e;
           text-decoration: underline;
         }
         .html-preview :global(ul),
@@ -630,20 +603,20 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
           margin: 0.75em 0;
         }
         .html-preview :global(blockquote) {
-          border-left: 3px solid #38bdf8;
+          border-left: 3px solid #0f766e;
           padding-left: 12px;
-          color: #cbd5e1;
+          color: #52606b;
           margin: 0.75em 0;
         }
         .html-preview :global(code) {
-          background: rgba(56, 189, 248, 0.1);
+          background: #e6f5f2;
           padding: 2px 6px;
           border-radius: 4px;
           font-size: 0.85em;
-          color: #38bdf8;
+          color: #0f766e;
         }
         .html-preview :global(pre) {
-          background: #020617;
+          background: #20272e;
           padding: 14px 16px;
           border-radius: 8px;
           overflow-x: auto;
@@ -664,7 +637,7 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
           position: absolute;
           cursor: pointer;
           inset: 0;
-          background: #334155;
+          background: #aab3ba;
           border-radius: 24px;
           transition: background 200ms;
         }
@@ -675,14 +648,14 @@ export default function ContentEditor({ contentType, initialData, onSave, onBack
           width: 18px;
           left: 3px;
           bottom: 3px;
-          background: #94a3b8;
+          background: #ffffff;
           border-radius: 50%;
           transition: transform 200ms;
         }
-        .toggle-switch input:checked + .toggle-slider { background: #38bdf8; }
+        .toggle-switch input:checked + .toggle-slider { background: #0f766e; }
         .toggle-switch input:checked + .toggle-slider::before {
           transform: translateX(20px);
-          background: #0f172a;
+          background: #ffffff;
         }
       `}</style>
     </div>

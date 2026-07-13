@@ -234,17 +234,17 @@ export default function AdminAgentPage() {
       </div>
 
       <style jsx>{`
-        .op-header h1 { color: #f1f5f9; margin: 0 0 8px; font-size: 1.6rem; font-weight: 700; }
-        .op-meta { display: flex; gap: 16px; flex-wrap: wrap; color: #94a3b8; font-size: 0.85rem; align-items: center; }
-        .op-meta code { color: #38bdf8; background: rgba(56,189,248,0.08); padding: 2px 6px; border-radius: 4px; font-size: 0.78rem; }
-        .op-meta strong { color: #f1f5f9; }
-        .op-hint { color: #94a3b8; font-size: 0.85rem; margin: 12px 0 24px; }
-        .op-hint code { color: #fcd34d; background: rgba(252,211,77,0.08); padding: 2px 6px; border-radius: 4px; font-size: 0.78rem; }
+        .op-header h1 { color: #17212b; margin: 0 0 8px; font-size: 2rem; font-weight: 720; }
+        .op-meta { display: flex; gap: 16px; flex-wrap: wrap; color: #66717d; font-size: 0.82rem; align-items: center; }
+        .op-meta code { color: #0f766e; background: #e6f5f2; padding: 2px 6px; border-radius: 4px; font-size: 0.76rem; }
+        .op-meta strong { color: #17212b; }
+        .op-hint { max-width: 900px; color: #66717d; font-size: 0.85rem; line-height: 1.55; margin: 12px 0 24px; }
+        .op-hint code { color: #8a6715; background: #fff7df; padding: 2px 6px; border-radius: 4px; font-size: 0.78rem; }
 
         .op-log {
-          background: #0f172a;
-          border: 1px solid rgba(148,163,184,0.12);
-          border-radius: 16px;
+          background: #ffffff;
+          border: 1px solid #dfe4e8;
+          border-radius: 8px;
           padding: 16px;
           min-height: 320px;
           max-height: 60vh;
@@ -253,43 +253,43 @@ export default function AdminAgentPage() {
           flex-direction: column;
           gap: 12px;
         }
-        .op-empty { color: #64748b; text-align: center; padding: 60px 12px; }
+        .op-empty { color: #7a858e; text-align: center; padding: 60px 12px; }
         .op-row { display: flex; }
         .op-row-user { justify-content: flex-end; }
         .op-row-agent { justify-content: flex-start; }
         .op-bubble {
           max-width: 88%;
-          border-radius: 12px;
+          border-radius: 8px;
           padding: 12px 16px;
           font-size: 0.88rem;
           line-height: 1.5;
         }
-        .op-bubble-user { background: #1e40af; color: #dbeafe; }
-        .op-bubble-agent { background: #1e293b; color: #e2e8f0; border: 1px solid rgba(148,163,184,0.12); }
+        .op-bubble-user { background: #0f766e; color: #ffffff; }
+        .op-bubble-agent { background: #f8f9fa; color: #2d3943; border: 1px solid #dfe4e8; }
         .op-bubble-head { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
         .op-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; font-weight: 700; letter-spacing: 0.04em; }
-        .op-status { font-size: 0.72rem; color: #64748b; font-family: ui-monospace, monospace; }
+        .op-status { font-size: 0.72rem; color: #7a858e; font-family: ui-monospace, monospace; }
         .op-msg { margin: 8px 0; }
         .op-opts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-        .op-confirm { margin-top: 8px; border-top: 1px dashed rgba(148,163,184,0.2); padding-top: 8px; }
-        .op-confirm-meta { font-size: 0.82rem; color: #cbd5e1; margin-bottom: 6px; }
-        .op-confirm-meta code { color: #fcd34d; }
+        .op-confirm { margin-top: 8px; border-top: 1px dashed #cfd6db; padding-top: 8px; }
+        .op-confirm-meta { font-size: 0.82rem; color: #52606b; margin-bottom: 6px; }
+        .op-confirm-meta code { color: #8a6715; }
         .op-confirm-actions { display: flex; gap: 8px; margin-top: 8px; }
-        .op-pre { background: #0b1220; color: #cbd5e1; padding: 10px 12px; border-radius: 8px; overflow-x: auto; font-size: 0.78rem; margin: 6px 0; }
-        .op-details summary { cursor: pointer; color: #94a3b8; font-size: 0.78rem; margin-top: 6px; }
+        .op-pre { background: #eef1f3; color: #35414b; padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 0.78rem; margin: 6px 0; }
+        .op-details summary { cursor: pointer; color: #66717d; font-size: 0.78rem; margin-top: 6px; }
 
         .op-composer { display: flex; gap: 8px; margin-top: 16px; }
-        .op-input { flex: 1; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(148,163,184,0.2); background: #0f172a; color: #f1f5f9; font-size: 0.95rem; }
-        .op-input:focus { outline: none; border-color: #38bdf8; }
-        .op-btn { padding: 9px 16px; border-radius: 10px; font-size: 0.85rem; cursor: pointer; border: 1px solid transparent; transition: opacity 120ms; font-weight: 600; }
+        .op-input { flex: 1; padding: 10px 14px; border-radius: 6px; border: 1px solid #cfd6db; background: #ffffff; color: #17212b; font-size: 0.95rem; }
+        .op-input:focus { outline: 2px solid rgba(15,118,110,0.12); border-color: #0f766e; }
+        .op-btn { padding: 9px 16px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; border: 1px solid transparent; transition: opacity 120ms; font-weight: 600; }
         .op-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .op-btn-primary { background: #38bdf8; color: #0f172a; border: 1px solid #38bdf8; }
-        .op-btn-confirm { background: #16a34a; color: #052e16; border: 1px solid #16a34a; }
-        .op-btn-ghost { background: transparent; color: #cbd5e1; border: 1px solid rgba(148,163,184,0.3); }
+        .op-btn-primary { background: #0f766e; color: #ffffff; border: 1px solid #0f766e; }
+        .op-btn-confirm { background: #16734f; color: #ffffff; border: 1px solid #16734f; }
+        .op-btn-ghost { background: #ffffff; color: #46525c; border: 1px solid #cfd6db; }
 
-        .op-examples { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; color: #94a3b8; font-size: 0.8rem; align-items: center; }
-        .op-chip { background: rgba(148,163,184,0.08); color: #cbd5e1; border: 1px solid rgba(148,163,184,0.2); border-radius: 999px; padding: 4px 10px; font-size: 0.78rem; cursor: pointer; }
-        .op-chip:hover { background: rgba(148,163,184,0.16); }
+        .op-examples { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; color: #6b7680; font-size: 0.8rem; align-items: center; }
+        .op-chip { background: #ffffff; color: #52606b; border: 1px solid #d5dbe0; border-radius: 999px; padding: 4px 10px; font-size: 0.78rem; cursor: pointer; }
+        .op-chip:hover { background: #f0f4f4; }
       `}</style>
     </AdminLayout>
   );
