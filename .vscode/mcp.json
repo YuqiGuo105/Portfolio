@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "yuqi-portfolio": {
+      "type": "http",
+      "url": "https://portfolio-mcp-server-702193211434.us-central1.run.app/mcp"
+    }
+  }
+}
