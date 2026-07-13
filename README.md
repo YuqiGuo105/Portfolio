@@ -10,6 +10,9 @@ A modern Next.js portfolio application for showcasing projects, blogs, CV, visit
 
 ```mermaid
 flowchart LR
+    %% ================= External MCP Clients =================
+    MCP_CLIENTS["🧑‍💻 MCP Clients\nChatGPT · Claude · Copilot · Cursor"]
+
     %% ================= Frontend =================
     subgraph FRONTEND["▲ PORTFOLIO FRONTEND · VERCEL"]
         UI["🖥️ Portfolio UI\nNext.js · Blog · Projects · CV\nChat Widget · 3D Visitor Globe"]
@@ -23,6 +26,8 @@ flowchart LR
     %% ================= Backend =================
     subgraph CLOUD["☁️ GOOGLE CLOUD / MANAGED BACKEND"]
         SESSION_CACHE@{ shape: lin-cyl, label: "⚡ Valkey (frontend)\n/api/track rate limit\nshared across Vercel replicas" }
+
+        PUBLIC_MCP["🌐 Public Portfolio MCP Server\nStreamable HTTP · stateless\n6 read-only tools · response sanitization"]
 
         %% ================= AI Platform =================
         subgraph AI_SYS["🧠 AI PLATFORM · portfolio-ai-platform"]
@@ -175,6 +180,10 @@ flowchart LR
     API_PROXY -->|/api/rag/answer/stream · Gemini + pgvector| RAG_DB
     API_PROXY -.->|Kafka down fallback| ANALYTICS_DB
 
+    %% ================= Public MCP access =================
+    MCP_CLIENTS -->|Streamable HTTP · /mcp| PUBLIC_MCP
+    PUBLIC_MCP -->|authenticated internal invocation\nread-only tools only| MCP
+
     %% ================= Styles =================
     classDef frontend fill:#ecfeff,stroke:#0891b2,stroke-width:1.8px,color:#164e63
     classDef service fill:#ffffff,stroke:#334155,stroke-width:1.2px,color:#0f172a
@@ -184,11 +193,11 @@ flowchart LR
     classDef external fill:#f9fafb,stroke:#6b7280,stroke-width:1.1px,color:#111827
 
     class UI,AUTH,API_PROXY frontend
-    class AGENT,COMPACTOR,MCP,KNOWLEDGE,RECORDS_CONSUMER,OS_CONSUMER,KIBANA,ADMIN_API,SEARCH_INDEXER,RAG_INDEXER,SUB_API,EMAIL_WORKER,DELIVERY_TRACKER,ANALYTICS_CONSUMER,SESSION_AGG,ROLLUP_JOB,VISITS_API,ALERTS service
+    class AGENT,COMPACTOR,MCP,KNOWLEDGE,RECORDS_CONSUMER,OS_CONSUMER,KIBANA,ADMIN_API,SEARCH_INDEXER,RAG_INDEXER,SUB_API,EMAIL_WORKER,DELIVERY_TRACKER,ANALYTICS_CONSUMER,SESSION_AGG,ROLLUP_JOB,VISITS_API,ALERTS,PUBLIC_MCP service
     class CONTENT_DB,RAG_DB,NOTIF_DB,ANALYTICS_DB,OPENSEARCH,OS_KB,AI_EVENTS,RECORDS_DB database
     class CONTENT_TOPIC,DISPATCH_TOPIC,RAW_TOPIC,DLQ,AI_TOPIC kafka
     class SESSION_CACHE,REDIS_MEMORY,DEDUP_CACHE cache
-    class LLM,EMAIL_PROVIDER external
+    class LLM,EMAIL_PROVIDER,MCP_CLIENTS external
 
     style FRONTEND fill:#ecfeff,stroke:#0891b2,stroke-width:2px,color:#164e63
     style CLOUD fill:#f8fafc,stroke:#94a3b8,stroke-width:2px,color:#0f172a
@@ -205,6 +214,7 @@ flowchart LR
 | Service                            | Repository                                                                                                | Responsibility                                                                                                |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | **Portfolio Frontend**             | [YuqiGuo105/Portfolio](https://github.com/YuqiGuo105/Portfolio)                                           | Next.js frontend, project pages, blogs, API proxy routes, chat widget, visitor globe                          |
+| **Public Portfolio MCP Server**    | [YuqiGuo105/portfolio-mcp-server](https://github.com/YuqiGuo105/portfolio-mcp-server)                     | Public, read-only Streamable HTTP MCP tools for projects, articles, architecture diagrams, and profile data   |
 | **portfolio-ai-platform**          | [YuqiGuo105/portfolio-ai-platform](https://github.com/YuqiGuo105/portfolio-ai-platform)                   | Agent service (safety → retrieval → generation pipeline, event observability), knowledge service (hybrid BM25+kNN, RRF, OpenAI embed), MCP gateway (typed tools, RBAC, idempotency, audit) |
 | **portfolio-admin-service**        | [YuqiGuo105/portfolio-admin-service](https://github.com/YuqiGuo105/portfolio-admin-service)               | Content CRUD, optimistic concurrency, transactional outbox, Kafka publishing, OpenSearch indexer, RAG indexer |
 | **portfolio-notification-service** | [YuqiGuo105/portfolio-notification-service](https://github.com/YuqiGuo105/portfolio-notification-service) | Subscription APIs, notification dispatch, email sender worker, retry handling, delivery tracking              |
@@ -216,6 +226,7 @@ flowchart LR
 
 * **Modern portfolio frontend** built with Next.js, including projects, blogs, CV, parallax project detail pages, and guided navigation.
 * **AI chat assistant** with RAG retrieval, multi-round reasoning, intent classification, and MCP tool execution.
+* **Public MCP integration** that gives ChatGPT, Claude, GitHub Copilot, Cursor, and other MCP clients read-only access to projects, articles, stored architecture diagrams, and public profile data.
 * **Admin dashboard** for managing blogs, projects, life posts, and portfolio content.
 * **Kafka-driven content pipeline** that publishes content change events to search, RAG, and notification consumers.
 * **Professional search stack** using OpenSearch for indexed portfolio search and ranking.
