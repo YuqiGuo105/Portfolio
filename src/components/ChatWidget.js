@@ -1752,6 +1752,8 @@ function TodoList({ subtasks, expanded = false }) {
  * ToolCard and StageToast style blocks if introducing one.
  */
 const STAGE_REGISTRY = [
+  { match: (s) => /(connect|network|transport)/.test(s),           label: "Connecting",    tone: "cyan",    Icon: Zap },
+  { match: (s) => /(safety|policy|guard|verify|check)/.test(s),   label: "Checking",      tone: "amber",   Icon: CheckCircle2 },
   { match: (s) => /plan/.test(s),                              label: "Planning",     tone: "violet",  Icon: Sparkles },
   { match: (s) => /(route|intent|classif)/.test(s),            label: "Routing",      tone: "blue",    Icon: Compass },
   { match: (s) => /(retriev|search|kb|rag|query)/.test(s),     label: "Searching",    tone: "indigo",  Icon: Search },
@@ -1862,10 +1864,13 @@ function humanizeStep(step) {
 }
 
 /* ---------- Collapsible tool history (timeline) ---------- */
-function ToolHistory({ cards }) {
+function ToolHistory({ cards, kind = "tools" }) {
   const [open, setOpen] = useState(false)
   if (!Array.isArray(cards) || cards.length === 0) return null
   const count = cards.length
+  const label = kind === "steps"
+    ? `Completed ${count} step${count === 1 ? "" : "s"}`
+    : `Used ${count} tool${count === 1 ? "" : "s"}`
   return (
     <div className="cw-th mb-2">
       <button
@@ -1878,7 +1883,7 @@ function ToolHistory({ cards }) {
           <Check />
         </span>
         <span className="cw-th-label">
-          Used {count} tool{count === 1 ? "" : "s"}
+          {label}
         </span>
         <span className="cw-th-chev" aria-hidden="true">
           <ChevronDown />
@@ -1986,7 +1991,11 @@ function ToolCard({ step }) {
   const StageIcon = meta.Icon || Circle
   const details = humanizeStep(step)
   const hasDetails = details.length > 0
-  const duration = step.tsEnd && step.ts ? formatDuration(step.tsEnd - step.ts) : null
+  const duration = formatDuration(
+    typeof step.durationMs === "number"
+      ? step.durationMs
+      : (step.tsEnd && step.ts ? step.tsEnd - step.ts : NaN),
+  )
 
   return (
     <div className={`cw-tc tone-${meta.tone}`}>
@@ -2160,11 +2169,17 @@ function ToolCard({ step }) {
 
 /* ---------- Live stage toast (while streaming) ---------- */
 function StageToast({ step }) {
+  const [, setClockTick] = useState(0)
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockTick((tick) => tick + 1), 250)
+    return () => window.clearInterval(timer)
+  }, [step?.id])
   if (!step) return null
   const meta = getStageMeta(step.stage, step.title)
   const StageIcon = meta.Icon || Circle
   const summary = getCardSummary(step)
   const title = step.title || meta.label
+  const elapsed = formatDuration(Math.max(0, Date.now() - (step.ts || Date.now())))
 
   // Extract tasks for the live mini-list (if any)
   const tasks = (() => {
@@ -2195,6 +2210,7 @@ function StageToast({ step }) {
             <div className="cw-st-row1">
               <span className="cw-st-tag">{meta.label}</span>
               <span className="cw-st-title">{title}</span>
+              {elapsed ? <span className="cw-st-elapsed">{elapsed}</span> : null}
             </div>
             {summary ? <div className="cw-st-sub">{summary}</div> : null}
           </div>
@@ -2324,6 +2340,16 @@ function StageToast({ step }) {
           flex: 1;
           min-width: 0;
         }
+        .cw-st-elapsed {
+          min-width: 38px;
+          flex-shrink: 0;
+          text-align: right;
+          font-size: 11px;
+          font-variant-numeric: tabular-nums;
+          color: rgba(71, 85, 105, 0.72);
+        }
+        :global(body.dark-skin) .cw-st-elapsed,
+        :global(.dark) .cw-st-elapsed { color: rgba(203, 213, 225, 0.7); }
         :global(body.dark-skin) .cw-st-title,
         :global(.dark) .cw-st-title {
           background-image: linear-gradient(
@@ -3001,8 +3027,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     const now = Date.now()
     // Suppress further timeline writes after the user stopped this turn.
     if (stoppedAssistantIdsRef.current.has(assistantId)) return
-    const groupKey = typeof obj?.groupKey === "string" && obj.groupKey ? obj.groupKey : null
-    const isFinal = !!obj?.final
+    const groupKey = [obj?.groupKey, obj?.stageId].find((value) => typeof value === "string" && value) || null
+    const isFinal = !!obj?.final || obj?.status === "completed" || obj?.status === "failed"
+    const durationMs = Number.isFinite(obj?.durationMs) ? obj.durationMs : undefined
+    // Use the browser clock for live elapsed time. Backend and browser clocks
+    // may differ; backend durationMs remains the source of truth on completion.
+    const localStartedAt = isFinal && durationMs !== undefined ? now - durationMs : now
+    const localCompletedAt = isFinal ? now : undefined
     const card = {
       id: `${String(stage || "stage")}-${now}-${Math.random().toString(36).slice(2, 6)}`,
       stage,
@@ -3010,14 +3041,16 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       keyInfo,
       rawPayload: obj?.payload,
       groupKey,
-      ts: now,
-      tsEnd: isFinal ? now : undefined,
+      status: obj?.status || (isFinal ? "completed" : "started"),
+      durationMs,
+      ts: localStartedAt,
+      tsEnd: localCompletedAt,
     }
 
     setMessages((prev) =>
       prev.map((m) => {
         if (m.id !== assistantId) return m
-        const existing = Array.isArray(m.toolCards) ? m.toolCards : []
+        const existing = Array.isArray(m.executionStages) ? m.executionStages : []
 
         // ── Group merge ──────────────────────────────────────────────
         // When a card with the same groupKey exists, update it in place
@@ -3040,27 +3073,28 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               keyInfo: summarizePayload(mergedPayload, 180) || cur.keyInfo,
               rawPayload: mergedPayload,
               stage,
+              status: card.status,
+              durationMs: durationMs ?? cur.durationMs,
               tsEnd: isFinal ? now : cur.tsEnd,
             }
             const next = [...existing]
             next[idx] = merged
+            const active = [...next].reverse().find((entry) => !entry.tsEnd)
             return {
               ...m,
-              thinkingNow: isFinal ? null : merged,
-              toolCards: next,
+              thinkingNow: isFinal ? (active || null) : merged,
+              executionStages: next,
             }
           }
         }
 
         const last = existing[existing.length - 1]
-        // Close out the previous card with an end timestamp
-        const closed = last && !last.tsEnd ? [...existing.slice(0, -1), { ...last, tsEnd: now }] : existing
         // De-dupe: skip if previous card has the same stage + title (avoids repeated steps)
         const isDup = last && last.stage === stage && last.title === title
         return {
           ...m,
           thinkingNow: isFinal ? null : card,
-          toolCards: isDup ? closed : [...closed, card],
+          executionStages: isDup ? existing : [...existing, card],
         }
       }),
     )
@@ -3071,10 +3105,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     setMessages((prev) =>
       prev.map((m) => {
         if (m.id !== assistantId) return m
-        const existing = Array.isArray(m.toolCards) ? m.toolCards : []
-        const last = existing[existing.length - 1]
-        const closed = last && !last.tsEnd ? [...existing.slice(0, -1), { ...last, tsEnd: now }] : existing
-        return { ...m, thinkingNow: null, toolCards: closed }
+        const existing = Array.isArray(m.executionStages) ? m.executionStages : []
+        const closed = existing.map((entry) => entry.tsEnd ? entry : { ...entry, tsEnd: now })
+        return { ...m, thinkingNow: null, executionStages: closed }
       }),
     )
   }
@@ -3292,21 +3325,20 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               prev.map((m) => {
                 if (m.id !== assistantId) return m
                 const existing = Array.isArray(m.toolCards) ? m.toolCards : []
+                const card = {
+                  id: callId || `tc-${now}`,
+                  stage: "tool_call_start",
+                  title: toolName,
+                  keyInfo: args ? String(args).slice(0, 120) : "",
+                  rawPayload: obj.payload,
+                  ts: now,
+                  toolName,
+                  callId,
+                }
                 return {
                   ...m,
-                  toolCards: [
-                    ...existing,
-                    {
-                      id: callId || `tc-${now}`,
-                      stage: "tool_call_start",
-                      title: `\u{1F527} ${toolName}`,
-                      keyInfo: args ? String(args).slice(0, 120) : "",
-                      rawPayload: obj.payload,
-                      ts: now,
-                      toolName,
-                      callId,
-                    },
-                  ],
+                  thinkingNow: card,
+                  toolCards: [...existing, card],
                 }
               })
             )
@@ -3324,11 +3356,16 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               const existing = Array.isArray(m.toolCards) ? m.toolCards : []
               const updated = existing.map((c) => {
                 if (c.callId && c.callId === callId) {
-                  return { ...c, tsEnd: now, keyInfo: latencyMs ? `${latencyMs}ms · ${status || "done"}` : (status || "done") }
+                  return {
+                    ...c,
+                    tsEnd: Number.isFinite(latencyMs) ? c.ts + latencyMs : now,
+                    durationMs: Number.isFinite(latencyMs) ? latencyMs : undefined,
+                    keyInfo: latencyMs ? `${latencyMs}ms · ${status || "done"}` : (status || "done"),
+                  }
                 }
                 return c
               })
-              return { ...m, toolCards: updated }
+              return { ...m, thinkingNow: null, toolCards: updated }
             })
           )
           return
@@ -3939,7 +3976,21 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     setComposerFiles([])
 
     const assistantId = generateUUID()
-    setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", streaming: true, thinkingNow: null, toolCards: [] }])
+    const requestStartedAt = Date.now()
+    setMessages((prev) => [...prev, {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      streaming: true,
+      thinkingNow: {
+        id: `connecting-${assistantId}`,
+        stage: "connecting",
+        title: "Connecting to the assistant...",
+        ts: requestStartedAt,
+      },
+      executionStages: [],
+      toolCards: [],
+    }])
 
     const baseQuestion = visibleText
     const requestMode = mode
@@ -4172,9 +4223,12 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
               {m.role === "assistant" && m.streaming && m.thinkingNow ? <StageToast step={m.thinkingNow} /> : null}
 
-              {/* Persist completed tool/stage cards after streaming so the user can review what ran */}
+              {/* Execution trace and real MCP calls are intentionally separate. */}
+              {m.role === "assistant" && !m.streaming && Array.isArray(m.executionStages) && m.executionStages.length > 0 ? (
+                <ToolHistory cards={m.executionStages} kind="steps" />
+              ) : null}
               {m.role === "assistant" && !m.streaming && Array.isArray(m.toolCards) && m.toolCards.length > 0 ? (
-                <ToolHistory cards={m.toolCards} />
+                <ToolHistory cards={m.toolCards} kind="tools" />
               ) : null}
 
               {/* Task 3: Render TodoList when planPayload with subtasks is present */}
@@ -4411,10 +4465,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
                     if (!m.streaming) return m
                     stoppedAssistantIdsRef.current.add(m.id)
                     const now = Date.now()
-                    const existing = Array.isArray(m.toolCards) ? m.toolCards : []
-                    // Close any open card so the timeline shows a final duration.
-                    const closedCards = existing.map((c) =>
+                    const existingTools = Array.isArray(m.toolCards) ? m.toolCards : []
+                    const existingStages = Array.isArray(m.executionStages) ? m.executionStages : []
+                    const closedCards = existingTools.map((c) =>
                       c.tsEnd ? c : { ...c, tsEnd: now },
+                    )
+                    const closedStages = existingStages.map((stage) =>
+                      stage.tsEnd ? stage : { ...stage, tsEnd: now },
                     )
                     const trimmed = typeof m.content === "string" ? m.content.trim() : ""
                     return {
@@ -4422,6 +4479,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
                       streaming: false,
                       thinkingNow: null,
                       toolCards: closedCards,
+                      executionStages: closedStages,
                       content: trimmed ? m.content : "_Stopped._",
                       isHtml: trimmed ? m.isHtml : false,
                     }
