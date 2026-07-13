@@ -18,8 +18,7 @@ function sanitizeRedirect(target) {
 function buildOauthRedirect(target) {
   if (typeof window === 'undefined') return undefined;
   const safe = sanitizeRedirect(target);
-  // Supabase will append `#access_token=...` and then bounce back here.
-  return `${window.location.origin}/admin/login?redirect=${encodeURIComponent(safe)}`;
+  return `${window.location.origin}/admin/callback?redirect=${encodeURIComponent(safe)}`;
 }
 
 export default function AdminLogin() {
@@ -57,6 +56,10 @@ export default function AdminLogin() {
       setCheckingSession(true);
       if (router.query.reason === 'unauthorized') {
         setError('This account is not authorized to access the admin panel.');
+      } else if (router.query.reason === 'oauth_error') {
+        setError(typeof router.query.message === 'string'
+          ? router.query.message
+          : 'Google sign-in could not be completed. Please try again.');
       }
       try {
         const { data } = await supabase.auth.getSession();
