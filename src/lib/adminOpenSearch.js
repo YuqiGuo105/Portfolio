@@ -72,7 +72,7 @@ export async function listAgentConversations({ query, hours, limit } = {}) {
 
   const { host, port, username, password } = config();
   const indices = process.env.OPENSEARCH_AGENT_INDEXES
-    || "ai-agent-runs-*,ai-answers-*";
+    || "ai-agent-runs-*,ai-answers-*,ai-safety-*";
   const endpoint = `https://${host}:${port}/${indices}/_search?ignore_unavailable=true`;
   const token = Buffer.from(`${username}:${password}`).toString("base64");
   const response = await fetch(endpoint, {
