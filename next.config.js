@@ -7,10 +7,15 @@ const nextConfig = {
     defaultLocale: "en",
   },
   async rewrites() {
+    const mcpBase = process.env.MCP_SERVER_URL || 'https://portfolio-mcp-server-702193211434.us-central1.run.app';
     return [
       {
         source: '/mcp',
-        destination: 'https://portfolio-mcp-server-702193211434.us-central1.run.app/mcp',
+        destination: `${mcpBase}/mcp`,
+      },
+      {
+        source: '/mcp/admin',
+        destination: `${mcpBase}/mcp/admin`,
       },
     ];
   },
