@@ -298,15 +298,6 @@ const Header = ({ onOpenSearch }) => {
             </div>
           </div>
         </div>
-        {/* social */}
-        <div className="menu-social-links">
-          <a href={GITHUB_URL} target="blank" title="twitter">
-            <i className="fab fa-github" />
-          </a>
-          <a href={INSTAGRAM_URL} target="blank" title="behance">
-            <i className="fab fa-instagram" />
-          </a>
-        </div>
       </div>
     </header>
   );
