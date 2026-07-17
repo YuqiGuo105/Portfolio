@@ -133,11 +133,11 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "name": { "type": "string", "description": "Sender's name (may be inferred from the conversation; ask if unknown)." },
+          "name": { "type": "string", "description": "Optional sender display name." },
           "email": { "type": "string", "description": "Sender's reply-to email." },
           "message": { "type": "string", "description": "The body of the message the visitor wants to send to the owner." }
         },
-        "required": ["name", "email", "message"]
+        "required": ["email", "message"]
       },
       "riskLevel": "WRITE",
       "requiresConfirmation": true,

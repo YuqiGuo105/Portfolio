@@ -17,7 +17,6 @@ import { createClient } from 'redis';
 
 const RATE_LIMIT = Number(process.env.TRACK_RATE_LIMIT || 10);
 const RATE_WINDOW_MS = Number(process.env.TRACK_RATE_WINDOW_MS || 60_000);
-const RATE_WINDOW_SEC = Math.max(1, Math.ceil(RATE_WINDOW_MS / 1000));
 
 // In-memory fallback used when Valkey is down. Keyed the same way as the
 // Redis key so behavior is identical when we degrade.
@@ -75,8 +74,15 @@ async function getClient() {
  *   share the same Valkey.
  * @returns {Promise<boolean>}
  */
-export async function isRateLimited(ip, scope = 'track') {
-  const bucket = Math.floor(Date.now() / RATE_WINDOW_MS);
+export async function isRateLimited(ip, scope = 'track', options = {}) {
+  const limit = Number.isFinite(Number(options.limit))
+    ? Math.max(1, Number(options.limit))
+    : RATE_LIMIT;
+  const windowMs = Number.isFinite(Number(options.windowMs))
+    ? Math.max(1_000, Number(options.windowMs))
+    : RATE_WINDOW_MS;
+  const windowSec = Math.max(1, Math.ceil(windowMs / 1000));
+  const bucket = Math.floor(Date.now() / windowMs);
   const key = `rl:${scope}:${ip}:${bucket}`;
 
   const client = await getClient();
@@ -87,9 +93,9 @@ export async function isRateLimited(ip, scope = 'track') {
         // First hit in this window — arm TTL so the counter self-cleans.
         // Add a small grace so requests landing on the boundary don't lose
         // their counter mid-window.
-        await client.expire(key, RATE_WINDOW_SEC + 5);
+        await client.expire(key, windowSec + 5);
       }
-      return count > RATE_LIMIT;
+      return count > limit;
     } catch (err) {
       console.warn('[rateLimiter] valkey op failed, falling back:', err && err.message);
       // fall through to in-memory
@@ -100,7 +106,7 @@ export async function isRateLimited(ip, scope = 'track') {
   const now = Date.now();
   const entry = memoryFallback.get(key);
   if (!entry || now > entry.resetAt) {
-    memoryFallback.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    memoryFallback.set(key, { count: 1, resetAt: now + windowMs });
     // Best-effort GC: prune anything stale that isn't the current bucket.
     if (memoryFallback.size > 5000) {
       for (const [k, v] of memoryFallback) {
@@ -109,7 +115,7 @@ export async function isRateLimited(ip, scope = 'track') {
     }
     return false;
   }
-  if (entry.count >= RATE_LIMIT) return true;
+  if (entry.count >= limit) return true;
   entry.count += 1;
   return false;
 }

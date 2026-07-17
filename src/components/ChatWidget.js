@@ -3260,7 +3260,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     onFinal?.(finalContent)
   }
 
-  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal, requestMode, currentSessionId, pageContext, userEmail, conversationHistory, pendingActionId, confirm }) => {
+  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal, requestMode, currentSessionId, pageContext, userEmail, conversationHistory, pendingActionId }) => {
     const base = ragEndpointRef.current || (await resolveRagEndpoint())
     const streamUrl = ragStreamUrl(base)
 
@@ -3289,7 +3289,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         : {}),
       // Backend confirmation of a previously staged pending action.
       ...(pendingActionId ? { pendingActionId } : {}),
-      ...(typeof confirm === "boolean" ? { confirm } : {}),
     }
 
     await postSSE(streamUrl, body, {
@@ -3335,6 +3334,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               tool: obj.payload?.targetTool || "tool",
               ts: Date.now(),
             }
+          } else if (pendingActionId) {
+            pendingActionRef.current = null
           }
           
           // Parse and extract [KEYWORDS_EN] section (bilingual keyword explanations)
@@ -3664,110 +3665,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
    */
 
   /**
-   * Direct frontend handler for `contact.email_owner`.
-   *
-   * This tool is intentionally NOT registered in the agent-service
-   * ToolRegistry (admin/notification tools only). Visitor-facing contact
-   * lives entirely in the Next.js layer: the existing /api/contact
-   * nodemailer endpoint already does the work. Routing it through Cloud
-   * Run + MCP gateway would add cold-start latency, a new auth surface,
-   * and another deploy target for zero benefit.
-   *
-   * Returns true when the message was sent (skip RAG); false when the
-   * caller should fall through to RAG/other handling.
-   */
-  const handleContactEmailOwner = async ({ args, assistantId }) => {
-    const name = typeof args?.name === "string" ? args.name.trim() : ""
-    const email = typeof args?.email === "string" ? args.email.trim() : ""
-    const message = typeof args?.message === "string" ? args.message.trim() : ""
-    if (!name || !email || !message) {
-      // Validator should have caught this; defensive fallback.
-      return false
-    }
-
-    const TOOL_GROUP = "tool_contact_email_owner"
-    setStage(assistantId, "tool_call", {
-      message: "Tool call",
-      payload: {
-        toolName: "contact.email_owner",
-        route: "/api/contact",
-        from: `${name} <${email}>`,
-        messagePreview: message.length > 120 ? `${message.slice(0, 117)}…` : message,
-      },
-      groupKey: TOOL_GROUP,
-      final: false,
-    })
-
-    const ctrl = new AbortController()
-    abortRef.current = ctrl
-
-    try {
-      const res = await fetch("/api/contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, message }),
-        signal: ctrl.signal,
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || data?.ok !== true) {
-        setStage(assistantId, "tool_result", {
-          message: "Tool call",
-          payload: {
-            toolName: "contact.email_owner",
-            route: "/api/contact",
-            result: `Failed (HTTP ${res.status}): ${data?.error || "unknown error"}`,
-          },
-          groupKey: TOOL_GROUP,
-          final: true,
-        })
-        const msg =
-          "⚠️ Sorry — I couldn't send that contact message just now. " +
-          "Please try again in a minute, or email yuqi.guo17@gmail.com directly."
-        clearStage(assistantId)
-        finalizeAssistant(assistantId, msg)
-        return true
-      }
-      setStage(assistantId, "tool_result", {
-        message: "Tool call",
-        payload: {
-          toolName: "contact.email_owner",
-          route: "/api/contact",
-          result: `Sent to site owner (reply-to ${email})`,
-        },
-        groupKey: TOOL_GROUP,
-        final: true,
-      })
-      const confirm =
-        `Done — your message has been sent to Yuqi. ✉️\n\n` +
-        `**Name:** ${name}\n**Email:** ${email}\n**Message:** ${message}\n\n` +
-        `He'll usually reply within a day or two. Anything else I can help with?`
-      clearStage(assistantId)
-      finalizeAssistant(assistantId, confirm)
-      return true
-    } catch (err) {
-      // User aborted via the Stop button — re-throw so sendMessage's catch
-      // can do its unified cleanup. Don't render a "failure" bubble.
-      if (err?.name === "AbortError") throw err
-      setStage(assistantId, "tool_result", {
-        message: "Tool call",
-        payload: {
-          toolName: "contact.email_owner",
-          route: "/api/contact",
-          result: `Network error: ${err?.message || String(err)}`,
-        },
-        groupKey: TOOL_GROUP,
-        final: true,
-      })
-      const msg =
-        "⚠️ The contact endpoint isn't reachable right now. " +
-        "Please try again later, or email yuqi.guo17@gmail.com directly."
-      clearStage(assistantId)
-      finalizeAssistant(assistantId, msg)
-      return true
-    }
-  }
-
-  /**
    * Inline handler for analytics.get_visitor_summary / analytics.get_top_pages.
    *
    * Fetches the public analytics proxy, then PASSES THE RAW DATA + original
@@ -3995,23 +3892,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         ts: Date.now(),
       }
     } else if (env.type === "FORBIDDEN") {
-      // Friendlier message + actionable fallback when the classifier wants
-      // an admin-only notification tool but the user is clearly trying to
-      // contact the site owner.
-      const rawMsg = env.message || "You don't have permission to run that action."
-      const looksLikeContact =
-        /contact|reach|message|email|notify/i.test(question || "") ||
-        /notification\./i.test(rawMsg)
-      if (looksLikeContact) {
-        lines.push(
-          `I can't send admin notifications from the chat (that's an owner-only tool).`,
-          `If you want to **reach Yuqi directly**, use the contact form at the bottom of the home page — it emails him right away. ` +
-            `Or send a note to **Yuqi.guo17@gmail.com**.`,
-          `_Original classifier reason: ${rawMsg}_`,
-        )
-      } else {
-        lines.push(rawMsg)
-      }
+      lines.push(env.message || "You don't have permission to run that action.")
     } else {
       lines.push("```json\n" + JSON.stringify(env, null, 2) + "\n```")
     }
@@ -4149,45 +4030,32 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       const ownerEmail = activeSession?.user?.email || null
 
       // ── Fast mode: try the agent (MCP tools) before RAG ─────────────────
-      // - If the user is responding to a pending confirmation, ship that
-      //   straight to /api/agent/intent/confirm.
+      // - If the user is responding to a pending confirmation, preserve the
+      //   raw utterance and let the backend LLM decide its meaning.
       // - Else pre-classify the utterance. If the agent owns it (OK / ASK /
       //   CONFIRMATION_REQUIRED / FORBIDDEN), render the envelope. Otherwise
       //   fall through to the existing Railway RAG SSE flow.
       if (requestMode === "regular") {
         if (pendingActionRef.current?.id) {
-          const lower = baseQuestion.trim().toLowerCase()
-          const isConfirm = /^(confirm|yes|y|go|proceed|ok|okay|do it|执行|确认|是的?|好的?)$/.test(lower)
-          const isCancel = /^(cancel|no|n|stop|abort|nevermind|取消|不要?|否)$/.test(lower)
-          if (isConfirm || isCancel) {
-            const pendingId = pendingActionRef.current.id
-            pendingActionRef.current = null
-            // Route the confirmation through the same backend SSE stream —
-            // the agent-service pipeline detects pendingActionId + confirm and
-            // hands directly to IntentOrchestrator.handle(...) without
-            // re-running the LLM route planner.
-            const historyForConfirm = messages
-              .filter((m) => m.role === "user" || m.role === "assistant")
-              .filter((m) => typeof m.content === "string" && m.content.trim() && !m.streaming)
-              .slice(-6)
-              .map((m) => ({ role: m.role, content: m.content.trim().slice(0, 800) }))
-            await startRagSSE({
-              question: baseQuestion,
-              fileUrls: [],
-              assistantId,
-              requestMode,
-              currentSessionId: sessionId,
-              onFinal: finalizeAndPersist,
-              pageContext: pageCtx,
-              userEmail: ownerEmail,
-              conversationHistory: historyForConfirm,
-              pendingActionId: pendingId,
-              confirm: isConfirm,
-            })
-            return
-          }
-          // Unrelated message — drop the pending action and proceed normally.
-          pendingActionRef.current = null
+          const pendingId = pendingActionRef.current.id
+          const historyForConfirm = messages
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .filter((m) => typeof m.content === "string" && m.content.trim() && !m.streaming)
+            .slice(-6)
+            .map((m) => ({ role: m.role, content: m.content.trim().slice(0, 800) }))
+          await startRagSSE({
+            question: baseQuestion,
+            fileUrls: [],
+            assistantId,
+            requestMode,
+            currentSessionId: sessionId,
+            onFinal: finalizeAndPersist,
+            pageContext: pageCtx,
+            userEmail: ownerEmail,
+            conversationHistory: historyForConfirm,
+            pendingActionId: pendingId,
+          })
+          return
         }
 
         // ── Backend owns all routing ───────────────────────────────────

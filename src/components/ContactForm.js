@@ -4,7 +4,7 @@ const ContactForm = () => {
   const [contactData, setContactData] = useState({
     name: "",
     email: "",
-    messages: "",
+    message: "",
   });
   const [error, setError] = useState(false);
   const { name, email, message } = contactData;
