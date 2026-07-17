@@ -3,7 +3,7 @@ import { requireAdminUser } from "../../../src/lib/agentServiceProxy";
 const PROD_DEFAULT = "https://portfolio-analytics-aggregator-702193211434.us-central1.run.app";
 const ALLOWED_QUERY = new Set([
   "from", "to", "hours", "q", "event", "path", "country", "city",
-  "device", "browser", "referrer", "sessionId", "page", "size",
+  "device", "browser", "referrer", "sessionId", "includeAdmin", "page", "size",
 ]);
 
 export default async function handler(req, res) {

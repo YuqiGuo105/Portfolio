@@ -21,6 +21,7 @@ const EMPTY_FILTERS = {
   browser: "",
   referrer: "",
   sessionId: "",
+  includeAdmin: false,
 };
 const EMPTY_SUMMARY = { totalEvents: 0, uniqueVisitors: 0, countries: 0, cities: 0 };
 
@@ -91,7 +92,11 @@ export default function VisitorsPage() {
         />
 
         <section className={ui.metrics} aria-label="Visitor query summary">
-          <Metric label="Events" value={summary.totalEvents} hint={`Within ${windowLabel(hours)}`} />
+          <Metric
+            label="Events"
+            value={summary.totalEvents}
+            hint={`${windowLabel(hours)} · ${filters.includeAdmin ? "All traffic" : "Public traffic"}`}
+          />
           <Metric label="Unique visitors" value={summary.uniqueVisitors} hint="Session, anonymous ID or IP" />
           <Metric label="Countries" value={summary.countries} hint="Matching events" />
           <Metric label="Cities" value={summary.cities} hint="Matching events" />
@@ -102,7 +107,7 @@ export default function VisitorsPage() {
         <section className={ui.panel}>
           <form className={visitorStyles.queryForm} onSubmit={submitQuery}>
             <div className={visitorStyles.queryTop}>
-              <div className={ui.searchWrap}>
+              <div className={`${ui.searchWrap} ${visitorStyles.search}`}>
                 <Search className={ui.searchIcon} size={15} />
                 <input
                   className={ui.input}
@@ -124,6 +129,18 @@ export default function VisitorsPage() {
                   </button>
                 ))}
               </div>
+              <label className={visitorStyles.trafficToggle}>
+                <input
+                  className={visitorStyles.toggleInput}
+                  type="checkbox"
+                  checked={draft.includeAdmin}
+                  onChange={(event) => updateDraft("includeAdmin", event.target.checked)}
+                />
+                <span className={visitorStyles.toggleTrack} aria-hidden="true">
+                  <span className={visitorStyles.toggleThumb} />
+                </span>
+                <span>Include admin</span>
+              </label>
               <div className={visitorStyles.queryActions}>
                 <button className={ui.buttonPrimary} type="submit" disabled={loading}>
                   <Search size={14} /> Query
