@@ -163,7 +163,15 @@ function average(values) {
 }
 
 function summarizeItems(items) {
-  const incompleteStatuses = new Set(["blocked", "failed", "budget_exhausted"]);
+  const incompleteStatuses = new Set([
+    "blocked",
+    "failed",
+    "budget_exhausted",
+    "forbidden",
+    "unauthorized",
+    "rate_limited",
+    "cancelled",
+  ]);
   const completedItems = items.filter((item) =>
     item.completedAt && !incompleteStatuses.has(String(item.status || "").toLowerCase()),
   );
