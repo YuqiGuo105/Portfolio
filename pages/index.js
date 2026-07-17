@@ -151,20 +151,21 @@ const Index = () => {
 
     bootstrap();
 
-    /* GitHub commit count */
+    /* GitHub contribution count (all types, all years) */
     const fetchGithubCommits = async () => {
       try {
-        const res = await fetch(
-          "https://api.github.com/search/commits?q=author:YuqiGuo105&per_page=1",
-          { headers: { Accept: "application/vnd.github.cloak-preview+json" } }
-        );
+        const res = await fetch("/api/github-contributions");
         if (!res.ok) return;
         const json = await res.json();
-        if (json.total_count && json.total_count > 0) {
-          const count = json.total_count;
-          // Round down to nearest 100 and show as e.g. "600+"
-          const rounded = Math.floor(count / 100) * 100;
-          setGithubCommits(count >= 1000 ? `${(count / 1000).toFixed(1)}k+` : `${rounded}+`);
+        if (json.total && json.total > 0) {
+          const count = json.total;
+          if (count >= 1_000_000) {
+            setGithubCommits(`${(Math.floor(count / 100_000) / 10).toFixed(1)}M+`);
+          } else if (count >= 1000) {
+            setGithubCommits(`${(Math.floor(count / 100) / 10).toFixed(1)}K+`);
+          } else {
+            setGithubCommits(`${Math.floor(count / 100) * 100}+`);
+          }
         }
       } catch (_) {
         /* keep fallback */
@@ -741,7 +742,7 @@ const Index = () => {
             {/* Contribution graph */}
             <div style={{ padding: "20px 24px", overflowY: "auto", background: isLightSkin ? "#f7f5f2" : "transparent" }}>
               <div style={{ color: isLightSkin ? "#6b7280" : "#7d8590", fontSize: "13px", marginBottom: "12px" }}>
-                {githubCommits} contributions in the last year
+                {githubCommits} total commits across all repositories
               </div>
               <img
                 src={`https://ghchart.rshah.org/ff8059/YuqiGuo105`}
