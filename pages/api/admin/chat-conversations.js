@@ -1,5 +1,4 @@
-import { requireAdminUser } from "../../../src/lib/agentServiceProxy";
-import { listAgentConversations } from "../../../src/lib/adminOpenSearch";
+import { forwardJson, requireAdminUser } from "../../../src/lib/agentServiceProxy";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -9,18 +8,15 @@ export default async function handler(req, res) {
   }
   const auth = await requireAdminUser(req, res);
   if (!auth) return;
-  try {
-    const result = await listAgentConversations({
-      query: req.query.q,
-      hours: req.query.hours,
-      limit: req.query.limit,
-    });
-    res.status(200).json(result);
-  } catch (error) {
-    console.error("[admin conversations]", error);
-    res.status(502).json({
-      error: "observability_unavailable",
-      message: "Conversation activity is temporarily unavailable.",
-    });
-  }
+
+  const params = new URLSearchParams({
+    q: String(req.query.q || ""),
+    hours: String(req.query.hours || "168"),
+    limit: String(req.query.limit || "50"),
+  });
+  await forwardJson(req, res, {
+    path: `/api/admin/conversations?${params.toString()}`,
+    method: "GET",
+    auth,
+  });
 }

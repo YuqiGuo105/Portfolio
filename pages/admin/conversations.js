@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ExternalLink, RefreshCw, Search } from "lucide-react";
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { DataState, PageHeader, StatusPill, adminStyles as ui } from "../../src/components/admin/AdminUI";
@@ -10,6 +10,8 @@ const WINDOWS = [
   { label: "30d", value: 720 },
 ];
 
+const EMPTY_SUMMARY = { runs: 0, completed: 0, blocked: 0, averageLatencyMs: null };
+
 const KIBANA_DASHBOARD = process.env.NEXT_PUBLIC_KIBANA_DASHBOARD_URL ||
   "https://os-79250b0-yguo105-17e7.l.aivencloud.com/app/data-explorer/discover#?" +
   "_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:ai-all,view:discover))" +
@@ -20,6 +22,7 @@ export default function ConversationsPage() {
   const [items, setItems] = useState([]);
   const [query, setQuery] = useState("");
   const [hours, setHours] = useState(168);
+  const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -28,7 +31,9 @@ export default function ConversationsPage() {
     setError("");
     try {
       const data = await adminApi.conversations.list({ query, hours, limit: 100 });
-      setItems(Array.isArray(data.items) ? data.items : []);
+      const nextItems = Array.isArray(data.items) ? data.items : [];
+      setItems(nextItems);
+      setSummary(data.summary || summarizeItems(nextItems));
     } catch (err) {
       setError(err.message || "Conversation activity could not be loaded.");
     } finally {
@@ -41,18 +46,12 @@ export default function ConversationsPage() {
     return () => clearTimeout(timer);
   }, [load]);
 
-  const summary = useMemo(() => ({
-    completed: items.filter((item) => ["completed", "answered", "tool_completed"].includes(item.status)).length,
-    blocked: items.filter((item) => item.status === "blocked").length,
-    averageLatency: average(items.map((item) => item.latencyMs).filter(Number.isFinite)),
-  }), [items]);
-
   return (
     <AdminLayout>
       <div className={ui.page}>
         <PageHeader
           title="Agent conversations"
-          subtitle="Review user questions, final answers, route outcomes and latency from protected OpenSearch observability indexes."
+          subtitle="Review PostgreSQL-backed agent runs, nested pipeline events, route outcomes and latency."
           actions={(
             <>
               <button className={ui.buttonSecondary} type="button" onClick={load} disabled={loading}>
@@ -66,10 +65,10 @@ export default function ConversationsPage() {
         />
 
         <section className={ui.metrics} aria-label="Conversation summary">
-          <Metric label="Runs" value={items.length} hint={`Within ${windowLabel(hours)}`} />
+          <Metric label="Runs" value={summary.runs ?? items.length} hint={`Within ${windowLabel(hours)}`} />
           <Metric label="Completed" value={summary.completed} hint="Answered or tool completed" />
           <Metric label="Blocked" value={summary.blocked} hint="Safety policy outcomes" />
-          <Metric label="Average latency" value={formatLatency(summary.averageLatency)} hint="Completed runs with timing" />
+          <Metric label="Average latency" value={formatLatency(summary.averageLatencyMs)} hint="Completed runs with timing" />
         </section>
 
         <section className={ui.panel}>
@@ -163,6 +162,19 @@ function average(values) {
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
+function summarizeItems(items) {
+  const incompleteStatuses = new Set(["blocked", "failed", "budget_exhausted"]);
+  const completedItems = items.filter((item) =>
+    item.completedAt && !incompleteStatuses.has(String(item.status || "").toLowerCase()),
+  );
+  return {
+    runs: items.length,
+    completed: completedItems.length,
+    blocked: items.filter((item) => String(item.status || "").toLowerCase() === "blocked").length,
+    averageLatencyMs: average(completedItems.map((item) => item.latencyMs).filter(Number.isFinite)),
+  };
+}
+
 function formatLatency(value) {
   if (!Number.isFinite(value)) return "—";
   return value >= 1000 ? `${(value / 1000).toFixed(1)}s` : `${value}ms`;
@@ -189,6 +201,7 @@ function stepLabel(type) {
   const labels = {
     "model_call.completed": "Model call",
     "retrieval.completed": "Knowledge retrieval",
+    "safety.check_completed": "Safety check",
     "safety.checked": "Safety check",
     "tool_call.completed": "Tool call",
   };
@@ -199,6 +212,7 @@ function stepColor(type) {
   const colors = {
     "model_call.completed": "#2563eb",
     "retrieval.completed": "#059669",
+    "safety.check_completed": "#d97706",
     "safety.checked": "#d97706",
     "tool_call.completed": "#7c3aed",
   };
