@@ -21,6 +21,10 @@ function eventTypeQuery() {
     "agent_run.completed",
     "answer.generated",
     "answer.blocked",
+    "model_call.completed",
+    "retrieval.completed",
+    "safety.checked",
+    "tool_call.completed",
   ];
   return {
     bool: {
@@ -52,27 +56,14 @@ export async function listAgentConversations({ query, hours, limit } = {}) {
   }
 
   const body = {
-    size: Math.min(safeLimit * 6, 600),
+    size: Math.min(safeLimit * 10, 1000),
     sort: [{ timestamp: { order: "desc" } }],
     query: { bool: { filter: filters, must } },
-    _source: [
-      "eventType",
-      "timestamp",
-      "runId",
-      "status",
-      "latencyMs",
-      "payload.question",
-      "payload.answer",
-      "payload.sessionId",
-      "payload.conversationId",
-      "payload.finalStatus",
-      "payload.route",
-    ],
+    _source: true,
   };
 
   const { host, port, username, password } = config();
-  const indices = process.env.OPENSEARCH_AGENT_INDEXES
-    || "ai-agent-runs-*,ai-answers-*,ai-safety-*";
+  const indices = process.env.OPENSEARCH_AGENT_INDEXES || "ai-*";
   const endpoint = `https://${host}:${port}/${indices}/_search?ignore_unavailable=true`;
   const token = Buffer.from(`${username}:${password}`).toString("base64");
   const response = await fetch(endpoint, {
@@ -94,7 +85,7 @@ export async function listAgentConversations({ query, hours, limit } = {}) {
     const source = hit?._source || {};
     const runId = source.runId || hit?._id;
     if (!runId) continue;
-    const current = grouped.get(runId) || { runId };
+    const current = grouped.get(runId) || { runId, steps: [] };
     const payload = source.payload || {};
 
     if (source.eventType === "agent_run.started") {
@@ -111,8 +102,22 @@ export async function listAgentConversations({ query, hours, limit } = {}) {
       current.route = payload.route || "";
       current.status = source.status || current.status;
       current.latencyMs = source.latencyMs ?? current.latencyMs ?? null;
+    } else {
+      // Pipeline steps: model_call, retrieval, safety, tool_call
+      current.steps.push({
+        type: source.eventType,
+        timestamp: source.timestamp,
+        latencyMs: source.latencyMs ?? null,
+        status: source.status || payload.verdict || null,
+        detail: payload,
+      });
     }
     grouped.set(runId, current);
+  }
+
+  // Sort steps within each run by timestamp
+  for (const item of grouped.values()) {
+    item.steps.sort((a, b) => String(a.timestamp || "").localeCompare(String(b.timestamp || "")));
   }
 
   const items = Array.from(grouped.values())

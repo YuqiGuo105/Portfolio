@@ -11,7 +11,10 @@ const WINDOWS = [
 ];
 
 const KIBANA_DASHBOARD = process.env.NEXT_PUBLIC_KIBANA_DASHBOARD_URL ||
-  "https://console.aiven.io/account/a5c1cacf06ce/project/yuqi-791c/services/os-b4cbaea/opensearch";
+  "https://os-79250b0-yguo105-17e7.l.aivencloud.com/app/data-explorer/discover#?" +
+  "_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:ai-all,view:discover))" +
+  "&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:now-7d,to:now))" +
+  "&_q=(filters:!(),query:(language:kuery,query:''))";
 
 export default function ConversationsPage() {
   const [items, setItems] = useState([]);
@@ -116,6 +119,27 @@ export default function ConversationsPage() {
                       {item.answer || "Final answer was not captured by the event schema used for this older run."}
                     </p>
                   </div>
+                  {item.steps && item.steps.length > 0 && (
+                    <details style={{ marginTop: "8px", fontSize: "13px" }}>
+                      <summary style={{ cursor: "pointer", color: "#6b7280", fontWeight: 500 }}>
+                        Pipeline steps ({item.steps.length})
+                      </summary>
+                      <div style={{ marginTop: "6px", borderLeft: "2px solid #e5e7eb", paddingLeft: "12px" }}>
+                        {item.steps.map((step, i) => (
+                          <div key={i} style={{ marginBottom: "6px", lineHeight: "1.5" }}>
+                            <span style={{ fontWeight: 500, color: stepColor(step.type) }}>{stepLabel(step.type)}</span>
+                            {step.latencyMs != null && <span style={{ color: "#9ca3af", marginLeft: "8px" }}>{formatLatency(step.latencyMs)}</span>}
+                            {step.status && <span style={{ marginLeft: "8px", opacity: 0.7 }}>{step.status}</span>}
+                            {step.detail && Object.keys(step.detail).length > 0 && (
+                              <pre style={{ margin: "2px 0 0", fontSize: "11px", color: "#6b7280", whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: "120px", overflow: "auto" }}>
+                                {JSON.stringify(step.detail, null, 2)}
+                              </pre>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
                   <div className={ui.conversationMeta}>
                     {item.sessionId && <span className={ui.mono}>session {shortId(item.sessionId)}</span>}
                     {item.conversationId && <span className={ui.mono}>conversation {shortId(item.conversationId)}</span>}
@@ -159,4 +183,24 @@ function windowLabel(hours) {
   if (hours === 24) return "24 hours";
   if (hours === 168) return "7 days";
   return "30 days";
+}
+
+function stepLabel(type) {
+  const labels = {
+    "model_call.completed": "Model call",
+    "retrieval.completed": "Knowledge retrieval",
+    "safety.checked": "Safety check",
+    "tool_call.completed": "Tool call",
+  };
+  return labels[type] || type;
+}
+
+function stepColor(type) {
+  const colors = {
+    "model_call.completed": "#2563eb",
+    "retrieval.completed": "#059669",
+    "safety.checked": "#d97706",
+    "tool_call.completed": "#7c3aed",
+  };
+  return colors[type] || "#374151";
 }
