@@ -1391,6 +1391,9 @@ function extractPayloadText(payload) {
     if (payload.resultsCount != null) {
       enhancedParts.push(`${payload.resultsCount} results`)
     }
+    if (payload.sourcesFound != null) {
+      enhancedParts.push(`${payload.sourcesFound} sources`)
+    }
     
     // Handle history hits
     if (payload.historyHits != null) {
@@ -1434,20 +1437,28 @@ function formatStageTitle(stage, message) {
 /* ---------- UI bits ---------- */
 
 function ReasoningChain({ steps, streaming }) {
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(Boolean(streaming))
+  useEffect(() => {
+    if (!streaming) setExpanded(false)
+  }, [streaming])
   if (!steps?.length) return null
   const doneCount = steps.filter((s) => s.completed).length
   return (
-    <div className="cw-reasoning">
-      <button type="button" className="cw-reasoning-toggle" onClick={() => setExpanded((v) => !v)}>
-        <Brain className="cw-r-ico" size={14} />
-        <span>Reasoning {doneCount}/{steps.length}</span>
+    <div className="cw-reasoning" aria-live={streaming ? "polite" : "off"}>
+      <button type="button" className="cw-reasoning-toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+        {streaming ? <Loader2 className="cw-r-ico cw-r-spin" size={15} /> : <Brain className="cw-r-ico" size={15} />}
+        <span className="cw-reasoning-heading">
+          <span>{streaming ? "Researching" : "Research activity"}</span>
+          <span className="cw-reasoning-subtitle">
+            {streaming ? "Searching and verifying sources" : `${doneCount} phases completed`}
+          </span>
+        </span>
         <ChevronDown className={"cw-chev " + (expanded ? "open" : "")} size={13} />
       </button>
       {expanded && (
         <div className="cw-reasoning-steps">
           {steps.map((step, i) => (
-            <div key={i} className={"cw-rs " + (step.completed ? "done" : streaming ? "active" : "")}>
+            <div key={`${step.label}-${i}`} className={"cw-rs " + (step.completed ? "done" : streaming && i === steps.length - 1 ? "active" : "")}>
               <div className="cw-rs-dot">
                 {step.completed ? <CheckCircle2 className="cw-rs-check" size={14} /> : <Circle className="cw-rs-circle" size={14} />}
               </div>
@@ -1494,12 +1505,14 @@ function SourceCardsRow({ cards }) {
   const [collapsed, setCollapsed] = useState(false)
   if (!cards?.length) return null
   const badgeLabel = (type) => {
+    if (type === "web") return "Web"
     if (type === "life_blog") return "Life Blog"
     if (type === "tech_blog") return "Tech Blog"
     if (type === "Projects") return "Project"
     return "Article"
   }
   const emoji = (type) => {
+    if (type === "web") return "🌐"
     if (type === "life_blog") return "✈️"
     if (type === "tech_blog") return "💡"
     return "🗂️"
@@ -1792,6 +1805,8 @@ function getCardSummary(step) {
   if (typeof p.historyHits === "number")
     return `${p.historyHits} message${p.historyHits === 1 ? "" : "s"}`
   if (typeof p.count === "number") return `${p.count} result${p.count === 1 ? "" : "s"}`
+  if (typeof p.sourcesFound === "number")
+    return `${p.sourcesFound} source${p.sourcesFound === 1 ? "" : "s"}`
 
   const taskArr = p.tasks ?? p.subtasks ?? p.steps ?? p.plan
   if (Array.isArray(taskArr) && taskArr.length > 0)
@@ -1838,6 +1853,8 @@ function humanizeStep(step) {
       out.push({ label: "Recalled", value: `${p.historyHits} earlier message${p.historyHits === 1 ? "" : "s"}` })
     if (typeof p.count === "number" && !out.some((x) => x.label === "Found"))
       out.push({ label: "Result", value: `${p.count} item${p.count === 1 ? "" : "s"}` })
+    if (typeof p.sourcesFound === "number")
+      out.push({ label: "Sources", value: `${p.sourcesFound} public source${p.sourcesFound === 1 ? "" : "s"}` })
 
     const taskArr = p.tasks ?? p.subtasks ?? p.steps ?? p.plan
     if (Array.isArray(taskArr) && taskArr.length > 0) {
@@ -1864,15 +1881,46 @@ function humanizeStep(step) {
 }
 
 /* ---------- Collapsible tool history (timeline) ---------- */
-function ToolHistory({ cards, kind = "tools" }) {
-  const [open, setOpen] = useState(false)
+const STEP_REVEAL_INTERVAL_MS = 320
+
+function ToolHistory({ cards, kind = "tools", streaming = false }) {
+  const [open, setOpen] = useState(Boolean(streaming))
+  const [clock, setClock] = useState(Date.now())
+  const [visibleCount, setVisibleCount] = useState(() => streaming ? Math.min(1, cards?.length || 0) : (cards?.length || 0))
+
+  useEffect(() => {
+    setOpen(Boolean(streaming))
+    if (!streaming) return undefined
+    const timer = window.setInterval(() => setClock(Date.now()), 500)
+    return () => window.clearInterval(timer)
+  }, [streaming])
+
+  useEffect(() => {
+    const total = Array.isArray(cards) ? cards.length : 0
+    if (!streaming) {
+      setVisibleCount(total)
+      return undefined
+    }
+    if (total === 0 || visibleCount >= total) return undefined
+    const timer = window.setTimeout(
+      () => setVisibleCount((current) => Math.min(total, Math.max(1, current + 1))),
+      STEP_REVEAL_INTERVAL_MS,
+    )
+    return () => window.clearTimeout(timer)
+  }, [cards, streaming, visibleCount])
+
   if (!Array.isArray(cards) || cards.length === 0) return null
   const count = cards.length
+  const displayCount = streaming ? Math.max(1, Math.min(visibleCount, count)) : count
+  const visibleCards = cards.slice(0, displayCount)
+  const doneCount = (streaming ? visibleCards.slice(0, -1) : visibleCards).filter((card) =>
+    card?.tsEnd || card?.status === "completed" || card?.status === "failed",
+  ).length
   const label = kind === "steps"
-    ? `Completed ${count} step${count === 1 ? "" : "s"}`
+    ? (streaming ? `Working · ${doneCount}/${displayCount}` : `Completed ${count} step${count === 1 ? "" : "s"}`)
     : `Used ${count} tool${count === 1 ? "" : "s"}`
   return (
-    <div className="cw-th mb-2">
+    <div className={`cw-th mb-2 ${streaming ? "is-live" : ""}`} aria-live={streaming ? "polite" : "off"}>
       <button
         type="button"
         className={"cw-th-toggle " + (open ? "is-open" : "")}
@@ -1880,7 +1928,7 @@ function ToolHistory({ cards, kind = "tools" }) {
         aria-expanded={open ? "true" : "false"}
       >
         <span className="cw-th-check" aria-hidden="true">
-          <Check />
+          {streaming ? <Loader2 className="cw-th-spinner" /> : <Check />}
         </span>
         <span className="cw-th-label">
           {label}
@@ -1891,8 +1939,16 @@ function ToolHistory({ cards, kind = "tools" }) {
       </button>
       {open ? (
         <div className="cw-th-body">
-          {cards.map((card, idx) => (
-            <ToolCard key={card.id} step={card} index={idx} isLast={idx === count - 1} />
+          {visibleCards.map((card, idx) => (
+            <ToolCard
+              key={card.id}
+              step={card}
+              streaming={streaming}
+              presentationActive={streaming && idx === displayCount - 1}
+              now={clock}
+              index={idx}
+              isLast={idx === displayCount - 1}
+            />
           ))}
         </div>
       ) : null}
@@ -1900,46 +1956,54 @@ function ToolHistory({ cards, kind = "tools" }) {
         .cw-th {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 2px;
+          overflow: hidden;
+          border: 1px solid rgba(100, 116, 139, 0.2);
+          border-radius: 8px;
+          background: rgba(248, 250, 252, 0.72);
+          transition: border-color 160ms ease, background-color 160ms ease;
+        }
+        .cw-th.is-live {
+          border-color: rgba(59, 130, 246, 0.3);
+          background: rgba(239, 246, 255, 0.62);
         }
         .cw-th-toggle {
-          display: inline-flex;
+          display: flex;
           align-items: center;
           gap: 8px;
-          align-self: flex-start;
-          padding: 5px 10px 5px 6px;
-          border-radius: 999px;
-          border: 1px solid rgba(16, 185, 129, 0.28);
-          background: linear-gradient(
-            135deg,
-            rgba(16, 185, 129, 0.08),
-            rgba(59, 130, 246, 0.06)
-          );
-          color: #047857;
+          width: 100%;
+          padding: 8px 10px;
+          border: 0;
+          background: transparent;
+          color: #334155;
           font-size: 12px;
-          font-weight: 600;
+          font-weight: 650;
+          text-align: left;
           cursor: pointer;
-          transition: transform 120ms ease, background-color 150ms ease, border-color 150ms ease;
+          transition: background-color 150ms ease;
         }
         .cw-th-toggle:hover {
-          transform: translateY(-1px);
-          border-color: rgba(16, 185, 129, 0.5);
+          background: rgba(148, 163, 184, 0.08);
         }
         .cw-th-check {
           width: 18px;
           height: 18px;
           border-radius: 999px;
-          background: rgba(16, 185, 129, 0.18);
+          background: rgba(16, 185, 129, 0.12);
           color: #059669;
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          flex: 0 0 auto;
         }
+        .cw-th.is-live .cw-th-check { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
         .cw-th-check :global(svg) {
           width: 12px;
           height: 12px;
           stroke-width: 3;
         }
+        .cw-th-check :global(.cw-th-spinner) { animation: thSpin 900ms linear infinite; }
+        .cw-th-label { flex: 1 1 auto; min-width: 0; }
         .cw-th-chev {
           display: inline-flex;
           opacity: 0.6;
@@ -1954,26 +2018,32 @@ function ToolHistory({ cards, kind = "tools" }) {
         }
         :global(body.dark-skin) .cw-th-toggle,
         :global(.dark) .cw-th-toggle {
-          color: #6ee7b7;
-          background: linear-gradient(
-            135deg,
-            rgba(16, 185, 129, 0.16),
-            rgba(59, 130, 246, 0.12)
-          );
-          border-color: rgba(16, 185, 129, 0.4);
+          color: rgba(226, 232, 240, 0.92);
+        }
+        :global(body.dark-skin) .cw-th,
+        :global(.dark) .cw-th {
+          border-color: rgba(148, 163, 184, 0.24);
+          background: rgba(15, 23, 42, 0.5);
+        }
+        :global(body.dark-skin) .cw-th.is-live,
+        :global(.dark) .cw-th.is-live {
+          border-color: rgba(96, 165, 250, 0.35);
+          background: rgba(30, 58, 138, 0.16);
         }
         :global(body.dark-skin) .cw-th-check,
         :global(.dark) .cw-th-check {
-          background: rgba(16, 185, 129, 0.25);
+          background: rgba(16, 185, 129, 0.18);
           color: #6ee7b7;
         }
         .cw-th-body {
           position: relative;
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 2px;
+          padding: 0 10px 8px;
           animation: thIn 180ms ease-out;
         }
+        @keyframes thSpin { to { transform: rotate(360deg); } }
         @keyframes thIn {
           from { opacity: 0; transform: translateY(-4px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -1984,34 +2054,46 @@ function ToolHistory({ cards, kind = "tools" }) {
 }
 
 /* ---------- Completed tool card (in history) ---------- */
-function ToolCard({ step }) {
+function ToolCard({ step, streaming = false, presentationActive = false, now = Date.now() }) {
   const [open, setOpen] = useState(false)
   if (!step) return null
   const meta = getStageMeta(step.stage, step.title)
   const StageIcon = meta.Icon || Circle
   const details = humanizeStep(step)
   const hasDetails = details.length > 0
+  const isFailed = step.status === "failed"
+  const isActive = streaming && (presentationActive || (!step.tsEnd && !["completed", "failed"].includes(step.status)))
+  const stageTitle = typeof step.title === "string" && step.title.trim() && step.title !== meta.label
+    ? step.title.trim()
+    : null
   const duration = formatDuration(
-    typeof step.durationMs === "number"
+    presentationActive && step.ts
+      ? now - step.ts
+      : typeof step.durationMs === "number"
       ? step.durationMs
-      : (step.tsEnd && step.ts ? step.tsEnd - step.ts : NaN),
+      : (step.ts ? (step.tsEnd || (isActive ? now : null)) - step.ts : NaN),
   )
 
   return (
-    <div className={`cw-tc tone-${meta.tone}`}>
+    <div className={`cw-tc tone-${meta.tone} ${isActive ? "is-active" : ""} ${isFailed ? "is-failed" : ""}`}>
       <button
         type="button"
-        className={"cw-tc-row " + (open ? "is-open" : "") + (hasDetails ? "" : " no-details")}
+        className={"cw-tc-row " + (open ? "is-open" : "") + (hasDetails ? "" : " no-details") + (isActive ? " is-active" : "")}
         onClick={() => hasDetails && setOpen((v) => !v)}
         aria-expanded={open ? "true" : "false"}
         disabled={!hasDetails}
       >
         <span className="cw-tc-icon" aria-hidden="true"><StageIcon /></span>
-        <span className="cw-tc-name">{meta.label}</span>
+        <span className="cw-tc-copy">
+          <span className="cw-tc-name">{meta.label}</span>
+          {stageTitle ? <span className="cw-tc-title">{stageTitle}</span> : null}
+        </span>
         {duration ? (
           <span className="cw-tc-dur"><Clock /> {duration}</span>
         ) : null}
-        <span className="cw-tc-status" aria-hidden="true"><CheckCircle2 /></span>
+        <span className={`cw-tc-status ${isActive ? "active" : ""} ${isFailed ? "failed" : ""}`} aria-hidden="true">
+          {isActive ? <Loader2 /> : isFailed ? <X /> : <CheckCircle2 />}
+        </span>
         {hasDetails ? (
           <span className="cw-tc-chev" aria-hidden="true"><ChevronDown /></span>
         ) : null}
@@ -2061,6 +2143,7 @@ function ToolCard({ step }) {
         }
         .cw-tc-row:hover:not(:disabled) { background: rgba(var(--tone), 0.07); }
         .cw-tc-row.no-details { cursor: default; }
+        .cw-tc-row.is-active { background: rgba(var(--tone), 0.055); }
         :global(body.dark-skin) .cw-tc-row:hover:not(:disabled),
         :global(.dark) .cw-tc-row:hover:not(:disabled) { background: rgba(var(--tone), 0.12); }
 
@@ -2071,17 +2154,32 @@ function ToolCard({ step }) {
         }
         .cw-tc-icon :global(svg) { width: 15px; height: 15px; stroke-width: 2; }
 
-        .cw-tc-name {
+        .cw-tc-copy {
           flex: 1 1 auto;
           min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 1px;
+        }
+        .cw-tc-name {
           font-weight: 600;
           color: rgba(15, 23, 42, 0.9);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
+        .cw-tc-title {
+          color: rgba(71, 85, 105, 0.76);
+          font-size: 11px;
+          line-height: 1.3;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
         :global(body.dark-skin) .cw-tc-name,
         :global(.dark) .cw-tc-name { color: rgba(226, 232, 240, 0.92); }
+        :global(body.dark-skin) .cw-tc-title,
+        :global(.dark) .cw-tc-title { color: rgba(148, 163, 184, 0.88); }
 
         .cw-tc-dur {
           flex-shrink: 0;
@@ -2101,7 +2199,10 @@ function ToolCard({ step }) {
           display: inline-flex;
           color: rgb(16, 185, 129);
         }
+        .cw-tc-status.active { color: rgb(var(--tone)); }
+        .cw-tc-status.failed { color: rgb(239, 68, 68); }
         .cw-tc-status :global(svg) { width: 14px; height: 14px; }
+        .cw-tc-status.active :global(svg) { animation: tcSpin 900ms linear infinite; }
 
         .cw-tc-chev {
           flex-shrink: 0;
@@ -2133,7 +2234,7 @@ function ToolCard({ step }) {
           font-size: 11px;
           font-weight: 700;
           text-transform: uppercase;
-          letter-spacing: 0.05em;
+          letter-spacing: 0;
           color: rgb(var(--tone));
           opacity: 0.8;
         }
@@ -2162,6 +2263,7 @@ function ToolCard({ step }) {
           from { opacity: 0; transform: translateY(-2px); }
           to   { opacity: 1; transform: translateY(0); }
         }
+        @keyframes tcSpin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   )
@@ -3050,7 +3152,28 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     setMessages((prev) =>
       prev.map((m) => {
         if (m.id !== assistantId) return m
-        const existing = Array.isArray(m.executionStages) ? m.executionStages : []
+        const rawExisting = Array.isArray(m.executionStages) ? m.executionStages : []
+        const existing = rawExisting.map((entry) =>
+          entry.stage === "connecting" && !entry.tsEnd
+            ? {
+                ...entry,
+                status: "completed",
+                tsEnd: now,
+                durationMs: Math.max(0, now - (entry.ts || now)),
+              }
+            : entry,
+        )
+        const completeForDisplay = (entry) => {
+          if (entry.tsEnd || ["completed", "failed"].includes(entry.status)) return entry
+          return {
+            ...entry,
+            status: "completed",
+            tsEnd: now,
+            durationMs: Number.isFinite(entry.durationMs)
+              ? entry.durationMs
+              : Math.max(0, now - (entry.ts || now)),
+          }
+        }
 
         // ── Group merge ──────────────────────────────────────────────
         // When a card with the same groupKey exists, update it in place
@@ -3061,7 +3184,12 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         if (groupKey) {
           const idx = existing.findIndex((c) => c.groupKey === groupKey)
           if (idx >= 0) {
-            const cur = existing[idx]
+            // The backend may emit nested/overlapping stages. Present them as a
+            // sequential user-facing timeline: only the newest started stage spins.
+            const sequential = isFinal
+              ? existing
+              : existing.map((entry, entryIdx) => entryIdx === idx ? entry : completeForDisplay(entry))
+            const cur = sequential[idx]
             const mergedPayload =
               cur.rawPayload && typeof cur.rawPayload === "object" &&
               obj?.payload && typeof obj.payload === "object" && !Array.isArray(obj.payload)
@@ -3077,7 +3205,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               durationMs: durationMs ?? cur.durationMs,
               tsEnd: isFinal ? now : cur.tsEnd,
             }
-            const next = [...existing]
+            const next = [...sequential]
             next[idx] = merged
             const active = [...next].reverse().find((entry) => !entry.tsEnd)
             return {
@@ -3088,13 +3216,18 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           }
         }
 
-        const last = existing[existing.length - 1]
+        // A newly surfaced stage becomes the sole active step. Earlier stages
+        // remain visible as completed and are corrected by later final events.
+        const sequential = isFinal ? existing : existing.map(completeForDisplay)
+        const last = sequential[sequential.length - 1]
         // De-dupe: skip if previous card has the same stage + title (avoids repeated steps)
         const isDup = last && last.stage === stage && last.title === title
+        const next = isDup ? sequential : [...sequential, card]
+        const active = [...next].reverse().find((entry) => !entry.tsEnd)
         return {
           ...m,
-          thinkingNow: isFinal ? null : card,
-          executionStages: isDup ? existing : [...existing, card],
+          thinkingNow: isFinal ? (active || null) : card,
+          executionStages: next,
         }
       }),
     )
@@ -3977,18 +4110,20 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
     const assistantId = generateUUID()
     const requestStartedAt = Date.now()
+    const connectingStage = {
+      id: `connecting-${assistantId}`,
+      stage: "connecting",
+      title: "Connecting to the assistant...",
+      status: "started",
+      ts: requestStartedAt,
+    }
     setMessages((prev) => [...prev, {
       id: assistantId,
       role: "assistant",
       content: "",
       streaming: true,
-      thinkingNow: {
-        id: `connecting-${assistantId}`,
-        stage: "connecting",
-        title: "Connecting to the assistant...",
-        ts: requestStartedAt,
-      },
-      executionStages: [],
+      thinkingNow: connectingStage,
+      executionStages: [connectingStage],
       toolCards: [],
     }])
 
@@ -4184,7 +4319,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
                     <Brain className="cw-mode-item-ico" />
                     <span className="cw-mode-left">
                       <span className="cw-mode-name">Deep</span>
-                      <span className="cw-mode-desc">Deeper reasoning / more tool steps</span>
+                      <span className="cw-mode-desc">Searches the web, verifies sources, and gives specific answers</span>
                     </span>
                   </span>
                   {mode === "thinking" ? <Check className="cw-check" /> : null}
@@ -4221,11 +4356,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
                 </div>
               ) : null}
 
-              {m.role === "assistant" && m.streaming && m.thinkingNow ? <StageToast step={m.thinkingNow} /> : null}
+              {m.role === "assistant" && m.streaming && m.thinkingNow && (!Array.isArray(m.executionStages) || m.executionStages.length === 0) ? (
+                <StageToast step={m.thinkingNow} />
+              ) : null}
 
               {/* Execution trace and real MCP calls are intentionally separate. */}
-              {m.role === "assistant" && !m.streaming && Array.isArray(m.executionStages) && m.executionStages.length > 0 ? (
-                <ToolHistory cards={m.executionStages} kind="steps" />
+              {m.role === "assistant" && Array.isArray(m.executionStages) && m.executionStages.length > 0 ? (
+                <ToolHistory cards={m.executionStages} kind="steps" streaming={Boolean(m.streaming)} />
               ) : null}
               {m.role === "assistant" && !m.streaming && Array.isArray(m.toolCards) && m.toolCards.length > 0 ? (
                 <ToolHistory cards={m.toolCards} kind="tools" />
@@ -5402,49 +5539,76 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
         /* Reasoning chain */
         #__chat_widget_root .cw-reasoning {
-          margin-top: 8px;
-          border: 1px solid rgba(245, 158, 11, 0.2);
-          border-radius: 8px;
+          margin: 6px 0 10px;
+          border: 1px solid rgba(99, 102, 241, 0.18);
+          border-radius: 12px;
           overflow: hidden;
-          background: rgba(245, 158, 11, 0.03);
+          background: rgba(99, 102, 241, 0.035);
         }
         #__chat_widget_root .cw-reasoning-toggle {
           display: flex;
           align-items: center;
           gap: 6px;
           width: 100%;
-          padding: 7px 10px;
+          padding: 9px 11px;
           font-size: 12px;
-          font-weight: 500;
+          font-weight: 650;
           cursor: pointer;
           background: none;
           border: none;
           color: inherit;
           text-align: left;
-          opacity: 0.75;
+          opacity: 0.9;
         }
         #__chat_widget_root .cw-reasoning-toggle:hover { opacity: 1; }
-        #__chat_widget_root .cw-r-ico { flex: 0 0 auto; color: #f59e0b; }
+        #__chat_widget_root .cw-r-ico { flex: 0 0 auto; color: #6366f1; }
+        #__chat_widget_root .cw-r-spin { animation: cw-reasoning-spin 1s linear infinite; }
+        #__chat_widget_root .cw-reasoning-heading {
+          display: flex;
+          min-width: 0;
+          flex: 1;
+          flex-direction: column;
+          gap: 1px;
+        }
+        #__chat_widget_root .cw-reasoning-subtitle {
+          font-size: 10px;
+          font-weight: 450;
+          line-height: 1.3;
+          opacity: 0.55;
+        }
+        #__chat_widget_root .cw-reasoning-toggle > .cw-chev { flex: 0 0 auto; }
         #__chat_widget_root .cw-reasoning-steps {
-          padding: 4px 10px 10px 10px;
+          padding: 4px 12px 12px 12px;
           display: flex;
           flex-direction: column;
           gap: 6px;
         }
         #__chat_widget_root .cw-rs {
+          position: relative;
           display: flex;
           align-items: flex-start;
-          gap: 8px;
+          gap: 10px;
           font-size: 12px;
-          opacity: 0.7;
+          line-height: 1.45;
+          opacity: 0.62;
+        }
+        #__chat_widget_root .cw-rs:not(:last-child)::after {
+          content: "";
+          position: absolute;
+          left: 6px;
+          top: 17px;
+          bottom: -7px;
+          width: 1px;
+          background: rgba(99, 102, 241, 0.2);
         }
         #__chat_widget_root .cw-rs.done { opacity: 1; }
         #__chat_widget_root .cw-rs.active { opacity: 0.9; }
         #__chat_widget_root .cw-rs-dot { flex: 0 0 auto; padding-top: 1px; }
         #__chat_widget_root .cw-rs-check { color: #10b981; }
         #__chat_widget_root .cw-rs-circle { color: #9ca3af; }
-        #__chat_widget_root .cw-rs-label { font-weight: 500; }
-        #__chat_widget_root .cw-rs-detail { font-size: 11px; opacity: 0.7; margin-top: 1px; }
+        #__chat_widget_root .cw-rs-label { font-weight: 650; }
+        #__chat_widget_root .cw-rs-detail { font-size: 11px; line-height: 1.5; opacity: 0.72; margin-top: 3px; }
+        @keyframes cw-reasoning-spin { to { transform: rotate(360deg); } }
 
         /* Key concepts bar */
         #__chat_widget_root .cw-concepts {
