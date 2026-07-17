@@ -1912,10 +1912,10 @@ function ToolHistory({ cards, kind = "tools", streaming = false }) {
   if (!Array.isArray(cards) || cards.length === 0) return null
   const count = cards.length
   const displayCount = streaming ? Math.max(1, Math.min(visibleCount, count)) : count
-  const visibleCards = cards.slice(0, displayCount)
-  const doneCount = (streaming ? visibleCards.slice(0, -1) : visibleCards).filter((card) =>
-    card?.tsEnd || card?.status === "completed" || card?.status === "failed",
-  ).length
+  const visibleCards = streaming ? [cards[displayCount - 1]] : cards
+  const doneCount = streaming
+    ? displayCount - 1
+    : cards.filter((card) => card?.tsEnd || card?.status === "completed" || card?.status === "failed").length
   const label = kind === "steps"
     ? (streaming ? `Working · ${doneCount}/${displayCount}` : `Completed ${count} step${count === 1 ? "" : "s"}`)
     : `Used ${count} tool${count === 1 ? "" : "s"}`
@@ -1944,10 +1944,10 @@ function ToolHistory({ cards, kind = "tools", streaming = false }) {
               key={card.id}
               step={card}
               streaming={streaming}
-              presentationActive={streaming && idx === displayCount - 1}
+              presentationActive={streaming}
               now={clock}
               index={idx}
-              isLast={idx === displayCount - 1}
+              isLast={idx === visibleCards.length - 1}
             />
           ))}
         </div>
