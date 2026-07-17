@@ -11,10 +11,7 @@ const WINDOWS = [
 ];
 
 const KIBANA_DASHBOARD = process.env.NEXT_PUBLIC_KIBANA_DASHBOARD_URL ||
-  "https://os-79250b0-yguo105-17e7.l.aivencloud.com/app/data-explorer/discover#?" +
-  "_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:ai-all,view:discover))" +
-  "&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:now-7d,to:now))" +
-  "&_q=(filters:!(),query:(language:kuery,query:''))";
+  "https://console.aiven.io/account/a5c1cacf06ce/project/yuqi-791c/services/os-b4cbaea/opensearch";
 
 export default function ConversationsPage() {
   const [items, setItems] = useState([]);
