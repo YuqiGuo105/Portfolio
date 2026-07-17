@@ -8,6 +8,7 @@ import {
   ExternalLink,
   FileText,
   History,
+  Eye,
   Users,
 } from "lucide-react";
 import AdminLayout from "../../src/components/admin/AdminLayout";
@@ -23,6 +24,7 @@ const CONTENT = [
 ];
 
 const ACTIONS = [
+  { label: "Visitor logs", text: "Query visitor behavior, location and client context.", href: "/admin/visitors", icon: Eye },
   { label: "Subscribers", text: "Search subscribers and update lifecycle status.", href: "/admin/subscriptions", icon: Users },
   { label: "Notifications", text: "Review notification fan-out and delivery outcomes.", href: "/admin/notifications", icon: Bell },
   { label: "Conversations", text: "Inspect recent Agent runs and final responses.", href: "/admin/conversations", icon: History },

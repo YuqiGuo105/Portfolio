@@ -11,6 +11,7 @@ import {
   FileText,
   Gauge,
   History,
+  Eye,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -52,6 +53,7 @@ const NAV_GROUPS = [
     items: [
       { href: "/admin/subscriptions", label: "Subscribers", icon: Users },
       { href: "/admin/notifications", label: "Notifications", icon: Bell },
+      { href: "/admin/visitors", label: "Visitor logs", icon: Eye },
     ],
   },
   {

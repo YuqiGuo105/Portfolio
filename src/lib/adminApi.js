@@ -57,4 +57,18 @@ export const adminApi = {
       return request(`/api/admin/chat-conversations?${params.toString()}`);
     },
   },
+  visitors: {
+    list({ query = "", hours = 24, page = 0, size = 50, ...filters } = {}) {
+      const params = new URLSearchParams({
+        q: query,
+        hours: String(hours),
+        page: String(page),
+        size: String(size),
+      });
+      for (const [key, value] of Object.entries(filters)) {
+        if (value != null && String(value).trim()) params.set(key, String(value).trim());
+      }
+      return request(`/api/admin/visitors?${params.toString()}`);
+    },
+  },
 };

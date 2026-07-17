@@ -1,0 +1,30 @@
+.queryForm { display: grid; gap: 12px; padding: 13px; border-bottom: 1px solid #e3e8eb; background: #fbfcfc; }
+.queryTop { display: grid; grid-template-columns: minmax(260px, 1fr) auto auto; align-items: center; gap: 10px; }
+.filterGrid { display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap: 9px; }
+.field { display: grid; min-width: 0; gap: 5px; }
+.fieldLabel { color: #747f88; font-size: 10px; font-weight: 750; letter-spacing: 0.05em; text-transform: uppercase; }
+.fieldInput { width: 100%; min-height: 35px; padding: 7px 9px; border: 1px solid #cfd6db; border-radius: 6px; background: #fff; color: #25313b; font: inherit; font-size: 12px; }
+.fieldInput:focus { border-color: #0f766e; outline: 2px solid rgba(15, 118, 110, 0.12); }
+.queryActions { display: flex; align-items: center; gap: 7px; }
+.cellStack { display: grid; max-width: 280px; gap: 3px; }
+.cellPrimary { overflow: hidden; color: #27333d; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.cellSecondary { overflow: hidden; color: #7a858e; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.eventName { display: inline-flex; align-items: center; gap: 7px; color: #155e59; font-weight: 700; white-space: nowrap; }
+.eventDot { width: 7px; height: 7px; border-radius: 50%; background: #2a9d8f; }
+.identity { display: grid; max-width: 210px; gap: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
+.identity span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bot { color: #9a5a11; font-size: 10px; font-weight: 750; text-transform: uppercase; }
+
+@media (max-width: 1100px) {
+  .filterGrid { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .queryTop { grid-template-columns: 1fr; }
+  .queryActions { flex-wrap: wrap; }
+  .filterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 460px) {
+  .filterGrid { grid-template-columns: 1fr; }
+}
