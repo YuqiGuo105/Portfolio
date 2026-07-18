@@ -15,6 +15,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
   const isotope = useRef();
   const [filterKey, setFilterKey] = useState("all");
   const [projects, setProjects] = useState([]);
+  const [projectSystems, setProjectSystems] = useState({});
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -26,8 +27,35 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
       if (featuredOnly) query = query.eq("featured", true);
 
       const { data, error } = await query;
-      if (!error) setProjects(data);
-      else console.error(error);
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      const nextProjects = data || [];
+      setProjects(nextProjects);
+      if (nextProjects.length === 0) {
+        setProjectSystems({});
+        return;
+      }
+
+      const { data: systems, error: systemsError } = await supabase
+        .from("project_subsystems")
+        .select("id,project_id,title,eyebrow,maturity,sort_order,diagram_config")
+        .in("project_id", nextProjects.map((project) => project.id))
+        .eq("active", true)
+        .order("sort_order", { ascending: true });
+
+      if (systemsError) {
+        console.error(systemsError);
+        setProjectSystems({});
+        return;
+      }
+
+      setProjectSystems((systems || []).reduce((byProject, system) => {
+        if (!byProject[system.project_id]) byProject[system.project_id] = system;
+        return byProject;
+      }, {}));
     };
     fetchProjects();
   }, [featuredOnly]);
@@ -88,7 +116,9 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
           const categories = project.category
             ? project.category.split(",").map((category) => category.trim())
             : [];
-          const hasSystemCover = supportsSystemCover(project.cover_variant);
+          const projectSystem = projectSystems[project.id];
+          const hasSystemCover = supportsSystemCover(project.cover_variant, projectSystem)
+            || (project.cover_variant !== "IMAGE" && !project.image_url);
           const columnClass = featuredOnly ? "col-lg-6" : "col-lg-4";
 
           return (
@@ -100,7 +130,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
                 <a className="proj-card">
                   <div className="proj-card-image">
                     {hasSystemCover ? (
-                      <ProjectSystemCover variant={project.cover_variant} />
+                      <ProjectSystemCover variant={project.cover_variant} system={projectSystem} />
                     ) : (
                       <img src={project.image_url} alt={project.title} />
                     )}
