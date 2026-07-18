@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, RotateCcw, Search } from "lucide-react";
+import { BellRing, RefreshCw, RotateCcw, Search } from "lucide-react";
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { DataState, PageHeader, adminStyles as ui } from "../../src/components/admin/AdminUI";
 import visitorStyles from "../../src/components/admin/VisitorsPage.module.css";
@@ -24,6 +24,11 @@ const EMPTY_FILTERS = {
   includeAdmin: false,
 };
 const EMPTY_SUMMARY = { totalEvents: 0, uniqueVisitors: 0, countries: 0, cities: 0 };
+const EMPTY_ALERTS = {
+  rules: [],
+  incidents: [],
+  summary: { total: 0, notified: 0, pendingNotification: 0 },
+};
 
 export default function VisitorsPage() {
   const [items, setItems] = useState([]);
@@ -33,6 +38,9 @@ export default function VisitorsPage() {
   const [page, setPage] = useState(0);
   const [pageInfo, setPageInfo] = useState({ number: 0, size: PAGE_SIZE, totalElements: 0, totalPages: 0 });
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
+  const [alerts, setAlerts] = useState(EMPTY_ALERTS);
+  const [alertsLoading, setAlertsLoading] = useState(true);
+  const [alertsError, setAlertsError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -51,7 +59,25 @@ export default function VisitorsPage() {
     }
   }, [filters, hours, page]);
 
+  const loadAlerts = useCallback(async () => {
+    setAlertsLoading(true);
+    setAlertsError("");
+    try {
+      const data = await adminApi.visitorAlerts.overview({ hours });
+      setAlerts({
+        rules: Array.isArray(data.rules) ? data.rules : [],
+        incidents: Array.isArray(data.incidents) ? data.incidents : [],
+        summary: data.summary || EMPTY_ALERTS.summary,
+      });
+    } catch (requestError) {
+      setAlertsError(requestError.message || "Visitor alerts could not be loaded.");
+    } finally {
+      setAlertsLoading(false);
+    }
+  }, [hours]);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadAlerts(); }, [loadAlerts]);
 
   function updateDraft(name, value) {
     setDraft((current) => ({ ...current, [name]: value }));
@@ -85,7 +111,12 @@ export default function VisitorsPage() {
           title="Visitor logs"
           subtitle="Query protected visitor events by time, behavior, page, location and client context."
           actions={(
-            <button className={ui.buttonSecondary} type="button" onClick={load} disabled={loading}>
+            <button
+              className={ui.buttonSecondary}
+              type="button"
+              onClick={() => { load(); loadAlerts(); }}
+              disabled={loading || alertsLoading}
+            >
               <RefreshCw size={15} /> Refresh
             </button>
           )}
@@ -101,6 +132,14 @@ export default function VisitorsPage() {
           <Metric label="Countries" value={summary.countries} hint="Matching events" />
           <Metric label="Cities" value={summary.cities} hint="Matching events" />
         </section>
+
+        <VisitorAlerts
+          data={alerts}
+          loading={alertsLoading}
+          error={alertsError}
+          hours={hours}
+          onRetry={loadAlerts}
+        />
 
         {error && !loading && items.length > 0 && <div className={ui.errorBanner}>{error}</div>}
 
@@ -238,6 +277,91 @@ export default function VisitorsPage() {
   );
 }
 
+function VisitorAlerts({ data, loading, error, hours, onRetry }) {
+  const rules = data.rules || [];
+  const incidents = data.incidents || [];
+  const activeRules = rules.filter((rule) => rule.enabled).length;
+  const summary = data.summary || EMPTY_ALERTS.summary;
+
+  return (
+    <section className={`${ui.panel} ${visitorStyles.alertPanel}`} aria-label="Visitor behavior alerts">
+      <div className={visitorStyles.alertHeader}>
+        <div>
+          <div className={visitorStyles.alertTitle}><BellRing size={17} /> Behavior alerts</div>
+          <div className={visitorStyles.alertSubtitle}>{windowLabel(hours)} evaluation window</div>
+        </div>
+        <button className={ui.buttonSecondary} type="button" onClick={onRetry} disabled={loading}>
+          <RefreshCw size={14} /> Refresh
+        </button>
+      </div>
+
+      {error && <div className={ui.errorBanner}>{error}</div>}
+      {loading && !rules.length && !incidents.length ? (
+        <div className={visitorStyles.alertEmpty}>Loading alert state...</div>
+      ) : (
+        <>
+          <div className={visitorStyles.alertStats}>
+            <AlertStat label="Active rules" value={`${activeRules} / ${rules.length}`} />
+            <AlertStat label="Triggered" value={summary.total || 0} />
+            <AlertStat label="Delivered" value={summary.notified || 0} />
+            <AlertStat label="Retry queue" value={summary.pendingNotification || 0} tone={summary.pendingNotification ? "warning" : "normal"} />
+          </div>
+
+          <div className={visitorStyles.alertGrid}>
+            <div className={visitorStyles.alertSection}>
+              <div className={visitorStyles.alertSectionTitle}>Rules</div>
+              {rules.length ? rules.map((rule) => (
+                <div className={visitorStyles.ruleRow} key={rule.ruleId}>
+                  <div className={visitorStyles.ruleCopy}>
+                    <span className={visitorStyles.ruleName}>{rule.name}</span>
+                    <span className={visitorStyles.ruleMeta}>
+                      {rule.eventType} · {formatScope(rule)} · {rule.granularity}
+                    </span>
+                  </div>
+                  <div className={visitorStyles.ruleValue}>
+                    <strong>{rule.comparator} {rule.threshold}</strong>
+                    <span className={rule.enabled ? visitorStyles.ruleEnabled : visitorStyles.ruleDisabled}>
+                      {rule.enabled ? "Enabled" : "Paused"}
+                    </span>
+                  </div>
+                </div>
+              )) : <div className={visitorStyles.alertEmpty}>No rules configured.</div>}
+            </div>
+
+            <div className={visitorStyles.alertSection}>
+              <div className={visitorStyles.alertSectionTitle}>Recent incidents</div>
+              {incidents.length ? incidents.slice(0, 6).map((incident) => (
+                <div className={visitorStyles.incidentRow} key={incident.incidentId}>
+                  <span className={incident.notified ? visitorStyles.incidentDelivered : visitorStyles.incidentPending} aria-hidden="true" />
+                  <div className={visitorStyles.ruleCopy}>
+                    <span className={visitorStyles.ruleName}>{incident.ruleName}</span>
+                    <span className={visitorStyles.ruleMeta}>
+                      Measured {incident.measuredValue} {incident.comparator} {incident.threshold}
+                    </span>
+                  </div>
+                  <div className={visitorStyles.incidentTime}>
+                    <span>{incident.notified ? "Delivered" : `Retry ${incident.notificationAttempts || 0}`}</span>
+                    <time dateTime={incident.createdAt}>{formatDateTime(incident.createdAt)}</time>
+                  </div>
+                </div>
+              )) : <div className={visitorStyles.alertEmpty}>No incidents in this window.</div>}
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function AlertStat({ label, value, tone = "normal" }) {
+  return (
+    <div className={`${visitorStyles.alertStat} ${tone === "warning" ? visitorStyles.alertStatWarning : ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 function Filter({ label, name, value, onChange, placeholder }) {
   return (
     <label className={visitorStyles.field}>
@@ -249,6 +373,11 @@ function Filter({ label, name, value, onChange, placeholder }) {
 
 function Metric({ label, value, hint }) {
   return <div className={ui.metric}><div className={ui.metricLabel}>{label}</div><div className={ui.metricValue}>{value ?? 0}</div><div className={ui.metricHint}>{hint}</div></div>;
+}
+
+function formatScope(rule) {
+  if (rule.geoAreaId) return rule.geoAreaId;
+  return rule.geoLevel || "GLOBAL";
 }
 
 function formatDateTime(value) {

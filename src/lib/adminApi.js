@@ -71,4 +71,10 @@ export const adminApi = {
       return request(`/api/admin/visitors?${params.toString()}`);
     },
   },
+  visitorAlerts: {
+    overview({ hours = 24 } = {}) {
+      const params = new URLSearchParams({ hours: String(hours) });
+      return request(`/api/admin/visitor-alerts?${params.toString()}`);
+    },
+  },
 };
