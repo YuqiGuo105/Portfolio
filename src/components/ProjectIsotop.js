@@ -117,8 +117,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
             ? project.category.split(",").map((category) => category.trim())
             : [];
           const projectSystem = projectSystems[project.id];
-          const hasSystemCover = supportsSystemCover(project.cover_variant, projectSystem)
-            || (project.cover_variant !== "IMAGE" && !project.image_url);
+          const hasSystemCover = supportsSystemCover(projectSystem);
           const columnClass = featuredOnly ? "col-lg-6" : "col-lg-4";
 
           return (
@@ -130,7 +129,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
                 <a className="proj-card">
                   <div className="proj-card-image">
                     {hasSystemCover ? (
-                      <ProjectSystemCover variant={project.cover_variant} system={projectSystem} />
+                      <ProjectSystemCover system={projectSystem} />
                     ) : (
                       <img src={project.image_url} alt={project.title} />
                     )}

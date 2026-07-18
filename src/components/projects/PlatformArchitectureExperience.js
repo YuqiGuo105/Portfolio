@@ -63,6 +63,54 @@ const EDGE_KIND_CLASSES = {
 
 const edgeKey = (from, to) => `${from}::${to}`;
 
+const hasText = (value) => typeof value === "string" && value.trim().length > 0;
+
+function getDiagramConfig(system) {
+  return system?.diagram_config || system?.diagramConfig || null;
+}
+
+function hasValidDiagramConfig(system) {
+  const config = getDiagramConfig(system);
+  const nodes = Array.isArray(config?.nodes) ? config.nodes : [];
+  const edges = Array.isArray(config?.edges) ? config.edges : [];
+  const routes = Array.isArray(config?.routes) ? config.routes : [];
+  const domains = Array.isArray(config?.domains) ? config.domains : [];
+  const nodeIds = new Set(nodes.map((node) => node.id));
+
+  return nodes.length >= 2
+    && edges.length >= 1
+    && routes.length >= 1
+    && domains.length >= 1
+    && nodeIds.has(config.defaultNode)
+    && routes.some((route) => route.key === config.defaultRoute)
+    && nodes.every((node) => (
+      hasText(node.id)
+      && hasText(node.code)
+      && hasText(node.icon)
+      && hasText(node.label)
+      && hasText(node.shape)
+      && hasText(node.title)
+      && hasText(node.responsibility)
+      && hasText(node.data)
+      && hasText(node.reliability)
+      && Number.isFinite(Number(node.x))
+      && Number.isFinite(Number(node.y))
+    ))
+    && edges.every((edge) => (
+      nodeIds.has(edge.from)
+      && nodeIds.has(edge.to)
+      && hasText(edge.kind)
+      && hasText(edge.label)
+    ))
+    && routes.every((route) => (
+      hasText(route.key)
+      && hasText(route.label)
+      && Array.isArray(route.steps)
+      && route.steps.length >= 2
+      && route.steps.every((step) => nodeIds.has(step.nodeId) && hasText(step.description))
+    ));
+}
+
 function edgePath(from, to) {
   const startX = Number(from.x) * 10;
   const startY = Number(from.y) * 6;
@@ -81,7 +129,7 @@ function edgeLabelPosition(from, to) {
 }
 
 function SystemDiagram({ system }) {
-  const config = system.diagram_config || system.diagramConfig;
+  const config = getDiagramConfig(system);
   const nodes = Array.isArray(config?.nodes) ? config.nodes : [];
   const edges = Array.isArray(config?.edges) ? config.edges : [];
   const routes = Array.isArray(config?.routes) ? config.routes : [];
@@ -89,8 +137,8 @@ function SystemDiagram({ system }) {
     () => Object.fromEntries(nodes.map((node) => [node.id, node])),
     [nodes]
   );
-  const initialRoute = config?.defaultRoute || routes[0]?.key || "";
-  const initialNode = config?.defaultNode || nodes[0]?.id || "";
+  const initialRoute = config.defaultRoute;
+  const initialNode = config.defaultNode;
 
   const [routeKey, setRouteKey] = useState(initialRoute);
   const [activeStep, setActiveStep] = useState(0);
@@ -369,7 +417,10 @@ function SystemDiagram({ system }) {
 }
 
 export default function PlatformArchitectureExperience({ systems = [] }) {
-  const activeSystems = useMemo(() => systems.filter((system) => system.active !== false), [systems]);
+  const activeSystems = useMemo(
+    () => systems.filter((system) => system.active !== false && hasValidDiagramConfig(system)),
+    [systems]
+  );
   const [filter, setFilter] = useState("ALL");
   const [selectedId, setSelectedId] = useState(activeSystems[0]?.id || "");
   const filtered = filter === "ALL"
