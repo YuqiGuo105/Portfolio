@@ -3,6 +3,7 @@ import styles from "./PlatformProjectCover.module.css";
 const PRESETS = {
   PLATFORM_SYSTEM_MAP: {
     theme: "platform",
+    layout: "topology",
     eyebrow: "PORTFOLIO PLATFORM",
     caption: "PRODUCTION SYSTEM MAP · 2026",
     status: "LIVE ARCHITECTURE",
@@ -38,6 +39,7 @@ const PRESETS = {
   },
   CONTENT_INTELLIGENCE: {
     theme: "content",
+    layout: "pipeline",
     eyebrow: "CONTENT INTELLIGENCE",
     caption: "PUBLISH · INDEX · RETRIEVE",
     status: "REPLAYABLE PROJECTIONS",
@@ -71,6 +73,7 @@ const PRESETS = {
   },
   SUBSCRIPTION_NOTIFICATION: {
     theme: "notification",
+    layout: "sequence",
     eyebrow: "SUBSCRIPTION + NOTIFICATION",
     caption: "VERIFY · PREFERENCE · DELIVER",
     status: "CONSENT-AWARE DELIVERY",
@@ -106,6 +109,7 @@ const PRESETS = {
   },
   VISITOR_BEHAVIOR: {
     theme: "analytics",
+    layout: "stream",
     eyebrow: "VISITOR BEHAVIOR",
     caption: "INGEST · AGGREGATE · ACT",
     status: "RECOMMENDATION-READY",
@@ -153,10 +157,12 @@ export default function ProjectSystemCover({ variant }) {
     <div
       className={styles.cover}
       data-theme={preset.theme}
+      data-layout={preset.layout}
       role="img"
       aria-label={preset.aria}
     >
       <div className={styles.grid} aria-hidden="true" />
+      <div className={styles.layoutSignature} aria-hidden="true" />
 
       <div className={styles.zones} aria-hidden="true">
         {preset.zones.map((zone) => (
