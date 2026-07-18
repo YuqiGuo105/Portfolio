@@ -11,7 +11,6 @@ import Link from "next/link";
 import DOMPurify from "dompurify";
 import {
   ArrowLeft,
-  Download,
   LogOut,
   MessageSquareText,
   Pencil,
@@ -181,16 +180,14 @@ export default function CVPage() {
 
   const safeHtml = useMemo(() => {
     if (typeof window === "undefined") return cvRow?.content || "";
-    return DOMPurify.sanitize(cvRow?.content || "", {
-      ADD_ATTR: ["target", "download", "data-resume-pdf"],
+    const sanitized = DOMPurify.sanitize(cvRow?.content || "", {
+      ADD_ATTR: ["target", "data-resume-pdf"],
     });
+    const container = document.createElement("div");
+    container.innerHTML = sanitized;
+    container.querySelectorAll("[data-resume-pdf]").forEach((node) => node.remove());
+    return container.innerHTML;
   }, [cvRow]);
-
-  const pdfUrl = useMemo(() => {
-    if (typeof window === "undefined" || !safeHtml) return "";
-    const document = new DOMParser().parseFromString(safeHtml, "text/html");
-    return document.querySelector("[data-resume-pdf]")?.getAttribute("href") || "";
-  }, [safeHtml]);
 
   /* ---------------- auth ---------------- */
   useEffect(() => {
@@ -634,11 +631,6 @@ export default function CVPage() {
                     <ArrowLeft size={16} aria-hidden="true" /> Home
                   </a>
                 </Link>
-                {pdfUrl && (
-                  <a className="btn cv-download-btn" href={pdfUrl} download>
-                    <Download size={16} aria-hidden="true" /> Download PDF
-                  </a>
-                )}
                 <button type="button" className="btn btn-ghost cv-icon-command" onClick={() => window.print()}>
                   <Printer size={16} aria-hidden="true" /> Print
                 </button>

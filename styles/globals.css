@@ -1387,18 +1387,6 @@ body.dark-skin .cv-side-empty {
   gap: 7px;
 }
 
-.cv-header-actions .cv-download-btn {
-  color: #ffffff;
-  background: #0f766e;
-  border-color: #0f766e;
-}
-
-.cv-header-actions .cv-download-btn:hover {
-  color: #ffffff;
-  background: #115e59;
-  border-color: #115e59;
-}
-
 .cv-header-actions .cv-icon-command.is-active {
   color: #ffffff;
   background: #243746;
@@ -1434,10 +1422,6 @@ body.dark-skin .cv-side-empty {
   font-size: 0.94rem;
   line-height: 1.52;
   animation: resumeReveal 360ms ease-out both;
-}
-
-.cv-content [data-resume-pdf] {
-  display: none !important;
 }
 
 .cv-content .resume-hero {

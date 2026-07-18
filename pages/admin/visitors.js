@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { BellRing, RefreshCw, RotateCcw, Search } from "lucide-react";
+import { BellRing, Check, Pencil, Plus, RefreshCw, RotateCcw, Search, X } from "lucide-react";
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { DataState, PageHeader, adminStyles as ui } from "../../src/components/admin/AdminUI";
 import visitorStyles from "../../src/components/admin/VisitorsPage.module.css";
@@ -139,6 +139,7 @@ export default function VisitorsPage() {
           error={alertsError}
           hours={hours}
           onRetry={loadAlerts}
+          onChanged={loadAlerts}
         />
 
         {error && !loading && items.length > 0 && <div className={ui.errorBanner}>{error}</div>}
@@ -277,79 +278,377 @@ export default function VisitorsPage() {
   );
 }
 
-function VisitorAlerts({ data, loading, error, hours, onRetry }) {
+function VisitorAlerts({ data, loading, error, hours, onRetry, onChanged }) {
   const rules = data.rules || [];
   const incidents = data.incidents || [];
   const activeRules = rules.filter((rule) => rule.enabled).length;
   const summary = data.summary || EMPTY_ALERTS.summary;
+  const [editingRule, setEditingRule] = useState(null);
+  const [preparedChange, setPreparedChange] = useState(null);
+  const [mutationError, setMutationError] = useState("");
+  const [mutationBusy, setMutationBusy] = useState(false);
+
+  async function prepareRuleChange({ patch, reason }) {
+    setMutationBusy(true);
+    setMutationError("");
+    try {
+      const prepared = await adminApi.visitorAlerts.prepareChange({
+        ruleId: editingRule.ruleId,
+        patch,
+        reason,
+      });
+      if (!prepared.diff || Object.keys(prepared.diff).length === 0) {
+        setMutationError("No policy changes to review.");
+        return;
+      }
+      setEditingRule(null);
+      setPreparedChange(prepared);
+    } catch (requestError) {
+      setMutationError(requestError.message || "The policy change could not be prepared.");
+    } finally {
+      setMutationBusy(false);
+    }
+  }
+
+  async function applyRuleChange() {
+    setMutationBusy(true);
+    setMutationError("");
+    try {
+      await adminApi.visitorAlerts.applyChange(preparedChange.changeId);
+      setPreparedChange(null);
+      await onChanged();
+    } catch (requestError) {
+      setMutationError(requestError.message || "The policy change could not be applied.");
+    } finally {
+      setMutationBusy(false);
+    }
+  }
+
+  function openRuleEditor(rule) {
+    setMutationError("");
+    setPreparedChange(null);
+    setEditingRule(rule);
+  }
+
+  function openRuleCreator() {
+    setMutationError("");
+    setPreparedChange(null);
+    setEditingRule({
+      ruleId: null,
+      siteId: rules.find((rule) => rule.siteId)?.siteId || "",
+      name: "",
+      eventType: "",
+      geoLevel: "GLOBAL",
+      geoAreaId: "",
+      granularity: "5m",
+      threshold: 0,
+      comparator: ">=",
+      cooldownSeconds: 1800,
+      enabled: true,
+    });
+  }
 
   return (
-    <section className={`${ui.panel} ${visitorStyles.alertPanel}`} aria-label="Visitor behavior alerts">
-      <div className={visitorStyles.alertHeader}>
-        <div>
-          <div className={visitorStyles.alertTitle}><BellRing size={17} /> Behavior alerts</div>
-          <div className={visitorStyles.alertSubtitle}>{windowLabel(hours)} evaluation window</div>
+    <>
+      <section className={`${ui.panel} ${visitorStyles.alertPanel}`} aria-label="Visitor behavior alerts">
+        <div className={visitorStyles.alertHeader}>
+          <div>
+            <div className={visitorStyles.alertTitle}><BellRing size={17} /> Behavior alerts</div>
+            <div className={visitorStyles.alertSubtitle}>{windowLabel(hours)} evaluation window</div>
+          </div>
+          <div className={visitorStyles.alertHeaderActions}>
+            <button className={ui.buttonPrimary} type="button" onClick={openRuleCreator} disabled={loading}>
+              <Plus size={14} /> New rule
+            </button>
+            <button className={ui.buttonSecondary} type="button" onClick={onRetry} disabled={loading}>
+              <RefreshCw size={14} /> Refresh
+            </button>
+          </div>
         </div>
-        <button className={ui.buttonSecondary} type="button" onClick={onRetry} disabled={loading}>
-          <RefreshCw size={14} /> Refresh
-        </button>
-      </div>
 
-      {error && <div className={ui.errorBanner}>{error}</div>}
-      {loading && !rules.length && !incidents.length ? (
-        <div className={visitorStyles.alertEmpty}>Loading alert state...</div>
-      ) : (
-        <>
-          <div className={visitorStyles.alertStats}>
-            <AlertStat label="Active rules" value={`${activeRules} / ${rules.length}`} />
-            <AlertStat label="Triggered" value={summary.total || 0} />
-            <AlertStat label="Delivered" value={summary.notified || 0} />
-            <AlertStat label="Retry queue" value={summary.pendingNotification || 0} tone={summary.pendingNotification ? "warning" : "normal"} />
-          </div>
-
-          <div className={visitorStyles.alertGrid}>
-            <div className={visitorStyles.alertSection}>
-              <div className={visitorStyles.alertSectionTitle}>Rules</div>
-              {rules.length ? rules.map((rule) => (
-                <div className={visitorStyles.ruleRow} key={rule.ruleId}>
-                  <div className={visitorStyles.ruleCopy}>
-                    <span className={visitorStyles.ruleName}>{rule.name}</span>
-                    <span className={visitorStyles.ruleMeta}>
-                      {rule.eventType} · {formatScope(rule)} · {rule.granularity}
-                    </span>
-                  </div>
-                  <div className={visitorStyles.ruleValue}>
-                    <strong>{rule.comparator} {rule.threshold}</strong>
-                    <span className={rule.enabled ? visitorStyles.ruleEnabled : visitorStyles.ruleDisabled}>
-                      {rule.enabled ? "Enabled" : "Paused"}
-                    </span>
-                  </div>
-                </div>
-              )) : <div className={visitorStyles.alertEmpty}>No rules configured.</div>}
+        {error && <div className={ui.errorBanner}>{error}</div>}
+        {loading && !rules.length && !incidents.length ? (
+          <div className={visitorStyles.alertEmpty}>Loading alert state...</div>
+        ) : (
+          <>
+            <div className={visitorStyles.alertStats}>
+              <AlertStat label="Active rules" value={`${activeRules} / ${rules.length}`} />
+              <AlertStat label="Triggered" value={summary.total || 0} />
+              <AlertStat label="Delivered" value={summary.notified || 0} />
+              <AlertStat label="Retry queue" value={summary.pendingNotification || 0} tone={summary.pendingNotification ? "warning" : "normal"} />
             </div>
 
-            <div className={visitorStyles.alertSection}>
-              <div className={visitorStyles.alertSectionTitle}>Recent incidents</div>
-              {incidents.length ? incidents.slice(0, 6).map((incident) => (
-                <div className={visitorStyles.incidentRow} key={incident.incidentId}>
-                  <span className={incident.notified ? visitorStyles.incidentDelivered : visitorStyles.incidentPending} aria-hidden="true" />
-                  <div className={visitorStyles.ruleCopy}>
-                    <span className={visitorStyles.ruleName}>{incident.ruleName}</span>
-                    <span className={visitorStyles.ruleMeta}>
-                      Measured {incident.measuredValue} {incident.comparator} {incident.threshold}
-                    </span>
+            <div className={visitorStyles.alertGrid}>
+              <div className={visitorStyles.alertSection}>
+                <div className={visitorStyles.alertSectionTitle}>Rules</div>
+                {rules.length ? rules.map((rule) => (
+                  <div className={visitorStyles.ruleRow} key={rule.ruleId}>
+                    <div className={visitorStyles.ruleCopy}>
+                      <span className={visitorStyles.ruleName}>{rule.name}</span>
+                      <span className={visitorStyles.ruleMeta}>
+                        {rule.eventType} · {formatScope(rule)} · {rule.granularity}
+                      </span>
+                    </div>
+                    <div className={visitorStyles.ruleValue}>
+                      <strong>{rule.comparator} {rule.threshold}</strong>
+                      <span className={rule.enabled ? visitorStyles.ruleEnabled : visitorStyles.ruleDisabled}>
+                        {rule.enabled ? "Enabled" : "Paused"}
+                      </span>
+                    </div>
+                    <button
+                      className={visitorStyles.ruleEditButton}
+                      type="button"
+                      onClick={() => openRuleEditor(rule)}
+                      title={`Edit ${rule.name}`}
+                      aria-label={`Edit ${rule.name}`}
+                    >
+                      <Pencil size={14} />
+                    </button>
                   </div>
-                  <div className={visitorStyles.incidentTime}>
-                    <span>{incident.notified ? "Delivered" : `Retry ${incident.notificationAttempts || 0}`}</span>
-                    <time dateTime={incident.createdAt}>{formatDateTime(incident.createdAt)}</time>
+                )) : <div className={visitorStyles.alertEmpty}>No rules configured.</div>}
+              </div>
+
+              <div className={visitorStyles.alertSection}>
+                <div className={visitorStyles.alertSectionTitle}>Recent incidents</div>
+                {incidents.length ? incidents.slice(0, 6).map((incident) => (
+                  <div className={visitorStyles.incidentRow} key={incident.incidentId}>
+                    <span className={incident.notified ? visitorStyles.incidentDelivered : visitorStyles.incidentPending} aria-hidden="true" />
+                    <div className={visitorStyles.ruleCopy}>
+                      <span className={visitorStyles.ruleName}>{incident.ruleName}</span>
+                      <span className={visitorStyles.ruleMeta}>
+                        Measured {incident.measuredValue} {incident.comparator} {incident.threshold}
+                      </span>
+                    </div>
+                    <div className={visitorStyles.incidentTime}>
+                      <span>{incident.notified ? "Delivered" : `Retry ${incident.notificationAttempts || 0}`}</span>
+                      <time dateTime={incident.createdAt}>{formatDateTime(incident.createdAt)}</time>
+                    </div>
                   </div>
-                </div>
-              )) : <div className={visitorStyles.alertEmpty}>No incidents in this window.</div>}
+                )) : <div className={visitorStyles.alertEmpty}>No incidents in this window.</div>}
+              </div>
             </div>
-          </div>
-        </>
+          </>
+        )}
+      </section>
+
+      {editingRule && (
+        <AlertRuleEditor
+          key={editingRule.ruleId}
+          rule={editingRule}
+          busy={mutationBusy}
+          error={mutationError}
+          onCancel={() => { setEditingRule(null); setMutationError(""); }}
+          onReview={prepareRuleChange}
+        />
       )}
-    </section>
+
+      {preparedChange && (
+        <PreparedRuleChange
+          change={preparedChange}
+          busy={mutationBusy}
+          error={mutationError}
+          onBack={() => {
+            const rule = rules.find((candidate) => candidate.ruleId === preparedChange.ruleId);
+            setPreparedChange(null);
+            setMutationError("");
+            if (rule) {
+              setEditingRule(rule);
+            } else if (!preparedChange.ruleId) {
+              setEditingRule({ ruleId: null, ...(preparedChange.after || {}) });
+            }
+          }}
+          onCancel={() => { setPreparedChange(null); setMutationError(""); }}
+          onApply={applyRuleChange}
+        />
+      )}
+    </>
+  );
+}
+
+function AlertRuleEditor({ rule, busy, error, onCancel, onReview }) {
+  const [form, setForm] = useState({
+    siteId: rule.siteId || "",
+    name: rule.name || "",
+    eventType: rule.eventType || "",
+    geoLevel: rule.geoLevel || "GLOBAL",
+    geoAreaId: rule.geoAreaId || "",
+    granularity: rule.granularity || "5m",
+    threshold: String(rule.threshold ?? 0),
+    comparator: rule.comparator || ">=",
+    cooldownSeconds: String(rule.cooldownSeconds ?? 1800),
+    enabled: Boolean(rule.enabled),
+    reason: "",
+  });
+  const [localError, setLocalError] = useState("");
+
+  function update(name, value) {
+    setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function submit(event) {
+    event.preventDefault();
+    const threshold = Number(form.threshold);
+    const cooldownSeconds = Number(form.cooldownSeconds);
+    if (!form.siteId.trim() || !form.name.trim() || !form.eventType.trim() || !form.reason.trim()) {
+      setLocalError("Site ID, name, event type and change reason are required.");
+      return;
+    }
+    if (!Number.isSafeInteger(threshold) || threshold < 0) {
+      setLocalError("Threshold must be a non-negative integer.");
+      return;
+    }
+    if (!Number.isSafeInteger(cooldownSeconds) || cooldownSeconds < 60) {
+      setLocalError("Cooldown must be at least 60 seconds.");
+      return;
+    }
+    setLocalError("");
+    onReview({
+      patch: {
+        siteId: form.siteId.trim(),
+        name: form.name.trim(),
+        eventType: form.eventType.trim(),
+        geoLevel: form.geoLevel,
+        geoAreaId: form.geoLevel === "GLOBAL" ? "" : form.geoAreaId.trim(),
+        granularity: form.granularity,
+        threshold,
+        comparator: form.comparator,
+        cooldownSeconds,
+        enabled: form.enabled,
+      },
+      reason: form.reason.trim(),
+    });
+  }
+
+  return (
+    <div className={visitorStyles.dialogBackdrop} role="presentation">
+      <section className={visitorStyles.policyDialog} role="dialog" aria-modal="true" aria-labelledby="alert-rule-editor-title">
+        <header className={visitorStyles.dialogHeader}>
+          <div>
+            <span className={visitorStyles.dialogEyebrow}>Alert policy</span>
+            <h2 id="alert-rule-editor-title">{rule.ruleId ? `Edit ${rule.name}` : "Create alert rule"}</h2>
+          </div>
+          <button className={visitorStyles.dialogClose} type="button" onClick={onCancel} disabled={busy} aria-label="Close editor">
+            <X size={17} />
+          </button>
+        </header>
+
+        <form onSubmit={submit}>
+          <div className={visitorStyles.policyForm}>
+            <PolicyField label="Site ID">
+              <input value={form.siteId} onChange={(event) => update("siteId", event.target.value)} maxLength={120} disabled={Boolean(rule.ruleId)} />
+            </PolicyField>
+            <PolicyField label="Name">
+              <input value={form.name} onChange={(event) => update("name", event.target.value)} maxLength={160} />
+            </PolicyField>
+            <PolicyField label="Event type">
+              <input value={form.eventType} onChange={(event) => update("eventType", event.target.value)} maxLength={80} />
+            </PolicyField>
+            <PolicyField label="Scope level">
+              <select value={form.geoLevel} onChange={(event) => update("geoLevel", event.target.value)}>
+                <option value="GLOBAL">Global</option>
+                <option value="COUNTRY">Country</option>
+                <option value="REGION">Region</option>
+                <option value="METRO">Metro</option>
+              </select>
+            </PolicyField>
+            <PolicyField label="Scope ID">
+              <input
+                value={form.geoAreaId}
+                onChange={(event) => update("geoAreaId", event.target.value)}
+                disabled={form.geoLevel === "GLOBAL"}
+                maxLength={120}
+                placeholder={form.geoLevel === "GLOBAL" ? "All areas" : "Area identifier"}
+              />
+            </PolicyField>
+            <PolicyField label="Evaluation window">
+              <select value={form.granularity} onChange={(event) => update("granularity", event.target.value)}>
+                <option value="5m">5 minutes</option>
+                <option value="1d">1 day</option>
+              </select>
+            </PolicyField>
+            <PolicyField label="Comparator">
+              <select value={form.comparator} onChange={(event) => update("comparator", event.target.value)}>
+                <option value=">=">Greater than or equal</option>
+                <option value="<=">Less than or equal</option>
+              </select>
+            </PolicyField>
+            <PolicyField label="Threshold">
+              <input type="number" min="0" step="1" value={form.threshold} onChange={(event) => update("threshold", event.target.value)} />
+            </PolicyField>
+            <PolicyField label="Cooldown (seconds)">
+              <input type="number" min="60" step="60" value={form.cooldownSeconds} onChange={(event) => update("cooldownSeconds", event.target.value)} />
+            </PolicyField>
+            <label className={visitorStyles.policyStatus}>
+              <span>
+                <strong>Rule status</strong>
+                <small>{form.enabled ? "Evaluated by the scheduler" : "Evaluation paused"}</small>
+              </span>
+              <input type="checkbox" checked={form.enabled} onChange={(event) => update("enabled", event.target.checked)} />
+              <span className={visitorStyles.policySwitch} aria-hidden="true"><span /></span>
+            </label>
+            <PolicyField label="Change reason" wide>
+              <textarea value={form.reason} onChange={(event) => update("reason", event.target.value)} rows="3" maxLength={400} placeholder="Reason for this policy revision" />
+            </PolicyField>
+          </div>
+
+          {(localError || error) && <div className={visitorStyles.dialogError}>{localError || error}</div>}
+          <footer className={visitorStyles.dialogActions}>
+            <button className={ui.buttonSecondary} type="button" onClick={onCancel} disabled={busy}>Cancel</button>
+            <button className={ui.buttonPrimary} type="submit" disabled={busy}>{busy ? "Preparing..." : "Review changes"}</button>
+          </footer>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function PreparedRuleChange({ change, busy, error, onBack, onCancel, onApply }) {
+  const entries = Object.entries(change.diff || {});
+  return (
+    <div className={visitorStyles.dialogBackdrop} role="presentation">
+      <section className={`${visitorStyles.policyDialog} ${visitorStyles.reviewDialog}`} role="alertdialog" aria-modal="true" aria-labelledby="alert-rule-review-title">
+        <header className={visitorStyles.dialogHeader}>
+          <div>
+            <span className={visitorStyles.dialogEyebrow}>Confirmation</span>
+            <h2 id="alert-rule-review-title">Review policy changes</h2>
+          </div>
+          <button className={visitorStyles.dialogClose} type="button" onClick={onCancel} disabled={busy} aria-label="Cancel policy change">
+            <X size={17} />
+          </button>
+        </header>
+        <div className={visitorStyles.changeList}>
+          {entries.map(([field, values]) => (
+            <div className={visitorStyles.changeRow} key={field}>
+              <strong>{humanizeField(field)}</strong>
+              <span>{formatPolicyValue(values.from)}</span>
+              <span className={visitorStyles.changeArrow}>→</span>
+              <span>{formatPolicyValue(values.to)}</span>
+            </div>
+          ))}
+        </div>
+        {change.warnings?.length > 0 && (
+          <div className={visitorStyles.policyWarnings}>
+            {change.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+          </div>
+        )}
+        {error && <div className={visitorStyles.dialogError}>{error}</div>}
+        <footer className={visitorStyles.dialogActions}>
+          <button className={ui.buttonSecondary} type="button" onClick={onBack} disabled={busy}>Back</button>
+          <button className={ui.buttonPrimary} type="button" onClick={onApply} disabled={busy}>
+            <Check size={14} /> {busy ? "Applying..." : "Apply changes"}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function PolicyField({ label, wide = false, children }) {
+  return (
+    <label className={`${visitorStyles.policyField} ${wide ? visitorStyles.policyFieldWide : ""}`}>
+      <span>{label}</span>
+      {children}
+    </label>
   );
 }
 
@@ -378,6 +677,18 @@ function Metric({ label, value, hint }) {
 function formatScope(rule) {
   if (rule.geoAreaId) return rule.geoAreaId;
   return rule.geoLevel || "GLOBAL";
+}
+
+function humanizeField(value) {
+  return String(value || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function formatPolicyValue(value) {
+  if (value === null || value === undefined || value === "null" || value === "") return "Not set";
+  if (typeof value === "boolean") return value ? "Enabled" : "Paused";
+  return String(value);
 }
 
 function formatDateTime(value) {

@@ -76,5 +76,17 @@ export const adminApi = {
       const params = new URLSearchParams({ hours: String(hours) });
       return request(`/api/admin/visitor-alerts?${params.toString()}`);
     },
+    prepareChange({ ruleId, patch, reason }) {
+      return request("/api/admin/visitor-alerts", {
+        method: "POST",
+        body: JSON.stringify({ operation: "prepare", ruleId, patch, reason }),
+      });
+    },
+    applyChange(changeId) {
+      return request("/api/admin/visitor-alerts", {
+        method: "POST",
+        body: JSON.stringify({ operation: "apply", changeId }),
+      });
+    },
   },
 };

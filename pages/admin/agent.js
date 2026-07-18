@@ -1,6 +1,7 @@
 // pages/admin/agent.js
 // Operate console — talks to portfolio-agent-service via the Next.js
-// `/api/agent/intent` and `/api/agent/intent/confirm` proxies.
+// admin-only agent proxies. Identity and roles are derived server-side from
+// the verified Supabase session; the browser cannot grant itself write access.
 //
 // Goals:
 //   * Type any natural-language request ("list failed email deliveries",
@@ -72,7 +73,7 @@ export default function AdminAgentPage() {
     setUtterance("");
     append({ role: "user", text });
     try {
-      const r = await callAgent("/api/agent/intent", {
+      const r = await callAgent("/api/admin/agent/intent", {
         sessionId: sessionRef.current,
         utterance: text,
         pageContext: { page: "/admin/agent" },
@@ -93,7 +94,7 @@ export default function AdminAgentPage() {
       text: `[${accept ? "CONFIRM" : "CANCEL"} pending action ${pendingActionId.slice(0, 8)}…]`,
     });
     try {
-      const r = await callAgent("/api/agent/intent/confirm", {
+      const r = await callAgent("/api/admin/agent/confirm", {
         sessionId: sessionRef.current,
         pendingActionId,
         confirm: accept,
@@ -117,12 +118,13 @@ export default function AdminAgentPage() {
         <h1>Operate Console</h1>
         <div className="op-meta">
           <span>session: <code>{sessionRef.current}</code></span>
-          {email ? <span>signed in as <strong>{email}</strong></span> : <span style={{ color: "#fca5a5" }}>not signed in (VIEWER only)</span>}
+          <span className="op-admin-mode">Admin mode</span>
+          {email ? <span>signed in as <strong>{email}</strong></span> : <span style={{ color: "#fca5a5" }}>admin session unavailable</span>}
           <button onClick={reset} className="op-btn op-btn-ghost">Reset</button>
         </div>
         <p className="op-hint">
           Type any natural-language request in any language. Read-only intents execute immediately.
-          Write intents (publish, reindex, retry, send-test, unsubscribe…) return
+          Write intents (publish, reindex, retry, alert policy changes, send-test…) return
           <code>CONFIRMATION_REQUIRED</code> with the staged tool — click Confirm to fire.
         </p>
       </div>
@@ -227,6 +229,8 @@ export default function AdminAgentPage() {
           "check delivery stats",
           "帮我搜索 Kafka 相关的文章",
           "republish the latest Kafka blog",
+          "list visitor alert rules",
+          "create a visitor alert rule and show me the diff",
           "what is the weather today",
         ].map((s, i) => (
           <button key={i} className="op-chip" onClick={() => setUtterance(s)}>{s}</button>
@@ -238,6 +242,7 @@ export default function AdminAgentPage() {
         .op-meta { display: flex; gap: 16px; flex-wrap: wrap; color: #66717d; font-size: 0.82rem; align-items: center; }
         .op-meta code { color: #0f766e; background: #e6f5f2; padding: 2px 6px; border-radius: 4px; font-size: 0.76rem; }
         .op-meta strong { color: #17212b; }
+        .op-admin-mode { color: #0f5f58; background: #dff3ef; border: 1px solid #a8d8d0; border-radius: 4px; padding: 3px 7px; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; }
         .op-hint { max-width: 900px; color: #66717d; font-size: 0.85rem; line-height: 1.55; margin: 12px 0 24px; }
         .op-hint code { color: #8a6715; background: #fff7df; padding: 2px 6px; border-radius: 4px; font-size: 0.78rem; }
 
