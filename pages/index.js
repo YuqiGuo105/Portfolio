@@ -1109,7 +1109,7 @@ const Index = () => {
             </div>
 
             {/* Works */}
-            <ProjectIsotop />
+            <ProjectIsotop featuredOnly />
           </div>
         </section>
 

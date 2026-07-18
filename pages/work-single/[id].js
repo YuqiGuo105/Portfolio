@@ -1,140 +1,179 @@
-import Layout from "../../src/layout/Layout";
+import { useEffect } from "react";
 import Link from "next/link";
-import { useEffect } from 'react';
+import Layout from "../../src/layout/Layout";
+import ProjectExperience from "../../src/components/projects/ProjectExperience";
 import SeoHead, { absoluteUrl } from "../../src/components/SeoHead";
-import { supabaseServer } from '../../src/supabase/supabaseServer';
-// isomorphic-dompurify pulls in jsdom + native optional deps that Vercel's
-// serverless Node runtime cannot resolve; loading it throws at request time
-// and served 500s for every /work-single/[id] view. sanitize-html is a
-// pure-JS sanitizer that works identically in local Node and Vercel.
-import { sanitize } from '../../src/lib/sanitizeHtml';
+import { sanitize } from "../../src/lib/sanitizeHtml";
+import { supabaseServer } from "../../src/supabase/supabaseServer";
 
-/**
- * Server-rendered project detail. Same rationale as blog-single: without
- * SSR, Googlebot sees only `<div>Loading...</div>` on the first byte and
- * never indexes any of the project copy. Fetching in getServerSideProps
- * (plus a short CDN cache) pushes the real markup into the initial HTML.
- */
+const PROJECT_FIELDS = [
+  "id",
+  "title",
+  "year",
+  "technology",
+  "URL",
+  "content",
+  "summary",
+  "image_url",
+  "updated_at",
+  "published_at",
+  "publication_status",
+  "cover_variant",
+  "experience_variant",
+  "num",
+].join(",");
+
+function sanitizeWithMermaid(html) {
+  if (!html) return "";
+
+  const blocks = [];
+  const marked = html.replace(/<div\s+class="mermaid">[\s\S]*?<\/div>/g, (match) => {
+    const inner = match.replace(/^<div[^>]*>/, "").replace(/<\/div>$/, "");
+    blocks.push(inner);
+    return `<div class="mermaid" id="mermaid-block-${blocks.length - 1}"></div>`;
+  });
+
+  return sanitize(marked).replace(
+    /<div[^>]+id="mermaid-block-(\d+)"[^>]*>[\s\S]*?<\/div>/g,
+    (_, index) => {
+      const code = blocks[Number.parseInt(index, 10)] || "";
+      const escaped = code.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      return `<div class="mermaid">${escaped}</div>`;
+    }
+  );
+}
+
 export async function getServerSideProps({ params, res }) {
   const { id } = params;
-
-  // Column set must match the actual Projects table schema:
-  //   id, title, content, published_at, updated_at, image_url, URL,
-  //   category, year, technology, num
-  // (No `description`, no `image`, no `created_at`.) Selecting non-existent
-  // columns returns HTTP 400 from PostgREST and previously caused this page
-  // to 500 in production.
-  const [{ data: project, error: projectErr }, { data: nextRows }] = await Promise.all([
+  const [projectResult, navigationResult, subsystemResult] = await Promise.all([
     supabaseServer
-      .from('Projects')
-      .select('id,title,year,technology,URL,content,image_url,updated_at,published_at')
-      .eq('id', id)
-      .single(),
+      .from("Projects")
+      .select(PROJECT_FIELDS)
+      .eq("id", id)
+      .eq("publication_status", "PUBLISHED")
+      .maybeSingle(),
     supabaseServer
-      .from('Projects')
-      .select('id,title')
-      .gt('id', id)
-      .order('id', { ascending: true })
-      .limit(1),
+      .from("Projects")
+      .select("id,title,num,published_at")
+      .eq("publication_status", "PUBLISHED")
+      .order("num", { ascending: false })
+      .order("published_at", { ascending: false }),
+    supabaseServer
+      .from("project_subsystems")
+      .select("id,project_id,linked_project_id,slug,title,eyebrow,summary,design_intent,maturity,sort_order,diagram_config,active")
+      .eq("project_id", id)
+      .eq("active", true)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true }),
   ]);
 
-  if (projectErr || !project) {
+  if (projectResult.error || !projectResult.data) {
     return { notFound: true };
   }
 
-  // Sanitize project content while preserving mermaid diagram blocks.
-  // sanitize-html encodes > as &gt; which breaks mermaid arrows (->> becomes -&gt;&gt;).
-  // Fix: extract mermaid blocks first, sanitize the rest, then restore blocks
-  // with only & and < encoded (> is valid unescaped in HTML5 text content).
-  function sanitizeWithMermaid(html) {
-    if (!html) return '';
-    const blocks = [];
-    const marked = html.replace(
-      /<div\s+class="mermaid">[\s\S]*?<\/div>/g,
-      (match) => {
-        // strip outer div tags, keep raw mermaid syntax
-        const inner = match.replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '');
-        blocks.push(inner);
-        return `<div class="mermaid" id="mermaid-block-${blocks.length - 1}"></div>`;
-      }
-    );
-    const sanitized = sanitize(marked);
-    return sanitized.replace(
-      /<div[^>]+id="mermaid-block-(\d+)"[^>]*>[\s\S]*?<\/div>/g,
-      (_, idx) => {
-        const code = blocks[parseInt(idx)];
-        // Encode & and < only; > is left as-is (valid HTML5 text, needed for arrows)
-        const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-        return `<div class="mermaid">${escaped}</div>`;
-      }
-    );
+  if (navigationResult.error) {
+    throw navigationResult.error;
   }
-  const sanitizedContent = sanitizeWithMermaid(project.content);
 
-  if (res) {
-    res.setHeader(
-      'Cache-Control',
-      'public, s-maxage=60, stale-while-revalidate=600'
-    );
+  if (subsystemResult.error) {
+    console.error("Project subsystem query failed", {
+      projectId: id,
+      message: subsystemResult.error.message,
+    });
   }
+
+  const project = projectResult.data;
+  const projects = navigationResult.data || [];
+  const rawSubsystems = subsystemResult.data || [];
+  const linkedProjectIds = [...new Set(
+    rawSubsystems.map((system) => system.linked_project_id).filter(Boolean)
+  )];
+  let publishedLinkedProjectIds = new Set();
+
+  if (linkedProjectIds.length > 0) {
+    const linkedResult = await supabaseServer
+      .from("Projects")
+      .select("id")
+      .in("id", linkedProjectIds)
+      .eq("publication_status", "PUBLISHED");
+
+    if (!linkedResult.error) {
+      publishedLinkedProjectIds = new Set(
+        (linkedResult.data || []).map((linkedProject) => linkedProject.id)
+      );
+    }
+  }
+
+  const currentIndex = projects.findIndex((item) => item.id === id);
+  const nextProject = currentIndex >= 0 ? projects[currentIndex + 1] || null : null;
+  const subsystems = rawSubsystems.map((system) => ({
+    ...system,
+    linked_project_id: publishedLinkedProjectIds.has(system.linked_project_id)
+      ? system.linked_project_id
+      : null,
+  }));
+
+  res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=600");
 
   return {
     props: {
       project: {
         id: project.id,
-        title: project.title || '',
-        year: project.year || '',
-        technology: project.technology || '',
-        URL: project.URL || '',
-        content: sanitizedContent,
-        // Projects table has no `description` column; the render code derives
-        // meta description from content when this is empty.
-        description: '',
+        title: project.title || "",
+        year: project.year || "",
+        technology: project.technology || "",
+        URL: project.URL || "",
+        content: sanitizeWithMermaid(project.content),
+        description: project.summary || "",
         image: project.image_url || null,
+        coverVariant: project.cover_variant || "IMAGE",
+        experienceVariant: project.experience_variant || null,
         updatedAt: project.updated_at || null,
         createdAt: project.published_at || null,
       },
-      nextProject: (nextRows && nextRows[0])
-        ? { id: nextRows[0].id, title: nextRows[0].title || '' }
+      subsystems,
+      nextProject: nextProject
+        ? { id: nextProject.id, title: nextProject.title || "" }
         : null,
     },
   };
 }
 
-const WorkSingle = ({ project, nextProject }) => {
-  // Render mermaid diagrams embedded in article content as SVGs.
-  // The server-side sanitizeWithMermaid() already ensures the mermaid div content
-  // has correct arrow syntax (>> and --> not entity-encoded). We just need to
-  // load mermaid.js and run it.
+export default function WorkSingle({ project, subsystems, nextProject }) {
   useEffect(() => {
-    if (!document.querySelector('div.mermaid')) return;
-    const SCRIPT_ID = '__mermaid_cdn';
-    const run = () => {
-      window.mermaid?.initialize({ startOnLoad: false, theme: 'dark' });
+    if (!document.querySelector("div.mermaid")) return undefined;
+
+    const scriptId = "__mermaid_cdn";
+    const render = () => {
+      window.mermaid?.initialize({ startOnLoad: false, theme: "dark" });
       window.mermaid?.run?.();
     };
-    if (document.getElementById(SCRIPT_ID)) { run(); return; }
-    const s = document.createElement('script');
-    s.id   = SCRIPT_ID;
-    s.src  = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
-    s.onload = run;
-    document.body.appendChild(s);
+    const existingScript = document.getElementById(scriptId);
+
+    if (existingScript) {
+      render();
+      return undefined;
+    }
+
+    const script = document.createElement("script");
+    script.id = scriptId;
+    script.src = "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js";
+    script.onload = render;
+    document.body.appendChild(script);
+    return undefined;
   }, []);
 
-  const metaDescription = (project.description
-    || (project.content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  const metaDescription = (
+    project.description
+    || (project.content || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
   ).slice(0, 200);
-
   const canonical = absoluteUrl(`/work-single/${project.id}`);
-
-  // CreativeWork is the closest schema.org match for a portfolio project
-  // page (Google renders it as a rich result with title + author + date).
   const projectLd = {
-    '@context': 'https://schema.org',
-    '@type': 'CreativeWork',
+    "@context": "https://schema.org",
+    "@type": "CreativeWork",
     name: project.title,
     description: metaDescription,
-    author: { '@type': 'Person', name: 'Yuqi Guo' },
+    author: { "@type": "Person", name: "Yuqi Guo" },
     url: canonical,
     dateModified: project.updatedAt || project.createdAt || undefined,
     keywords: project.technology || undefined,
@@ -151,93 +190,86 @@ const WorkSingle = ({ project, nextProject }) => {
         image={project.image || undefined}
         jsonLd={projectLd}
       />
-      <Layout extraWrapClass={"project-single"}>
-      {/* Section Started Heading */}
-      <section className="section section-inner started-heading">
-        <div className="container">
-          <div className="row">
-            <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
-              {/* titles */}
-              <div className="h-titles">
-                <h1
-                  className="h-title"
-                >
-                  {project.title}
-                </h1>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-      {/* Details */}
-      <section className="section section-inner details">
-        <div className="container">
-          <div className="row row-custom">
-            <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3"></div>
-            <div className="col-xs-12 col-sm-12 col-md-9 col-lg-9 vertical-line">
-              <div className="m-details">
-                <div className="details-label">
-                  <span>Year</span>
-                  <strong>{project.year}</strong>
-                </div>
-                <div className="details-label">
-                  <span>Technology</span>
-                  <strong>{project.technology}</strong>
-                </div>
-                <div className="details-label">
-                  <span>Link</span>
-                  <strong>
-                    <Link href={project.URL || '#'}>
-                      <a
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        
-                      >
-                        Source Code
-                      </a>
-                    </Link>
-                  </strong>
+      <Layout extraWrapClass="project-single">
+        <section className="section section-inner started-heading">
+          <div className="container">
+            <div className="row">
+              <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                <div className="h-titles">
+                  <h1 className="h-title">{project.title}</h1>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-      {/* Cover Image — only rendered when the project has an absolute image URL */}
-      {project.image && project.image.startsWith('http') && (
-        <section className="m-image-large">
-          <div className="image">
-            <div
-              className="img js-parallax"
-              style={{ backgroundImage: `url(${project.image})` }}
-            />
           </div>
         </section>
-      )}
 
-      {/* Description */}
-      <section className="section section-bg">
-        <div className="container">
-          <div className="row">
-            <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
-              <div
-                className="p-title"
-              >
-                Project
-              </div>
-              <div
-                className="text"
-                dangerouslySetInnerHTML={{__html: project.content}}
-              >
-
+        <section className="section section-inner details">
+          <div className="container">
+            <div className="row row-custom">
+              <div className="col-xs-12 col-sm-12 col-md-3 col-lg-3" />
+              <div className="col-xs-12 col-sm-12 col-md-9 col-lg-9 vertical-line">
+                <div className="m-details">
+                  <div className="details-label">
+                    <span>Year</span>
+                    <strong>{project.year}</strong>
+                  </div>
+                  <div className="details-label">
+                    <span>Technology</span>
+                    <strong>{project.technology}</strong>
+                  </div>
+                  {project.URL && (
+                    <div className="details-label">
+                      <span>Link</span>
+                      <strong>
+                        <Link href={project.URL}>
+                          <a target="_blank" rel="noopener noreferrer">Source Code</a>
+                        </Link>
+                      </strong>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Next project navigation */}
-      {nextProject && (
+        {project.coverVariant === "IMAGE" && project.image?.startsWith("http") && (
+          <section className="m-image-large">
+            <div className="image">
+              <div
+                className="img js-parallax"
+                style={{ backgroundImage: `url(${project.image})` }}
+              />
+            </div>
+          </section>
+        )}
+
+        {project.experienceVariant && subsystems.length > 0 && (
+          <section className="section section-inner project-architecture-section">
+            <div className="container">
+              <ProjectExperience
+                variant={project.experienceVariant}
+                systems={subsystems}
+              />
+            </div>
+          </section>
+        )}
+
+        <section className="section section-bg">
+          <div className="container">
+            <div className="row">
+              <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                <div className="p-title">Project</div>
+                <div
+                  className="text"
+                  dangerouslySetInnerHTML={{ __html: project.content }}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {nextProject && (
           <section className="m-page-navigation">
             <div className="container">
               <div className="row">
@@ -254,9 +286,8 @@ const WorkSingle = ({ project, nextProject }) => {
               </div>
             </div>
           </section>
-      )}
-    </Layout>
+        )}
+      </Layout>
     </>
   );
-};
-export default WorkSingle;
+}

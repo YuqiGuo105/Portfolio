@@ -1,35 +1,43 @@
 import Isotope from "isotope-layout";
 import Link from "next/link";
-import {Fragment, useEffect, useRef, useState} from "react";
-import {supabase} from '../supabase/supabaseClient';
+import { Fragment, useEffect, useRef, useState } from "react";
+import ProjectSystemCover, { supportsSystemCover } from "./projects/ProjectSystemCover";
+import { supabase } from "../supabase/supabaseClient";
 
 const FILTERS = [
-  { key: "all",        label: "All",        icon: "fa-border-all" },
-  { key: "Full-Stack", label: "Full Stack",  icon: "fa-layer-group" },
-  { key: "Backend",    label: "Backend",     icon: "fa-server" },
-  { key: "Web-Infra",  label: "Web Infra",   icon: "fa-cloud" },
+  { key: "all", label: "All", icon: "fa-border-all" },
+  { key: "Full-Stack", label: "Full Stack", icon: "fa-layer-group" },
+  { key: "Backend", label: "Backend", icon: "fa-server" },
+  { key: "Web-Infra", label: "Web Infra", icon: "fa-cloud" },
 ];
 
-const ProjectIsotop = () => {
+const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
   const isotope = useRef();
   const [filterKey, setFilterKey] = useState("all");
   const [projects, setProjects] = useState([]);
 
   useEffect(() => {
     const fetchProjects = async () => {
-      const {data, error} = await supabase
-        .from('Projects')
-        .select('*')
-        .order('num', {ascending: false});
+      let query = supabase
+        .from("Projects")
+        .select("*")
+        .eq("publication_status", "PUBLISHED")
+        .order("num", { ascending: false });
+      if (featuredOnly) query = query.eq("featured", true);
+
+      const { data, error } = await query;
       if (!error) setProjects(data);
       else console.error(error);
     };
     fetchProjects();
-  }, []);
+  }, [featuredOnly]);
 
   useEffect(() => {
-    if (!projects.length) return;
-    if (isotope.current) { isotope.current.destroy(); isotope.current = null; }
+    if (!projects.length) return undefined;
+    if (isotope.current) {
+      isotope.current.destroy();
+      isotope.current = null;
+    }
     const timer = setTimeout(() => {
       isotope.current = new Isotope(".proj-grid", {
         itemSelector: ".proj-col",
@@ -39,7 +47,10 @@ const ProjectIsotop = () => {
     }, 120);
     return () => {
       clearTimeout(timer);
-      if (isotope.current) { isotope.current.destroy(); isotope.current = null; }
+      if (isotope.current) {
+        isotope.current.destroy();
+        isotope.current = null;
+      }
     };
   }, [projects]);
 
@@ -51,65 +62,69 @@ const ProjectIsotop = () => {
 
   return (
     <Fragment>
-      {/* ── Filter pills ── */}
       <div className="proj-filters">
         {FILTERS.map(({ key, label, icon }) => (
           <button
+            type="button"
             key={key}
             className={`proj-filter-btn${filterKey === key ? " active" : ""}`}
             onClick={() => setFilterKey(key)}
+            aria-pressed={filterKey === key}
           >
-            <i className={`fas ${icon}`} />
+            <i className={`fas ${icon}`} aria-hidden="true" />
             <span>{label}</span>
           </button>
         ))}
       </div>
 
-      {/* ── Card grid ── */}
       <div className="proj-grid row">
         {projects.map((project) => {
           const categoryClasses = project.category
-            ? project.category.split(',').map((c) => c.trim().replace(/\s+/g, '-')).join(' ')
-            : '';
+            ? project.category.split(",").map((category) => category.trim().replace(/\s+/g, "-")).join(" ")
+            : "";
           const techList = project.technology
-            ? project.technology.split(',').map((t) => t.trim()).filter(Boolean)
+            ? project.technology.split(",").map((technology) => technology.trim()).filter(Boolean)
             : [];
-          const cats = project.category
-            ? project.category.split(',').map((c) => c.trim())
+          const categories = project.category
+            ? project.category.split(",").map((category) => category.trim())
             : [];
+          const hasSystemCover = supportsSystemCover(project.cover_variant);
+          const columnClass = featuredOnly ? "col-lg-6" : "col-lg-4";
 
           return (
             <div
               key={project.id}
-              className={`proj-col col-xs-12 col-sm-6 col-md-6 col-lg-4 ${categoryClasses}`}
+              className={`proj-col col-xs-12 col-sm-6 col-md-6 ${columnClass} ${categoryClasses}`}
             >
               <Link href={`/work-single/${project.id}`} passHref>
                 <a className="proj-card">
-                  {/* Image area */}
                   <div className="proj-card-image">
-                    <img src={project.image_url} alt={project.title} />
+                    {hasSystemCover ? (
+                      <ProjectSystemCover variant={project.cover_variant} />
+                    ) : (
+                      <img src={project.image_url} alt={project.title} />
+                    )}
                     <div className="proj-card-overlay">
                       <span className="proj-card-cta">
-                        <i className="fas fa-arrow-right" />
+                        <i className="fas fa-arrow-right" aria-hidden="true" />
                         View Project
                       </span>
                     </div>
-                    {cats.length > 0 && (
+                    {categories.length > 0 && (
                       <div className="proj-card-badges">
-                        {cats.map((cat, i) => (
-                          <span key={i} className="proj-badge">{cat}</span>
+                        {categories.map((category) => (
+                          <span key={category} className="proj-badge">{category}</span>
                         ))}
                       </div>
                     )}
                   </div>
 
-                  {/* Body */}
                   <div className="proj-card-body">
                     <h3 className="proj-card-title">{project.title}</h3>
                     {techList.length > 0 && (
                       <div className="proj-tech-list">
-                        {techList.slice(0, 4).map((tech, i) => (
-                          <span key={i} className="proj-tech-tag">{tech}</span>
+                        {techList.slice(0, 4).map((technology) => (
+                          <span key={technology} className="proj-tech-tag">{technology}</span>
                         ))}
                         {techList.length > 4 && (
                           <span className="proj-tech-tag proj-tech-more">+{techList.length - 4}</span>
@@ -119,7 +134,7 @@ const ProjectIsotop = () => {
                     <div className="proj-card-footer">
                       {project.year && <span className="proj-year">{project.year}</span>}
                       <span className="proj-arrow">
-                        <i className="fas fa-external-link-alt" />
+                        <i className="fas fa-external-link-alt" aria-hidden="true" />
                       </span>
                     </div>
                   </div>
@@ -130,15 +145,16 @@ const ProjectIsotop = () => {
         })}
       </div>
 
-      {/* ── View All button ── */}
-      <div className="proj-view-all-wrap">
-        <Link href="/works-list" passHref>
-          <a className="proj-view-all-btn">
-            <span>View All Projects</span>
-            <i className="fas fa-chevron-right" />
-          </a>
-        </Link>
-      </div>
+      {showViewAll && (
+        <div className="proj-view-all-wrap">
+          <Link href="/works-list" passHref>
+            <a className="proj-view-all-btn">
+              <span>View All Projects</span>
+              <i className="fas fa-chevron-right" aria-hidden="true" />
+            </a>
+          </Link>
+        </div>
+      )}
     </Fragment>
   );
 };

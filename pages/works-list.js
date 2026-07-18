@@ -17,7 +17,7 @@ const WorksList = () => {
                 <h1
                   className="h-title"
                 >
-                  Projects (list)
+                  All Projects
                 </h1>
               </div>
             </div>
@@ -35,8 +35,8 @@ const WorksList = () => {
                 className="text"
               >
                 <h6>
-                  A Collection of my favorites project I’ve designed recently.
-                  Feeling great while sharing here.
+                  The complete project archive, including current flagship work
+                  and earlier systems that shaped the platform.
                 </h6>
               </div>
             </div>
@@ -44,7 +44,7 @@ const WorksList = () => {
           <div className="row">
             <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
               {/* Works */}
-              <ProjectIsotop />
+              <ProjectIsotop showViewAll={false} />
             </div>
           </div>
         </div>
