@@ -466,8 +466,13 @@
 .node {
   position: absolute;
   z-index: 2;
-  width: 104px;
+  width: 120px;
   transform: translate(-50%, -50%);
+}
+
+.node:hover,
+.node:focus-within {
+  z-index: 8;
 }
 
 .nodeButton {
@@ -533,16 +538,17 @@
   grid-column: 1 / -1;
   overflow: hidden;
   color: #d7ddda;
+  display: -webkit-box;
   font-size: 11px;
   font-weight: 650;
   line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .experience .nodeButton .nodeTitle {
   height: auto;
-  min-height: 14px;
+  min-height: 28px;
   line-height: 1.25;
 }
 
@@ -599,6 +605,85 @@
 
 .nodeActive .nodeLabel {
   color: var(--trace-mint);
+}
+
+.nodeTooltip {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 12px);
+  width: 278px;
+  padding: 16px;
+  visibility: hidden;
+  color: #bdc5c9;
+  background: rgba(9, 13, 16, 0.98);
+  border: 1px solid #405049;
+  border-radius: 3px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-6px);
+  transition: opacity 150ms ease, transform 150ms ease, visibility 150ms ease;
+}
+
+.node[data-tooltip-side="left"] .nodeTooltip {
+  right: calc(100% + 12px);
+  left: auto;
+  transform: translateX(6px);
+}
+
+.node[data-tooltip-vertical="up"] .nodeTooltip {
+  top: auto;
+  bottom: 0;
+}
+
+.node:hover .nodeTooltip,
+.node:focus-within .nodeTooltip {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.nodeTooltipHeading {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #2b343a;
+}
+
+.nodeTooltipHeading span,
+.nodeTooltip dt {
+  color: var(--trace-mint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+}
+
+.nodeTooltipHeading strong {
+  color: #eef4f1;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.nodeTooltip dl {
+  margin: 0;
+}
+
+.nodeTooltip dl > div {
+  padding-top: 11px;
+}
+
+.nodeTooltip dt,
+.nodeTooltip dd {
+  margin: 0;
+}
+
+.nodeTooltip dd {
+  margin-top: 4px;
+  color: #9ca7ad;
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .traceConsole {
@@ -678,6 +763,82 @@
 .stepCount {
   color: var(--trace-violet);
   white-space: nowrap;
+}
+
+.routePlan {
+  background: #0c1013;
+  border-top: 1px solid var(--trace-line);
+}
+
+.routePlanHeader {
+  min-height: 52px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #657078;
+  border-bottom: 1px solid var(--trace-line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.13em;
+}
+
+.routeSteps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.routeSteps li {
+  position: relative;
+  min-height: 116px;
+  padding: 22px 20px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  border-right: 1px solid var(--trace-line);
+  border-bottom: 1px solid var(--trace-line);
+  transition: background 180ms ease, box-shadow 180ms ease;
+}
+
+.routeSteps li[data-state="active"] {
+  background: rgba(117, 230, 196, 0.07);
+  box-shadow: inset 0 2px 0 var(--trace-mint);
+}
+
+.routeSteps li[data-state="complete"] {
+  background: rgba(117, 230, 196, 0.025);
+}
+
+.routeStepNumber {
+  color: #59656d;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+}
+
+.routeSteps li[data-state="active"] .routeStepNumber,
+.routeSteps li[data-state="complete"] .routeStepNumber {
+  color: var(--trace-mint);
+}
+
+.routeSteps strong {
+  display: block;
+  color: #c8cecb;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.routeSteps p {
+  margin: 8px 0 0;
+  color: #78838a;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.routeSteps li[data-state="active"] strong {
+  color: #effff9;
 }
 
 .componentPanel {
@@ -854,6 +1015,10 @@
 
   .nodeButton {
     min-height: 108px;
+  }
+
+  .nodeTooltip {
+    display: none;
   }
 
   .canvasMeta {

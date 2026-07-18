@@ -2219,3 +2219,90 @@ body.light-skin .text thead tr { background: rgba(28,37,40,0.04); }
 body.light-skin .text pre { background: #f6f8fa; border-color: rgba(28,37,40,0.1); }
 body.light-skin .text code { background: rgba(28,37,40,0.07); }
 body.light-skin .text .mermaid { background: rgba(28,37,40,0.03); border-color: rgba(28,37,40,0.1); }
+
+/* Contact: keep long values inside the details column at every viewport. */
+#contact-section .contact-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.82fr) minmax(0, 2.18fr);
+  align-items: stretch;
+}
+
+#contact-section .contact-layout::before,
+#contact-section .contact-layout::after {
+  display: none;
+}
+
+#contact-section .contact-details,
+#contact-section .contact-form-column {
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  float: none;
+}
+
+#contact-section .contact-details {
+  padding: 8px clamp(26px, 3vw, 52px) 8px 15px;
+}
+
+#contact-section .contact-form-column {
+  padding-left: clamp(34px, 4vw, 68px);
+}
+
+#contact-section .contact-value {
+  max-width: 100%;
+  display: block;
+  overflow-wrap: anywhere;
+  color: inherit;
+  font-size: clamp(15px, 1.15vw, 18px);
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+#contact-section a.contact-value:hover {
+  color: #ff8059;
+}
+
+@media (max-width: 991px) {
+  #contact-section .contact-layout {
+    grid-template-columns: 1fr;
+  }
+
+  #contact-section .contact-details {
+    padding: 0 15px 44px;
+    text-align: left !important;
+  }
+
+  #contact-section .contacts-items {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 28px;
+  }
+
+  #contact-section .contacts-items .numbers-item {
+    margin-top: 0;
+  }
+
+  #contact-section .contact-form-column {
+    padding: 44px 15px 0;
+    border-top: 1px solid currentColor;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  #contact-section .contacts-items {
+    grid-template-columns: 1fr;
+  }
+
+  #contact-section .contacts-items .numbers-item {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: center;
+    gap: 14px;
+  }
+
+  #contact-section .contacts-items .numbers-item .icon {
+    margin: 0;
+    font-size: 26px;
+  }
+}

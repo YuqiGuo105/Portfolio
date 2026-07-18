@@ -261,13 +261,21 @@ function SystemDiagram({ system }) {
             const active = hasStarted && currentStep?.nodeId === node.id;
             const visited = hasStarted && visitedNodes.has(node.id);
             const boundedX = Math.min(92, Math.max(8, Number(node.x)));
+            const tooltipId = `architecture-node-${system.id}-${node.id}`;
             return (
-              <div key={node.id} className={styles.node} style={{ left: `${boundedX}%`, top: `${node.y}%` }}>
+              <div
+                key={node.id}
+                className={styles.node}
+                style={{ left: `${boundedX}%`, top: `${node.y}%` }}
+                data-tooltip-side={boundedX > 72 ? "left" : "right"}
+                data-tooltip-vertical={Number(node.y) > 64 ? "up" : "down"}
+              >
                 <button
                   type="button"
                   className={`${styles.nodeButton} ${active ? styles.nodeActive : ""} ${visited ? styles.nodeVisited : ""} ${selectedNode === node.id ? styles.nodeSelected : ""}`}
                   onClick={() => setSelectedNode(node.id)}
                   aria-label={`Inspect ${node.title}`}
+                  aria-describedby={tooltipId}
                   title={node.title}
                   data-shape={node.shape || "service"}
                 >
@@ -278,6 +286,17 @@ function SystemDiagram({ system }) {
                   <strong className={styles.nodeTitle}>{node.title}</strong>
                   <span className={styles.nodeLabel}>{node.label}</span>
                 </button>
+                <aside id={tooltipId} className={styles.nodeTooltip} role="tooltip">
+                  <div className={styles.nodeTooltipHeading}>
+                    <span>{node.code}</span>
+                    <strong>{node.title}</strong>
+                  </div>
+                  <dl>
+                    <div><dt>ROLE</dt><dd>{node.responsibility}</dd></div>
+                    <div><dt>DATA</dt><dd>{node.data}</dd></div>
+                    <div><dt>RELIABILITY</dt><dd>{node.reliability}</dd></div>
+                  </dl>
+                </aside>
               </div>
             );
           })}
@@ -299,6 +318,34 @@ function SystemDiagram({ system }) {
             </span>
           </div>
         </div>
+      </div>
+
+      <div className={styles.routePlan} aria-label={`${route.label} workflow steps`}>
+        <div className={styles.routePlanHeader}>
+          <span className={styles.eyebrow}>EXECUTION PLAN</span>
+          <span>{String(steps.length).padStart(2, "0")} STAGES</span>
+        </div>
+        <ol className={styles.routeSteps}>
+          {steps.map((step, index) => {
+            const stepNode = nodeMap[step.nodeId];
+            const state = hasStarted
+              ? index < activeStep
+                ? "complete"
+                : index === activeStep
+                  ? isComplete ? "complete" : "active"
+                  : "pending"
+              : "pending";
+            return (
+              <li key={`${step.nodeId}-${index}`} data-state={state}>
+                <span className={styles.routeStepNumber}>{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <strong>{stepNode?.title || step.nodeId}</strong>
+                  <p>{step.description}</p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
       </div>
 
       <div className={styles.componentPanel}>

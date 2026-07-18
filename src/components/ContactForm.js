@@ -46,24 +46,24 @@ const ContactForm = () => {
         <div className="m-titles">
           <h2 className="m-title" id="tour-contact">Contact Me</h2>
         </div>
-        <div className="row row-custom">
-          <div className="col-md-3 align-right">
+        <div className="row row-custom contact-layout">
+          <div className="col-md-3 align-right contact-details">
             <div className="numbers-items contacts-items">
               <div className="numbers-item">
                 <div className="icon"><i className="fas fa-phone"/></div>
-                <div className="num">+1 (315) 956 7675</div>
+                <a className="num contact-value" href="tel:+13159567675">+1 (315) 956 7675</a>
               </div>
               <div className="numbers-item">
                 <div className="icon"><i className="fas fa-mail-bulk"/></div>
-                <div className="num">yuqi.guo17@gmail.com</div>
+                <a className="num contact-value" href="mailto:yuqi.guo17@gmail.com">yuqi.guo17@gmail.com</a>
               </div>
               <div className="numbers-item">
                 <div className="icon"><i className="fas fa-location-arrow"/></div>
-                <div className="num">Syracuse, NY, USA 13210</div>
+                <div className="num contact-value">Syracuse, NY, USA 13210</div>
               </div>
             </div>
           </div>
-          <div className="col-md-9 vertical-line">
+          <div className="col-md-9 vertical-line contact-form-column">
             <div className="contacts-form">
               <form onSubmit={onSubmit}>
                 <label>
