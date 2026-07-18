@@ -9,6 +9,14 @@ import {
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import DOMPurify from "dompurify";
+import {
+  ArrowLeft,
+  Download,
+  LogOut,
+  MessageSquareText,
+  Pencil,
+  Printer,
+} from "lucide-react";
 import Layout from "../src/layout/Layout";
 import SeoHead from "../src/components/SeoHead";
 import LogInDialog from "../src/components/LogInDialog";
@@ -151,8 +159,7 @@ export default function CVPage() {
   });
   const [submittingComment, setSubmittingComment] = useState(false);
   const [activeAnnoId, setActiveAnnoId] = useState(null);
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const exportMenuRef = useRef(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const quillRef = useRef(null);
   const contentRef = useRef(null);
@@ -174,8 +181,16 @@ export default function CVPage() {
 
   const safeHtml = useMemo(() => {
     if (typeof window === "undefined") return cvRow?.content || "";
-    return DOMPurify.sanitize(cvRow?.content || "", { ADD_ATTR: ["target"] });
+    return DOMPurify.sanitize(cvRow?.content || "", {
+      ADD_ATTR: ["target", "download", "data-resume-pdf"],
+    });
   }, [cvRow]);
+
+  const pdfUrl = useMemo(() => {
+    if (typeof window === "undefined" || !safeHtml) return "";
+    const document = new DOMParser().parseFromString(safeHtml, "text/html");
+    return document.querySelector("[data-resume-pdf]")?.getAttribute("href") || "";
+  }, [safeHtml]);
 
   /* ---------------- auth ---------------- */
   useEffect(() => {
@@ -583,67 +598,6 @@ export default function CVPage() {
     }
   };
 
-  /* ---------------- export ---------------- */
-  const handleExport = useCallback((format) => {
-    setShowExportMenu(false);
-    const html = safeHtml || "<p>No content</p>";
-
-    const triggerDownload = (filename, mimeType, content) => {
-      const blob = new Blob([content], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    };
-
-    if (format === "txt") {
-      const div = document.createElement("div");
-      div.innerHTML = html;
-      const text = div.innerText || div.textContent || "";
-      triggerDownload("Yuqi_Guo_CV.txt", "text/plain;charset=utf-8", text);
-    } else if (format === "doc") {
-      const docHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-<head><meta charset='utf-8'><title>CV – Yuqi Guo</title>
-<style>body{font-family:Calibri,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.6}h1,h2,h3{color:#1a1a1a}a{color:#2563eb}</style>
-</head><body>${html}</body></html>`;
-      triggerDownload("Yuqi_Guo_CV.doc", "application/msword", docHtml);
-    } else if (format === "pdf") {
-      const win = window.open("", "_blank");
-      if (!win) {
-        setStatusMsg("Pop-up blocked — please allow pop-ups for this site.");
-        setTimeout(() => setStatusMsg(""), 3000);
-        return;
-      }
-      win.document.write(`<!DOCTYPE html><html><head>
-<meta charset="utf-8">
-<title>CV – Yuqi Guo</title>
-<style>
-  @page{margin:18mm 20mm}
-  body{font-family:Calibri,Georgia,sans-serif;max-width:800px;margin:0 auto;padding:0 10px;line-height:1.6;color:#111}
-  h1,h2,h3{color:#1a1a1a;page-break-after:avoid}
-  img{max-width:100%}
-  a{color:#2563eb;text-decoration:none}
-  p,li{orphans:3;widows:3}
-</style>
-</head><body>${html}<script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);};<\/script></body></html>`);
-      win.document.close();
-    }
-  }, [safeHtml]);
-
-  // Close export menu on outside click
-  useEffect(() => {
-    if (!showExportMenu) return;
-    const handler = (e) => {
-      if (!exportMenuRef.current?.contains(e.target)) setShowExportMenu(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showExportMenu]);
-
   const handlePopoverKeyDown = (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
@@ -658,16 +612,16 @@ export default function CVPage() {
   return (
     <Layout extraWrapClass="cv-page-wrap">
       <SeoHead
-        title="CV — Yuqi Guo"
-        description="Online editable CV / résumé of Yuqi Guo with inline reader comments."
+        title="Yuqi Guo | Software Engineer Resume"
+        description="Yuqi Guo is a software engineer specializing in backend systems, distributed platforms, and AI infrastructure."
       />
 
       <section className="section">
         <div className="container">
           <div className="cv-page">
-            <header className="cv-header">
-              <div>
-                <h1 className="cv-title">Curriculum Vitae</h1>
+            <header className="cv-header cv-toolbar">
+              <div className="cv-toolbar-copy">
+                <span className="cv-kicker">YUQI.SITE / RESUME</span>
                 {cvRow?.updated_at && (
                   <p className="cv-meta">
                     Last updated {new Date(cvRow.updated_at).toLocaleString()}
@@ -676,63 +630,50 @@ export default function CVPage() {
               </div>
               <div className="cv-header-actions">
                 <Link href="/">
-                  <a className="btn btn-ghost">← Home</a>
+                  <a className="btn btn-ghost" title="Back to portfolio">
+                    <ArrowLeft size={16} aria-hidden="true" /> Home
+                  </a>
                 </Link>
+                {pdfUrl && (
+                  <a className="btn cv-download-btn" href={pdfUrl} download>
+                    <Download size={16} aria-hidden="true" /> Download PDF
+                  </a>
+                )}
+                <button type="button" className="btn btn-ghost cv-icon-command" onClick={() => window.print()}>
+                  <Printer size={16} aria-hidden="true" /> Print
+                </button>
+                {comments.length > 0 && !editing && (
+                  <button
+                    type="button"
+                    className={`btn btn-ghost cv-icon-command${reviewOpen ? " is-active" : ""}`}
+                    onClick={() => setReviewOpen((open) => !open)}
+                    aria-pressed={reviewOpen}
+                  >
+                    <MessageSquareText size={16} aria-hidden="true" /> Review
+                  </button>
+                )}
                 {authLoaded && !editing && (
                   <button
                     type="button"
                     className="btn"
                     onClick={requestEdit}
                   >
-                    Edit CV
+                    <Pencil size={16} aria-hidden="true" /> Edit
+                  </button>
+                )}
+                {session && !editing && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost cv-signout"
+                    onClick={handleSignOut}
+                    title={`Sign out ${userEmail}`}
+                    aria-label="Sign out"
+                  >
+                    <LogOut size={16} aria-hidden="true" />
                   </button>
                 )}
               </div>
             </header>
-
-            {/* Profile pill */}
-            <div className="cv-profile" aria-live="polite">
-              {!authLoaded ? (
-                <span className="cv-profile-text muted">Loading…</span>
-              ) : session ? (
-                <>
-                  <span
-                    className="cv-avatar"
-                    aria-hidden="true"
-                    title={userEmail}
-                  >
-                    {userInitial}
-                  </span>
-                  <span className="cv-profile-text">
-                    Signed in as <strong>{userDisplayName}</strong>{" "}
-                    <span className="muted">({userEmail})</span>
-                  </span>
-                  <button
-                    type="button"
-                    className="cv-link-btn"
-                    onClick={handleSignOut}
-                  >
-                    Sign out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span className="cv-avatar muted" aria-hidden="true">
-                    ?
-                  </span>
-                  <span className="cv-profile-text muted">
-                    Not signed in (null)
-                  </span>
-                  <button
-                    type="button"
-                    className="cv-link-btn"
-                    onClick={() => setShowLogin(true)}
-                  >
-                    Sign in
-                  </button>
-                </>
-              )}
-            </div>
 
             {statusMsg && <div className="cv-status">{statusMsg}</div>}
 
@@ -767,43 +708,14 @@ export default function CVPage() {
               </div>
             ) : (
               <>
-              {cvRow?.content && (
-                <div className="cv-export-toolbar">
-                  <div className="cv-export-wrap" ref={exportMenuRef}>
-                    <button
-                      type="button"
-                      className="cv-export-trigger"
-                      onClick={() => setShowExportMenu((v) => !v)}
-                      aria-haspopup="true"
-                      aria-expanded={showExportMenu}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                      Export ▾
-                    </button>
-                    {showExportMenu && (
-                      <ul className="cv-export-menu" role="menu">
-                        <li role="menuitem">
-                          <button type="button" onClick={() => handleExport("txt")}>Plain Text (.txt)</button>
-                        </li>
-                        <li role="menuitem">
-                          <button type="button" onClick={() => handleExport("doc")}>Word Document (.doc)</button>
-                        </li>
-                        <li role="menuitem">
-                          <button type="button" onClick={() => handleExport("pdf")}>PDF (print)</button>
-                        </li>
-                      </ul>
-                    )}
-                  </div>
-                </div>
-              )}
-              <div className="cv-doc-grid">
+              <div className={`cv-doc-grid ${reviewOpen ? "cv-doc-grid--review" : "cv-doc-grid--reading"}`}>
                 <article
                   ref={contentRef}
                   className="cv-content"
                   onMouseUp={handleContentMouseUp}
                 />
 
-                <aside className="cv-side">
+                {reviewOpen && <aside className="cv-side">
                   <div className="cv-side-head">
                     <h2 className="cv-side-title">
                       Comments {comments.length ? `(${comments.length})` : ""}
@@ -868,7 +780,7 @@ export default function CVPage() {
                       </li>
                     ))}
                   </ul>
-                </aside>
+                </aside>}
               </div>
               </>
             )}

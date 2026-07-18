@@ -1349,6 +1349,408 @@ body.dark-skin .cv-side-empty {
 }
 
 /* =====================================================
+   CV v2 - database-owned HTML resume
+   ===================================================== */
+.cv-page {
+  max-width: 1180px;
+  padding: 28px 0 96px;
+}
+
+.cv-toolbar {
+  margin-bottom: 30px;
+  padding: 0 0 18px;
+  align-items: center;
+}
+
+.cv-toolbar-copy {
+  display: grid;
+  gap: 5px;
+}
+
+.cv-kicker {
+  color: #0f766e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.cv-toolbar .cv-meta {
+  font-size: 0.8rem;
+}
+
+.cv-header-actions .btn {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.cv-header-actions .cv-download-btn {
+  color: #ffffff;
+  background: #0f766e;
+  border-color: #0f766e;
+}
+
+.cv-header-actions .cv-download-btn:hover {
+  color: #ffffff;
+  background: #115e59;
+  border-color: #115e59;
+}
+
+.cv-header-actions .cv-icon-command.is-active {
+  color: #ffffff;
+  background: #243746;
+  border-color: #243746;
+}
+
+.cv-header-actions .cv-signout {
+  width: 40px;
+  padding: 0;
+}
+
+.cv-doc-grid--reading {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cv-doc-grid--review {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.cv-doc-grid--reading .cv-content {
+  width: min(100%, 940px);
+  margin: 0 auto;
+}
+
+.cv-content {
+  padding: 52px 60px 58px;
+  color: #25323a;
+  background: #ffffff;
+  border: 1px solid #d8dee2;
+  border-radius: 4px;
+  box-shadow: 0 22px 58px rgba(29, 42, 50, 0.11);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.94rem;
+  line-height: 1.52;
+  animation: resumeReveal 360ms ease-out both;
+}
+
+.cv-content [data-resume-pdf] {
+  display: none !important;
+}
+
+.cv-content .resume-hero {
+  padding-bottom: 24px;
+  border-bottom: 2px solid #173b5d;
+  text-align: center;
+}
+
+.cv-content .resume-hero h1 {
+  margin: 0;
+  color: #173b5d;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 2.72rem;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.cv-content .resume-headline {
+  margin: 10px 0 12px;
+  color: #46535c;
+  font-size: 1.06rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.cv-content .resume-headline span,
+.cv-content .resume-skill-row span {
+  color: #9aa5ab;
+}
+
+.cv-content .resume-contact {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 7px 20px;
+}
+
+.cv-content .resume-contact a,
+.cv-content .resume-project-links a {
+  color: #0f6d78;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.cv-content .resume-contact a:hover,
+.cv-content .resume-project-links a:hover {
+  color: #173b5d;
+  text-decoration: underline;
+}
+
+.cv-content .resume-section {
+  margin-top: 30px;
+}
+
+.cv-content .resume-section > h2 {
+  margin: 0 0 13px;
+  padding-bottom: 7px;
+  color: #173b5d;
+  border-bottom: 1px solid #aebbc4;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 1.06rem;
+  font-weight: 760;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.cv-content .resume-section-intro {
+  max-width: 760px;
+  margin: -2px 0 20px;
+  color: #5d6971;
+}
+
+.cv-content .resume-skill-row {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 14px;
+  padding: 3px 0;
+}
+
+.cv-content .resume-skill-row strong {
+  color: #173b5d;
+}
+
+.cv-content .resume-skill-row p {
+  margin: 0;
+}
+
+.cv-content .resume-entry {
+  margin: 0;
+  padding: 0 0 22px;
+}
+
+.cv-content .resume-entry + .resume-entry {
+  padding-top: 3px;
+}
+
+.cv-content .resume-entry-header,
+.cv-content .resume-education-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.cv-content .resume-entry-header h3,
+.cv-content .resume-education-row h3,
+.cv-content .resume-system h3 {
+  margin: 0;
+  color: #1b4e78;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 1.03rem;
+  font-weight: 760;
+  line-height: 1.28;
+  letter-spacing: 0;
+}
+
+.cv-content .resume-entry-header p,
+.cv-content .resume-education-row p {
+  margin: 2px 0 0;
+  color: #3c4850;
+  font-style: italic;
+}
+
+.cv-content .resume-entry-meta,
+.cv-content .resume-education-row > div:last-child {
+  display: grid;
+  flex: 0 0 auto;
+  color: #3d4951;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cv-content .resume-entry-meta time,
+.cv-content .resume-education-row time {
+  font-style: italic;
+}
+
+.cv-content .resume-entry ul,
+.cv-content .resume-system ul {
+  margin: 8px 0 0;
+  padding-left: 19px;
+}
+
+.cv-content .resume-entry li,
+.cv-content .resume-system li {
+  margin: 5px 0;
+  padding-left: 3px;
+}
+
+.cv-content .resume-entry li::marker,
+.cv-content .resume-system li::marker {
+  color: #1b4e78;
+}
+
+.cv-content .resume-project-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-style: normal !important;
+}
+
+.cv-content .resume-system-list {
+  margin-top: 14px;
+  border-top: 1px solid #aebbc4;
+}
+
+.cv-content .resume-system h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.cv-content .resume-system h3 a:hover {
+  color: #0f6d78;
+  text-decoration: underline;
+}
+
+.cv-content .resume-system {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  column-gap: 30px;
+  margin: 0;
+  padding: 22px 0;
+  border-top: 1px solid #dce2e5;
+}
+
+.cv-content .resume-system:first-of-type {
+  border-top: 0;
+}
+
+.cv-content .resume-system > header {
+  grid-row: 1 / span 2;
+}
+
+.cv-content .resume-system > header p {
+  margin: 7px 0 0;
+  color: #0f766e;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.cv-content .resume-system > p,
+.cv-content .resume-system > ul {
+  grid-column: 2;
+}
+
+.cv-content .resume-system > p {
+  margin: 0;
+  color: #38464f;
+}
+
+.cv-content .resume-education-row {
+  padding: 5px 0;
+}
+
+@keyframes resumeReveal {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cv-content { animation: none; }
+}
+
+@media (max-width: 980px) {
+  .cv-doc-grid--review { grid-template-columns: 1fr; }
+  .cv-doc-grid--review .cv-content { width: 100%; }
+}
+
+@media (max-width: 720px) {
+  .cv-page { padding-top: 18px; }
+  .cv-toolbar { align-items: flex-start; }
+  .cv-header-actions { width: 100%; }
+  .cv-header-actions .btn { flex: 1 1 auto; }
+  .cv-header-actions .cv-signout { flex: 0 0 40px; }
+  .cv-content { padding: 34px 22px 40px; font-size: 0.91rem; }
+  .cv-content .resume-hero { text-align: left; }
+  .cv-content .resume-hero h1 { font-size: 2.15rem; }
+  .cv-content .resume-contact { justify-content: flex-start; gap: 6px 15px; }
+  .cv-content .resume-skill-row { grid-template-columns: 1fr; gap: 1px; padding: 5px 0; }
+  .cv-content .resume-entry-header,
+  .cv-content .resume-education-row { flex-direction: column; gap: 3px; }
+  .cv-content .resume-entry-meta,
+  .cv-content .resume-education-row > div:last-child { text-align: left; }
+  .cv-content .resume-system { grid-template-columns: 1fr; gap: 10px; }
+  .cv-content .resume-system > header,
+  .cv-content .resume-system > p,
+  .cv-content .resume-system > ul { grid-column: 1; grid-row: auto; }
+}
+
+body.dark-skin .cv-content,
+body.dark-skin .cv-content * {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+body.dark-skin .cv-content {
+  color: #25323a !important;
+  background: #ffffff !important;
+  border-color: #57636b !important;
+}
+
+body.dark-skin .cv-content h1,
+body.dark-skin .cv-content h2,
+body.dark-skin .cv-content h3,
+body.dark-skin .cv-content strong {
+  color: #173b5d !important;
+}
+
+body.dark-skin .cv-content a {
+  color: #0f6d78 !important;
+}
+
+body.dark-skin .cv-content .resume-headline,
+body.dark-skin .cv-content .resume-entry-header p,
+body.dark-skin .cv-content .resume-entry-meta,
+body.dark-skin .cv-content .resume-entry li,
+body.dark-skin .cv-content .resume-system > p,
+body.dark-skin .cv-content .resume-system li,
+body.dark-skin .cv-content .resume-education-row p,
+body.dark-skin .cv-content .resume-education-row > div:last-child {
+  color: #3d4951 !important;
+}
+
+@media print {
+  .cv-page-wrap .header,
+  .cv-toolbar,
+  .cv-side,
+  .footer,
+  .chat-widget,
+  .cv-add-comment-btn,
+  .cv-anno-popover {
+    display: none !important;
+  }
+
+  .cv-page,
+  .cv-doc-grid--reading .cv-content {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .cv-content {
+    border: 0;
+    box-shadow: none;
+    animation: none;
+  }
+}
+
+/* =====================================================
    PROJECT SECTION — Modern Card & Filter Design
    ===================================================== */
 
