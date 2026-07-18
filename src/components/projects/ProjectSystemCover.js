@@ -149,6 +149,39 @@ export function supportsSystemCover(variant) {
   return Boolean(PRESETS[variant]);
 }
 
+function ContentPipelineScene() {
+  return (
+    <div className={styles.contentPipeline} aria-hidden="true">
+      <div className={styles.contentSource}>
+        <span className={styles.pipelineLabel}>SOURCE OF TRUTH</span>
+        <span className={styles.documentStack}>
+          <i>ARTICLE</i>
+          <i>PROJECT</i>
+          <i>METADATA</i>
+        </span>
+      </div>
+
+      <div className={styles.eventBackbone}>
+        <span>OUTBOX</span>
+        <i className={styles.eventRail} />
+        <span>KAFKA</span>
+      </div>
+
+      <div className={styles.readModels}>
+        <span className={styles.pipelineLabel}>READ MODELS</span>
+        <span className={styles.readModel} data-kind="search">
+          <strong>SEARCH</strong>
+          <small>OPENSEARCH</small>
+        </span>
+        <span className={styles.readModel} data-kind="rag">
+          <strong>RAG</strong>
+          <small>PGVECTOR</small>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectSystemCover({ variant }) {
   const preset = PRESETS[variant];
   if (!preset) return null;
@@ -162,39 +195,44 @@ export default function ProjectSystemCover({ variant }) {
       aria-label={preset.aria}
     >
       <div className={styles.grid} aria-hidden="true" />
-      <div className={styles.layoutSignature} aria-hidden="true" />
+      {preset.layout === "pipeline" ? (
+        <ContentPipelineScene />
+      ) : (
+        <>
+          <div className={styles.layoutSignature} aria-hidden="true" />
+          <div className={styles.zones} aria-hidden="true">
+            {preset.zones.map((zone) => (
+              <span
+                key={zone.label}
+                className={styles.zone}
+                style={{ left: `${zone.x}%`, width: `${zone.width}%` }}
+              >
+                {zone.label}
+              </span>
+            ))}
+          </div>
 
-      <div className={styles.zones} aria-hidden="true">
-        {preset.zones.map((zone) => (
-          <span
-            key={zone.label}
-            className={styles.zone}
-            style={{ left: `${zone.x}%`, width: `${zone.width}%` }}
-          >
-            {zone.label}
-          </span>
-        ))}
-      </div>
+          <svg className={styles.links} viewBox="0 0 1000 360" aria-hidden="true">
+            {preset.paths.map((path, index) => (
+              <path key={`${path.kind}-${index}`} d={path.d} data-kind={path.kind} />
+            ))}
+          </svg>
 
-      <svg className={styles.links} viewBox="0 0 1000 360" aria-hidden="true">
-        {preset.paths.map((path, index) => (
-          <path key={`${path.kind}-${index}`} d={path.d} data-kind={path.kind} />
-        ))}
-      </svg>
-
-      <div className={styles.nodes} aria-hidden="true">
-        {preset.nodes.map((node) => (
-          <span
-            key={node.label}
-            className={styles.node}
-            data-tone={node.tone}
-            data-shape={node.shape || "service"}
-            style={{ left: `${node.x}%`, top: `${node.y}%` }}
-          >
-            {node.label}
-          </span>
-        ))}
-      </div>
+          <div className={styles.nodes} aria-hidden="true">
+            {preset.nodes.map((node) => (
+              <span
+                key={node.label}
+                className={styles.node}
+                data-tone={node.tone}
+                data-shape={node.shape || "service"}
+                style={{ left: `${node.x}%`, top: `${node.y}%` }}
+              >
+                {node.label}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
 
       <span className={styles.motif}>{preset.motif}</span>
       <div className={styles.heading}>

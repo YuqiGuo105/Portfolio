@@ -150,6 +150,211 @@
   pointer-events: none;
 }
 
+.contentPipeline {
+  position: absolute;
+  inset: 18% 4% 18%;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 30% 25% 39%;
+  gap: 3%;
+  color: #153744;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.pipelineLabel {
+  display: block;
+  color: rgba(29, 70, 85, 0.62);
+  font-size: clamp(5px, 0.72vw, 8px);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.contentSource {
+  position: relative;
+  min-width: 0;
+  padding: 8px;
+  border-left: 2px solid rgba(8, 126, 164, 0.42);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.08));
+}
+
+.contentSource::after {
+  content: "";
+  position: absolute;
+  top: 51%;
+  right: -16%;
+  width: 16%;
+  border-top: 1px dashed rgba(8, 126, 164, 0.55);
+}
+
+.documentStack {
+  position: absolute;
+  inset: 26% 9% 8% 13%;
+}
+
+.documentStack i {
+  position: absolute;
+  left: 0;
+  width: 77%;
+  height: 29%;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  color: #265463;
+  border: 1px solid rgba(53, 103, 121, 0.32);
+  border-left: 3px solid rgba(8, 126, 164, 0.55);
+  border-radius: 2px;
+  background: rgba(250, 253, 254, 0.88);
+  box-shadow: 0 5px 12px rgba(44, 78, 90, 0.08);
+  font-size: clamp(5px, 0.68vw, 7px);
+  font-style: normal;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.documentStack i:nth-child(1) {
+  top: 0;
+}
+
+.documentStack i:nth-child(2) {
+  top: 34%;
+  left: 8%;
+}
+
+.documentStack i:nth-child(3) {
+  top: 68%;
+  left: 16%;
+}
+
+.eventBackbone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.eventBackbone::after {
+  content: "";
+  position: absolute;
+  top: 51%;
+  right: -16%;
+  width: 20%;
+  border-top: 1px dashed rgba(103, 84, 154, 0.5);
+}
+
+.eventBackbone > span {
+  min-width: 62%;
+  padding: 6px 5px;
+  color: #654f91;
+  border: 1px solid rgba(103, 84, 154, 0.34);
+  border-radius: 3px;
+  background: rgba(250, 248, 255, 0.82);
+  box-shadow: 0 4px 10px rgba(68, 55, 102, 0.08);
+  font-size: clamp(5px, 0.7vw, 8px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.eventRail {
+  position: relative;
+  width: 2px;
+  height: 38%;
+  min-height: 25px;
+  overflow: visible;
+  background: linear-gradient(180deg, rgba(163, 108, 22, 0.38), rgba(103, 84, 154, 0.52));
+}
+
+.eventRail::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a36c16;
+  box-shadow: 0 0 10px rgba(163, 108, 22, 0.45);
+  animation: pipelineEvent 2.2s ease-in-out infinite;
+}
+
+.readModels {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr 1fr;
+  gap: 7px;
+  padding: 8px 8px 8px 13px;
+  border-right: 2px solid rgba(8, 126, 164, 0.35);
+  background: linear-gradient(270deg, rgba(8, 126, 164, 0.07), transparent);
+}
+
+.readModels::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 31%;
+  bottom: 10%;
+  border-left: 1px solid rgba(53, 103, 121, 0.28);
+}
+
+.readModel {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 7px;
+  border: 1px solid rgba(53, 103, 121, 0.28);
+  border-radius: 3px;
+  background: rgba(250, 253, 254, 0.86);
+  box-shadow: 0 5px 12px rgba(44, 78, 90, 0.08);
+}
+
+.readModel::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -9px;
+  width: 8px;
+  border-top: 1px solid rgba(53, 103, 121, 0.3);
+}
+
+.readModel[data-kind="search"] {
+  border-left: 3px solid #087ea4;
+}
+
+.readModel[data-kind="rag"] {
+  border-left: 3px solid #9a4069;
+}
+
+.readModel strong,
+.readModel small {
+  overflow: hidden;
+  line-height: 1;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.readModel strong {
+  color: #173b48;
+  font-size: clamp(5px, 0.75vw, 8px);
+}
+
+.readModel small {
+  color: rgba(29, 70, 85, 0.58);
+  font-size: clamp(4px, 0.6vw, 7px);
+  font-weight: 700;
+}
+
 .cover[data-layout="pipeline"] .layoutSignature {
   left: 57%;
   top: 25%;
@@ -585,6 +790,15 @@
   }
 }
 
+@keyframes pipelineEvent {
+  0%, 100% {
+    top: 0;
+  }
+  50% {
+    top: calc(100% - 6px);
+  }
+}
+
 @media (max-width: 700px) {
   .cover {
     min-height: 180px;
@@ -601,6 +815,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .links path,
+  .eventRail::after,
   .node[data-shape="hub"] {
     animation: none;
   }
