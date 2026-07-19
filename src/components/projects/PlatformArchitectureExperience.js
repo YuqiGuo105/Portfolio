@@ -62,8 +62,11 @@ const EDGE_KIND_CLASSES = {
 };
 
 const edgeKey = (from, to) => `${from}::${to}`;
+const NODE_HALF_WIDTH = 60;
+const NODE_HALF_HEIGHT = 43;
 
 const hasText = (value) => typeof value === "string" && value.trim().length > 0;
+const hasCoordinate = (value) => Number.isFinite(Number(value));
 
 function getDiagramConfig(system) {
   return system?.diagram_config || system?.diagramConfig || null;
@@ -101,6 +104,12 @@ function hasValidDiagramConfig(system) {
       && nodeIds.has(edge.to)
       && hasText(edge.kind)
       && hasText(edge.label)
+      && (!Array.isArray(edge.waypoints) || edge.waypoints.every((point) => (
+        hasCoordinate(point?.x) && hasCoordinate(point?.y)
+      )))
+      && (!edge.labelPosition || (
+        hasCoordinate(edge.labelPosition.x) && hasCoordinate(edge.labelPosition.y)
+      ))
     ))
     && routes.every((route) => (
       hasText(route.key)
@@ -111,17 +120,86 @@ function hasValidDiagramConfig(system) {
     ));
 }
 
-function edgePath(from, to) {
-  const startX = Number(from.x) * 10;
-  const startY = Number(from.y) * 6;
-  const endX = Number(to.x) * 10;
-  const endY = Number(to.y) * 6;
-  const bend = Math.max(48, Math.abs(endX - startX) * 0.46);
-  const direction = endX >= startX ? 1 : -1;
-  return `M ${startX} ${startY} C ${startX + bend * direction} ${startY}, ${endX - bend * direction} ${endY}, ${endX} ${endY}`;
+function toCanvasPoint(point) {
+  return { x: Number(point.x) * 10, y: Number(point.y) * 6 };
 }
 
-function edgeLabelPosition(from, to) {
+function nodePort(center, toward) {
+  const dx = toward.x - center.x;
+  const dy = toward.y - center.y;
+  if (dx === 0 && dy === 0) return center;
+
+  const scale = 1 / Math.max(
+    Math.abs(dx) / NODE_HALF_WIDTH,
+    Math.abs(dy) / NODE_HALF_HEIGHT
+  );
+  return { x: center.x + dx * scale, y: center.y + dy * scale };
+}
+
+function roundedOrthogonalPath(points) {
+  const distinctPoints = points.filter((point, index) => (
+    index === 0
+    || point.x !== points[index - 1].x
+    || point.y !== points[index - 1].y
+  ));
+  if (distinctPoints.length < 2) return "";
+  if (distinctPoints.length === 2) {
+    return `M ${distinctPoints[0].x} ${distinctPoints[0].y} L ${distinctPoints[1].x} ${distinctPoints[1].y}`;
+  }
+
+  const radius = 10;
+  let path = `M ${distinctPoints[0].x} ${distinctPoints[0].y}`;
+  for (let index = 1; index < distinctPoints.length - 1; index += 1) {
+    const previous = distinctPoints[index - 1];
+    const current = distinctPoints[index];
+    const next = distinctPoints[index + 1];
+    const incomingLength = Math.hypot(current.x - previous.x, current.y - previous.y);
+    const outgoingLength = Math.hypot(next.x - current.x, next.y - current.y);
+    const cornerRadius = Math.min(radius, incomingLength / 2, outgoingLength / 2);
+    const before = {
+      x: current.x - ((current.x - previous.x) / incomingLength) * cornerRadius,
+      y: current.y - ((current.y - previous.y) / incomingLength) * cornerRadius,
+    };
+    const after = {
+      x: current.x + ((next.x - current.x) / outgoingLength) * cornerRadius,
+      y: current.y + ((next.y - current.y) / outgoingLength) * cornerRadius,
+    };
+    path += ` L ${before.x} ${before.y} Q ${current.x} ${current.y} ${after.x} ${after.y}`;
+  }
+  const last = distinctPoints[distinctPoints.length - 1];
+  return `${path} L ${last.x} ${last.y}`;
+}
+
+function edgePath(edge, from, to) {
+  const start = toCanvasPoint(from);
+  const end = toCanvasPoint(to);
+  const waypoints = Array.isArray(edge.waypoints)
+    ? edge.waypoints.map(toCanvasPoint)
+    : [];
+
+  if (waypoints.length > 0) {
+    const firstTarget = waypoints[0];
+    const lastSource = waypoints[waypoints.length - 1];
+    return roundedOrthogonalPath([
+      nodePort(start, firstTarget),
+      ...waypoints,
+      nodePort(end, lastSource),
+    ]);
+  }
+
+  const startX = start.x;
+  const startY = start.y;
+  const endX = end.x;
+  const endY = end.y;
+  const bend = Math.max(48, Math.abs(endX - startX) * 0.46);
+  const direction = endX >= startX ? 1 : -1;
+  const startPort = nodePort(start, { x: startX + bend * direction, y: startY });
+  const endPort = nodePort(end, { x: endX - bend * direction, y: endY });
+  return `M ${startPort.x} ${startPort.y} C ${startX + bend * direction} ${startY}, ${endX - bend * direction} ${endY}, ${endPort.x} ${endPort.y}`;
+}
+
+function edgeLabelPosition(edge, from, to) {
+  if (edge.labelPosition) return toCanvasPoint(edge.labelPosition);
   return {
     x: ((Number(from.x) + Number(to.x)) / 2) * 10,
     y: ((Number(from.y) + Number(to.y)) / 2) * 6 - 7,
@@ -257,7 +335,12 @@ function SystemDiagram({ system }) {
           <div
             key={`${domain.label}-${domain.x}`}
             className={styles.domain}
-            style={{ left: `${domain.x}%`, width: `${domain.width}%` }}
+            style={{
+              left: `${domain.x}%`,
+              width: `${domain.width}%`,
+              top: `${hasCoordinate(domain.y) ? domain.y : 8}%`,
+              height: `${hasCoordinate(domain.height) ? domain.height : 75}%`,
+            }}
           >
             <span>{domain.label}</span>
           </div>
@@ -284,7 +367,7 @@ function SystemDiagram({ system }) {
             return (
               <path
                 key={key}
-                d={edgePath(from, to)}
+                d={edgePath(edge, from, to)}
                 className={`${styles.edge} ${kindClass} ${active ? styles.edgeActive : ""} ${complete ? styles.edgeComplete : ""}`}
                 markerEnd={active ? "url(#architecture-arrow-active)" : "url(#architecture-arrow)"}
               />
@@ -294,7 +377,7 @@ function SystemDiagram({ system }) {
             const from = nodeMap[edge.from];
             const to = nodeMap[edge.to];
             if (!from || !to || !edge.label) return null;
-            const position = edgeLabelPosition(from, to);
+            const position = edgeLabelPosition(edge, from, to);
             return (
               <text key={`${edgeKey(edge.from, edge.to)}-label`} x={position.x} y={position.y} className={styles.edgeLabel}>
                 {edge.label}
