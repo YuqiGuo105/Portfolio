@@ -466,7 +466,7 @@
 .node {
   position: absolute;
   z-index: 2;
-  width: 120px;
+  width: min(120px, 15%);
   transform: translate(-50%, -50%);
 }
 

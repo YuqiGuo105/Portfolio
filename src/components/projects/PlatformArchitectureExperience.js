@@ -62,7 +62,7 @@ const EDGE_KIND_CLASSES = {
 };
 
 const edgeKey = (from, to) => `${from}::${to}`;
-const NODE_HALF_WIDTH = 60;
+const NODE_HALF_WIDTH = 75;
 const NODE_HALF_HEIGHT = 43;
 
 const hasText = (value) => typeof value === "string" && value.trim().length > 0;
