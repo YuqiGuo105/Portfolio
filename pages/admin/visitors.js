@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { BellRing, Check, Pencil, Plus, RefreshCw, RotateCcw, Search, X } from "lucide-react";
+import { BellRing, Check, ExternalLink, Pencil, Plus, RefreshCw, RotateCcw, Search, X } from "lucide-react";
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { DataState, PageHeader, adminStyles as ui } from "../../src/components/admin/AdminUI";
 import visitorStyles from "../../src/components/admin/VisitorsPage.module.css";
@@ -204,8 +204,8 @@ export default function VisitorsPage() {
           </form>
 
           <DataState loading={loading} error={error && !items.length ? error : ""} empty={!loading && !error && items.length === 0} onRetry={load}>
-            <div className={ui.tableWrap}>
-              <table className={ui.table}>
+            <div className={`${ui.tableWrap} ${visitorStyles.visitorTableWrap}`}>
+              <table className={`${ui.table} ${visitorStyles.visitorTable}`}>
                 <thead>
                   <tr>
                     <th>Time</th>
@@ -220,17 +220,24 @@ export default function VisitorsPage() {
                 <tbody>
                   {items.map((item) => (
                     <tr key={item.eventId}>
-                      <td className={ui.numeric}>{formatDateTime(item.eventTime)}</td>
+                      <td className={ui.numeric}>
+                        <time className={visitorStyles.eventTime} dateTime={item.eventTime} title={formatDateTime(item.eventTime)}>
+                          <span>{formatDate(item.eventTime)}</span>
+                          <small>{formatTime(item.eventTime)}</small>
+                        </time>
+                      </td>
                       <td>
                         <span className={visitorStyles.eventName}>
                           <span className={visitorStyles.eventDot} aria-hidden="true" />
-                          {item.eventName || "unknown"}
+                          {humanizeEventName(item.eventName)}
                         </span>
                       </td>
                       <td>
-                        <div className={visitorStyles.cellStack}>
-                          <span className={visitorStyles.cellPrimary} title={item.pageUrl}>{displayPath(item.pageUrl) || "—"}</span>
-                          <span className={visitorStyles.cellSecondary} title={item.targetUrl}>{displayPath(item.targetUrl) || "No target"}</span>
+                        <div className={visitorStyles.contentStack}>
+                          <ContentReference content={item.pageContent} url={item.pageUrl} label="Page" />
+                          {shouldShowTarget(item) && (
+                            <ContentReference content={item.targetContent} url={item.targetUrl} label="Target" compact />
+                          )}
                         </div>
                       </td>
                       <td>
@@ -246,16 +253,17 @@ export default function VisitorsPage() {
                         </div>
                       </td>
                       <td>
-                        <div className={visitorStyles.identity}>
-                          <span title={item.ipAddress}>IP {item.ipAddress || "—"}</span>
+                        <details className={visitorStyles.identity}>
+                          <summary title={item.ipAddress}>{item.ipAddress || "Unknown IP"}</summary>
                           <span title={item.sessionId}>Session {shortId(item.sessionId)}</span>
-                          <span title={item.anonymousId}>Anon {shortId(item.anonymousId)}</span>
-                        </div>
+                          <span title={item.anonymousId}>Anonymous {shortId(item.anonymousId)}</span>
+                          <span title={item.eventId}>Event {shortId(item.eventId)}</span>
+                        </details>
                       </td>
                       <td>
                         <div className={visitorStyles.cellStack}>
                           <span className={visitorStyles.cellPrimary} title={item.referrer}>{displayHost(item.referrer) || "Direct"}</span>
-                          <span className={visitorStyles.cellSecondary} title={item.eventId}>{shortId(item.eventId)}</span>
+                          <span className={visitorStyles.cellSecondary}>{item.referrer ? "Referral traffic" : "No referrer"}</span>
                         </div>
                       </td>
                     </tr>
@@ -275,6 +283,54 @@ export default function VisitorsPage() {
         </section>
       </div>
     </AdminLayout>
+  );
+}
+
+function ContentReference({ content, url, label, compact = false }) {
+  const path = displayPath(url);
+  const href = content?.canonicalUrl || path || "";
+  const title = content?.title || path || "Unknown page";
+  const type = content?.type || label;
+
+  if (compact) {
+    return (
+      <a className={visitorStyles.targetLink} href={href || undefined} target="_blank" rel="noreferrer" title={url || title}>
+        <span>{label}</span>
+        <strong>{title}</strong>
+        <ExternalLink size={11} aria-hidden="true" />
+      </a>
+    );
+  }
+
+  return (
+    <div className={visitorStyles.contentReference} tabIndex={0}>
+      <div className={visitorStyles.contentSummary}>
+        <span className={visitorStyles.contentThumb} aria-hidden="true">
+          <span>{contentInitials(type)}</span>
+          {content?.coverUrl && <img src={content.coverUrl} alt="" onError={(event) => { event.currentTarget.hidden = true; }} />}
+        </span>
+        <span className={visitorStyles.contentCopy}>
+          <span className={visitorStyles.contentType}>{type}</span>
+          <a href={href || undefined} target="_blank" rel="noreferrer" title={url || title}>{title}</a>
+          <small>{path || "Unknown path"}</small>
+        </span>
+      </div>
+      <div className={visitorStyles.contentPreview} aria-label={`${title} details`}>
+        <span className={visitorStyles.previewCover} aria-hidden="true">
+          <span>{contentInitials(type)}</span>
+          {content?.coverUrl && <img src={content.coverUrl} alt="" onError={(event) => { event.currentTarget.hidden = true; }} />}
+        </span>
+        <span className={visitorStyles.previewCopy}>
+          <strong>{title}</strong>
+          <span>{url || href || "No URL recorded"}</span>
+          {href && (
+            <a href={href} target="_blank" rel="noreferrer">
+              Open {type} <ExternalLink size={11} aria-hidden="true" />
+            </a>
+          )}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -695,6 +751,41 @@ function formatDateTime(value) {
   if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
+function formatTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(date);
+}
+
+function humanizeEventName(value) {
+  const normalized = String(value || "unknown").replace(/[_-]+/g, " ").trim();
+  return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function shouldShowTarget(item) {
+  const target = displayPath(item.targetUrl);
+  return Boolean(target && target !== displayPath(item.pageUrl));
+}
+
+function contentInitials(value) {
+  return String(value || "page")
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }
 
 function displayPath(value) {
