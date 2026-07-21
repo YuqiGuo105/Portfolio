@@ -1186,8 +1186,11 @@ const DashboardPanels = () => {
         .dashboard-card-4 h3 {
           font-size: 1.35rem;
           font-weight: 600;
+          line-height: 1.15;
           margin: 0;
           color: var(--heading-color);
+          text-align: center;
+          overflow-wrap: anywhere;
         }
 
         .column-container {
@@ -1231,6 +1234,8 @@ const DashboardPanels = () => {
           display: flex;
           flex-direction: column;
           gap: 10px;
+          flex: 1 1 auto;
+          min-width: 0;
         }
 
         .dashboard-card-3 {
@@ -1351,6 +1356,11 @@ const DashboardPanels = () => {
           letter-spacing: 0.03em;
         }
 
+        .currency-rate {
+          margin-top: auto;
+          padding-top: 0.25rem;
+        }
+
         .converter-form {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1419,6 +1429,7 @@ const DashboardPanels = () => {
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
+          min-width: 0;
         }
 
         .temperature {
@@ -1474,6 +1485,10 @@ const DashboardPanels = () => {
           font-size: 0.78rem;
           color: var(--text-muted);
           letter-spacing: 0.04em;
+        }
+
+        .sun-times .timestamp {
+          display: block;
         }
 
         /* Visitors */
@@ -2112,41 +2127,133 @@ const DashboardPanels = () => {
 
           .dashboard-container {
             grid-template-columns: 1fr;
-            gap: 1rem;
+            gap: 1.75rem;
           }
 
           .dashboard-card-2,
           .dashboard-card-3 {
-            flex-direction: column;
-            align-items: stretch;
+            display: grid;
+            grid-template-rows: auto minmax(0, auto);
+            align-items: start;
+            gap: 1rem;
             height: auto;
+            min-height: unset;
+            overflow: hidden;
+            padding: 20px 20px 24px;
+          }
+
+          .dashboard-card-1 h3,
+          .dashboard-card-2 h3,
+          .dashboard-card-3 h3,
+          .dashboard-card-4 h3 {
+            max-width: 100%;
+            font-size: clamp(1.18rem, 5vw, 1.35rem);
+            white-space: normal;
           }
 
           .dashboard-card-1 header {
             height: 100px;
+            padding: 0 1rem;
+            overflow: visible;
           }
 
           .dashboard-card-2 header {
             width: 100%;
             height: 100px;
             max-width: 100%;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0;
+            padding: 0 1rem;
+            overflow: visible;
           }
 
           .dashboard-card-3 header {
             width: 100%;
             min-width: unset;
             height: 70px;
+            padding: 0 1rem;
+            overflow: visible;
+          }
+
+          .dashboard-card-4 header {
+            height: auto;
+            min-height: 118px;
+            padding: 1.15rem 1rem;
+            gap: 0.5rem;
+            overflow: visible;
+          }
+
+          .dashboard-card-4 .card-subtitle {
+            max-width: 100%;
+            padding: 0 0.5rem;
+            line-height: 1.4;
           }
 
           .conversion-output {
             font-size: 1.4rem;
           }
 
+          .output-container {
+            display: grid;
+            gap: 1rem;
+            width: 100%;
+            min-width: 0;
+          }
+
+          .currency-rate {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            max-width: 100%;
+            margin: 0;
+            padding: 0.45rem 0.65rem;
+            border: 1px solid var(--card-border);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.58);
+            line-height: 1.2;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+          }
+
+          .weather-container {
+            display: grid;
+            gap: 1rem;
+            width: 100%;
+            min-width: 0;
+          }
+
+          .weather-main {
+            display: grid;
+            grid-template-columns: 92px minmax(0, 1fr);
+            align-items: center;
+            gap: 1rem;
+          }
+
+          .weather-info {
+            display: grid;
+            gap: 0.55rem;
+          }
+
           .sun-times {
-            flex-direction: row;
-            gap: 0.75rem;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, auto));
+            justify-content: start;
+            gap: 0.45rem 0.75rem;
+            padding: 0;
+            line-height: 1.35;
+          }
+
+          .sun-times .timestamp {
+            grid-column: 1 / -1;
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            max-width: 100%;
+            margin: 0.2rem 0 0;
+            padding: 0.45rem 0.65rem;
+            border: 1px solid var(--card-border);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.58);
+            line-height: 1.2;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
           }
 
           .globe-frame {
@@ -2187,6 +2294,44 @@ const DashboardPanels = () => {
           }
 
           .monitor-charts {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 420px) {
+          .dashboard-card-2,
+          .dashboard-card-3 {
+            padding: 18px 18px 22px;
+          }
+
+          .converter-form {
+            gap: 0.55rem;
+          }
+
+          input,
+          select {
+            padding: 0 0.6rem;
+          }
+
+          .weather-main {
+            grid-template-columns: 78px minmax(0, 1fr);
+            gap: 0.9rem;
+          }
+
+          .icon-wrapper {
+            padding: 0.65rem;
+          }
+
+          .temperature-row {
+            flex-wrap: wrap;
+            row-gap: 0.45rem;
+          }
+
+          .unit-toggle {
+            min-height: 40px;
+          }
+
+          .sun-times {
             grid-template-columns: 1fr;
           }
         }
