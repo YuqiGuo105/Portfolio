@@ -6060,54 +6060,18 @@ function LauncherButton({ onOpen, onDragStart }) {
   }, [])
 
   return (
-    <>
-      <style jsx global>{`
-        @media (max-width: 767px) {
-          body #__chat_widget_root {
-            right: 10px !important;
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
-            max-width: calc(100vw - 20px) !important;
-          }
-
-          #__chat_widget_root .launch-button {
-            width: 58px !important;
-            max-width: 58px !important;
-            min-height: 58px !important;
-            margin-bottom: 0 !important;
-            padding: 8px !important;
-            gap: 0 !important;
-            justify-content: center !important;
-          }
-
-          #__chat_widget_root .launch-button > span:first-child {
-            width: 42px !important;
-            height: 42px !important;
-            flex: 0 0 42px !important;
-          }
-
-          #__chat_widget_root .launch-button img {
-            width: 34px !important;
-            height: 34px !important;
-          }
-
-          #__chat_widget_root .launch-button > span:last-child {
-            display: none !important;
-          }
-        }
-      `}</style>
-      <button
-        type="button"
-        onClick={onOpen}
-        onMouseDown={onDragStart}
-        className="launch-button relative flex items-center rounded-full mb-2 px-5 py-4 shadow-xl ring-1 ring-gray-200 backdrop-blur hover:shadow-2xl"
-      >
-        <span className="relative flex items-center justify-center rounded-full bg-blue-600" style={{ width: 60, height: 60 }}>
-          <Image src="/assets/images/chatPot.png" alt="Chat Bot" width={48} height={48} priority />
-          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white" />
-        </span>
-        <span className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">Mr.Pot</span>
-      </button>
-    </>
+    <button
+      type="button"
+      onClick={onOpen}
+      onMouseDown={onDragStart}
+      className="launch-button relative flex items-center rounded-full mb-2 px-5 py-4 shadow-xl ring-1 ring-gray-200 backdrop-blur hover:shadow-2xl"
+    >
+      <span className="relative flex items-center justify-center rounded-full bg-blue-600" style={{ width: 60, height: 60 }}>
+        <Image src="/assets/images/chatPot.png" alt="Chat Bot" width={48} height={48} priority />
+        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white" />
+      </span>
+      <span className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">Mr.Pot</span>
+    </button>
   )
 }
 
