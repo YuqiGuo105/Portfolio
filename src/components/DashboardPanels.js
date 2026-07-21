@@ -29,11 +29,19 @@ const getHoursSince = (timestamp) => {
   return Math.max(hours, 0);
 };
 
-const formatRelativeUpdate = (timestamp, now = Date.now()) => {
+const toTimestampMs = (timestamp) => {
   if (!timestamp) return null;
+  if (typeof timestamp === "number") return timestamp;
+  const parsed = Date.parse(timestamp);
+  return Number.isNaN(parsed) ? null : parsed;
+};
 
-  const elapsedSeconds = Math.max(Math.floor((now - timestamp) / 1000), 0);
-  if (elapsedSeconds < 60) return "Updated just now";
+const formatRelativeUpdate = (timestamp, now = Date.now()) => {
+  const timestampMs = toTimestampMs(timestamp);
+  if (!timestampMs) return null;
+
+  const elapsedSeconds = Math.max(Math.floor((now - timestampMs) / 1000), 0);
+  if (elapsedSeconds < 60) return "Updated less than 1 minute ago";
 
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
   if (elapsedMinutes < 60) {
@@ -83,7 +91,7 @@ const buildPinLabel = (r) => {
    ============================================================ */
 
 // Semicircular gauge (like Grafana's gauge panel).
-const GaugeArc = ({ value, label, unit = "%", max = 100 }) => {
+const GaugeArc = ({ value, label, unit = "%", max = 100, fallbackText = "N/A" }) => {
   const pct = value == null ? 0 : Math.max(0, Math.min(value / max, 1));
   const startAngle = -220;
   const endAngle = 40;
@@ -104,7 +112,7 @@ const GaugeArc = ({ value, label, unit = "%", max = 100 }) => {
   const color = value == null ? "#6b7280" : value < 60 ? "#22c55e" : value < 85 ? "#f59e0b" : "#ef4444";
   return (
     <div className="gauge">
-      <svg viewBox="0 0 140 118" className="gauge-svg" role="img" aria-label={`${label} ${value ?? "no data"}${unit}`}>
+      <svg viewBox="0 0 140 118" className="gauge-svg" role="img" aria-label={`${label} ${value ?? fallbackText}${unit}`}>
         <path
           d={`M ${sx} ${sy} A ${r} ${r} 0 ${largeTrack} 1 ${ex} ${ey}`}
           fill="none"
@@ -120,7 +128,7 @@ const GaugeArc = ({ value, label, unit = "%", max = 100 }) => {
           strokeLinecap="round"
         />
         <text x={cx} y={cy + 2} textAnchor="middle" className="gauge-value" fill={color}>
-          {value == null ? "N/A" : `${Math.round(value)}`}
+          {value == null ? fallbackText : `${Math.round(value)}`}
           {value != null && <tspan className="gauge-unit">{unit}</tspan>}
         </text>
       </svg>
@@ -909,7 +917,7 @@ const DashboardPanels = () => {
             <span className="badge">live</span>
           </header>
           <p className="card-subtitle">
-            Real-time metrics from 8 microservices — powered by Prometheus &amp; Grafana Cloud. Auto-refreshes every 30s.
+            Real-time metrics for the microservices platform — powered by Prometheus &amp; Grafana Cloud. Auto-refreshes every 30s.
           </p>
 
           {/* Summary tiles */}
@@ -952,7 +960,11 @@ const DashboardPanels = () => {
             <div className="monitor-gauges">
               <GaugeArc value={metrics?.gauges?.heapPct ?? null} label="Heap Used" />
               <GaugeArc value={metrics?.gauges?.nonHeapPct ?? null} label="Non-Heap" />
-              <GaugeArc value={metrics?.gauges?.cpuPct ?? null} label="CPU" />
+              <GaugeArc
+                value={metrics?.gauges?.cpuPct ?? null}
+                label="CPU"
+                fallbackText={metrics?.summary?.up ? "No data" : "Idle"}
+              />
             </div>
             <div className="monitor-charts">
               <Sparkline
@@ -1021,7 +1033,7 @@ const DashboardPanels = () => {
           <div className="grafana-links">
             {metrics?.updatedAt && (
               <span className="monitor-updated">
-                Updated {new Date(metrics.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}
+                <RelativeUpdateTime timestamp={metrics.updatedAt} />
               </span>
             )}
             <a

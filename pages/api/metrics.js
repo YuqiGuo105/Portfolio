@@ -164,7 +164,7 @@ export default async function handler(req, res) {
     const totalReq = services.reduce((sum, s) => sum + (s.reqPerSec || 0), 0);
 
     // Aggregate gauges (instant) + time-series (range) for a Grafana-like view.
-    const [heapGauge, nonHeapGauge, cpuGauge, sysCpuGauge, loadAvgGauge, heapSeries, reqSeries, threadSeries] =
+    const [heapGauge, nonHeapGauge, cpuGauge, sysCpuGauge, cpuRateGauge, loadAvgGauge, heapSeries, reqSeries, threadSeries] =
       await Promise.all([
         promQuery(
           `sum(jvm_memory_used_bytes{area="heap"})/sum(jvm_memory_max_bytes{area="heap"})*100`,
@@ -176,6 +176,7 @@ export default async function handler(req, res) {
         ),
         promQuery(`avg(process_cpu_usage)*100`, token),
         promQuery(`avg(system_cpu_usage)*100`, token),
+        promQuery(`avg(rate(process_cpu_time_ns_total[5m])) / 10000000`, token),
         promQuery(`avg(system_load_average_1m) / avg(system_cpu_count) * 100`, token),
         promRange(
           `sum(jvm_memory_used_bytes{area="heap"})/sum(jvm_memory_max_bytes{area="heap"})*100`,
@@ -191,6 +192,14 @@ export default async function handler(req, res) {
       return Number.isNaN(n) ? null : Math.round(n * 10) / 10;
     };
 
+    const firstUsablePct = (...results) => {
+      for (const result of results) {
+        const value = firstVal(result);
+        if (value != null && value >= 0) return value;
+      }
+      return null;
+    };
+
     const payload = {
       updatedAt: new Date().toISOString(),
       summary: {
@@ -203,10 +212,7 @@ export default async function handler(req, res) {
       gauges: {
         heapPct: firstVal(heapGauge),
         nonHeapPct: firstVal(nonHeapGauge),
-        cpuPct: (() => {
-          const v = firstVal(cpuGauge) ?? firstVal(sysCpuGauge) ?? firstVal(loadAvgGauge);
-          return v == null || v < 0 ? null : v;
-        })(),
+        cpuPct: firstUsablePct(cpuGauge, sysCpuGauge, cpuRateGauge, loadAvgGauge),
       },
       timeseries: {
         heap: heapSeries,
