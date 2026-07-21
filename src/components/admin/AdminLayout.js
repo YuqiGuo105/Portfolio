@@ -17,6 +17,7 @@ import {
   Menu,
   Radio,
   ScrollText,
+  ShieldCheck,
   Users,
   X,
 } from "lucide-react";
@@ -60,6 +61,7 @@ const NAV_GROUPS = [
     label: "AI Operations",
     items: [
       { href: "/admin/conversations", label: "Conversations", icon: History },
+      { href: "/admin/cost-guardrails", label: "Cost guardrails", icon: ShieldCheck },
       { href: "/admin/agent", label: "Operate console", icon: Bot },
       { href: KIBANA_DASHBOARD, label: "OpenSearch", icon: Gauge, external: true },
     ],

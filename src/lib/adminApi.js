@@ -57,6 +57,11 @@ export const adminApi = {
       return request(`/api/admin/chat-conversations?${params.toString()}`);
     },
   },
+  costGuardrail: {
+    snapshot() {
+      return request("/api/admin/cost-guardrail");
+    },
+  },
   visitors: {
     list({ query = "", hours = 24, page = 0, size = 50, ...filters } = {}) {
       const params = new URLSearchParams({
