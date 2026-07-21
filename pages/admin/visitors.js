@@ -1,5 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
-import { BellRing, Check, ExternalLink, Pencil, Plus, RefreshCw, RotateCcw, Search, X } from "lucide-react";
+import {
+  BellRing,
+  BarChart3,
+  Check,
+  Clock3,
+  ExternalLink,
+  GitBranch,
+  Globe2,
+  Laptop,
+  Link2,
+  MapPin,
+  MousePointerClick,
+  Pencil,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  TrendingUp,
+  UserRound,
+  X,
+} from "lucide-react";
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { DataState, PageHeader, adminStyles as ui } from "../../src/components/admin/AdminUI";
 import visitorStyles from "../../src/components/admin/VisitorsPage.module.css";
@@ -29,6 +49,23 @@ const EMPTY_ALERTS = {
   incidents: [],
   summary: { total: 0, notified: 0, pendingNotification: 0 },
 };
+const EMPTY_INTELLIGENCE = {
+  funnel: [],
+  attribution: [],
+  topContent: [],
+  cohort: {},
+  sampledEvents: 0,
+  totalEvents: 0,
+};
+const PAGE_TITLES = {
+  "/": "Home",
+  "/analytics": "Analytics dashboard",
+  "/blogs": "Blog index",
+  "/works": "Project index",
+  "/contact": "Contact",
+  "/cv": "Resume",
+  "/resume": "Resume",
+};
 
 export default function VisitorsPage() {
   const [items, setItems] = useState([]);
@@ -39,8 +76,11 @@ export default function VisitorsPage() {
   const [pageInfo, setPageInfo] = useState({ number: 0, size: PAGE_SIZE, totalElements: 0, totalPages: 0 });
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [alerts, setAlerts] = useState(EMPTY_ALERTS);
+  const [intelligence, setIntelligence] = useState(EMPTY_INTELLIGENCE);
   const [alertsLoading, setAlertsLoading] = useState(true);
+  const [intelligenceLoading, setIntelligenceLoading] = useState(true);
   const [alertsError, setAlertsError] = useState("");
+  const [intelligenceError, setIntelligenceError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -76,8 +116,29 @@ export default function VisitorsPage() {
     }
   }, [hours]);
 
+  const loadIntelligence = useCallback(async () => {
+    setIntelligenceLoading(true);
+    setIntelligenceError("");
+    try {
+      const data = await adminApi.visitorIntelligence.overview({ ...filters, hours });
+      setIntelligence({
+        ...EMPTY_INTELLIGENCE,
+        ...(data || {}),
+        funnel: Array.isArray(data?.funnel) ? data.funnel : [],
+        attribution: Array.isArray(data?.attribution) ? data.attribution : [],
+        topContent: Array.isArray(data?.topContent) ? data.topContent : [],
+        cohort: data?.cohort || {},
+      });
+    } catch (requestError) {
+      setIntelligenceError(requestError.message || "Visitor intelligence could not be loaded.");
+    } finally {
+      setIntelligenceLoading(false);
+    }
+  }, [filters, hours]);
+
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadAlerts(); }, [loadAlerts]);
+  useEffect(() => { loadIntelligence(); }, [loadIntelligence]);
 
   function updateDraft(name, value) {
     setDraft((current) => ({ ...current, [name]: value }));
@@ -114,8 +175,8 @@ export default function VisitorsPage() {
             <button
               className={ui.buttonSecondary}
               type="button"
-              onClick={() => { load(); loadAlerts(); }}
-              disabled={loading || alertsLoading}
+              onClick={() => { load(); loadAlerts(); loadIntelligence(); }}
+              disabled={loading || alertsLoading || intelligenceLoading}
             >
               <RefreshCw size={15} /> Refresh
             </button>
@@ -132,6 +193,14 @@ export default function VisitorsPage() {
           <Metric label="Countries" value={summary.countries} hint="Matching events" />
           <Metric label="Cities" value={summary.cities} hint="Matching events" />
         </section>
+
+        <VisitorIntelligence
+          data={intelligence}
+          loading={intelligenceLoading}
+          error={intelligenceError}
+          hours={hours}
+          onRetry={loadIntelligence}
+        />
 
         <VisitorAlerts
           data={alerts}
@@ -204,72 +273,10 @@ export default function VisitorsPage() {
           </form>
 
           <DataState loading={loading} error={error && !items.length ? error : ""} empty={!loading && !error && items.length === 0} onRetry={load}>
-            <div className={`${ui.tableWrap} ${visitorStyles.visitorTableWrap}`}>
-              <table className={`${ui.table} ${visitorStyles.visitorTable}`}>
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Event</th>
-                    <th>Page / target</th>
-                    <th>Location</th>
-                    <th>Client</th>
-                    <th>Visitor</th>
-                    <th>Referrer</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={item.eventId}>
-                      <td className={ui.numeric}>
-                        <time className={visitorStyles.eventTime} dateTime={item.eventTime} title={formatDateTime(item.eventTime)}>
-                          <span>{formatDate(item.eventTime)}</span>
-                          <small>{formatTime(item.eventTime)}</small>
-                        </time>
-                      </td>
-                      <td>
-                        <span className={visitorStyles.eventName}>
-                          <span className={visitorStyles.eventDot} aria-hidden="true" />
-                          {humanizeEventName(item.eventName)}
-                        </span>
-                      </td>
-                      <td>
-                        <div className={visitorStyles.contentStack}>
-                          <ContentReference content={item.pageContent} url={item.pageUrl} label="Page" />
-                          {shouldShowTarget(item) && (
-                            <ContentReference content={item.targetContent} url={item.targetUrl} label="Target" compact />
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <div className={visitorStyles.cellStack}>
-                          <span className={visitorStyles.cellPrimary}>{[item.city, item.region].filter(Boolean).join(", ") || "Unknown"}</span>
-                          <span className={visitorStyles.cellSecondary}>{item.country || "No country"}</span>
-                        </div>
-                      </td>
-                      <td>
-                        <div className={visitorStyles.cellStack}>
-                          <span className={visitorStyles.cellPrimary}>{[item.deviceType, item.browser].filter(Boolean).join(" · ") || "Unknown"}</span>
-                          <span className={visitorStyles.cellSecondary}>{item.os || "No OS"} {item.bot ? <span className={visitorStyles.bot}>Bot</span> : null}</span>
-                        </div>
-                      </td>
-                      <td>
-                        <details className={visitorStyles.identity}>
-                          <summary title={item.ipAddress}>{item.ipAddress || "Unknown IP"}</summary>
-                          <span title={item.sessionId}>Session {shortId(item.sessionId)}</span>
-                          <span title={item.anonymousId}>Anonymous {shortId(item.anonymousId)}</span>
-                          <span title={item.eventId}>Event {shortId(item.eventId)}</span>
-                        </details>
-                      </td>
-                      <td>
-                        <div className={visitorStyles.cellStack}>
-                          <span className={visitorStyles.cellPrimary} title={item.referrer}>{displayHost(item.referrer) || "Direct"}</span>
-                          <span className={visitorStyles.cellSecondary}>{item.referrer ? "Referral traffic" : "No referrer"}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className={visitorStyles.eventList}>
+              {items.map((item) => (
+                <VisitorEventCard item={item} key={item.eventId || `${item.eventTime}-${item.pageUrl}`} />
+              ))}
             </div>
           </DataState>
 
@@ -286,11 +293,234 @@ export default function VisitorsPage() {
   );
 }
 
+function VisitorIntelligence({ data, loading, error, hours, onRetry }) {
+  const funnel = data.funnel || [];
+  const attribution = data.attribution || [];
+  const topContent = data.topContent || [];
+  const cohort = data.cohort || {};
+  const hasData = funnel.length || attribution.length || topContent.length || cohort.visitors;
+
+  return (
+    <section className={`${ui.panel} ${visitorStyles.insightPanel}`} aria-label="Visitor intelligence">
+      <div className={visitorStyles.insightHeader}>
+        <div>
+          <div className={visitorStyles.insightTitle}>
+            <BarChart3 size={17} />
+            Visitor intelligence
+          </div>
+          <div className={visitorStyles.insightSubtitle}>
+            {windowLabel(hours)} behavioral summary · sampled {data.sampledEvents || 0} of {data.totalEvents || 0} events
+          </div>
+        </div>
+        <button className={ui.buttonSecondary} type="button" onClick={onRetry} disabled={loading}>
+          <RefreshCw size={14} /> Refresh insights
+        </button>
+      </div>
+
+      {error && <div className={ui.errorBanner}>{error}</div>}
+      {loading && !hasData ? (
+        <div className={visitorStyles.insightEmpty}>Loading visitor intelligence...</div>
+      ) : !hasData ? (
+        <div className={visitorStyles.insightEmpty}>No behavioral signal in this window yet.</div>
+      ) : (
+        <div className={visitorStyles.insightGrid}>
+          <div className={`${visitorStyles.insightCard} ${visitorStyles.insightCardWide}`}>
+            <div className={visitorStyles.insightCardHeader}>
+              <GitBranch size={15} />
+              <span>Funnel</span>
+            </div>
+            <div className={visitorStyles.funnelList}>
+              {funnel.map((step, index) => (
+                <div className={visitorStyles.funnelStep} key={step.key || step.label}>
+                  <div className={visitorStyles.funnelIndex}>{String(index + 1).padStart(2, "0")}</div>
+                  <div className={visitorStyles.funnelCopy}>
+                    <strong>{step.label}</strong>
+                    <span>{step.description}</span>
+                  </div>
+                  <div className={visitorStyles.funnelValue}>
+                    <strong>{step.visitors || 0}</strong>
+                    <span>{formatPercent(step.fromStartRate)} from start</span>
+                  </div>
+                  <div className={visitorStyles.funnelTrack} aria-hidden="true">
+                    <span style={{ width: `${Math.max(3, Math.min(100, (step.fromStartRate || 0) * 100))}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className={visitorStyles.insightCard}>
+            <div className={visitorStyles.insightCardHeader}>
+              <TrendingUp size={15} />
+              <span>Attribution</span>
+            </div>
+            <div className={visitorStyles.rankList}>
+              {attribution.length ? attribution.map((source) => (
+                <div className={visitorStyles.rankRow} key={`${source.sourceType}-${source.source}`}>
+                  <span>
+                    <strong>{source.source}</strong>
+                    <small>{source.sourceType} · {source.visitors} visitors · {source.events} events</small>
+                  </span>
+                  <b>{source.qualityScore}</b>
+                </div>
+              )) : <div className={visitorStyles.insightEmptySmall}>No attribution signal.</div>}
+            </div>
+          </div>
+
+          <div className={visitorStyles.insightCard}>
+            <div className={visitorStyles.insightCardHeader}>
+              <MousePointerClick size={15} />
+              <span>Top content</span>
+            </div>
+            <div className={visitorStyles.rankList}>
+              {topContent.length ? topContent.map((content) => (
+                <a className={visitorStyles.contentRankRow} key={content.path} href={content.path} target="_blank" rel="noreferrer">
+                  <span className={visitorStyles.rankThumb} aria-hidden="true">
+                    <span>{contentInitials(content.type)}</span>
+                    {content.coverUrl && <img src={content.coverUrl} alt="" onError={(event) => { event.currentTarget.hidden = true; }} />}
+                  </span>
+                  <span>
+                    <strong>{content.title}</strong>
+                    <small>{content.type} · {content.visitors} visitors · {content.opens} opens</small>
+                  </span>
+                  <ExternalLink size={12} aria-hidden="true" />
+                </a>
+              )) : <div className={visitorStyles.insightEmptySmall}>No project/article activity.</div>}
+            </div>
+          </div>
+
+          <div className={visitorStyles.insightCard}>
+            <div className={visitorStyles.insightCardHeader}>
+              <UserRound size={15} />
+              <span>Cohort quality</span>
+            </div>
+            <div className={visitorStyles.cohortGrid}>
+              <InsightNumber label="Visitors" value={cohort.visitors || 0} />
+              <InsightNumber label="Returning" value={cohort.returningVisitors || 0} hint={formatPercent(cohort.returningRate)} />
+              <InsightNumber label="Multi-step" value={cohort.multiStepVisitors || 0} hint={formatPercent(cohort.multiStepRate)} />
+              <InsightNumber label="Events / visitor" value={formatDecimal(cohort.averageEventsPerVisitor)} />
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function InsightNumber({ label, value, hint }) {
+  return (
+    <div className={visitorStyles.insightNumber}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {hint && <small>{hint}</small>}
+    </div>
+  );
+}
+
+function VisitorEventCard({ item }) {
+  const eventTone = visitorStyles[`eventTone${eventToneName(item.eventName)}`] || visitorStyles.eventToneNeutral;
+  const locationPrimary = [item.city, item.region].filter(Boolean).join(", ") || "Unknown location";
+  const locationSecondary = item.country || "No country";
+  const clientPrimary = [cleanValue(item.deviceType), cleanValue(item.browser)].filter(Boolean).join(" · ") || "Unknown client";
+  const clientSecondary = [cleanValue(item.os), item.bot ? "Bot traffic" : ""].filter(Boolean).join(" · ") || "No OS";
+  const referrerHost = displayHost(item.referrer);
+  const pagePath = displayPath(item.pageUrl);
+  const targetPath = displayPath(item.targetUrl);
+
+  return (
+    <article className={visitorStyles.eventCard}>
+      <div className={visitorStyles.eventRail}>
+        <span className={`${visitorStyles.eventBadge} ${eventTone}`} title={humanizeEventName(item.eventName)}>
+          {eventAbbrev(item.eventName)}
+        </span>
+        <time className={visitorStyles.eventTime} dateTime={item.eventTime} title={formatDateTime(item.eventTime)}>
+          <span>{formatDate(item.eventTime)}</span>
+          <small>{formatTime(item.eventTime)}</small>
+        </time>
+      </div>
+
+      <div className={visitorStyles.eventMain}>
+        <header className={visitorStyles.eventHeader}>
+          <div className={visitorStyles.eventTitleBlock}>
+            <span className={visitorStyles.eventAction}>
+              <MousePointerClick size={15} aria-hidden="true" />
+              {humanizeEventName(item.eventName)}
+            </span>
+            <span className={visitorStyles.eventIntent}>{eventIntent(item.eventName)}</span>
+          </div>
+          {pagePath && (
+            <a className={visitorStyles.pathPill} href={pagePath} target="_blank" rel="noreferrer" title={item.pageUrl || pagePath}>
+              {pagePath}
+              <ExternalLink size={12} aria-hidden="true" />
+            </a>
+          )}
+        </header>
+
+        <div className={visitorStyles.eventBody}>
+          <div className={visitorStyles.contentStack}>
+            <ContentReference content={item.pageContent} url={item.pageUrl} label="Page" />
+            {targetPath && targetPath !== pagePath && (
+              <ContentReference content={item.targetContent} url={item.targetUrl} label="Target" compact />
+            )}
+          </div>
+
+          <div className={visitorStyles.contextGrid}>
+            <ContextItem icon={<MapPin size={14} />} label="Location" primary={locationPrimary} secondary={locationSecondary} />
+            <ContextItem icon={<Laptop size={14} />} label="Client" primary={clientPrimary} secondary={clientSecondary} />
+            <ContextItem
+              icon={<Link2 size={14} />}
+              label="Referrer"
+              primary={referrerHost || "Direct"}
+              secondary={item.referrer ? "Referral traffic" : "No referrer"}
+              title={item.referrer}
+            />
+            <ContextItem
+              icon={<Globe2 size={14} />}
+              label="Visitor"
+              primary={item.ipAddress || "Unknown IP"}
+              secondary={`Session ${shortId(item.sessionId)}`}
+              title={item.ipAddress}
+            />
+          </div>
+        </div>
+
+        <details className={visitorStyles.identityDrawer}>
+          <summary>
+            <UserRound size={13} aria-hidden="true" />
+            Show visitor identifiers
+          </summary>
+          <div>
+            <span title={item.sessionId}>Session <strong>{shortId(item.sessionId)}</strong></span>
+            <span title={item.anonymousId}>Anon <strong>{shortId(item.anonymousId)}</strong></span>
+            <span title={item.eventId}>Event <strong>{shortId(item.eventId)}</strong></span>
+            <span title={formatDateTime(item.eventTime)}><Clock3 size={11} aria-hidden="true" /> {formatDateTime(item.eventTime)}</span>
+          </div>
+        </details>
+      </div>
+    </article>
+  );
+}
+
+function ContextItem({ icon, label, primary, secondary, title }) {
+  return (
+    <div className={visitorStyles.contextItem} title={title || primary || ""}>
+      <span className={visitorStyles.contextIcon} aria-hidden="true">{icon}</span>
+      <span className={visitorStyles.contextCopy}>
+        <span>{label}</span>
+        <strong>{primary || "Unknown"}</strong>
+        <small>{secondary || "—"}</small>
+      </span>
+    </div>
+  );
+}
+
 function ContentReference({ content, url, label, compact = false }) {
   const path = displayPath(url);
   const href = content?.canonicalUrl || path || "";
-  const title = content?.title || path || "Unknown page";
+  const fallbackTitle = PAGE_TITLES[path] || path || "Unknown page";
+  const title = content?.title || fallbackTitle;
   const type = content?.type || label;
+  const subtitle = path && path !== title ? path : "";
 
   if (compact) {
     return (
@@ -312,7 +542,7 @@ function ContentReference({ content, url, label, compact = false }) {
         <span className={visitorStyles.contentCopy}>
           <span className={visitorStyles.contentType}>{type}</span>
           <a href={href || undefined} target="_blank" rel="noreferrer" title={url || title}>{title}</a>
-          <small>{path || "Unknown path"}</small>
+          {subtitle && <small>{subtitle}</small>}
         </span>
       </div>
       <div className={visitorStyles.contentPreview} aria-label={`${title} details`}>
@@ -747,6 +977,18 @@ function formatPolicyValue(value) {
   return String(value);
 }
 
+function formatPercent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "0%";
+  return `${Math.round(number * 100)}%`;
+}
+
+function formatDecimal(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "0";
+  return number >= 10 ? String(Math.round(number)) : number.toFixed(1);
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   const date = new Date(value);
@@ -774,6 +1016,38 @@ function humanizeEventName(value) {
   return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function eventAbbrev(value) {
+  const text = String(value || "event").replace(/[_-]+/g, " ").trim();
+  const words = text.split(/\s+/).filter(Boolean);
+  if (!words.length) return "EV";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return words.map((word) => word[0]).join("").slice(0, 3).toUpperCase();
+}
+
+function eventToneName(value) {
+  const text = String(value || "").toLowerCase();
+  if (text.includes("page")) return "Page";
+  if (text.includes("progress") || text.includes("engaged")) return "Engagement";
+  if (text.includes("open") || text.includes("click")) return "Action";
+  if (text.includes("subscribe")) return "Conversion";
+  if (text.includes("chat") || text.includes("tool")) return "Agent";
+  return "Neutral";
+}
+
+function eventIntent(value) {
+  const text = String(value || "").toLowerCase();
+  if (text.includes("page_view")) return "Visitor loaded a page";
+  if (text.includes("read_progress")) return "Reading progress checkpoint";
+  if (text.includes("engaged_time")) return "Active time recorded";
+  if (text.includes("project_open")) return "Project detail opened";
+  if (text.includes("content_open")) return "Content detail opened";
+  if (text.includes("outbound_link")) return "External link click";
+  if (text.includes("search")) return "Search behavior";
+  if (text.includes("subscribe")) return "Subscription funnel";
+  if (text.includes("chat")) return "Chat agent interaction";
+  return "Behavior event";
+}
+
 function shouldShowTarget(item) {
   const target = displayPath(item.targetUrl);
   return Boolean(target && target !== displayPath(item.pageUrl));
@@ -796,6 +1070,12 @@ function displayPath(value) {
 function displayHost(value) {
   if (!value) return "";
   try { return new URL(value).hostname.replace(/^www\./, ""); } catch { return String(value); }
+}
+
+function cleanValue(value) {
+  const text = String(value || "").trim();
+  if (!text || text.toLowerCase() === "unknown") return "";
+  return text;
 }
 
 function shortId(value) {

@@ -14,6 +14,81 @@
 .toggleInput:checked + .toggleTrack .toggleThumb { transform: translateX(14px); }
 .toggleInput:focus-visible + .toggleTrack { outline: 2px solid rgba(15, 118, 110, 0.25); outline-offset: 2px; }
 .queryActions { display: flex; align-items: center; gap: 7px; margin-left: auto; }
+.insightPanel { overflow: hidden; }
+.insightHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 17px; border-bottom: 1px solid #e3e8eb; }
+.insightTitle { display: flex; align-items: center; gap: 8px; color: #25313b; font-size: 14px; font-weight: 800; }
+.insightTitle svg { color: #0f766e; }
+.insightSubtitle { margin-top: 3px; color: #7a858e; font-size: 11px; }
+.insightGrid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr) minmax(260px, 1fr); gap: 0; border-top: 1px solid #f3f5f6; }
+.insightCard { display: grid; min-width: 0; align-content: start; gap: 12px; padding: 15px 17px; border-right: 1px solid #e8ecef; }
+.insightCard:last-child { border-right: 0; }
+.insightCardWide { grid-row: span 2; }
+.insightCardHeader { display: flex; align-items: center; gap: 7px; color: #56636d; font-size: 10px; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; }
+.insightCardHeader svg { color: #0f766e; }
+.insightEmpty { padding: 22px 17px; color: #849099; font-size: 12px; }
+.insightEmptySmall { padding: 9px 0; color: #849099; font-size: 11px; }
+.funnelList { display: grid; gap: 9px; }
+.funnelStep { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 9px 11px; align-items: center; }
+.funnelIndex { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #d6e5e2; border-radius: 6px; background: #eff8f6; color: #0f766e; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 850; }
+.funnelCopy { display: grid; min-width: 0; gap: 2px; }
+.funnelCopy strong { overflow: hidden; color: #26323b; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.funnelCopy span { overflow: hidden; color: #7b858d; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.funnelValue { display: grid; min-width: 78px; justify-items: end; gap: 2px; color: #7b858d; font-size: 9px; }
+.funnelValue strong { color: #25313b; font-size: 15px; }
+.funnelTrack { grid-column: 2 / -1; overflow: hidden; height: 5px; border-radius: 999px; background: #edf1f3; }
+.funnelTrack span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #0f766e, #48b8ac); }
+.rankList { display: grid; gap: 7px; }
+.rankRow, .contentRankRow { display: grid; min-width: 0; align-items: center; gap: 9px; padding: 8px 0; border-bottom: 1px solid #edf1f3; text-decoration: none; }
+.rankRow:last-child, .contentRankRow:last-child { border-bottom: 0; }
+.rankRow { grid-template-columns: minmax(0, 1fr) auto; }
+.contentRankRow { grid-template-columns: 40px minmax(0, 1fr) auto; color: inherit; }
+.rankRow span, .contentRankRow > span:nth-child(2) { display: grid; min-width: 0; gap: 2px; }
+.rankRow strong, .contentRankRow strong { overflow: hidden; color: #26323b; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.rankRow small, .contentRankRow small { overflow: hidden; color: #7e8991; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.rankRow b { min-width: 30px; color: #0f766e; font-size: 14px; text-align: right; }
+.contentRankRow:hover strong { color: #0f766e; text-decoration: underline; }
+.rankThumb { position: relative; display: grid; width: 38px; height: 30px; overflow: hidden; place-items: center; border: 1px solid #d5dde1; border-radius: 5px; background: #edf4f3; color: #35736e; font-size: 9px; font-weight: 850; }
+.rankThumb img { position: absolute; width: 100%; height: 100%; inset: 0; object-fit: cover; }
+.cohortGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.insightNumber { display: grid; min-height: 68px; align-content: center; gap: 3px; padding: 10px; border: 1px solid #edf1f3; border-radius: 7px; background: #fbfcfc; }
+.insightNumber span { color: #818c94; font-size: 9px; font-weight: 850; letter-spacing: 0.05em; text-transform: uppercase; }
+.insightNumber strong { color: #25313b; font-size: 20px; line-height: 1; }
+.insightNumber small { color: #0f766e; font-size: 10px; font-weight: 750; }
+.eventList { display: grid; gap: 0; }
+.eventCard { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 16px; padding: 16px 18px; border-bottom: 1px solid #e7ecef; background: #ffffff; }
+.eventCard:last-child { border-bottom: 0; }
+.eventCard:hover { background: #fbfdfd; }
+.eventRail { display: grid; align-content: start; gap: 10px; padding-top: 2px; }
+.eventBadge { display: inline-flex; width: max-content; min-width: 38px; min-height: 28px; align-items: center; justify-content: center; padding: 5px 9px; border: 1px solid #d2dadf; border-radius: 999px; background: #f5f7f8; color: #53616b; font-size: 10px; font-weight: 850; letter-spacing: 0.05em; }
+.eventTonePage { border-color: #bcded9; background: #ebf7f5; color: #0f766e; }
+.eventToneEngagement { border-color: #d5c5ee; background: #f4effb; color: #6842a4; }
+.eventToneAction { border-color: #f0c8ad; background: #fff3eb; color: #b45309; }
+.eventToneConversion { border-color: #b9dcbf; background: #eef8ef; color: #28733a; }
+.eventToneAgent { border-color: #bfdbfe; background: #eef6ff; color: #1d5f9f; }
+.eventToneNeutral { border-color: #d2dadf; background: #f5f7f8; color: #53616b; }
+.eventMain { display: grid; min-width: 0; gap: 12px; }
+.eventHeader { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.eventTitleBlock { display: grid; min-width: 0; gap: 4px; }
+.eventAction { display: inline-flex; min-width: 0; align-items: center; gap: 7px; color: #1d2933; font-size: 14px; font-weight: 800; }
+.eventAction svg { color: #0f766e; }
+.eventIntent { color: #74808a; font-size: 11px; line-height: 1.35; }
+.pathPill { display: inline-flex; max-width: min(360px, 34vw); min-height: 30px; flex: 0 1 auto; align-items: center; gap: 6px; overflow: hidden; padding: 6px 10px; border: 1px solid #dce3e6; border-radius: 999px; background: #f7f9fa; color: #52606a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
+.pathPill:hover { border-color: #9dc5c0; color: #0f766e; }
+.pathPill svg { flex: 0 0 auto; }
+.eventBody { display: grid; grid-template-columns: minmax(260px, 0.95fr) minmax(360px, 1.35fr); gap: 14px; align-items: start; }
+.contextGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.contextItem { display: grid; min-width: 0; grid-template-columns: 30px minmax(0, 1fr); gap: 8px; align-items: center; padding: 9px 10px; border: 1px solid #edf1f3; border-radius: 7px; background: #fbfcfc; }
+.contextIcon { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 6px; background: #edf7f5; color: #0f766e; }
+.contextCopy { display: grid; min-width: 0; gap: 2px; }
+.contextCopy > span { color: #88939b; font-size: 9px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+.contextCopy strong { overflow: hidden; color: #2b3740; font-size: 12px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.contextCopy small { overflow: hidden; color: #7e8991; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.identityDrawer { display: grid; width: max-content; max-width: 100%; color: #73808a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
+.identityDrawer summary { display: inline-flex; align-items: center; gap: 6px; width: max-content; color: #64717b; font-family: inherit; font-size: 10px; font-weight: 750; cursor: pointer; }
+.identityDrawer summary:hover { color: #0f766e; }
+.identityDrawer > div { display: flex; flex-wrap: wrap; gap: 7px 12px; margin-top: 8px; padding: 8px 10px; border: 1px solid #e3e9ec; border-radius: 6px; background: #f8fafb; }
+.identityDrawer span { color: #7a858e; }
+.identityDrawer strong { color: #34414b; font-weight: 800; }
 .visitorTableWrap { overflow-y: visible; }
 .visitorTable { min-width: 1180px; }
 .visitorTable td { vertical-align: top; }
@@ -25,7 +100,7 @@
 .eventTime small { color: #7b8790; font-size: 10px; }
 .eventName { display: inline-flex; min-width: 118px; align-items: center; gap: 7px; color: #155e59; font-weight: 700; white-space: nowrap; }
 .eventDot { width: 7px; height: 7px; border-radius: 50%; background: #2a9d8f; }
-.contentStack { display: grid; width: min(300px, 24vw); min-width: 220px; gap: 6px; }
+.contentStack { display: grid; width: 100%; min-width: 220px; gap: 6px; }
 .contentReference { display: grid; min-width: 0; gap: 0; outline: none; }
 .contentSummary { display: grid; grid-template-columns: 46px minmax(0, 1fr); align-items: center; gap: 9px; }
 .contentThumb, .previewCover { position: relative; display: grid; overflow: hidden; place-items: center; border: 1px solid #d5dde1; border-radius: 5px; background: #edf4f3; color: #35736e; font-size: 10px; font-weight: 800; }
@@ -125,6 +200,11 @@
 @media (max-width: 1100px) {
   .filterGrid { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
   .queryTop .search { max-width: none; }
+  .insightGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .insightCardWide { grid-column: 1 / -1; grid-row: auto; }
+  .insightCard:nth-child(2) { border-right: 0; }
+  .eventCard { grid-template-columns: 112px minmax(0, 1fr); }
+  .eventBody { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
@@ -138,6 +218,15 @@
   .alertStat:nth-child(-n + 2) { border-bottom: 1px solid #e3e8eb; }
   .alertGrid { grid-template-columns: 1fr; }
   .alertSection + .alertSection { border-top: 1px solid #e3e8eb; border-left: 0; }
+  .insightHeader { align-items: flex-start; flex-direction: column; }
+  .insightGrid { grid-template-columns: 1fr; }
+  .insightCard { border-right: 0; border-bottom: 1px solid #e8ecef; }
+  .insightCard:last-child { border-bottom: 0; }
+  .eventCard { grid-template-columns: 1fr; gap: 10px; padding: 15px; }
+  .eventRail { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .eventHeader { flex-direction: column; }
+  .pathPill { max-width: 100%; }
+  .contextGrid { grid-template-columns: 1fr; }
   .dialogBackdrop { align-items: end; padding: 12px; }
   .policyDialog { max-height: calc(100vh - 24px); }
   .policyForm { grid-template-columns: 1fr; }

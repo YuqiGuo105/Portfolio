@@ -71,6 +71,18 @@ export const adminApi = {
       return request(`/api/admin/visitors?${params.toString()}`);
     },
   },
+  visitorIntelligence: {
+    overview({ query = "", hours = 24, ...filters } = {}) {
+      const params = new URLSearchParams({
+        q: query,
+        hours: String(hours),
+      });
+      for (const [key, value] of Object.entries(filters)) {
+        if (value != null && String(value).trim()) params.set(key, String(value).trim());
+      }
+      return request(`/api/admin/visitor-intelligence?${params.toString()}`);
+    },
+  },
   visitorAlerts: {
     overview({ hours = 24 } = {}) {
       const params = new URLSearchParams({ hours: String(hours) });
