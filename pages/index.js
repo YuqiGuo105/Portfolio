@@ -1298,30 +1298,30 @@ const Index = () => {
           
           {/* Border styling for blogs */}
           <style jsx global>{`
-            /* ── Tech / Life script text toggle ── */
+            /* ── Tech / Life animated text toggle ── */
             #Blog-section .blog-switch {
               display: flex;
               align-items: flex-start;
               justify-content: flex-start;
-              gap: 20px;
+              gap: 18px;
               flex-wrap: wrap;
-              min-height: 84px;
-              margin-bottom: 24px;
+              min-height: 92px;
+              margin: 0 0 28px;
             }
 
             #Blog-section .blog-switch-sep {
               display: inline-flex;
               align-items: center;
               justify-content: center;
-              height: 56px;
+              height: 58px;
               font-family: "Sorts Mill Goudy", "Cormorant Garamond",
                 "Bodoni 72", "Didot", Georgia, serif;
               font-size: 38px;
               font-style: italic;
               font-weight: 200;
               line-height: 1;
-              color: rgba(88, 104, 112, 0.24);
-              transform: translateY(13px);
+              color: rgba(28, 39, 44, 0.22);
+              transform: translateY(12px) rotate(2deg);
               user-select: none;
             }
 
@@ -1331,12 +1331,12 @@ const Index = () => {
               background: transparent;
               cursor: pointer;
               margin: 0;
-              padding: 0;
+              padding: 0 2px 10px;
 
               display: inline-flex;
               align-items: center;
               justify-content: center;
-              height: 56px;
+              min-height: 58px;
               line-height: 1;
 
               --switch-y: 0px;
@@ -1345,11 +1345,11 @@ const Index = () => {
                 "Bodoni 72", "Didot", Georgia, serif;
               font-size: 50px;
               font-style: italic;
-              font-weight: 600;
-              letter-spacing: 0.005em;
+              font-weight: 650;
+              letter-spacing: 0.01em;
               font-variant-ligatures: discretionary-ligatures;
 
-              color: rgba(92, 103, 109, 0.34);
+              color: rgba(28, 39, 44, 0.38);
               transform: translateY(var(--switch-y));
               transform-origin: left center;
               transition:
@@ -1360,49 +1360,59 @@ const Index = () => {
             }
 
             #Blog-section .blog-switch-btn:first-of-type {
-              --switch-y: -8px;
+              --switch-y: -7px;
             }
 
             #Blog-section .blog-switch-btn:last-of-type {
-              --switch-y: 17px;
+              --switch-y: 16px;
             }
 
             #Blog-section .blog-switch-btn:hover {
-              color: rgba(61, 91, 99, 0.58);
+              color: rgba(28, 39, 44, 0.62);
               transform: translateY(calc(var(--switch-y) - 2px));
             }
 
             #Blog-section .blog-switch-btn.is-active {
               color: transparent;
               background: linear-gradient(
-                105deg,
-                #5aa9a3 0%,
-                #78b7d7 42%,
-                #d5a95d 100%
+                110deg,
+                #ff8059 0%,
+                #ff3f73 20%,
+                #8f64ff 42%,
+                #28b8ca 64%,
+                #d6a849 100%
               );
+              background-size: 260% auto;
               -webkit-background-clip: text;
               background-clip: text;
               -webkit-text-fill-color: transparent;
-              text-shadow: 0 12px 30px rgba(90, 169, 163, 0.14);
+              animation: blogSwitchGradient 6.5s ease-in-out infinite;
+              text-shadow:
+                0 10px 28px rgba(255, 128, 89, 0.12),
+                0 2px 14px rgba(40, 184, 202, 0.1);
             }
 
             #Blog-section .blog-switch-btn::after {
               content: "";
               position: absolute;
-              left: 4px;
-              right: 4px;
+              left: 6px;
+              right: 6px;
               bottom: 2px;
-              height: 3px;
+              height: 4px;
               border-radius: 999px;
-              transform: scaleX(0.55);
               background: linear-gradient(
                 90deg,
-                rgba(90, 169, 163, 0.85),
-                rgba(120, 183, 215, 0.75),
-                rgba(213, 169, 93, 0.78)
+                #ff8059,
+                #ff3f73,
+                #8f64ff,
+                #28b8ca,
+                #d6a849,
+                #ff8059
               );
+              background-size: 260% auto;
               opacity: 0;
-              transform-origin: left;
+              transform: scaleX(0.55);
+              transform-origin: center;
               transition:
                 opacity 0.25s ease,
                 transform 0.25s ease;
@@ -1411,31 +1421,44 @@ const Index = () => {
             #Blog-section .blog-switch-btn.is-active::after {
               opacity: 1;
               transform: scaleX(1);
+              animation: blogSwitchGradient 6.5s ease-in-out infinite;
+            }
+
+            @keyframes blogSwitchGradient {
+              0% {
+                background-position: 0% center;
+              }
+              50% {
+                background-position: 100% center;
+              }
+              100% {
+                background-position: 0% center;
+              }
             }
 
             @media (max-width: 600px) {
               #Blog-section .blog-switch {
                 gap: 10px;
-                min-height: 72px;
+                min-height: 78px;
               }
 
               #Blog-section .blog-switch-btn {
-                height: 46px;
-                font-size: 40px;
+                min-height: 46px;
+                font-size: 36px;
               }
 
               #Blog-section .blog-switch-btn:first-of-type {
-                --switch-y: -5px;
+                --switch-y: -4px;
               }
 
               #Blog-section .blog-switch-btn:last-of-type {
-                --switch-y: 13px;
+                --switch-y: 12px;
               }
 
               #Blog-section .blog-switch-sep {
                 height: 46px;
-                font-size: 30px;
-                transform: translateY(10px);
+                font-size: 28px;
+                transform: translateY(10px) rotate(2deg);
               }
             }
 
@@ -1457,20 +1480,22 @@ const Index = () => {
 
             /* Dark mode toggle */
             body.dark-skin #Blog-section .blog-switch-sep {
-              color: rgba(255, 255, 255, 0.24);
+              color: rgba(255, 255, 255, 0.28);
             }
 
             body.dark-skin #Blog-section .blog-switch-btn {
-              color: rgba(255, 255, 255, 0.34);
+              color: rgba(255, 255, 255, 0.4);
             }
 
             body.dark-skin #Blog-section .blog-switch-btn:hover {
-              color: rgba(224, 242, 241, 0.68);
+              color: rgba(255, 255, 255, 0.68);
             }
 
             body.dark-skin #Blog-section .blog-switch-btn.is-active {
               -webkit-text-fill-color: transparent;
-              text-shadow: 0 10px 28px rgba(120, 183, 215, 0.14);
+              text-shadow:
+                0 12px 30px rgba(255, 128, 89, 0.14),
+                0 2px 18px rgba(40, 184, 202, 0.12);
             }
 
             /* Tech blog carousel controls */
