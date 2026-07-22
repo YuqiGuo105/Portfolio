@@ -14,6 +14,7 @@ import Modal from "react-modal";
 import { useRouter } from 'next/router';
 import LogInDialog from "../src/components/LogInDialog";
 import SiteTour from "../src/components/SiteTour";
+import GuideHighlights from "../src/components/GuideHighlights";
 
 const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL;
 const LEETCODE_URL = process.env.NEXT_PUBLIC_LEETCODE_URL;
@@ -1789,6 +1790,7 @@ const Index = () => {
 
         <DashboardPanels />
           <ContactForm />
+        <GuideHighlights />
         <SiteTour />
       </Layout>
     </>

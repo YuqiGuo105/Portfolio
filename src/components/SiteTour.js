@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { createPortal } from "react-dom"
+import { consumePendingWebGuide } from "../lib/webGuide"
+
+const DEFAULT_CONTROLS = { previous: "Prev", next: "Next", done: "Done", close: "Close" }
 
 function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n))
@@ -37,42 +40,49 @@ export default function SiteTour() {
         () => [
             {
                 id: "about",
+                targetKey: "home.about",
                 targetId: "tour-about",
                 title: "About Me",
                 content: "Start with a quick snapshot of who I am, what I love building, and how to pronounce my name.",
             },
             {
                 id: "background",
+                targetKey: "home.background",
                 targetId: "tour-background",
                 title: "My Background",
                 content: "See where I've studied, the teams I've contributed to, and the technical domains I've focused on.",
             },
             {
                 id: "projects",
+                targetKey: "home.projects",
                 targetId: "tour-projects",
                 title: "My Projects",
                 content: "Browse the flagship projects I've shipped, the problems they solve, and the stacks I used to build them.",
             },
             {
                 id: "techblogs",
+                targetKey: "home.techBlogs",
                 targetId: "tour-techblogs",
                 title: "My Technical Blogs",
                 content: "Explore deep dives, system design notes, and hands-on write-ups that showcase how I approach new challenges.",
             },
             {
                 id: "life",
+                targetKey: "home.lifeBlogs",
                 targetId: "tour-life",
                 title: "My Vibrant Life",
                 content: "Get a glimpse of my hobbies, travels, and the moments outside of code that keep me inspired.",
             },
             {
                 id: "realtime",
+                targetKey: "home.dashboard",
                 targetId: "tour-real-time-data",
                 title: "Real-Time Data",
                 content: "See live market moves, quick currency conversions, and a snapshot of the weather I'm tracking right now.",
             },
             {
                 id: "contact",
+                targetKey: "home.contact",
                 targetId: "tour-contact",
                 title: "Contact Me",
                 content: "Wrap up with the best ways to reach me, whether you want to collaborate, hire, or just say hello.",
@@ -83,6 +93,7 @@ export default function SiteTour() {
 
     // steps state supports both static default and dynamic AI-generated overrides
     const [steps, setSteps] = useState(null) // null = use STATIC_STEPS
+    const [controls, setControls] = useState(DEFAULT_CONTROLS)
     const stepsRef = useRef(null)            // always mirrors current effective steps
 
     const effectiveSteps = steps || STATIC_STEPS
@@ -113,6 +124,7 @@ export default function SiteTour() {
         setOpen(false)
         setIdx(0)
         setSteps(null) // reset to static steps for next tour
+        setControls(DEFAULT_CONTROLS)
         activeElRef.current = null
         if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("cw:site-tour:end"))
@@ -168,6 +180,14 @@ export default function SiteTour() {
                 setSteps(dynamic)
                 stepsRef.current = dynamic
             }
+            if (e?.detail?.controls) setControls(e.detail.controls)
+            window.dispatchEvent(new CustomEvent("cw:guide:highlights", {
+                detail: {
+                    language: e?.detail?.language || "en",
+                    controls: e?.detail?.controls || DEFAULT_CONTROLS,
+                    steps: e?.detail?.steps || stepsRef.current,
+                },
+            }))
             setOpen(true)
             setIdx(0)
             requestAnimationFrame(() => go(0))
@@ -177,6 +197,7 @@ export default function SiteTour() {
                 const dynamic = e.detail.steps
                 setSteps(dynamic)
                 stepsRef.current = dynamic
+                if (e?.detail?.controls) setControls(e.detail.controls)
                 // Start tour automatically with the new steps
                 setOpen(true)
                 setIdx(0)
@@ -186,13 +207,20 @@ export default function SiteTour() {
         window.addEventListener("cw:site-tour:start", onStart)
         window.addEventListener("cw:site-tour:dynamic", onDynamic)
 
-        // 从其他页面跳转过来时，检查是否有待启动的 tour
-        try {
-            if (sessionStorage.getItem("__pending_site_tour") === "1") {
-                sessionStorage.removeItem("__pending_site_tour")
-                setTimeout(() => onStart({}), 600) // 等页面渲染完成
-            }
-        } catch {}
+        const pendingGuide = consumePendingWebGuide()
+        if (pendingGuide) {
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent("cw:guide:highlights", { detail: pendingGuide.plan }))
+                if (pendingGuide.start) onStart({ detail: pendingGuide.plan })
+            }, 600)
+        } else {
+            try {
+                if (sessionStorage.getItem("__pending_site_tour") === "1") {
+                    sessionStorage.removeItem("__pending_site_tour")
+                    setTimeout(() => onStart({}), 600)
+                }
+            } catch {}
+        }
 
         return () => {
             window.removeEventListener("cw:site-tour:start", onStart)
@@ -273,7 +301,7 @@ export default function SiteTour() {
             >
                 <div className="st-hd">
                     <div className="st-title">{current?.title}</div>
-                    <button className="st-x" onClick={close} aria-label="Close">×</button>
+                    <button className="st-x" onClick={close} aria-label={controls.close}>×</button>
                 </div>
 
                 <div className="st-bd">{current?.content}</div>
@@ -281,9 +309,9 @@ export default function SiteTour() {
                 <div className="st-ft">
                     <div className="st-count">{idx + 1} / {effectiveSteps.length}</div>
                     <div className="st-actions">
-                        <button className="st-btn st-plain" onClick={prev} disabled={idx === 0}>Prev</button>
+                        <button className="st-btn st-plain" onClick={prev} disabled={idx === 0}>{controls.previous}</button>
                         <button className="st-btn st-primary" onClick={next}>
-                            {idx === effectiveSteps.length - 1 ? "Done" : "Next"}
+                            {idx === effectiveSteps.length - 1 ? controls.done : controls.next}
                         </button>
                     </div>
                 </div>

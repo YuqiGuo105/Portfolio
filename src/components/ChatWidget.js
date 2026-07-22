@@ -8,6 +8,7 @@ import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path
 import { useRouter } from "next/router"
 import LogInDialog from "../components/LogInDialog"
 import RelatedLinks from "../components/RelatedLinks"
+import { applyWebGuidePlan, normalizeWebGuidePlan } from "../lib/webGuide"
 
 // Markdown + code highlight + LaTeX math rendering (ChatGPT-like)
 // Math rendering uses MathJax v3 (loaded from CDN) so you do NOT need KaTeX.
@@ -2804,8 +2805,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     setMessages([])
   }
 
-  const triggerSiteTour = () => {
+  const triggerSiteTour = (guidePlan = null) => {
     try {
+      if (guidePlan && applyWebGuidePlan(guidePlan, { start: true })) return
       if (routerPathname === "/" || window.location.pathname === "/") {
         window.dispatchEvent(new CustomEvent("cw:site-tour:start"))
       } else {
@@ -2864,12 +2866,19 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
   useEffect(() => {
     if (messages.length === 0) {
+      const chinese = typeof navigator !== "undefined"
+        && navigator.language?.toLowerCase().startsWith("zh")
       setMessages([
         {
           id: generateUUID(),
           role: "assistant",
-          content: "Welcome! I can start a quick web guide or answer any questions.",
+          content: chinese
+            ? "欢迎！我可以带你快速浏览网站，也可以直接回答问题。"
+            : "Welcome! I can start a quick web guide or answer any questions.",
           showGuideCta: true,
+          guideTitle: chinese ? "网页导览" : "Web guide",
+          guideCopy: chinese ? "快速了解 Yuqi 的经历、项目、博客与平台面板。" : "Explore Yuqi's background, projects, writing, and live platform dashboard.",
+          guideButtonLabel: chinese ? "开始网页导览" : "Start web guide",
         },
       ])
     }
@@ -3402,17 +3411,20 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
         // Handle tour_steps (WebGuide AI tour)
         if (stage === "tour_steps") {
-          const tourSteps = obj.payload?.steps
-          const autoStart = obj.payload?.autoStart
-          if (Array.isArray(tourSteps) && tourSteps.length > 0) {
+          const guidePlan = normalizeWebGuidePlan(obj.payload)
+          if (guidePlan) {
             setMessages((prev) =>
-              prev.map((m) => (m.id !== assistantId ? m : { ...m, tourSteps }))
+              prev.map((m) => (m.id !== assistantId ? m : {
+                ...m,
+                tourSteps: guidePlan.steps,
+                guidePlan,
+                showGuideCta: !guidePlan.autoStart,
+                guideTitle: guidePlan.language === "zh" ? "网页导览" : "Web guide",
+                guideCopy: guidePlan.responseMessage,
+                guideButtonLabel: guidePlan.controls.start,
+              }))
             )
-            if (autoStart) {
-              try {
-                window.dispatchEvent(new CustomEvent("cw:site-tour:dynamic", { detail: { steps: tourSteps } }))
-              } catch {}
-            }
+            applyWebGuidePlan(guidePlan, { start: guidePlan.autoStart })
           }
           return
         }
@@ -3928,32 +3940,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       .filter((f) => f.status === "ready" && f.publicUrl)
       .map((f) => ({ name: f.name, url: f.publicUrl }))
 
-    // --- Site-tour intent shortcut ---
-    // If the user explicitly asks for a web/site tour, skip the backend and
-    // re-render the "Start web guide" CTA so they can launch it directly.
-    const tourIntentRegex = /\b(?:guide\s+me(?:\s+(?:through|around|on|the))?(?:\s+(?:the\s+)?(?:web|site|website|portfolio|page))?|(?:web|site|website|guided)\s*tour|show\s+me\s+around|walk\s+me\s+through(?:\s+the\s+(?:site|web|website|portfolio))?|take\s+me\s+on\s+a\s+tour|start\s+(?:the\s+)?(?:web\s+)?guide)\b/i
-    if (visibleText && readyFiles.length === 0 && !isThinking && tourIntentRegex.test(visibleText)) {
-      setMessages((prev) => [...prev, { id: generateUUID(), role: "user", content: visibleText, attachments: [] }])
-      setInput("")
-      setComposerFiles([])
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: generateUUID(),
-          role: "assistant",
-          content: "Sure — click below to start the guided web tour.",
-          showGuideCta: true,
-        },
-      ])
-      try {
-        const dbMode = mode === "thinking" ? "deepthinking" : "regular"
-        await supabase.from("Chat").insert([{ question: visibleText, answer: "[web tour CTA shown]", mode: dbMode }])
-      } catch (dbErr) {
-        logger.warn("Supabase insert failed", dbErr)
-      }
-      return
-    }
-
     // --- Blog management auth guard ---
     if (visibleText && BLOG_MGMT_INTENT.test(visibleText)) {
       const { data: { session } } = await supabase.auth.getSession()
@@ -4259,13 +4245,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
                 </div>
               ) : m.showGuideCta ? (
                 <div className="cw-guide-message">
-                  <p className="cw-guide-title">Hi! How can I help you today?</p>
+                  <p className="cw-guide-title">{m.guideTitle || "Web guide"}</p>
                   <p className="cw-guide-copy">
-                    I'm Mr. Pot, Yuqi's web AI agent.
+                    {m.guideCopy || m.content || "Explore Yuqi's portfolio."}
                   </p>
                   <div className="cw-guide-actions">
-                    <button type="button" className="cw-guide-btn" onClick={triggerSiteTour}>
-                      Start web guide
+                    <button type="button" className="cw-guide-btn" onClick={() => triggerSiteTour(m.guidePlan)}>
+                      {m.guideButtonLabel || "Start web guide"}
                       <ArrowUpRight className="cw-guide-ico" aria-hidden="true" />
                     </button>
                   </div>
