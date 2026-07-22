@@ -209,6 +209,22 @@ flowchart LR
 
 ---
 
+## Admin / MCP Operations
+
+The admin page is the protected operator surface for the portfolio platform. It
+centralizes content management, subscriber and notification views, visitor logs,
+agent conversations, cost guardrails, and MCP-style operations behind Supabase
+authentication and an allow-listed admin identity.
+
+The operate console lets an admin issue natural-language platform commands.
+Read-only requests can run immediately; write operations such as publish,
+reindex, retry, alert policy changes, and send-test flows are staged first as a
+confirmation-required action before the backend tool executes.
+
+<img src="docs/readme-assets/admin-mcp-operate-console.png" alt="Admin MCP operate console" width="900" />
+
+---
+
 ## Microservices GitHub Repositories
 
 | Service                            | Repository                                                                                                | Responsibility                                                                                                |
