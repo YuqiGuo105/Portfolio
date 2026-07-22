@@ -1075,6 +1075,9 @@ const DashboardPanels = () => {
           --unit-toggle-bg: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
           --unit-toggle-hover-bg: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
           --provider-indicator: #f97316;
+          --timestamp-pill-bg: rgba(255, 255, 255, 0.58);
+          --timestamp-pill-text: #6b7280;
+          --timestamp-pill-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
 
           background: var(--dashboard-bg);
           padding: 3rem 0;
@@ -1107,6 +1110,9 @@ const DashboardPanels = () => {
           --unit-toggle-bg: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
           --unit-toggle-hover-bg: linear-gradient(135deg, #4338ca 0%, #312e81 100%);
           --provider-indicator: #f97316;
+          --timestamp-pill-bg: rgba(148, 163, 184, 0.08);
+          --timestamp-pill-text: #ffffff;
+          --timestamp-pill-shadow: none;
         }
 
         /* ... keep rest of your CSS unchanged ... */
@@ -1352,7 +1358,7 @@ const DashboardPanels = () => {
 
         .currency-card .timestamp {
           font-size: 0.75rem;
-          color: var(--text-muted);
+          color: var(--timestamp-pill-text);
           letter-spacing: 0.03em;
         }
 
@@ -1489,6 +1495,7 @@ const DashboardPanels = () => {
 
         .sun-times .timestamp {
           display: block;
+          color: var(--timestamp-pill-text);
         }
 
         /* Visitors */
@@ -2205,12 +2212,12 @@ const DashboardPanels = () => {
             width: fit-content;
             max-width: 100%;
             margin: 0;
-            padding: 0.45rem 0.65rem;
-            border: 1px solid var(--card-border);
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.58);
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
             line-height: 1.2;
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+            box-shadow: none;
           }
 
           .weather-container {
@@ -2248,12 +2255,12 @@ const DashboardPanels = () => {
             width: fit-content;
             max-width: 100%;
             margin: 0.2rem 0 0;
-            padding: 0.45rem 0.65rem;
-            border: 1px solid var(--card-border);
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.58);
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
             line-height: 1.2;
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+            box-shadow: none;
           }
 
           .globe-frame {
