@@ -140,6 +140,7 @@ export async function forwardJson(req, res, { path, method = "POST", auth }) {
     "Content-Type": "application/json",
     Accept: "application/json",
   };
+  copyConversationHeaders(req, headers);
   const internal = process.env.AGENT_SERVICE_INTERNAL_TOKEN;
   if (!internal) {
     // Fail-closed: the agent's SupabaseJwtAuthFilter now rejects every
@@ -169,6 +170,50 @@ export async function forwardJson(req, res, { path, method = "POST", auth }) {
 }
 
 /**
+ * Forward the widget's production streaming request without changing its
+ * attachment/page/memory contract.
+ */
+export async function forwardRagSse(req, res, { auth }) {
+  const base = getAgentBase();
+  if (!base) {
+    res.status(500).json({ error: "config_missing", message: "AGENT_SERVICE_URL not set." });
+    return;
+  }
+  const internal = process.env.AGENT_SERVICE_INTERNAL_TOKEN;
+  if (!internal) {
+    res.status(500).json({
+      error: "config_missing",
+      message: "AGENT_SERVICE_INTERNAL_TOKEN is not set.",
+    });
+    return;
+  }
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+    Authorization: `Bearer ${internal}`,
+  };
+  copyConversationHeaders(req, headers);
+  const upstreamBody = JSON.stringify({
+    ...(req.body || {}),
+    userEmail: auth.email,
+    userRoles: auth.roles,
+  });
+
+  let upstream;
+  try {
+    upstream = await fetch(`${base}/api/rag/answer/stream`, {
+      method: "POST",
+      headers,
+      body: upstreamBody,
+    });
+  } catch (err) {
+    res.status(502).json({ error: "upstream_unreachable", message: err.message });
+    return;
+  }
+  await pipeSse(req, res, upstream);
+}
+
+/**
  * Forward a chat request to the agent service and stream the SSE response back
  * to the browser. The upstream is `POST {AGENT_SERVICE_URL}/api/chat` which
  * returns text/event-stream.
@@ -184,6 +229,7 @@ export async function forwardSse(req, res, { auth }) {
     "Content-Type": "application/json",
     Accept: "text/event-stream",
   };
+  copyConversationHeaders(req, headers);
   const internal = process.env.AGENT_SERVICE_INTERNAL_TOKEN;
   if (!internal) {
     // See forwardJson for rationale — the agent filter is fail-closed and
@@ -235,6 +281,10 @@ export async function forwardSse(req, res, { auth }) {
     return;
   }
 
+  await pipeSse(req, res, upstream);
+}
+
+async function pipeSse(req, res, upstream) {
   if (!upstream.ok || !upstream.body) {
     const errBody = await upstream.text().catch(() => "");
     res.status(upstream.status || 502);
@@ -278,6 +328,13 @@ export async function forwardSse(req, res, { auth }) {
   } finally {
     res.end();
   }
+}
+
+function copyConversationHeaders(req, headers) {
+  const deviceId = req.headers["x-cw-device-id"];
+  const forwardedFor = req.headers["x-forwarded-for"];
+  if (deviceId) headers["X-CW-Device-Id"] = String(deviceId).slice(0, 200);
+  if (forwardedFor) headers["X-Forwarded-For"] = String(forwardedFor).slice(0, 500);
 }
 
 export function methodGuard(req, res, allowed) {

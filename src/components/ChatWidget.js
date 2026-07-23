@@ -19,7 +19,7 @@ import rehypeHighlight from "rehype-highlight"
 /* ============================================================
    ChatWidget — POST SSE for /api/rag/answer/stream
    + Attachments (2 max, progress bar, chips in msg)
-   ✅ NEW: send uploaded file URLs via request body: { fileUrls: [...] }
+   ✅ Uploads use backend-issued one-time URLs; chat sends opaque attachment IDs.
    ✅ No hard-coded stage list: stages come from backend stream payload
    ============================================================ */
 
@@ -484,12 +484,32 @@ function renderTextWithLinks(text) {
   return out
 }
 
-const SESSION_TTL_MS = 15 * 60 * 1000
+const SESSION_TTL_MS = 30 * 60 * 1000
 
-// ✅ bucket name from your Supabase dashboard link: .../buckets/chat
-const UPLOAD_BUCKET = "chat"
-const UPLOAD_TTL_MS = 2 * 60 * 1000
 const MAX_FILES_PER_MESSAGE = 2
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+const ACCEPTED_UPLOAD_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "application/json",
+])
+const ACCEPTED_UPLOAD_EXTENSIONS = ".pdf,.jpg,.jpeg,.png,.webp,.txt,.md,.csv,.json"
+const ACCEPTED_UPLOAD_SUFFIXES = new Set(
+  ACCEPTED_UPLOAD_EXTENSIONS.split(",").map((value) => value.replace(/^\./, "")),
+)
+
+const isAcceptedUpload = (file) => {
+  const mimeType = String(file?.type || "").toLowerCase()
+  const fileName = String(file?.name || "")
+  const extension = fileName.includes(".") ? fileName.split(".").pop().toLowerCase() : ""
+  return ACCEPTED_UPLOAD_TYPES.has(mimeType)
+    || ((!mimeType || mimeType === "application/octet-stream") && ACCEPTED_UPLOAD_SUFFIXES.has(extension))
+}
 
 const storageSafeGet = (key) => {
   if (typeof window === "undefined") return null
@@ -588,6 +608,14 @@ function generateUUID() {
   return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
     (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16),
   )
+}
+
+function getOrCreateChatDeviceId() {
+  const existing = storageSafeGet("cwDeviceId")
+  if (existing) return existing
+  const created = generateUUID()
+  storageSafeSet("cwDeviceId", created)
+  return created
 }
 
 function safeJsonParse(s) {
@@ -1251,6 +1279,12 @@ function ragStreamUrl(ragBaseUrl) {
   return u.toString()
 }
 
+function ragAttachmentUrl(ragBaseUrl, suffix) {
+  const u = new URL(ragBaseUrl, window.location.origin)
+  u.pathname = u.pathname.replace(/\/$/, "") + "/attachments/" + String(suffix || "").replace(/^\/+/, "")
+  return u.toString()
+}
+
 async function resolveRagEndpoint() {
   const primaryRaw = process.env.NEXT_PUBLIC_ASSIST_API || process.env.NEXT_PUBLIC_RAG_API || ""
   const primary = primaryRaw ? normalizeRagBaseUrl(primaryRaw) : ""
@@ -1292,7 +1326,7 @@ function parseSSEBlock(block) {
   return { event, data: dataLines.join("\n") }
 }
 
-async function postSSE(url, body, { onEvent, signal }) {
+async function postSSE(url, body, { onEvent, signal, deviceId }) {
   let res
   try {
     res = await fetch(url, {
@@ -1300,6 +1334,7 @@ async function postSSE(url, body, { onEvent, signal }) {
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        ...(deviceId ? { "X-CW-Device-Id": deviceId } : {}),
       },
       body: JSON.stringify(body),
       mode: "cors",
@@ -2540,80 +2575,42 @@ function StageToast({ step }) {
   )
 }
 
-/* ----------------- upload helpers (FIXED InvalidKey) ----------------- */
-
-function sanitizeFilenameForStorageKey(name) {
-  const original = String(name || "upload").trim()
-
-  const dot = original.lastIndexOf(".")
-  const ext = dot >= 0 ? original.slice(dot) : ""
-  const base = dot >= 0 ? original.slice(0, dot) : original
-
-  const safeBase =
-    base
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-zA-Z0-9._-]+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .slice(0, 80) || "file"
-
-  const safeExt = ext.normalize("NFKD").replace(/[^a-zA-Z0-9.]+/g, "").slice(0, 10)
-
-  return safeBase + safeExt
-}
-
-function buildUploadPath({ sessionId, file }) {
-  const safeName = sanitizeFilenameForStorageKey(file?.name)
-  return {
-    safeName,
-    path: `${sessionId}-${Date.now()}-${generateUUID()}-${safeName}`,
-  }
-}
+/* ----------------- private attachment upload helpers ----------------- */
 
 function prettyStorageError(err) {
   const msg = String(err?.message || err || "")
-  if (/unauthorized|forbidden|permission/i.test(msg)) {
-    return "Upload blocked (permission denied). Check your Supabase Storage policies for bucket “chat”."
-  }
-  if (/bucket/i.test(msg) && /not found/i.test(msg)) {
-    return "Upload failed: bucket “chat” not found. Create it in Supabase Storage."
-  }
+  if (/unsupported|type|mime/i.test(msg)) return "This file type is not supported."
+  if (/size|large|limit/i.test(msg)) return "This file is larger than the 5 MB limit."
+  if (/rate/i.test(msg)) return "Too many uploads. Please try again later."
+  if (/expired|signature/i.test(msg)) return "The upload permission expired. Please add the file again."
   return msg || "Upload failed. Please try again."
 }
 
-function stripTrailingSlash(s) {
-  return String(s || "").replace(/\/+$/, "")
+async function requestAttachmentUpload({ ragBase, sessionId, deviceId, file }) {
+  const response = await fetch(ragAttachmentUrl(ragBase, "upload-url"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CW-Device-Id": deviceId,
+    },
+    body: JSON.stringify({
+      sessionId,
+      name: file.name,
+      mimeType: file.type || "application/octet-stream",
+      sizeBytes: file.size,
+    }),
+    mode: "cors",
+  })
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(body.error || `Upload grant failed (${response.status})`)
+  return body
 }
 
-// keep "/" separators; encode each segment safely
-function encodeStoragePath(path) {
-  return String(path || "")
-    .split("/")
-    .map((seg) => encodeURIComponent(seg))
-    .join("/")
-}
-
-/**
- * Upload with progress (XHR) to Supabase Storage REST endpoint.
- * Uses user access_token if available, else anon key.
- */
-async function uploadToSupabaseWithProgress({ bucket, path, file, onProgress }) {
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!baseUrl || !anonKey) throw new Error("Supabase env vars missing")
-
-  const { data } = await supabase.auth.getSession()
-  const bearer = data?.session?.access_token || anonKey
-
-  const url = `${stripTrailingSlash(baseUrl)}/storage/v1/object/${bucket}/${encodeStoragePath(path)}`
-
+function uploadToAgentWithProgress({ uploadUrl, file, onProgress }) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open("POST", url, true)
-    xhr.setRequestHeader("apikey", anonKey)
-    xhr.setRequestHeader("Authorization", `Bearer ${bearer}`)
+    xhr.open("PUT", uploadUrl, true)
     xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream")
-    xhr.setRequestHeader("x-upsert", "false")
 
     xhr.upload.onprogress = (e) => {
       if (!e.lengthComputable) return
@@ -2630,14 +2627,18 @@ async function uploadToSupabaseWithProgress({ bucket, path, file, onProgress }) 
   })
 }
 
-/**
- * Build a PUBLIC URL for a public bucket.
- * Example: https://xxx.supabase.co/storage/v1/object/public/chat/<path>
- */
-function buildPublicFileUrl(bucket, objectPath) {
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!baseUrl) return ""
-  return `${stripTrailingSlash(baseUrl)}/storage/v1/object/public/${bucket}/${encodeStoragePath(objectPath)}`
+async function endAttachmentConversation({ ragBase, sessionId, deviceId }) {
+  if (!ragBase || !sessionId) return
+  await fetch(ragAttachmentUrl(ragBase, "conversation/end"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CW-Device-Id": deviceId,
+    },
+    body: JSON.stringify({ sessionId }),
+    mode: "cors",
+    keepalive: true,
+  })
 }
 
 /* ---------- Attachment UI (CSS only) ---------- */
@@ -2711,6 +2712,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     }
     return id
   })
+  const [chatDeviceId] = useState(() => getOrCreateChatDeviceId())
 
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
@@ -2732,7 +2734,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
   // composer attachments (max 2 per outgoing message)
   const [composerFiles, setComposerFiles] = useState([])
-  // { id, file, name(original), status: "uploading"|"ready"|"error", progress, storagePath, publicUrl }
+  // { id, attachmentId, file, name, mimeType, sizeBytes, status, progress }
 
   // --- Desktop resize (PC only) ---
   const clamp = (n, min, max) => Math.min(max, Math.max(min, n))
@@ -2770,7 +2772,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
   // setStage / finalize call for these ids becomes a no-op so async work that
   // has already kicked off can't redraw the bubble after the user moved on.
   const stoppedAssistantIdsRef = useRef(new Set())
-  const uploadTimersRef = useRef([])
   const fileInputRef = useRef(null)
   const textareaRef = useRef(null)
   const modeWrapRef = useRef(null)
@@ -2789,6 +2790,14 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       } catch {}
       abortRef.current = null
     }
+
+    const endingSessionId = sessionId
+    const ragBase = ragEndpointRef.current || endpoint || "/api/rag"
+    endAttachmentConversation({
+      ragBase,
+      sessionId: endingSessionId,
+      deviceId: chatDeviceId,
+    }).catch((err) => logger.warn("Attachment conversation cleanup request failed", err))
 
     clearChatPersistence()
 
@@ -2842,7 +2851,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       return () => clearTimeout(timer)
     }
   }, [errorToast])
-  // Auto-clean chat history if inactive for > SESSION_TTL_MS (default: 10 minutes).
+  // Keep browser history and the backend attachment lease on the same idle window.
   useEffect(() => {
     touchSession()
 
@@ -2959,16 +2968,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     [],
   )
 
-  const scheduleAutoDelete = (filePath) => {
-    const timerId = setTimeout(async () => {
-      const { error } = await supabase.storage.from(UPLOAD_BUCKET).remove([filePath])
-      if (error) logger.warn("Failed to auto-delete upload", error)
-      uploadTimersRef.current = uploadTimersRef.current.filter((id) => id !== timerId)
-    }, UPLOAD_TTL_MS)
-
-    uploadTimersRef.current.push(timerId)
-  }
-
   const startResize = (e, dir) => {
     if (!desktopResizable) return
     e.preventDefault()
@@ -3051,52 +3050,60 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
     const chosen = incoming.slice(0, room)
     if (incoming.length > room) setErrorToast(`Only ${MAX_FILES_PER_MESSAGE} files per message.`)
+    const invalid = chosen.find(
+      (file) => !isAcceptedUpload(file)
+        || file.size <= 0
+        || file.size > MAX_UPLOAD_BYTES,
+    )
+    if (invalid) {
+      setErrorToast(
+        invalid.size > MAX_UPLOAD_BYTES
+          ? "Each attachment must be 5 MB or smaller."
+          : "Supported files: PDF, JPG, PNG, WebP, TXT, Markdown, CSV, and JSON.",
+      )
+      return
+    }
 
     const newItems = chosen.map((file) => ({
       id: generateUUID(),
+      attachmentId: "",
       file,
       name: file.name,
+      mimeType: file.type,
+      sizeBytes: file.size,
       status: "uploading",
       progress: 0,
-      storagePath: "",
-      publicUrl: "",
     }))
 
     setComposerFiles((prev) => [...prev, ...newItems])
     setUploading(true)
 
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      setErrorToast("Supabase env vars missing. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.")
-      setComposerFiles((prev) =>
-        prev.map((x) => (newItems.some((n) => n.id === x.id) ? { ...x, status: "error" } : x)),
-      )
-      setUploading(false)
-      return
-    }
-
     await Promise.all(
       newItems.map(async (item) => {
-        const { path: uniquePath } = buildUploadPath({ sessionId: sessionId || generateUUID(), file: item.file })
-
-        setComposerFiles((prev) => prev.map((x) => (x.id === item.id ? { ...x, storagePath: uniquePath } : x)))
-
         try {
-          await uploadToSupabaseWithProgress({
-            bucket: UPLOAD_BUCKET,
-            path: uniquePath,
+          const ragBase = ragEndpointRef.current || (await resolveRagEndpoint())
+          const grant = await requestAttachmentUpload({
+            ragBase,
+            sessionId,
+            deviceId: chatDeviceId,
+            file: item.file,
+          })
+          setComposerFiles((prev) =>
+            prev.map((x) =>
+              x.id === item.id
+                ? { ...x, attachmentId: grant.attachmentId, mimeType: grant.mimeType }
+                : x,
+            ),
+          )
+          await uploadToAgentWithProgress({
+            uploadUrl: grant.uploadUrl,
             file: item.file,
             onProgress: (pct) => {
               setComposerFiles((prev) => prev.map((x) => (x.id === item.id ? { ...x, progress: pct } : x)))
             },
           })
-
-          scheduleAutoDelete(uniquePath)
-
-          const publicUrl = buildPublicFileUrl(UPLOAD_BUCKET, uniquePath)
-          if (!publicUrl) throw new Error("Could not build public URL. Check NEXT_PUBLIC_SUPABASE_URL.")
-
           setComposerFiles((prev) =>
-            prev.map((x) => (x.id === item.id ? { ...x, status: "ready", progress: 100, publicUrl } : x)),
+            prev.map((x) => (x.id === item.id ? { ...x, status: "ready", progress: 100 } : x)),
           )
         } catch (e) {
           logger.error("Upload failed", e)
@@ -3109,8 +3116,25 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     setUploading(false)
   }
 
-  const removeComposerFile = (id) => {
+  const removeComposerFile = async (id) => {
+    const item = composerFiles.find((file) => file.id === id)
     setComposerFiles((prev) => prev.filter((x) => x.id !== id))
+    if (!item?.attachmentId) return
+    try {
+      const ragBase = ragEndpointRef.current || (await resolveRagEndpoint())
+      const deleteUrl = new URL(
+        ragAttachmentUrl(ragBase, encodeURIComponent(item.attachmentId)),
+        window.location.origin,
+      )
+      deleteUrl.searchParams.set("sessionId", sessionId)
+      await fetch(deleteUrl.toString(), {
+        method: "DELETE",
+        headers: { "X-CW-Device-Id": chatDeviceId },
+        mode: "cors",
+      })
+    } catch (err) {
+      logger.warn("Attachment cleanup request failed", err)
+    }
   }
 
   // Stages we never want to surface as a "tool call card" — too noisy / not meaningful
@@ -3269,7 +3293,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     onFinal?.(finalContent)
   }
 
-  const startRagSSE = async ({ question, fileUrls, assistantId, onFinal, requestMode, currentSessionId, pageContext, userEmail, conversationHistory, pendingActionId }) => {
+  const startRagSSE = async ({ question, attachments, assistantId, onFinal, requestMode, currentSessionId, pageContext, userEmail, conversationHistory, pendingActionId }) => {
     const base = ragEndpointRef.current || (await resolveRagEndpoint())
     const streamUrl = ragStreamUrl(base)
 
@@ -3288,7 +3312,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       sessionId: currentSessionId,
       mode: backendMode,
       scopeMode: requestMode === "thinking" ? "GENERAL" : "OWNER_ONLY",
-      ...(Array.isArray(fileUrls) && fileUrls.length > 0 ? { fileUrls } : {}),
+      ...(Array.isArray(attachments) && attachments.length > 0 ? { attachments } : {}),
       // Send pageContext inside ext map — no backend schema change needed
       ...(pageContext ? { ext: { currentPageUrl: pageContext.url, currentPagePattern: pageContext.pagePattern, pageContextText: pageContext.text, pageTitle: pageContext.pageTitle } } : {}),
       ...(userEmail ? { userEmail } : {}),
@@ -3302,6 +3326,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
     await postSSE(streamUrl, body, {
       signal: controller.signal,
+      deviceId: chatDeviceId,
       onEvent: (evt) => {
         const obj = safeJsonParse(evt.data) || {}
         const stage = obj.stage || evt.event || "message"
@@ -3745,7 +3770,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
     await startRagSSE({
       question: augmented,
-      fileUrls: [],
+      attachments: [],
       assistantId,
       onFinal,
       requestMode,
@@ -3928,7 +3953,16 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
     } catch {}
     pageHighlightRef.current = { cleanup: () => {}, scrollToPhrase: () => false, hasHighlights: false }
 
-    const visibleText = input.trim()
+    const typedText = input.trim()
+    const visibleText = typedText || (
+      composerFiles.some((file) => file.status === "ready")
+        ? (
+          typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("zh")
+            ? "请分析我上传的文件。"
+            : "Please analyze the uploaded file."
+        )
+        : ""
+    )
     if ((!visibleText && composerFiles.length === 0) || loading) return
 
     const stillUploading = composerFiles.some((f) => f.status === "uploading")
@@ -3937,8 +3971,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
       return
     }
     const readyFiles = composerFiles
-      .filter((f) => f.status === "ready" && f.publicUrl)
-      .map((f) => ({ name: f.name, url: f.publicUrl }))
+      .filter((f) => f.status === "ready" && f.attachmentId)
+      .map((f) => ({
+        id: f.attachmentId,
+        name: f.name,
+        mimeType: f.mimeType,
+        sizeBytes: f.sizeBytes,
+      }))
 
     // --- Blog management auth guard ---
     if (visibleText && BLOG_MGMT_INTENT.test(visibleText)) {
@@ -3996,7 +4035,12 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
 
     const baseQuestion = visibleText
     const requestMode = mode
-    const fileUrls = readyFiles.map((f) => f.url)
+    const attachmentRefs = readyFiles.map((f) => ({
+      id: f.id,
+      name: f.name,
+      mimeType: f.mimeType,
+      sizeBytes: f.sizeBytes,
+    }))
     
     // Capture page context at send time
     const pageCtx = extractPageContext(routerPathname || "/")
@@ -4031,7 +4075,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
             .map((m) => ({ role: m.role, content: m.content.trim().slice(0, 800) }))
           await startRagSSE({
             question: baseQuestion,
-            fileUrls: [],
+            attachments: [],
             assistantId,
             requestMode,
             currentSessionId: sessionId,
@@ -4063,7 +4107,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
         .filter((m) => typeof m.content === "string" && m.content.trim() && !m.streaming)
         .slice(-6)
         .map((m) => ({ role: m.role, content: m.content.trim().slice(0, 800) }))
-      await startRagSSE({ question: baseQuestion, fileUrls, assistantId, requestMode, currentSessionId: sessionId, onFinal: finalizeAndPersist, pageContext: pageCtx, userEmail: ownerEmail, conversationHistory: historyForRag })
+      await startRagSSE({ question: baseQuestion, attachments: attachmentRefs, assistantId, requestMode, currentSessionId: sessionId, onFinal: finalizeAndPersist, pageContext: pageCtx, userEmail: ownerEmail, conversationHistory: historyForRag })
     } catch (err) {
       if (err?.name === "AbortError") {
         // User stopped the stream — keep whatever partial content was buffered
@@ -4334,7 +4378,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
                 <AttachmentChip
                   key={f.id}
                   name={f.name}
-                  href={f.status === "ready" ? f.publicUrl : undefined}
                   status={f.status}
                   progress={f.progress}
                   onRemove={() => removeComposerFile(f.id)}
@@ -4535,6 +4578,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
             ref={fileInputRef}
             type="file"
             multiple
+            accept={ACCEPTED_UPLOAD_EXTENSIONS}
             onChange={(e) => {
               touchSession()
               pickFiles(e.target.files)

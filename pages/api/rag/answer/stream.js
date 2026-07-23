@@ -11,6 +11,10 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { searchItems } from "../../../../src/lib/searchItems";
+import {
+  forwardRagSse,
+  requireSupabaseUser,
+} from "../../../../src/lib/agentServiceProxy";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -154,6 +158,16 @@ export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  // Production path: the Spring Agent owns routing, memory, attachments,
+  // safety, tools, and generation. Keep the local Gemini implementation
+  // below only as a development fallback when no agent service is configured.
+  if (process.env.AGENT_SERVICE_URL) {
+    const auth = await requireSupabaseUser(req, res, { allowAnonymous: true });
+    if (!auth) return;
+    await forwardRagSse(req, res, { auth });
+    return;
   }
 
   const { question, ext, conversationHistory } = req.body || {};
