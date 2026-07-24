@@ -10,7 +10,7 @@ import { BookOpen, Wrench, ExternalLink, ChevronDown } from "lucide-react"
  * @param {{ links: Array<{type: string, id: string, title: string, url: string, snippet: string, relevanceScore: number}> }} props
  */
 export default function RelatedLinks({ links }) {
-  const [collapsed, setCollapsed] = useState(true)
+  const [collapsed, setCollapsed] = useState(false)
 
   if (!links?.length) return null
 
