@@ -1,4 +1,7 @@
 .queryForm { display: grid; gap: 14px; padding: 16px; border-bottom: 1px solid #e3e8eb; background: #fbfcfc; }
+.queryForm input:not([type="checkbox"]) { color: #25313b; caret-color: #25313b; -webkit-text-fill-color: #25313b; }
+.queryForm input:not([type="checkbox"])::placeholder { color: #8a949c; -webkit-text-fill-color: #8a949c; opacity: 1; }
+.queryForm input:not([type="checkbox"]):focus { color: #25313b; caret-color: #25313b; -webkit-text-fill-color: #25313b; }
 .queryTop { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .queryTop .search { flex: 1 1 420px; min-width: 280px; max-width: 720px; }
 .filterGrid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px 12px; }
