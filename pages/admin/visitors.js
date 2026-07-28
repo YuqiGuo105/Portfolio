@@ -16,6 +16,8 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  Route,
+  Target,
   TrendingUp,
   UserRound,
   X,
@@ -54,8 +56,11 @@ const EMPTY_INTELLIGENCE = {
   attribution: [],
   topContent: [],
   cohort: {},
-  sampledEvents: 0,
   totalEvents: 0,
+  uniqueVisitors: 0,
+  policy: null,
+  highIntent: [],
+  recentJourneys: [],
 };
 const PAGE_TITLES = {
   "/": "Home",
@@ -128,6 +133,8 @@ export default function VisitorsPage() {
         attribution: Array.isArray(data?.attribution) ? data.attribution : [],
         topContent: Array.isArray(data?.topContent) ? data.topContent : [],
         cohort: data?.cohort || {},
+        highIntent: Array.isArray(data?.highIntent) ? data.highIntent : [],
+        recentJourneys: Array.isArray(data?.recentJourneys) ? data.recentJourneys : [],
       });
     } catch (requestError) {
       setIntelligenceError(requestError.message || "Visitor intelligence could not be loaded.");
@@ -298,7 +305,10 @@ function VisitorIntelligence({ data, loading, error, hours, onRetry }) {
   const attribution = data.attribution || [];
   const topContent = data.topContent || [];
   const cohort = data.cohort || {};
-  const hasData = funnel.length || attribution.length || topContent.length || cohort.visitors;
+  const highIntent = data.highIntent || [];
+  const recentJourneys = data.recentJourneys || [];
+  const hasData = funnel.length || attribution.length || topContent.length
+    || cohort.visitors || highIntent.length || recentJourneys.length;
 
   return (
     <section className={`${ui.panel} ${visitorStyles.insightPanel}`} aria-label="Visitor intelligence">
@@ -309,7 +319,8 @@ function VisitorIntelligence({ data, loading, error, hours, onRetry }) {
             Visitor intelligence
           </div>
           <div className={visitorStyles.insightSubtitle}>
-            {windowLabel(hours)} behavioral summary · sampled {data.sampledEvents || 0} of {data.totalEvents || 0} events
+            {windowLabel(hours)} · {data.totalEvents || 0} complete events · deterministic policy
+            {data.policy?.version ? ` v${data.policy.version}` : ""}
           </div>
         </div>
         <button className={ui.buttonSecondary} type="button" onClick={onRetry} disabled={loading}>
@@ -381,7 +392,7 @@ function VisitorIntelligence({ data, loading, error, hours, onRetry }) {
                   </span>
                   <span>
                     <strong>{content.title}</strong>
-                    <small>{content.type} · {content.visitors} visitors · {content.opens} opens</small>
+                    <small>{content.type} · {content.visitors} visitors · {content.events} events</small>
                   </span>
                   <ExternalLink size={12} aria-hidden="true" />
                 </a>
@@ -401,9 +412,77 @@ function VisitorIntelligence({ data, loading, error, hours, onRetry }) {
               <InsightNumber label="Events / visitor" value={formatDecimal(cohort.averageEventsPerVisitor)} />
             </div>
           </div>
+
+          <div className={`${visitorStyles.insightCard} ${visitorStyles.journeyCardWide}`}>
+            <div className={visitorStyles.insightCardHeader}>
+              <Target size={15} />
+              <span>Intent and journey</span>
+            </div>
+            <div className={visitorStyles.journeyColumns}>
+              <JourneyList
+                title="High-intent sessions"
+                empty="No medium or high-intent session in this window."
+                journeys={highIntent}
+                showSignals
+              />
+              <JourneyList
+                title="Recent journeys"
+                empty="No projected journey in this window."
+                journeys={recentJourneys}
+              />
+            </div>
+          </div>
         </div>
       )}
     </section>
+  );
+}
+
+function JourneyList({ title, empty, journeys, showSignals = false }) {
+  return (
+    <div className={visitorStyles.journeySection}>
+      <div className={visitorStyles.journeySectionTitle}>{title}</div>
+      <div className={visitorStyles.journeyList}>
+        {journeys.length ? journeys.map((journey) => (
+          <details className={visitorStyles.journeyRow} key={`${title}-${journey.sessionId}`}>
+            <summary>
+              <span className={visitorStyles.journeyScore} data-level={String(journey.intentLevel || "LOW").toLowerCase()}>
+                {journey.score ?? 0}
+              </span>
+              <span className={visitorStyles.journeySummary}>
+                <strong>{humanizeField(journey.dominantIntent || "exploration")}</strong>
+                <small>
+                  {displayPath(journey.entryPage) || "Unknown entry"} → {displayPath(journey.exitPage) || "Unknown exit"}
+                </small>
+              </span>
+              <span className={visitorStyles.journeyMeta}>
+                {formatDuration(journey.durationMs)} · {shortIdentifier(journey.sessionId)}
+              </span>
+            </summary>
+            <div className={visitorStyles.journeyDetails}>
+              <div className={visitorStyles.journeySteps}>
+                {(journey.steps || []).map((step) => (
+                  <span className={visitorStyles.journeyStep} key={step.eventId} title={formatDateTime(step.eventTime)}>
+                    <Route size={11} />
+                    <b>{humanizeEventName(step.eventName)}</b>
+                    <small>{displayPath(step.targetPath || step.pagePath) || "No path"}</small>
+                  </span>
+                ))}
+              </div>
+              {showSignals && (journey.contributingSignals || []).length > 0 && (
+                <div className={visitorStyles.signalList}>
+                  {journey.contributingSignals.slice(0, 5).map((signal) => (
+                    <span key={signal.signalKey}>
+                      <b>+{signal.score}</b> {signal.description}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </details>
+        )) : <div className={visitorStyles.insightEmptySmall}>{empty}</div>}
+      </div>
+    </div>
   );
 }
 
@@ -975,6 +1054,20 @@ function formatPolicyValue(value) {
   if (value === null || value === undefined || value === "null" || value === "") return "Not set";
   if (typeof value === "boolean") return value ? "Enabled" : "Paused";
   return String(value);
+}
+
+function shortIdentifier(value) {
+  const text = String(value || "");
+  if (text.length <= 14) return text || "No session";
+  return `${text.slice(0, 7)}…${text.slice(-5)}`;
+}
+
+function formatDuration(value) {
+  const seconds = Math.max(0, Math.round(Number(value || 0) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
 }
 
 function formatPercent(value) {
