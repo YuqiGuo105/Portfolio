@@ -56,6 +56,8 @@ export default function AdminLogin() {
       setCheckingSession(true);
       if (router.query.reason === 'unauthorized') {
         setError('This account is not authorized to access the admin panel.');
+      } else if (router.query.reason === 'session_expired') {
+        setError('Your admin session expired. Sign in again to continue.');
       } else if (router.query.reason === 'oauth_error') {
         setError(typeof router.query.message === 'string'
           ? router.query.message

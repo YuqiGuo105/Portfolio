@@ -11,6 +11,22 @@ import { useRouter } from 'next/router';
 import { supabase } from '../../supabase/supabaseClient';
 import { verifyAdminSession } from '../../lib/writerApi';
 
+const ACCESS_CHECK_TIMEOUT_MS = 10_000;
+const ACCESS_RECHECK_MS = 60_000;
+const FOCUS_RECHECK_THROTTLE_MS = 15_000;
+
+function withTimeout(promise, timeoutMs) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      const error = new Error('Admin access check timed out.');
+      error.code = 'admin_access_timeout';
+      reject(error);
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+}
+
 export default function AdminTokenGate({ children }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -20,58 +36,140 @@ export default function AdminTokenGate({ children }) {
   useEffect(() => {
     let active = true;
     let redirecting = false;
+    let authorized = false;
+    let inFlightCheck = null;
+    let lastCheckedAt = 0;
 
-    const redirectToLogin = (reason) => {
+    const loginUrl = (reason) => {
       const target = router.asPath || '/admin';
       const reasonQuery = reason ? `&reason=${encodeURIComponent(reason)}` : '';
-      router.replace(`/admin/login?redirect=${encodeURIComponent(target)}${reasonQuery}`);
+      return `/admin/login?redirect=${encodeURIComponent(target)}${reasonQuery}`;
     };
 
-    async function checkAccess() {
+    const redirectToLogin = (reason) => {
+      if (redirecting) return;
+      redirecting = true;
+      authorized = false;
       setReady(false);
-      setCheckError('');
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!active) return;
-        if (!data?.session) {
-          redirectToLogin();
-          return;
-        }
+      void router.replace(loginUrl(reason));
+    };
 
-        const result = await verifyAdminSession();
-        if (!active) return;
-        if (result.authorized) {
-          setReady(true);
-          return;
-        }
-
-        if (result.status === 401 || result.status === 403) {
-          redirecting = true;
-          await supabase.auth.signOut().catch(() => {});
-          if (active) redirectToLogin('unauthorized');
-          return;
-        }
-
-        setCheckError('Admin access could not be verified. Check the admin service and try again.');
-      } catch {
-        if (active) {
-          setCheckError('Admin access could not be verified. Check your connection and try again.');
-        }
+    const expireSession = async (reason) => {
+      if (redirecting) return;
+      redirecting = true;
+      authorized = false;
+      setReady(false);
+      await supabase.auth.signOut().catch(() => {});
+      if (active) {
+        void router.replace(loginUrl(reason));
       }
+    };
+
+    function checkAccess({ initial = false } = {}) {
+      if (redirecting) return Promise.resolve();
+      if (inFlightCheck) return inFlightCheck;
+
+      inFlightCheck = (async () => {
+        if (initial) {
+          setReady(false);
+          setCheckError('');
+        }
+
+        try {
+          const sessionResult = await withTimeout(
+            supabase.auth.getSession(),
+            ACCESS_CHECK_TIMEOUT_MS,
+          );
+          if (!active) return;
+
+          let session = sessionResult?.data?.session;
+          if (!session) {
+            redirectToLogin();
+            return;
+          }
+
+          const expiresAtMs = Number(session.expires_at || 0) * 1000;
+          if (expiresAtMs > 0 && expiresAtMs <= Date.now()) {
+            const refreshResult = await withTimeout(
+              supabase.auth.refreshSession(),
+              ACCESS_CHECK_TIMEOUT_MS,
+            );
+            session = refreshResult?.data?.session;
+            if (refreshResult?.error || !session) {
+              await expireSession('session_expired');
+              return;
+            }
+          }
+
+          const result = await withTimeout(
+            verifyAdminSession(),
+            ACCESS_CHECK_TIMEOUT_MS,
+          );
+          if (!active) return;
+          if (result.authorized) {
+            authorized = true;
+            setCheckError('');
+            setReady(true);
+            return;
+          }
+
+          if (result.status === 401) {
+            await expireSession('session_expired');
+            return;
+          }
+          if (result.status === 403) {
+            await expireSession('unauthorized');
+            return;
+          }
+
+          if (!authorized) {
+            setCheckError('Admin access could not be verified. Check the admin service and try again.');
+          }
+        } catch {
+          if (active && !authorized) {
+            setCheckError('Admin access could not be verified. Check your connection and try again.');
+          }
+        } finally {
+          lastCheckedAt = Date.now();
+          inFlightCheck = null;
+        }
+      })();
+
+      return inFlightCheck;
     }
 
-    checkAccess();
+    void checkAccess({ initial: true });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
-      if (event === 'SIGNED_OUT' && !redirecting) {
-        setReady(false);
-        redirectToLogin();
+      if (event === 'SIGNED_OUT' || !session) {
+        redirectToLogin(event === 'SIGNED_OUT' ? 'session_expired' : undefined);
+        return;
+      }
+      if (event === 'TOKEN_REFRESHED') {
+        window.setTimeout(() => {
+          if (active) void checkAccess();
+        }, 0);
       }
     });
 
+    const intervalId = window.setInterval(() => {
+      void checkAccess();
+    }, ACCESS_RECHECK_MS);
+
+    const recheckAfterResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (Date.now() - lastCheckedAt < FOCUS_RECHECK_THROTTLE_MS) return;
+      void checkAccess();
+    };
+    window.addEventListener('focus', recheckAfterResume);
+    document.addEventListener('visibilitychange', recheckAfterResume);
+
     return () => {
       active = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', recheckAfterResume);
+      document.removeEventListener('visibilitychange', recheckAfterResume);
       authListener?.subscription?.unsubscribe?.();
     };
   }, [router, retryKey]);
