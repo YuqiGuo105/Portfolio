@@ -555,13 +555,16 @@ const DashboardPanels = () => {
 
         const summary30 = await summary30Res.json();
         const summaryToday = await summaryTodayRes.json();
-        const total30 = Number(summary30?.totals?.pageViews || 0);
-        const totalToday = Number(summaryToday?.totals?.pageViews || 0);
+        const pageViews30 = Number(summary30?.totals?.pageViews || 0);
+        const uniqueVisitors30 = Number(summary30?.totals?.uniqueVisitors ?? pageViews30);
+        const uniqueVisitorsToday = Number(
+          summaryToday?.totals?.uniqueVisitors ?? summaryToday?.totals?.pageViews ?? 0
+        );
         const topSources = (Array.isArray(summary30?.topCountries) ? summary30.topCountries : [])
           .slice(0, 5)
           .map((row) => ({ label: row.country || "Unknown", count: Number(row.count || 0) }));
         const located30 = topSources.reduce((sum, row) => sum + row.count, 0);
-        const unknownLocation = Math.max(total30 - located30, 0);
+        const unknownLocation = Math.max(pageViews30 - located30, 0);
         const topDevices = (Array.isArray(summary30?.topDevices) ? summary30.topDevices : [])
           .slice(0, 4)
           .map((row) => ({ label: row.deviceType || "Unknown", count: Number(row.count || 0) }));
@@ -571,8 +574,8 @@ const DashboardPanels = () => {
         setVisitors((prev) => {
           const next = {
             ...prev,
-            last30: total30,
-            today: totalToday,
+            last30: uniqueVisitors30,
+            today: uniqueVisitorsToday,
             unknownLocation,
             topSources,
             topDevices,
