@@ -18,6 +18,7 @@ const SERVICE_LABELS = {
   "portfolio-notification-service": "Notification",
   "portfolio-agent-service": "AI Agent",
   "portfolio-mcp-gateway": "MCP Gateway",
+  "knowledge-service": "Knowledge",
   "portfolio-search-indexer": "Search Indexer",
   "portfolio-rag-indexer": "RAG Indexer",
   "analytics-aggregator-service": "Analytics Aggregator",
@@ -120,7 +121,7 @@ export default async function handler(req, res) {
 
   try {
     const [up, heapPct, uptime, threads, reqRate, errRate] = await Promise.all([
-      promQuery(`up`, token),
+      promQuery(`max by (job) (max_over_time(up[3m]))`, token),
       promQuery(
         `sum by (job) (jvm_memory_used_bytes{area="heap"}) / sum by (job) (jvm_memory_max_bytes{area="heap"}) * 100`,
         token
@@ -134,6 +135,16 @@ export default async function handler(req, res) {
       ),
     ]);
 
+    if (up.length === 0) {
+      if (cache.payload) {
+        res.setHeader("Cache-Control", "public, s-maxage=30, stale-while-revalidate=300");
+        res.setHeader("X-Cache", "STALE-ON-METRICS-GAP");
+        res.status(200).json(cache.payload);
+        return;
+      }
+      throw new Error("Grafana Cloud returned no availability samples");
+    }
+
     const upMap = byJob(up);
     const heapMap = byJob(heapPct);
     const uptimeMap = byJob(uptime);
@@ -145,7 +156,7 @@ export default async function handler(req, res) {
     const services = jobs.map((job) => {
       const isUp = upMap[job] === 1;
       // Event-driven consumers: up=0 or missing means idle (scaled to zero), not broken
-      const noMetrics = upMap[job] == null || (!isUp && EVENT_DRIVEN_JOBS.has(job));
+      const noMetrics = !isUp && EVENT_DRIVEN_JOBS.has(job);
       return {
         job,
         name: SERVICE_LABELS[job] || job,

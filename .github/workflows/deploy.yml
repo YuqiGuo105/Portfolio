@@ -1,21 +1,68 @@
-name: Deploy to Vercel
+name: CI · Portfolio Web
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portfolio-web-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  build:
+    name: Install · Lint · Test · Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install Dependencies
-        run: npm install
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
 
-      - name: Build
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test --if-present
+
+      - name: Production build
         run: npm run build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+  production-smoke:
+    name: Verify Vercel production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Wait for Vercel Git deployment
+        run: |
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error --max-time 15 \
+              "https://www.yuqi.site/" >/dev/null; then
+              echo "Production is reachable."
+              exit 0
+            fi
+            echo "Attempt ${attempt}: production is not ready yet."
+            sleep 15
+          done
+          echo "Vercel production did not become reachable in time."
+          exit 1
