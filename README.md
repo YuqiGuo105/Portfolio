@@ -223,6 +223,12 @@ confirmation-required action before the backend tool executes.
 
 <img src="docs/readme-assets/admin-mcp-operate-console.png" alt="Admin MCP operate console" width="900" />
 
+Visitor alert rules are evaluated by the analytics platform and delivered through
+the notification pipeline. The screenshot below shows an operational alert
+received by an administrator after a configured regional rule was triggered.
+
+<img src="docs/readme-assets/admin-visitor-alert-email.png" alt="Admin visitor alert email notification" width="900" />
+
 ---
 
 ## Microservices GitHub Repositories
