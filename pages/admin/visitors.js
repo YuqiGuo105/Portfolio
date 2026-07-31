@@ -4,6 +4,7 @@ import {
   BarChart3,
   Check,
   Clock3,
+  Download,
   ExternalLink,
   GitBranch,
   Globe2,
@@ -88,6 +89,8 @@ export default function VisitorsPage() {
   const [intelligenceError, setIntelligenceError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [exportingFormat, setExportingFormat] = useState("");
+  const [exportStatus, setExportStatus] = useState({ tone: "", message: "" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -168,9 +171,40 @@ export default function VisitorsPage() {
     setPage(0);
   }
 
+  async function exportVisitorLogs(format) {
+    setExportingFormat(format);
+    setExportStatus({ tone: "", message: "" });
+    try {
+      const result = await adminApi.visitors.download({ ...filters, hours, format });
+      saveDownload(result.blob, result.filename || `visitor-logs.${format}`);
+      setExportStatus({
+        tone: result.truncated ? "warning" : "success",
+        message: result.truncated
+          ? "The export reached the configured row limit. Narrow the filters to download the remaining records."
+          : `${format.toUpperCase()} export downloaded.`,
+      });
+    } catch (requestError) {
+      setExportStatus({
+        tone: "error",
+        message: requestError.message || "Visitor logs could not be exported.",
+      });
+    } finally {
+      setExportingFormat("");
+    }
+  }
+
   const total = Number(pageInfo.totalElements || 0);
   const start = total === 0 ? 0 : page * PAGE_SIZE + 1;
   const end = Math.min((page + 1) * PAGE_SIZE, total);
+  const paginationProps = {
+    page,
+    pageInfo,
+    total,
+    start,
+    end,
+    loading,
+    onPageChange: setPage,
+  };
 
   return (
     <AdminLayout>
@@ -279,6 +313,18 @@ export default function VisitorsPage() {
             </div>
           </form>
 
+          <VisitorPagination
+            {...paginationProps}
+            top
+            exportingFormat={exportingFormat}
+            onExport={exportVisitorLogs}
+          />
+          {exportStatus.message && (
+            <div className={`${visitorStyles.exportNotice} ${visitorStyles[`exportNotice${capitalize(exportStatus.tone)}`] || ""}`}>
+              {exportStatus.message}
+            </div>
+          )}
+
           <DataState loading={loading} error={error && !items.length ? error : ""} empty={!loading && !error && items.length === 0} onRetry={load}>
             <div className={visitorStyles.eventList}>
               {items.map((item) => (
@@ -287,16 +333,76 @@ export default function VisitorsPage() {
             </div>
           </DataState>
 
-          <div className={ui.pagination}>
-            <span>{total === 0 ? "0 events" : `${start}–${end} of ${total}`}</span>
-            <div className={ui.paginationActions}>
-              <button className={ui.buttonSecondary} type="button" disabled={page === 0 || loading} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</button>
-              <button className={ui.buttonSecondary} type="button" disabled={page + 1 >= pageInfo.totalPages || loading} onClick={() => setPage((value) => value + 1)}>Next</button>
-            </div>
-          </div>
+          <VisitorPagination {...paginationProps} />
         </section>
       </div>
     </AdminLayout>
+  );
+}
+
+function VisitorPagination({
+  page,
+  pageInfo,
+  total,
+  start,
+  end,
+  loading,
+  onPageChange,
+  top = false,
+  exportingFormat = "",
+  onExport,
+}) {
+  const totalPages = Number(pageInfo.totalPages || 0);
+  return (
+    <div className={`${ui.pagination} ${top ? visitorStyles.topPagination : ""}`}>
+      <span>
+        {total === 0
+          ? "0 events"
+          : `${start}–${end} of ${total} · Page ${page + 1} of ${Math.max(totalPages, 1)}`}
+      </span>
+      <div className={ui.paginationActions}>
+        {onExport && (
+          <>
+            <button
+              className={ui.buttonSecondary}
+              type="button"
+              disabled={Boolean(exportingFormat)}
+              onClick={() => onExport("csv")}
+              title="Download all matching visitor logs as CSV"
+            >
+              <Download size={14} />
+              {exportingFormat === "csv" ? "Exporting..." : "CSV"}
+            </button>
+            <button
+              className={ui.buttonSecondary}
+              type="button"
+              disabled={Boolean(exportingFormat)}
+              onClick={() => onExport("json")}
+              title="Download all matching visitor logs as JSON"
+            >
+              <Download size={14} />
+              {exportingFormat === "json" ? "Exporting..." : "JSON"}
+            </button>
+          </>
+        )}
+        <button
+          className={ui.buttonSecondary}
+          type="button"
+          disabled={page === 0 || loading}
+          onClick={() => onPageChange((value) => Math.max(0, value - 1))}
+        >
+          Previous
+        </button>
+        <button
+          className={ui.buttonSecondary}
+          type="button"
+          disabled={page + 1 >= totalPages || loading}
+          onClick={() => onPageChange((value) => value + 1)}
+        >
+          Next
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1174,6 +1280,23 @@ function cleanValue(value) {
 function shortId(value) {
   const text = String(value || "—");
   return text.length > 18 ? `${text.slice(0, 9)}…${text.slice(-5)}` : text;
+}
+
+function saveDownload(blob, filename) {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
+function capitalize(value) {
+  const text = String(value || "");
+  return text ? `${text[0].toUpperCase()}${text.slice(1)}` : "";
 }
 
 function windowLabel(hours) {

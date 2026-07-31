@@ -23,6 +23,58 @@ async function request(path, options = {}) {
   return body;
 }
 
+async function download(path) {
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error("Admin session is not available.");
+
+  const response = await fetch(path, {
+    headers: {
+      Accept: "text/csv, application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const error = new Error(body.message || `Download failed: ${response.status}`);
+    error.status = response.status;
+    error.body = body;
+    throw error;
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: attachmentFilename(response.headers.get("content-disposition")),
+    truncated: response.headers.get("x-export-truncated") === "true",
+  };
+}
+
+function visitorParams({ query = "", hours = 24, page, size, format, ...filters } = {}) {
+  const params = new URLSearchParams({
+    q: query,
+    hours: String(hours),
+  });
+  if (page != null) params.set("page", String(page));
+  if (size != null) params.set("size", String(size));
+  if (format) params.set("format", format);
+  for (const [key, value] of Object.entries(filters)) {
+    if (value != null && String(value).trim()) params.set(key, String(value).trim());
+  }
+  return params;
+}
+
+function attachmentFilename(value) {
+  const encoded = String(value || "").match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return encoded;
+    }
+  }
+  return String(value || "").match(/filename="?([^";]+)"?/i)?.[1] || "";
+}
+
 export const adminApi = {
   subscribers: {
     list({ status = "ALL", query = "", limit = 50, offset = 0 } = {}) {
@@ -64,16 +116,13 @@ export const adminApi = {
   },
   visitors: {
     list({ query = "", hours = 24, page = 0, size = 50, ...filters } = {}) {
-      const params = new URLSearchParams({
-        q: query,
-        hours: String(hours),
-        page: String(page),
-        size: String(size),
-      });
-      for (const [key, value] of Object.entries(filters)) {
-        if (value != null && String(value).trim()) params.set(key, String(value).trim());
-      }
+      const params = visitorParams({ query, hours, page, size, ...filters });
       return request(`/api/admin/visitors?${params.toString()}`);
+    },
+    download({ format, ...query } = {}) {
+      if (!["csv", "json"].includes(format)) throw new Error("Export format must be csv or json.");
+      const params = visitorParams({ ...query, format });
+      return download(`/api/admin/visitors?${params.toString()}`);
     },
   },
   visitorIntelligence: {

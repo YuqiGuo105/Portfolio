@@ -2,8 +2,11 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 const RotatingGlobe = dynamic(() => import("./RotatingGlobe"), { ssr: false });
+
+const MONITOR_SERVICE_VISIBLE_LIMIT = 8;
 
 /* ============================================================
    Helpers
@@ -326,6 +329,7 @@ const DashboardPanels = () => {
   // Platform monitoring (Grafana Cloud / Prometheus)
   const [metrics, setMetrics] = useState(null);
   const [isMetricsLoading, setIsMetricsLoading] = useState(true);
+  const [showAllMonitoredServices, setShowAllMonitoredServices] = useState(false);
 
   const hoursAgoLabel = (timestamp) => {
     const hours = getHoursSince(timestamp);
@@ -652,6 +656,15 @@ const DashboardPanels = () => {
     }
     return `${Math.round(weather.temperature)}°F`;
   }, [isWeatherLoading, weather.temperature, temperatureUnit]);
+
+  const monitoredServices = metrics?.services || [];
+  const visibleMonitoredServices = showAllMonitoredServices
+    ? monitoredServices
+    : monitoredServices.slice(0, MONITOR_SERVICE_VISIBLE_LIMIT);
+  const hiddenMonitoredServiceCount = Math.max(
+    monitoredServices.length - MONITOR_SERVICE_VISIBLE_LIMIT,
+    0
+  );
 
   const { marketBadgeText, marketBadgeClassName } = useMemo(() => {
     if (isMarketLoading) {
@@ -992,7 +1005,7 @@ const DashboardPanels = () => {
 
           {/* Per-service grid */}
           <div className="monitor-grid">
-            {(metrics?.services || []).map((svc) => (
+            {visibleMonitoredServices.map((svc) => (
               <div className={`monitor-service ${svc.up ? "is-up" : svc.noMetrics ? "is-idle" : "is-down"}`} key={svc.job}>
                 <div className="monitor-service-head">
                   <span className={`status-dot ${svc.up ? "up" : svc.noMetrics ? "idle" : "down"}`} aria-hidden="true" />
@@ -1032,6 +1045,25 @@ const DashboardPanels = () => {
                 <div className="monitor-service skeleton" key={`sk-${i}`} />
               ))}
           </div>
+          {hiddenMonitoredServiceCount > 0 && (
+            <button
+              className="monitor-disclosure"
+              type="button"
+              aria-expanded={showAllMonitoredServices}
+              onClick={() => setShowAllMonitoredServices((current) => !current)}
+            >
+              <span>
+                {showAllMonitoredServices
+                  ? "Show first 8 services"
+                  : `Show ${hiddenMonitoredServiceCount} more ${hiddenMonitoredServiceCount === 1 ? "service" : "services"}`}
+              </span>
+              <ChevronDown
+                className={showAllMonitoredServices ? "is-expanded" : ""}
+                size={16}
+                aria-hidden="true"
+              />
+            </button>
+          )}
 
           <div className="grafana-links">
             {metrics?.updatedAt && (
@@ -1912,6 +1944,38 @@ const DashboardPanels = () => {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
           gap: 12px;
+        }
+
+        .monitor-disclosure {
+          display: inline-flex;
+          min-height: 36px;
+          align-self: center;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          padding: 7px 12px;
+          border: 1px solid var(--card-border);
+          border-radius: 6px;
+          background: var(--input-bg);
+          color: var(--text-muted);
+          font: inherit;
+          font-size: 0.76rem;
+          font-weight: 650;
+          cursor: pointer;
+          transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+        }
+
+        .monitor-disclosure:hover {
+          border-color: rgba(99, 102, 241, 0.42);
+          color: var(--text-primary);
+        }
+
+        .monitor-disclosure svg {
+          transition: transform 0.2s ease;
+        }
+
+        .monitor-disclosure svg.is-expanded {
+          transform: rotate(180deg);
         }
 
         .monitor-service {

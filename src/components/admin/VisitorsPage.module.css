@@ -17,6 +17,11 @@
 .toggleInput:checked + .toggleTrack .toggleThumb { transform: translateX(14px); }
 .toggleInput:focus-visible + .toggleTrack { outline: 2px solid rgba(15, 118, 110, 0.25); outline-offset: 2px; }
 .queryActions { display: flex; align-items: center; gap: 7px; margin-left: auto; }
+.topPagination { border-top: 0; border-bottom: 1px solid #e3e8eb; background: #fbfcfc; }
+.exportNotice { padding: 9px 12px; border-bottom: 1px solid #e3e8eb; color: #58656f; font-size: 11px; }
+.exportNoticeSuccess { background: #f0f8f6; color: #0f6b63; }
+.exportNoticeWarning { background: #fff9e9; color: #886510; }
+.exportNoticeError { background: #fff5f4; color: #a43c34; }
 .insightPanel { overflow: hidden; }
 .insightHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 17px; border-bottom: 1px solid #e3e8eb; }
 .insightTitle { display: flex; align-items: center; gap: 8px; color: #25313b; font-size: 14px; font-weight: 800; }
@@ -244,6 +249,8 @@
   .queryTop .search { flex-basis: 100%; min-width: 0; }
   .trafficToggle { min-height: 38px; }
   .queryActions { margin-left: auto; }
+  .topPagination { align-items: flex-start; flex-direction: column; }
+  .topPagination > div { width: 100%; flex-wrap: wrap; }
   .filterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .alertStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .alertStat:nth-child(2) { border-right: 0; }
