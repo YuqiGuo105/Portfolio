@@ -1,0 +1,798 @@
+{
+  "title": "Portfolio Microservice Platform",
+  "subtitle": "C4 container view · independently deployable services · explicit API, event and state ownership",
+  "summary": "11 RUNTIMES · 5 KAFKA TOPICS · 14 OWNED RESOURCES",
+  "description": "Workflow-oriented microservice architecture showing online AI serving, content projection, visitor intelligence, notification delivery, and explicit reliability semantics.",
+  "theme": "light",
+  "validateNoOverlap": true,
+  "width": 2500,
+  "height": 1490,
+  "lanes": [
+    {
+      "id": "online",
+      "title": "01 · ONLINE AI SERVING",
+      "subtitle": "HTTPS / SSE · policy · retrieval · model and tool execution",
+      "x": 140,
+      "y": 115,
+      "w": 2220,
+      "h": 450,
+      "accent": "green",
+      "fillOpacity": 0.035,
+      "strokeOpacity": 0.28
+    },
+    {
+      "id": "content",
+      "title": "02 · CONTENT CONTROL + PROJECTIONS",
+      "subtitle": "Transactional outbox · independent Kafka topics · idempotent read models",
+      "x": 140,
+      "y": 585,
+      "w": 2220,
+      "h": 385,
+      "accent": "orange",
+      "fillOpacity": 0.035,
+      "strokeOpacity": 0.28
+    },
+    {
+      "id": "analytics",
+      "title": "03 · VISITOR INTELLIGENCE + ALERTING",
+      "subtitle": "First-party events · city-level enrichment · sessions · rollups · delivery intents",
+      "x": 140,
+      "y": 990,
+      "w": 2220,
+      "h": 300,
+      "accent": "cyan",
+      "fillOpacity": 0.035,
+      "strokeOpacity": 0.28
+    },
+    {
+      "id": "control-plane",
+      "title": "04 · PLATFORM CONTROL PLANE",
+      "subtitle": "Cross-cutting governance · independent failure domains · no shared database",
+      "x": 140,
+      "y": 1305,
+      "w": 2220,
+      "h": 155,
+      "accent": "slate",
+      "fillOpacity": 0.04,
+      "strokeOpacity": 0.3
+    }
+  ],
+  "nodes": [
+    {
+      "id": "visitor",
+      "shape": "actor",
+      "icon": "user",
+      "title": "Visitors",
+      "meta": "WEB / MOBILE",
+      "accent": "cyan",
+      "x": 20,
+      "y": 255,
+      "w": 105,
+      "h": 112
+    },
+    {
+      "id": "operator",
+      "shape": "actor",
+      "icon": "user",
+      "title": "Operator",
+      "meta": "ADMIN",
+      "accent": "orange",
+      "x": 20,
+      "y": 715,
+      "w": 105,
+      "h": 112
+    },
+    {
+      "id": "mcp-clients",
+      "shape": "actor",
+      "brands": [
+        {
+          "brand": "openai",
+          "brandColor": "#111827",
+          "accent": "slate"
+        },
+        {
+          "brand": "googlegemini",
+          "brandColor": "#4285f4",
+          "accent": "blue"
+        }
+      ],
+      "icon": "model",
+      "title": "AI MCP Clients",
+      "meta": "OPENAI · GEMINI",
+      "accent": "purple",
+      "x": 2320,
+      "y": 410,
+      "w": 120,
+      "h": 112
+    },
+    {
+      "id": "portfolio-edge",
+      "shape": "cluster",
+      "brand": "nextdotjs",
+      "brandColor": "#111827",
+      "icon": "web",
+      "title": "Portfolio Edge",
+      "meta": "NEXT.JS · VERCEL",
+      "members": [
+        "Public UI",
+        "Admin Console",
+        "API / BFF",
+        "Chat + Tracking"
+      ],
+      "resources": [
+        {
+          "brand": "supabase",
+          "brandColor": "#3ecf8e",
+          "icon": "lock",
+          "title": "Identity",
+          "meta": "SUPABASE AUTH",
+          "accent": "green",
+          "weight": 1.2
+        },
+        {
+          "brand": "redis",
+          "brandColor": "#d82c20",
+          "icon": "cache",
+          "title": "Session Cache",
+          "meta": "VALKEY · TTL",
+          "accent": "red",
+          "weight": 0.8
+        }
+      ],
+      "accent": "blue",
+      "x": 180,
+      "y": 235,
+      "w": 350,
+      "h": 250
+    },
+    {
+      "id": "agent-runtime",
+      "shape": "cluster",
+      "brand": "springboot",
+      "brandColor": "#6db33f",
+      "icon": "bot",
+      "title": "Agent Runtime",
+      "meta": "CLOUD RUN · HTTP / SSE",
+      "members": [
+        "Safety + Planner",
+        "Streaming",
+        "Retrieval Orchestration",
+        "Tool Execution"
+      ],
+      "resources": [
+        {
+          "brand": "redis",
+          "brandColor": "#d82c20",
+          "icon": "memory",
+          "title": "Conversation",
+          "meta": "REDIS · 30M TTL",
+          "accent": "red",
+          "weight": 1.25
+        },
+        {
+          "brand": "postgresql",
+          "brandColor": "#336791",
+          "icon": "database",
+          "title": "Run Store",
+          "meta": "POSTGRES",
+          "accent": "blue",
+          "weight": 1
+        },
+        {
+          "brand": "elasticsearch",
+          "brandColor": "#005571",
+          "brandColorMode": "source",
+          "icon": "search",
+          "title": "Trace Index",
+          "meta": "OPENSEARCH",
+          "accent": "cyan",
+          "weight": 1
+        }
+      ],
+      "accent": "green",
+      "x": 650,
+      "y": 145,
+      "w": 430,
+      "h": 280
+    },
+    {
+      "id": "knowledge-service",
+      "shape": "cluster",
+      "brand": "springboot",
+      "brandColor": "#6db33f",
+      "icon": "search",
+      "title": "Knowledge Service",
+      "meta": "CLOUD RUN · HYBRID RETRIEVAL",
+      "members": [
+        "BM25 Search",
+        "Vector Search",
+        "RRF Fusion",
+        "Canonical Links"
+      ],
+      "resources": [
+        {
+          "brand": "elasticsearch",
+          "brandColor": "#005571",
+          "brandColorMode": "source",
+          "icon": "search",
+          "title": "Search Index",
+          "meta": "OPENSEARCH",
+          "accent": "cyan",
+          "weight": 1
+        },
+        {
+          "brand": "postgresql",
+          "brandColor": "#336791",
+          "icon": "database",
+          "title": "Vectors",
+          "meta": "PGVECTOR",
+          "accent": "purple",
+          "weight": 1
+        }
+      ],
+      "accent": "cyan",
+      "x": 1180,
+      "y": 220,
+      "w": 390,
+      "h": 250
+    },
+    {
+      "id": "model-gateway",
+      "brand": "googlegemini",
+      "brandColor": "#4285f4",
+      "icon": "model",
+      "title": "Model Gateway",
+      "meta": "GEMINI · FALLBACK",
+      "details": [
+        "generation · safety · embeddings"
+      ],
+      "accent": "blue",
+      "x": 1750,
+      "y": 140,
+      "w": 300,
+      "h": 120
+    },
+    {
+      "id": "mcp-gateway",
+      "brand": "modelcontextprotocol",
+      "brandColor": "#7255a5",
+      "icon": "tool",
+      "title": "MCP Tool Gateway",
+      "meta": "STREAMABLE HTTP · RBAC",
+      "details": [
+        "confirmation · idempotent adapters",
+        "content · analytics · subscription"
+      ],
+      "accent": "purple",
+      "x": 1660,
+      "y": 380,
+      "w": 320,
+      "h": 125
+    },
+
+    {
+      "id": "content-control",
+      "shape": "cluster",
+      "brand": "springboot",
+      "brandColor": "#6db33f",
+      "icon": "workflow",
+      "title": "Content Control Service",
+      "meta": "CLOUD RUN · HTTP",
+      "members": [
+        "CRUD + Versioning",
+        "Audit",
+        "Durable Jobs",
+        "Outbox Relay"
+      ],
+      "resources": [
+        {
+          "brand": "postgresql",
+          "brandColor": "#336791",
+          "icon": "database",
+          "title": "Content Store",
+          "meta": "CONTENT · JOBS · OUTBOX",
+          "accent": "blue",
+          "weight": 1
+        }
+      ],
+      "accent": "orange",
+      "x": 180,
+      "y": 650,
+      "w": 390,
+      "h": 250
+    },
+    {
+      "id": "search-topic",
+      "shape": "queue",
+      "brand": "apachekafka",
+      "brandColor": "#111827",
+      "icon": "queue",
+      "title": "Search Indexing",
+      "meta": "CONTENT.SEARCH.V1",
+      "metaBelow": true,
+      "tubeHeight": 46,
+      "accent": "purple",
+      "x": 660,
+      "y": 620,
+      "w": 230,
+      "h": 68
+    },
+    {
+      "id": "rag-topic",
+      "shape": "queue",
+      "brand": "apachekafka",
+      "brandColor": "#111827",
+      "icon": "queue",
+      "title": "RAG Indexing",
+      "meta": "CONTENT.RAG.V1",
+      "metaBelow": true,
+      "tubeHeight": 46,
+      "accent": "purple",
+      "x": 660,
+      "y": 790,
+      "w": 230,
+      "h": 68
+    },
+    {
+      "id": "projection-workers",
+      "shape": "cluster",
+      "brand": "springboot",
+      "brandColor": "#6db33f",
+      "icon": "search",
+      "title": "Projection Workers",
+      "meta": "2 CLOUD RUN CONSUMERS",
+      "members": [
+        "Search Indexer",
+        "RAG Indexer",
+        "Idempotent Upsert",
+        "Replay + Rebuild"
+      ],
+      "resources": [
+        {
+          "brand": "elasticsearch",
+          "brandColor": "#005571",
+          "brandColorMode": "source",
+          "icon": "search",
+          "title": "Search Index",
+          "meta": "OPENSEARCH",
+          "accent": "cyan",
+          "weight": 1
+        },
+        {
+          "brand": "postgresql",
+          "brandColor": "#336791",
+          "icon": "database",
+          "title": "Vectors",
+          "meta": "PGVECTOR",
+          "accent": "purple",
+          "weight": 1
+        }
+      ],
+      "accent": "cyan",
+      "x": 1000,
+      "y": 650,
+      "w": 420,
+      "h": 250
+    },
+    {
+      "id": "notification-topic",
+      "shape": "queue",
+      "brand": "apachekafka",
+      "brandColor": "#111827",
+      "icon": "queue",
+      "title": "Notification Dispatch",
+      "meta": "NOTIFICATION.DISPATCH.V1",
+      "metaBelow": true,
+      "tubeHeight": 46,
+      "accent": "purple",
+      "x": 1430,
+      "y": 780,
+      "w": 260,
+      "h": 68
+    },
+    {
+      "id": "notification-service",
+      "shape": "cluster",
+      "brand": "springboot",
+      "brandColor": "#6db33f",
+      "icon": "mail",
+      "title": "Notification Service",
+      "meta": "CLOUD RUN · KAFKA CONSUMER",
+      "members": [
+        "Subscriber API",
+        "Preference Fan-out",
+        "Leased Delivery",
+        "OTP + Recovery"
+      ],
+      "resources": [
+        {
+          "brand": "postgresql",
+          "brandColor": "#336791",
+          "icon": "database",
+          "title": "Delivery Store",
+          "meta": "SUBSCRIBERS · RETRY",
+          "accent": "blue",
+          "weight": 1.35
+        },
+        {
+          "brand": "redis",
+          "brandColor": "#d82c20",
+          "icon": "lock",
+          "title": "OTP State",
+          "meta": "REDIS · TTL",
+          "accent": "red",
+          "weight": 0.65
+        }
+      ],
+      "accent": "red",
+      "x": 1760,
+      "y": 630,
+      "w": 400,
+      "h": 260
+    },
+    {
+      "id": "email-provider",
+      "brand": "gmail",
+      "brandColor": "#ea4335",
+      "icon": "mail",
+      "title": "Email",
+      "meta": "SMTP · GMAIL",
+      "details": [
+        "verified delivery"
+      ],
+      "accent": "red",
+      "x": 2260,
+      "y": 700,
+      "w": 170,
+      "h": 125
+    },
+
+    {
+      "id": "tracking-api",
+      "brand": "springboot",
+      "brandColor": "#6db33f",
+      "icon": "api",
+      "title": "Tracking API",
+      "meta": "CLOUD RUN · HTTP",
+      "details": [
+        "validate envelope · geo-snap city",
+        "request ID · bounded payload"
+      ],
+      "accent": "cyan",
+      "x": 230,
+      "y": 1070,
+      "w": 300,
+      "h": 140
+    },
+    {
+      "id": "analytics-topic",
+      "shape": "queue",
+      "brand": "apachekafka",
+      "brandColor": "#111827",
+      "icon": "queue",
+      "title": "Visitor Ingestion",
+      "meta": "ANALYTICS.RAW.V1",
+      "metaBelow": true,
+      "tubeHeight": 46,
+      "accent": "purple",
+      "x": 620,
+      "y": 1110,
+      "w": 230,
+      "h": 68
+    },
+    {
+      "id": "analytics-aggregator",
+      "shape": "cluster",
+      "brand": "springboot",
+      "brandColor": "#6db33f",
+      "icon": "chart",
+      "title": "Visitor Intelligence",
+      "meta": "CLOUD RUN · KAFKA CONSUMER",
+      "members": [
+        "Ingest + Enrich",
+        "Session Aggregator",
+        "Funnel + Journey",
+        "Query + Export"
+      ],
+      "resources": [
+        {
+          "brand": "postgresql",
+          "brandColor": "#336791",
+          "icon": "database",
+          "title": "Analytics Store",
+          "meta": "EVENTS · SESSIONS · ROLLUPS",
+          "accent": "blue",
+          "weight": 1.25
+        },
+        {
+          "brand": "redis",
+          "brandColor": "#d82c20",
+          "icon": "cache",
+          "title": "Idempotency Cache",
+          "meta": "VALKEY · SETNX",
+          "accent": "red",
+          "weight": 0.9
+        }
+      ],
+      "accent": "cyan",
+      "x": 950,
+      "y": 1010,
+      "w": 430,
+      "h": 260
+    },
+    {
+      "id": "alert-evaluator",
+      "brand": "springboot",
+      "brandColor": "#6db33f",
+      "icon": "bell",
+      "title": "Alert Evaluator",
+      "meta": "VERSIONED RULE ENGINE",
+      "details": [
+        "threshold window · incident ledger",
+        "deduped notification intent"
+      ],
+      "accent": "orange",
+      "x": 1450,
+      "y": 1070,
+      "w": 300,
+      "h": 140
+    },
+    {
+      "id": "alert-topic",
+      "shape": "queue",
+      "brand": "apachekafka",
+      "brandColor": "#111827",
+      "icon": "queue",
+      "title": "Alert Dispatch",
+      "meta": "ANALYTICS.ALERT.V1",
+      "metaBelow": true,
+      "tubeHeight": 46,
+      "accent": "purple",
+      "x": 1780,
+      "y": 1110,
+      "w": 210,
+      "h": 68
+    },
+    {
+      "id": "platform-security",
+      "shape": "fabric",
+      "brand": "supabase",
+      "brandColor": "#3ecf8e",
+      "icon": "shield",
+      "title": "Identity + Policy",
+      "meta": "AUTH · RBAC · POLICY · CONFIRM",
+      "accent": "green",
+      "x": 180,
+      "y": 1370,
+      "w": 490,
+      "h": 62
+    },
+    {
+      "id": "platform-observability",
+      "shape": "fabric",
+      "brand": "grafana",
+      "brandColor": "#f46800",
+      "icon": "chart",
+      "title": "Observability",
+      "meta": "SLO · METRICS · TRACES · ALERTS",
+      "accent": "orange",
+      "x": 710,
+      "y": 1370,
+      "w": 490,
+      "h": 62
+    },
+    {
+      "id": "platform-recovery",
+      "shape": "fabric",
+      "brand": "apachekafka",
+      "brandColor": "#111827",
+      "icon": "retry",
+      "title": "Recovery + Replay",
+      "meta": "OUTBOX · IDEMPOTENCY · DLQ / REPLAY",
+      "accent": "purple",
+      "x": 1240,
+      "y": 1370,
+      "w": 490,
+      "h": 62
+    },
+    {
+      "id": "platform-cost",
+      "shape": "fabric",
+      "brand": "googlecloud",
+      "brandColor": "#4285f4",
+      "icon": "cloud",
+      "title": "Cost + Capacity",
+      "meta": "SCALE-TO-ZERO · BUDGET · QUOTAS",
+      "accent": "blue",
+      "x": 1770,
+      "y": 1370,
+      "w": 530,
+      "h": 62
+    }
+  ],
+  "edges": [
+    {
+      "from": "visitor",
+      "to": "portfolio-edge",
+      "kind": "primary",
+      "label": "HTTPS",
+      "routing": "smooth"
+    },
+    {
+      "from": "portfolio-edge",
+      "to": "agent-runtime",
+      "kind": "primary",
+      "label": "chat / SSE",
+      "routing": "smooth"
+    },
+    {
+      "from": "agent-runtime",
+      "to": "knowledge-service",
+      "kind": "sync",
+      "label": "hybrid query",
+      "routing": "smooth"
+    },
+    {
+      "from": "agent-runtime",
+      "to": "model-gateway",
+      "fromSide": "top",
+      "toSide": "top",
+      "kind": "primary",
+      "via": [
+        { "x": 1120, "y": 112 },
+        { "x": 1620, "y": 108 }
+      ],
+      "label": "generate",
+      "labelAt": { "x": 1370, "y": 108 },
+      "routing": "smooth"
+    },
+    {
+      "from": "agent-runtime",
+      "to": "mcp-gateway",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "kind": "sync",
+      "via": [
+        { "x": 1120, "y": 535 },
+        { "x": 1510, "y": 535 }
+      ],
+      "label": "tool call",
+      "labelAt": { "x": 1320, "y": 535 },
+      "routing": "smooth"
+    },
+    {
+      "from": "mcp-clients",
+      "to": "mcp-gateway",
+      "fromSide": "left",
+      "toSide": "right",
+      "kind": "primary",
+      "label": "Streamable HTTP",
+      "routing": "smooth"
+    },
+
+    {
+      "from": "operator",
+      "to": "content-control",
+      "kind": "primary",
+      "label": "admin API",
+      "routing": "smooth"
+    },
+    {
+      "from": "content-control",
+      "to": "search-topic",
+      "kind": "event",
+      "label": "outbox",
+      "routing": "smooth"
+    },
+    {
+      "from": "content-control",
+      "to": "rag-topic",
+      "kind": "event",
+      "label": "outbox",
+      "routing": "smooth"
+    },
+    {
+      "from": "search-topic",
+      "to": "projection-workers",
+      "kind": "event",
+      "label": "consume",
+      "routing": "smooth"
+    },
+    {
+      "from": "rag-topic",
+      "to": "projection-workers",
+      "kind": "event",
+      "routing": "smooth"
+    },
+    {
+      "from": "projection-workers",
+      "to": "knowledge-service",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "kind": "data",
+      "label": "projection refresh",
+      "labelAt": { "x": 1400, "y": 560 },
+      "routing": "smooth"
+    },
+    {
+      "from": "content-control",
+      "to": "notification-topic",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "kind": "event",
+      "via": [
+        { "x": 650, "y": 945 },
+        { "x": 1440, "y": 945 },
+        { "x": 1440, "y": 850 }
+      ],
+      "label": "article published",
+      "labelAt": { "x": 1120, "y": 945 },
+      "routing": "smooth"
+    },
+    {
+      "from": "notification-topic",
+      "to": "notification-service",
+      "kind": "event",
+      "label": "fan-out",
+      "labelAt": { "x": 1725, "y": 790 },
+      "routing": "smooth"
+    },
+    {
+      "from": "notification-service",
+      "to": "email-provider",
+      "kind": "primary",
+      "routing": "smooth"
+    },
+
+    {
+      "from": "portfolio-edge",
+      "to": "tracking-api",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "kind": "sync",
+      "via": [
+        { "x": 150, "y": 555 },
+        { "x": 150, "y": 1040 },
+        { "x": 175, "y": 1140 }
+      ],
+      "label": "/api/track",
+      "labelAt": { "x": 150, "y": 555 },
+      "routing": "smooth"
+    },
+    {
+      "from": "tracking-api",
+      "to": "analytics-topic",
+      "kind": "event",
+      "routing": "smooth"
+    },
+    {
+      "from": "analytics-topic",
+      "to": "analytics-aggregator",
+      "kind": "event",
+      "routing": "smooth"
+    },
+    {
+      "from": "analytics-aggregator",
+      "to": "alert-evaluator",
+      "kind": "data",
+      "routing": "smooth"
+    },
+    {
+      "from": "alert-evaluator",
+      "to": "alert-topic",
+      "kind": "event",
+      "routing": "smooth"
+    },
+    {
+      "from": "alert-topic",
+      "to": "notification-service",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "kind": "event",
+      "label": "alert intent",
+      "labelAt": { "x": 1990, "y": 975 },
+      "routing": "smooth"
+    }
+  ]
+}

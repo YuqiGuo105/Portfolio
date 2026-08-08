@@ -1,0 +1,676 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2500" height="1490" viewBox="0 0 2500 1490" role="img" aria-labelledby="title desc">
+  <title id="title">Portfolio Microservice Platform</title>
+  <desc id="desc">Workflow-oriented microservice architecture showing online AI serving, content projection, visitor intelligence, notification delivery, and explicit reliability semantics.</desc>
+  <defs>
+    <pattern id="grid-small" width="22" height="22" patternUnits="userSpaceOnUse">
+      <path d="M 22 0 L 0 0 0 22" fill="none" stroke="#d9e0e5" stroke-opacity=".42" stroke-width=".7"/>
+    </pattern>
+    <pattern id="grid" width="110" height="110" patternUnits="userSpaceOnUse">
+      <rect width="110" height="110" fill="url(#grid-small)"/>
+      <path d="M 110 0 L 0 0 0 110" fill="none" stroke="#c4ced5" stroke-opacity=".52" stroke-width="1"/>
+    </pattern>
+    <filter id="node-shadow" x="-12%" y="-12%" width="124%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#1f2d38" flood-opacity=".22"/>
+    </filter>
+    <marker id="arrow-primary" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#24313c"/></marker><marker id="arrow-sync" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#657482"/></marker><marker id="arrow-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1778a8"/></marker><marker id="arrow-event" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#7356a6"/></marker><marker id="arrow-recovery" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#b84b53"/></marker><marker id="arrow-return" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#16805e"/></marker>
+  </defs>
+  <style>
+    text { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #17212a; }
+    .diagram-title { font-size: 28px; font-weight: 750; }
+    .diagram-subtitle { font-size: 13px; fill: #5f6f7a; }
+    .diagram-summary { font-size: 10px; font-weight: 750; letter-spacing: 1.4px; fill: #5f6f7a; }
+    .lane-title { font-size: 12px; font-weight: 750; letter-spacing: 1.5px; fill: #5f6f7a; }
+    .lane-subtitle { font-size: 10px; fill: #7b8891; }
+    .node-title { font-size: 16px; font-weight: 740; }
+    .node-meta { font-size: 10px; font-weight: 700; letter-spacing: 1px; fill: #5f6f7a; }
+    .node-detail { font-size: 11px; fill: #5f6f7a; }
+    .cluster-member { font-size: 11px; font-weight: 660; fill: #17212a; }
+    .resource-title { font-size: 10px; font-weight: 700; fill: #17212a; }
+    .resource-meta { font-size: 8px; font-weight: 700; letter-spacing: .55px; fill: #5f6f7a; }
+    .queue-title { font-size: 14px; font-weight: 740; fill: #17212a; }
+    .queue-meta { font-size: 9px; font-weight: 700; letter-spacing: .8px; fill: #5f6f7a; }
+    .fabric-title { font-size: 12px; font-weight: 750; letter-spacing: .6px; fill: #17212a; }
+    .fabric-meta { font-size: 9.5px; font-weight: 700; letter-spacing: .8px; fill: #5f6f7a; }
+    .edge-label { font-size: 9.5px; font-weight: 600; fill: #5f6f7a; }
+    .callout-title { font-size: 13px; font-weight: 700; }
+    .legend { font-size: 10px; font-weight: 650; fill: #5f6f7a; }
+  </style>
+  <rect width="2500" height="1490" fill="#ffffff"/>
+  <rect width="2500" height="1490" fill="url(#grid)" opacity=".86"/>
+  <rect x="0" y="0" width="2500" height="92" fill="#ffffff" fill-opacity=".97"/>
+  <line x1="0" y1="92" x2="2500" y2="92" stroke="#cbd4da"/>
+  <circle cx="38" cy="31" r="6" fill="#14805e"/>
+  <text x="56" y="40" class="diagram-title">Portfolio Microservice Platform</text>
+  <text x="56" y="66" class="diagram-subtitle">C4 container view · independently deployable services · explicit API, event and state ownership</text>
+  <text x="2460" y="28" text-anchor="end" class="diagram-summary">11 RUNTIMES · 5 KAFKA TOPICS · 14 OWNED RESOURCES</text>
+  <g transform="translate(2080 45)">
+    <line x1="0" y1="7" x2="30" y2="7" stroke="#24313c" stroke-width="2"/>
+    <text x="38" y="11" class="legend">request</text>
+    <line x1="100" y1="7" x2="130" y2="7" stroke="#7356a6" stroke-width="1.8" stroke-dasharray="7 6"/>
+    <text x="138" y="11" class="legend">Kafka event</text>
+    <line x1="222" y1="7" x2="252" y2="7" stroke="#b84b53" stroke-width="1.7" stroke-dasharray="3 6"/>
+    <text x="260" y="11" class="legend">recovery / DLQ</text>
+  </g>
+  <g>
+    <rect x="140" y="115" width="2220" height="450" rx="8"
+      fill="#f2faf6" fill-opacity="0.035" stroke="#14805e"
+      stroke-opacity="0.28" stroke-width=".9"
+      />
+    <line x1="156" y1="132" x2="192" y2="132"
+      stroke="#14805e" stroke-width="2"/>
+    <text x="202" y="137" class="lane-title">01 · ONLINE AI SERVING</text>
+    <text x="156" y="160" class="lane-subtitle">HTTPS / SSE · policy · retrieval · model and tool execution</text>
+  </g><g>
+    <rect x="140" y="585" width="2220" height="385" rx="8"
+      fill="#fff9f0" fill-opacity="0.035" stroke="#b56b13"
+      stroke-opacity="0.28" stroke-width=".9"
+      />
+    <line x1="156" y1="602" x2="192" y2="602"
+      stroke="#b56b13" stroke-width="2"/>
+    <text x="202" y="607" class="lane-title">02 · CONTENT CONTROL + PROJECTIONS</text>
+    <text x="156" y="630" class="lane-subtitle">Transactional outbox · independent Kafka topics · idempotent read models</text>
+  </g><g>
+    <rect x="140" y="990" width="2220" height="300" rx="8"
+      fill="#f1fafb" fill-opacity="0.035" stroke="#087f95"
+      stroke-opacity="0.28" stroke-width=".9"
+      />
+    <line x1="156" y1="1007" x2="192" y2="1007"
+      stroke="#087f95" stroke-width="2"/>
+    <text x="202" y="1012" class="lane-title">03 · VISITOR INTELLIGENCE + ALERTING</text>
+    <text x="156" y="1035" class="lane-subtitle">First-party events · city-level enrichment · sessions · rollups · delivery intents</text>
+  </g><g>
+    <rect x="140" y="1305" width="2220" height="155" rx="8"
+      fill="#f7f9fa" fill-opacity="0.04" stroke="#435363"
+      stroke-opacity="0.3" stroke-width=".9"
+      />
+    <line x1="156" y1="1322" x2="192" y2="1322"
+      stroke="#435363" stroke-width="2"/>
+    <text x="202" y="1327" class="lane-title">04 · PLATFORM CONTROL PLANE</text>
+    <text x="156" y="1350" class="lane-subtitle">Cross-cutting governance · independent failure domains · no shared database</text>
+  </g>
+  <g><path d="M 125 311 C 148.1 311, 156.9 360, 180 360" fill="none" stroke="#24313c" stroke-width="2"
+      
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-primary)"/>
+      <g transform="translate(123.5 325.5)">
+    <rect width="58" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="29" y="14" text-anchor="middle" class="edge-label">HTTPS</text>
+  </g><path d="M 530 360 C 580.4 360, 599.6 285, 650 285" fill="none" stroke="#24313c" stroke-width="2"
+      
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-primary)"/>
+      <g transform="translate(552 312.5)">
+    <rect width="76" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="38" y="14" text-anchor="middle" class="edge-label">chat / SSE</text>
+  </g><path d="M 1080 285 C 1122 285, 1138 345, 1180 345" fill="none" stroke="#657482" stroke-width="1.65"
+      
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-sync)"/>
+      <g transform="translate(1085.8 305)">
+    <rect width="88.4" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="44.2" y="14" text-anchor="middle" class="edge-label">hybrid query</text>
+  </g><path d="M 865 145 C 907.5 139.5, 994.1666666666666 118.16666666666667, 1120 112 C 1245.8333333333333 105.83333333333333, 1490 103.33333333333333, 1620 108 C 1750 112.66666666666667, 1853.3333333333333 134.66666666666666, 1900 140" fill="none" stroke="#24313c" stroke-width="2"
+      
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-primary)"/>
+      <g transform="translate(1338.2 98)">
+    <rect width="63.6" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="31.8" y="14" text-anchor="middle" class="edge-label">generate</text>
+  </g><path d="M 865 425 C 907.5 443.3333333333333, 1012.5 516.6666666666666, 1120 535 C 1227.5 553.3333333333334, 1420 550.4166666666666, 1510 535 C 1600 519.5833333333334, 1635 457.9166666666667, 1660 442.5" fill="none" stroke="#657482" stroke-width="1.65"
+      
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-sync)"/>
+      <g transform="translate(1285.1 525)">
+    <rect width="69.80000000000001" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="34.900000000000006" y="14" text-anchor="middle" class="edge-label">tool call</text>
+  </g><path d="M 2320 466 C 2177.2 466, 2122.8 442.5, 1980 442.5" fill="none" stroke="#24313c" stroke-width="2"
+      
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-primary)"/>
+      <g transform="translate(2096.5 444.25)">
+    <rect width="107" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="53.5" y="14" text-anchor="middle" class="edge-label">Streamable HTTP</text>
+  </g><path d="M 125 771 C 148.1 771, 156.9 775, 180 775" fill="none" stroke="#24313c" stroke-width="2"
+      
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-primary)"/>
+      <g transform="translate(117.6 763)">
+    <rect width="69.80000000000001" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="34.900000000000006" y="14" text-anchor="middle" class="edge-label">admin API</text>
+  </g><path d="M 570 775 C 570 719.56, 660 698.44, 660 643" fill="none" stroke="#7356a6" stroke-width="1.8"
+      stroke-dasharray="7 6"
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+      <g transform="translate(586 699)">
+    <rect width="58" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="29" y="14" text-anchor="middle" class="edge-label">outbox</text>
+  </g><path d="M 570 775 C 607.8 775, 622.2 813, 660 813" fill="none" stroke="#7356a6" stroke-width="1.8"
+      stroke-dasharray="7 6"
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+      <g transform="translate(586 784)">
+    <rect width="58" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="29" y="14" text-anchor="middle" class="edge-label">outbox</text>
+  </g><path d="M 890 643 C 890 698.44, 1000 719.56, 1000 775" fill="none" stroke="#7356a6" stroke-width="1.8"
+      stroke-dasharray="7 6"
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+      <g transform="translate(916 699)">
+    <rect width="58" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="29" y="14" text-anchor="middle" class="edge-label">consume</text>
+  </g><path d="M 890 813 C 936.2 813, 953.8 775, 1000 775" fill="none" stroke="#7356a6" stroke-width="1.8"
+      stroke-dasharray="7 6"
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+      <path d="M 1210 650 C 1210 574.4, 1375 545.6, 1375 470" fill="none" stroke="#1778a8" stroke-width="1.7"
+      
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-data)"/>
+      <g transform="translate(1337.2 550)">
+    <rect width="125.60000000000001" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="62.800000000000004" y="14" text-anchor="middle" class="edge-label">projection refresh</text>
+  </g><path d="M 375 900 C 420.8333333333333 907.5, 472.5 937.5, 650 945 C 827.5 952.5, 1308.3333333333333 960.8333333333334, 1440 945 C 1571.6666666666667 929.1666666666666, 1441.6666666666667 873.6666666666666, 1440 850 C 1438.3333333333333 826.3333333333334, 1431.6666666666667 810.8333333333334, 1430 803" fill="none" stroke="#7356a6" stroke-width="1.8"
+      stroke-dasharray="7 6"
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+      <g transform="translate(1060.3 935)">
+    <rect width="119.4" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="59.7" y="14" text-anchor="middle" class="edge-label">article published</text>
+  </g><path d="M 1690 803 C 1719.4 803, 1730.6 760, 1760 760" fill="none" stroke="#7356a6" stroke-width="1.8"
+      stroke-dasharray="7 6"
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+      <g transform="translate(1696 780)">
+    <rect width="58" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="29" y="14" text-anchor="middle" class="edge-label">fan-out</text>
+  </g><path d="M 2160 760 C 2202 760, 2218 762.5, 2260 762.5" fill="none" stroke="#24313c" stroke-width="2"
+      
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-primary)"/>
+      <path d="M 355 485 C 320.8333333333333 496.6666666666667, 184.16666666666666 462.5, 150 555 C 115.83333333333334 647.5, 145.83333333333334 942.5, 150 1040 C 154.16666666666666 1137.5, 161.66666666666666 1123.3333333333333, 175 1140 C 188.33333333333334 1156.6666666666667, 220.83333333333334 1140, 230 1140" fill="none" stroke="#657482" stroke-width="1.65"
+      
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-sync)"/>
+      <g transform="translate(112 545)">
+    <rect width="76" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="38" y="14" text-anchor="middle" class="edge-label">/api/track</text>
+  </g><path d="M 530 1140 C 567.8 1140, 582.2 1133, 620 1133" fill="none" stroke="#7356a6" stroke-width="1.8"
+      stroke-dasharray="7 6"
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+      <path d="M 850 1133 C 892 1133, 908 1140, 950 1140" fill="none" stroke="#7356a6" stroke-width="1.8"
+      stroke-dasharray="7 6"
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+      <path d="M 1380 1140 C 1409.4 1140, 1420.6 1140, 1450 1140" fill="none" stroke="#1778a8" stroke-width="1.7"
+      
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-data)"/>
+      <path d="M 1750 1140 C 1762.6 1140, 1767.4 1133, 1780 1133" fill="none" stroke="#7356a6" stroke-width="1.8"
+      stroke-dasharray="7 6"
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+      <path d="M 1885 1110 C 1885 1017.6, 1960 982.4, 1960 890" fill="none" stroke="#7356a6" stroke-width="1.8"
+      stroke-dasharray="7 6"
+      stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+      <g transform="translate(1945.8 965)">
+    <rect width="88.4" height="20" rx="3" fill="#ffffff" fill-opacity=".96"
+      stroke="#cbd4da" stroke-opacity=".45"/>
+    <text x="44.2" y="14" text-anchor="middle" class="edge-label">alert intent</text>
+  </g></g>
+  <g><g>
+    <g transform="translate(46.5 257) scale(2.1666666666666665)" fill="none" stroke="#087f95" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M4.5 21c.8-5 3.3-7 7.5-7s6.7 2 7.5 7"/></g>
+    <text x="72.5" y="331" text-anchor="middle" class="node-title">Visitors</text>
+    <text x="72.5" y="351" text-anchor="middle" class="node-meta">WEB / MOBILE</text>
+  </g><g>
+    <g transform="translate(46.5 717) scale(2.1666666666666665)" fill="none" stroke="#b56b13" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M4.5 21c.8-5 3.3-7 7.5-7s6.7 2 7.5 7"/></g>
+    <text x="72.5" y="791" text-anchor="middle" class="node-title">Operator</text>
+    <text x="72.5" y="811" text-anchor="middle" class="node-meta">ADMIN</text>
+  </g><g>
+    <g transform="translate(2335 419) scale(1.5833333333333333)"><path fill="#111827" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></g><g transform="translate(2387 419) scale(1.5833333333333333)"><path fill="#4285f4" d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></g>
+    <text x="2380" y="486" text-anchor="middle" class="node-title">AI MCP Clients</text>
+    <text x="2380" y="506" text-anchor="middle" class="node-meta">OPENAI · GEMINI</text>
+  </g><g>
+    <rect x="180" y="235" width="350" height="250" rx="9" fill="#f3f8fc"
+      fill-opacity=".9" stroke="#1769aa" stroke-opacity=".72" stroke-width="1.25"
+      filter="url(#node-shadow)"/>
+    <rect x="180" y="235" width="6" height="250" rx="3" fill="#1769aa"/>
+    <g transform="translate(200 251) scale(1.5833333333333333)"><path fill="#111827" d="M18.665 21.978C16.758 23.255 14.465 24 12 24 5.377 24 0 18.623 0 12S5.377 0 12 0s12 5.377 12 12c0 3.583-1.574 6.801-4.067 9.001L9.219 7.2H7.2v9.596h1.615V9.251l9.85 12.727Zm-3.332-8.533 1.6 2.061V7.2h-1.6v6.245Z"/></g>
+    <text x="252" y="266" class="node-title">Portfolio Edge</text>
+    <text x="252" y="287" class="node-meta">NEXT.JS · VERCEL</text>
+    <line x1="200" y1="298" x2="510" y2="298"
+      stroke="#1769aa" stroke-opacity=".24"/>
+    <g>
+        <rect x="202" y="307" width="148" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#1769aa" stroke-opacity=".35"/>
+        <circle cx="216" cy="323" r="3.5" fill="#1769aa"/>
+        <text x="228" y="329" class="cluster-member">Public UI</text>
+      </g><g>
+        <rect x="360" y="307" width="148" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#1769aa" stroke-opacity=".35"/>
+        <circle cx="374" cy="323" r="3.5" fill="#1769aa"/>
+        <text x="386" y="329" class="cluster-member">Admin Console</text>
+      </g><g>
+        <rect x="202" y="348" width="148" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#1769aa" stroke-opacity=".35"/>
+        <circle cx="216" cy="364" r="3.5" fill="#1769aa"/>
+        <text x="228" y="370" class="cluster-member">API / BFF</text>
+      </g><g>
+        <rect x="360" y="348" width="148" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#1769aa" stroke-opacity=".35"/>
+        <circle cx="374" cy="364" r="3.5" fill="#1769aa"/>
+        <text x="386" y="370" class="cluster-member">Chat + Tracking</text>
+      </g>
+    <g>
+      <rect x="202" y="423" width="178.79999999999998" height="48" rx="5"
+        fill="#f2faf6" fill-opacity=".78" stroke="#14805e" stroke-opacity=".5"/>
+      <g transform="translate(212 435) scale(1)"><path fill="#3ecf8e" d="M11.9 1.036c-.015-.986-1.26-1.41-1.874-.637L.764 12.05C-.33 13.427.65 15.455 2.409 15.455h9.579l.113 7.51c.014.985 1.259 1.408 1.873.636l9.262-11.653c1.093-1.375.113-3.403-1.645-3.403h-9.642z"/></g>
+      <text x="244" y="442" class="resource-title">Identity</text>
+      <text x="244" y="459" class="resource-meta">SUPABASE AUTH</text>
+    </g><g>
+      <rect x="388.79999999999995" y="423" width="119.2" height="48" rx="5"
+        fill="#fdf5f5" fill-opacity=".78" stroke="#ba4a52" stroke-opacity=".5"/>
+      <g transform="translate(398.79999999999995 435) scale(1)"><path fill="#d82c20" d="M22.71 13.145c-1.66 2.092-3.452 4.483-7.038 4.483-3.203 0-4.397-2.825-4.48-5.12.701 1.484 2.073 2.685 4.214 2.63 4.117-.133 6.94-3.852 6.94-7.239 0-4.05-3.022-6.972-8.268-6.972-3.752 0-8.4 1.428-11.455 3.685C2.59 6.937 3.885 9.958 4.35 9.626c2.648-1.904 4.748-3.13 6.784-3.744C8.12 9.244.886 17.05 0 18.425c.1 1.261 1.66 4.648 2.424 4.648.232 0 .431-.133.664-.365a100.49 100.49 0 0 0 5.54-6.765c.222 3.104 1.748 6.898 6.014 6.898 3.819 0 7.604-2.756 9.33-8.965.2-.764-.73-1.361-1.261-.73zm-4.349-5.013c0 1.959-1.926 2.922-3.685 2.922-.941 0-1.664-.247-2.235-.568 1.051-1.592 2.092-3.225 3.21-4.973 1.972.334 2.71 1.43 2.71 2.619z"/></g>
+      <text x="430.79999999999995" y="442" class="resource-title">Session Cache</text>
+      <text x="430.79999999999995" y="459" class="resource-meta">VALKEY · TTL</text>
+    </g>
+  </g><g>
+    <rect x="650" y="145" width="430" height="280" rx="9" fill="#f2faf6"
+      fill-opacity=".9" stroke="#14805e" stroke-opacity=".72" stroke-width="1.25"
+      filter="url(#node-shadow)"/>
+    <rect x="650" y="145" width="6" height="280" rx="3" fill="#14805e"/>
+    <g transform="translate(670 161) scale(1.5833333333333333)"><path fill="#6db33f" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="722" y="176" class="node-title">Agent Runtime</text>
+    <text x="722" y="197" class="node-meta">CLOUD RUN · HTTP / SSE</text>
+    <line x1="670" y1="208" x2="1060" y2="208"
+      stroke="#14805e" stroke-opacity=".24"/>
+    <g>
+        <rect x="672" y="217" width="188" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#14805e" stroke-opacity=".35"/>
+        <circle cx="686" cy="233" r="3.5" fill="#14805e"/>
+        <text x="698" y="239" class="cluster-member">Safety + Planner</text>
+      </g><g>
+        <rect x="870" y="217" width="188" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#14805e" stroke-opacity=".35"/>
+        <circle cx="884" cy="233" r="3.5" fill="#14805e"/>
+        <text x="896" y="239" class="cluster-member">Streaming</text>
+      </g><g>
+        <rect x="672" y="258" width="188" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#14805e" stroke-opacity=".35"/>
+        <circle cx="686" cy="274" r="3.5" fill="#14805e"/>
+        <text x="698" y="280" class="cluster-member">Retrieval Orchestration</text>
+      </g><g>
+        <rect x="870" y="258" width="188" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#14805e" stroke-opacity=".35"/>
+        <circle cx="884" cy="274" r="3.5" fill="#14805e"/>
+        <text x="896" y="280" class="cluster-member">Tool Execution</text>
+      </g>
+    <g>
+      <rect x="672" y="363" width="142.30769230769232" height="48" rx="5"
+        fill="#fdf5f5" fill-opacity=".78" stroke="#ba4a52" stroke-opacity=".5"/>
+      <g transform="translate(682 375) scale(1)"><path fill="#d82c20" d="M22.71 13.145c-1.66 2.092-3.452 4.483-7.038 4.483-3.203 0-4.397-2.825-4.48-5.12.701 1.484 2.073 2.685 4.214 2.63 4.117-.133 6.94-3.852 6.94-7.239 0-4.05-3.022-6.972-8.268-6.972-3.752 0-8.4 1.428-11.455 3.685C2.59 6.937 3.885 9.958 4.35 9.626c2.648-1.904 4.748-3.13 6.784-3.744C8.12 9.244.886 17.05 0 18.425c.1 1.261 1.66 4.648 2.424 4.648.232 0 .431-.133.664-.365a100.49 100.49 0 0 0 5.54-6.765c.222 3.104 1.748 6.898 6.014 6.898 3.819 0 7.604-2.756 9.33-8.965.2-.764-.73-1.361-1.261-.73zm-4.349-5.013c0 1.959-1.926 2.922-3.685 2.922-.941 0-1.664-.247-2.235-.568 1.051-1.592 2.092-3.225 3.21-4.973 1.972.334 2.71 1.43 2.71 2.619z"/></g>
+      <text x="714" y="382" class="resource-title">Conversation</text>
+      <text x="714" y="399" class="resource-meta">REDIS · 30M TTL</text>
+    </g><g>
+      <rect x="822.3076923076924" y="363" width="113.84615384615385" height="48" rx="5"
+        fill="#f3f8fc" fill-opacity=".78" stroke="#1769aa" stroke-opacity=".5"/>
+      <g transform="translate(832.3076923076924 375) scale(1)"><path fill="#336791" d="M23.5594 14.7228a.5269.5269 0 0 0-.0563-.1191c-.139-.2632-.4768-.3418-1.0074-.2321-1.6533.3411-2.2935.1312-2.5256-.0191 1.342-2.0482 2.445-4.522 3.0411-6.8297.2714-1.0507.7982-3.5237.1222-4.7316a1.5641 1.5641 0 0 0-.1509-.235C21.6931.9086 19.8007.0248 17.5099.0005c-1.4947-.0158-2.7705.3461-3.1161.4794a9.449 9.449 0 0 0-.5159-.0816 8.044 8.044 0 0 0-1.3114-.1278c-1.1822-.0184-2.2038.2642-3.0498.8406-.8573-.3211-4.7888-1.645-7.2219.0788C.9359 2.1526.3086 3.8733.4302 6.3043c.0409.818.5069 3.334 1.2423 5.7436.4598 1.5065.9387 2.7019 1.4334 3.582.553.9942 1.1259 1.5933 1.7143 1.7895.4474.1491 1.1327.1441 1.8581-.7279.8012-.9635 1.5903-1.8258 1.9446-2.2069.4351.2355.9064.3625 1.39.3772a.0569.0569 0 0 0 .0004.0041 11.0312 11.0312 0 0 0-.2472.3054c-.3389.4302-.4094.5197-1.5002.7443-.3102.064-1.1344.2339-1.1464.8115-.0025.1224.0329.2309.0919.3268.2269.4231.9216.6097 1.015.6331 1.3345.3335 2.5044.092 3.3714-.6787-.017 2.231.0775 4.4174.3454 5.0874.2212.5529.7618 1.9045 2.4692 1.9043.2505 0 .5263-.0291.8296-.0941 1.7819-.3821 2.5557-1.1696 2.855-2.9059.1503-.8707.4016-2.8753.5388-4.1012.0169-.0703.0357-.1207.057-.1362.0007-.0005.0697-.0471.4272.0307a.3673.3673 0 0 0 .0443.0068l.2539.0223.0149.001c.8468.0384 1.9114-.1426 2.5312-.4308.6438-.2988 1.8057-1.0323 1.5951-1.6698zM2.371 11.8765c-.7435-2.4358-1.1779-4.8851-1.2123-5.5719-.1086-2.1714.4171-3.6829 1.5623-4.4927 1.8367-1.2986 4.8398-.5408 6.108-.13-.0032.0032-.0066.0061-.0098.0094-2.0238 2.044-1.9758 5.536-1.9708 5.7495-.0002.0823.0066.1989.0162.3593.0348.5873.0996 1.6804-.0735 2.9184-.1609 1.1504.1937 2.2764.9728 3.0892.0806.0841.1648.1631.2518.2374-.3468.3714-1.1004 1.1926-1.9025 2.1576-.5677.6825-.9597.5517-1.0886.5087-.3919-.1307-.813-.5871-1.2381-1.3223-.4796-.839-.9635-2.0317-1.4155-3.5126zm6.0072 5.0871c-.1711-.0428-.3271-.1132-.4322-.1772.0889-.0394.2374-.0902.4833-.1409 1.2833-.2641 1.4815-.4506 1.9143-1.0002.0992-.126.2116-.2687.3673-.4426a.3549.3549 0 0 0 .0737-.1298c.1708-.1513.2724-.1099.4369-.0417.156.0646.3078.26.3695.4752.0291.1016.0619.2945-.0452.4444-.9043 1.2658-2.2216 1.2494-3.1676 1.0128zm2.094-3.988-.0525.141c-.133.3566-.2567.6881-.3334 1.003-.6674-.0021-1.3168-.2872-1.8105-.8024-.6279-.6551-.9131-1.5664-.7825-2.5004.1828-1.3079.1153-2.4468.079-3.0586-.005-.0857-.0095-.1607-.0122-.2199.2957-.2621 1.6659-.9962 2.6429-.7724.4459.1022.7176.4057.8305.928.5846 2.7038.0774 3.8307-.3302 4.7363-.084.1866-.1633.3629-.2311.5454zm7.3637 4.5725c-.0169.1768-.0358.376-.0618.5959l-.146.4383a.3547.3547 0 0 0-.0182.1077c-.0059.4747-.054.6489-.115.8693-.0634.2292-.1353.4891-.1794 1.0575-.11 1.4143-.8782 2.2267-2.4172 2.5565-1.5155.3251-1.7843-.4968-2.0212-1.2217a6.5824 6.5824 0 0 0-.0769-.2266c-.2154-.5858-.1911-1.4119-.1574-2.5551.0165-.5612-.0249-1.9013-.3302-2.6462.0044-.2932.0106-.5909.019-.8918a.3529.3529 0 0 0-.0153-.1126 1.4927 1.4927 0 0 0-.0439-.208c-.1226-.4283-.4213-.7866-.7797-.9351-.1424-.059-.4038-.1672-.7178-.0869.067-.276.1831-.5875.309-.9249l.0529-.142c.0595-.16.134-.3257.213-.5012.4265-.9476 1.0106-2.2453.3766-5.1772-.2374-1.0981-1.0304-1.6343-2.2324-1.5098-.7207.0746-1.3799.3654-1.7088.5321a5.6716 5.6716 0 0 0-.1958.1041c.0918-1.1064.4386-3.1741 1.7357-4.4823a4.0306 4.0306 0 0 1 .3033-.276.3532.3532 0 0 0 .1447-.0644c.7524-.5706 1.6945-.8506 2.802-.8325.4091.0067.8017.0339 1.1742.081 1.939.3544 3.2439 1.4468 4.0359 2.3827.8143.9623 1.2552 1.9315 1.4312 2.4543-1.3232-.1346-2.2234.1268-2.6797.779-.9926 1.4189.543 4.1729 1.2811 5.4964.1353.2426.2522.4522.2889.5413.2403.5825.5515.9713.7787 1.2552.0696.087.1372.1714.1885.245-.4008.1155-1.1208.3825-1.0552 1.717-.0123.1563-.0423.4469-.0834.8148-.0461.2077-.0702.4603-.0994.7662zm.8905-1.6211c-.0405-.8316.2691-.9185.5967-1.0105a2.8566 2.8566 0 0 0 .135-.0406 1.202 1.202 0 0 0 .1342.103c.5703.3765 1.5823.4213 3.0068.1344-.2016.1769-.5189.3994-.9533.6011-.4098.1903-1.0957.333-1.7473.3636-.7197.0336-1.0859-.0807-1.1721-.151zm.5695-9.2712c-.0059.3508-.0542.6692-.1054 1.0017-.055.3576-.112.7274-.1264 1.1762-.0142.4368.0404.8909.0932 1.3301.1066.887.216 1.8003-.2075 2.7014a3.5272 3.5272 0 0 1-.1876-.3856c-.0527-.1276-.1669-.3326-.3251-.6162-.6156-1.1041-2.0574-3.6896-1.3193-4.7446.3795-.5427 1.3408-.5661 2.1781-.463zm.2284 7.0137a12.3762 12.3762 0 0 0-.0853-.1074l-.0355-.0444c.7262-1.1995.5842-2.3862.4578-3.4385-.0519-.4318-.1009-.8396-.0885-1.2226.0129-.4061.0666-.7543.1185-1.0911.0639-.415.1288-.8443.1109-1.3505.0134-.0531.0188-.1158.0118-.1902-.0457-.4855-.5999-1.938-1.7294-3.253-.6076-.7073-1.4896-1.4972-2.6889-2.0395.5251-.1066 1.2328-.2035 2.0244-.1859 2.0515.0456 3.6746.8135 4.8242 2.2824a.908.908 0 0 1 .0667.1002c.7231 1.3556-.2762 6.2751-2.9867 10.5405zm-8.8166-6.1162c-.025.1794-.3089.4225-.6211.4225a.5821.5821 0 0 1-.0809-.0056c-.1873-.026-.3765-.144-.5059-.3156-.0458-.0605-.1203-.178-.1055-.2844.0055-.0401.0261-.0985.0925-.1488.1182-.0894.3518-.1226.6096-.0867.3163.0441.6426.1938.6113.4186zm7.9305-.4114c.0111.0792-.049.201-.1531.3102-.0683.0717-.212.1961-.4079.2232a.5456.5456 0 0 1-.075.0052c-.2935 0-.5414-.2344-.5607-.3717-.024-.1765.2641-.3106.5611-.352.297-.0414.6111.0088.6356.1851z"/></g>
+      <text x="864.3076923076924" y="382" class="resource-title">Run Store</text>
+      <text x="864.3076923076924" y="399" class="resource-meta">POSTGRES</text>
+    </g><g>
+      <rect x="944.1538461538462" y="363" width="113.84615384615385" height="48" rx="5"
+        fill="#f1fafb" fill-opacity=".78" stroke="#087f95" stroke-opacity=".5"/>
+      <g transform="translate(954.1538461538462 375) scale(0.75)">
+  
+  <g fill="none" fill-rule="evenodd" transform="translate(2)">
+    <path fill="#1A1C21" d="M0 16c0 1.384.194 2.72.524 4H20a4 4 0 100-8H.524A16.07 16.07 0 000 16"/>
+    <path fill="#FEC514" d="M26.924 7.662A16.1 16.1 0 0028.48 6 15.958 15.958 0 0016 0C9.679 0 4.239 3.678 1.644 9H23.51c1.267 0 2.484-.481 3.414-1.338"/>
+    <path fill="#00BFB3" d="M23.511 23H1.644A15.994 15.994 0 0016 32a15.958 15.958 0 0012.48-6 16.1 16.1 0 00-1.556-1.662A5.046 5.046 0 0023.511 23"/>
+  </g>
+</g>
+      <text x="986.1538461538462" y="382" class="resource-title">Trace Index</text>
+      <text x="986.1538461538462" y="399" class="resource-meta">OPENSEARCH</text>
+    </g>
+  </g><g>
+    <rect x="1180" y="220" width="390" height="250" rx="9" fill="#f1fafb"
+      fill-opacity=".9" stroke="#087f95" stroke-opacity=".72" stroke-width="1.25"
+      filter="url(#node-shadow)"/>
+    <rect x="1180" y="220" width="6" height="250" rx="3" fill="#087f95"/>
+    <g transform="translate(1200 236) scale(1.5833333333333333)"><path fill="#6db33f" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="1252" y="251" class="node-title">Knowledge Service</text>
+    <text x="1252" y="272" class="node-meta">CLOUD RUN · HYBRID RETRIEVAL</text>
+    <line x1="1200" y1="283" x2="1550" y2="283"
+      stroke="#087f95" stroke-opacity=".24"/>
+    <g>
+        <rect x="1202" y="292" width="168" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#087f95" stroke-opacity=".35"/>
+        <circle cx="1216" cy="308" r="3.5" fill="#087f95"/>
+        <text x="1228" y="314" class="cluster-member">BM25 Search</text>
+      </g><g>
+        <rect x="1380" y="292" width="168" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#087f95" stroke-opacity=".35"/>
+        <circle cx="1394" cy="308" r="3.5" fill="#087f95"/>
+        <text x="1406" y="314" class="cluster-member">Vector Search</text>
+      </g><g>
+        <rect x="1202" y="333" width="168" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#087f95" stroke-opacity=".35"/>
+        <circle cx="1216" cy="349" r="3.5" fill="#087f95"/>
+        <text x="1228" y="355" class="cluster-member">RRF Fusion</text>
+      </g><g>
+        <rect x="1380" y="333" width="168" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#087f95" stroke-opacity=".35"/>
+        <circle cx="1394" cy="349" r="3.5" fill="#087f95"/>
+        <text x="1406" y="355" class="cluster-member">Canonical Links</text>
+      </g>
+    <g>
+      <rect x="1202" y="408" width="169" height="48" rx="5"
+        fill="#f1fafb" fill-opacity=".78" stroke="#087f95" stroke-opacity=".5"/>
+      <g transform="translate(1212 420) scale(0.75)">
+  
+  <g fill="none" fill-rule="evenodd" transform="translate(2)">
+    <path fill="#1A1C21" d="M0 16c0 1.384.194 2.72.524 4H20a4 4 0 100-8H.524A16.07 16.07 0 000 16"/>
+    <path fill="#FEC514" d="M26.924 7.662A16.1 16.1 0 0028.48 6 15.958 15.958 0 0016 0C9.679 0 4.239 3.678 1.644 9H23.51c1.267 0 2.484-.481 3.414-1.338"/>
+    <path fill="#00BFB3" d="M23.511 23H1.644A15.994 15.994 0 0016 32a15.958 15.958 0 0012.48-6 16.1 16.1 0 00-1.556-1.662A5.046 5.046 0 0023.511 23"/>
+  </g>
+</g>
+      <text x="1244" y="427" class="resource-title">Search Index</text>
+      <text x="1244" y="444" class="resource-meta">OPENSEARCH</text>
+    </g><g>
+      <rect x="1379" y="408" width="169" height="48" rx="5"
+        fill="#f8f5fb" fill-opacity=".78" stroke="#7255a5" stroke-opacity=".5"/>
+      <g transform="translate(1389 420) scale(1)"><path fill="#336791" d="M23.5594 14.7228a.5269.5269 0 0 0-.0563-.1191c-.139-.2632-.4768-.3418-1.0074-.2321-1.6533.3411-2.2935.1312-2.5256-.0191 1.342-2.0482 2.445-4.522 3.0411-6.8297.2714-1.0507.7982-3.5237.1222-4.7316a1.5641 1.5641 0 0 0-.1509-.235C21.6931.9086 19.8007.0248 17.5099.0005c-1.4947-.0158-2.7705.3461-3.1161.4794a9.449 9.449 0 0 0-.5159-.0816 8.044 8.044 0 0 0-1.3114-.1278c-1.1822-.0184-2.2038.2642-3.0498.8406-.8573-.3211-4.7888-1.645-7.2219.0788C.9359 2.1526.3086 3.8733.4302 6.3043c.0409.818.5069 3.334 1.2423 5.7436.4598 1.5065.9387 2.7019 1.4334 3.582.553.9942 1.1259 1.5933 1.7143 1.7895.4474.1491 1.1327.1441 1.8581-.7279.8012-.9635 1.5903-1.8258 1.9446-2.2069.4351.2355.9064.3625 1.39.3772a.0569.0569 0 0 0 .0004.0041 11.0312 11.0312 0 0 0-.2472.3054c-.3389.4302-.4094.5197-1.5002.7443-.3102.064-1.1344.2339-1.1464.8115-.0025.1224.0329.2309.0919.3268.2269.4231.9216.6097 1.015.6331 1.3345.3335 2.5044.092 3.3714-.6787-.017 2.231.0775 4.4174.3454 5.0874.2212.5529.7618 1.9045 2.4692 1.9043.2505 0 .5263-.0291.8296-.0941 1.7819-.3821 2.5557-1.1696 2.855-2.9059.1503-.8707.4016-2.8753.5388-4.1012.0169-.0703.0357-.1207.057-.1362.0007-.0005.0697-.0471.4272.0307a.3673.3673 0 0 0 .0443.0068l.2539.0223.0149.001c.8468.0384 1.9114-.1426 2.5312-.4308.6438-.2988 1.8057-1.0323 1.5951-1.6698zM2.371 11.8765c-.7435-2.4358-1.1779-4.8851-1.2123-5.5719-.1086-2.1714.4171-3.6829 1.5623-4.4927 1.8367-1.2986 4.8398-.5408 6.108-.13-.0032.0032-.0066.0061-.0098.0094-2.0238 2.044-1.9758 5.536-1.9708 5.7495-.0002.0823.0066.1989.0162.3593.0348.5873.0996 1.6804-.0735 2.9184-.1609 1.1504.1937 2.2764.9728 3.0892.0806.0841.1648.1631.2518.2374-.3468.3714-1.1004 1.1926-1.9025 2.1576-.5677.6825-.9597.5517-1.0886.5087-.3919-.1307-.813-.5871-1.2381-1.3223-.4796-.839-.9635-2.0317-1.4155-3.5126zm6.0072 5.0871c-.1711-.0428-.3271-.1132-.4322-.1772.0889-.0394.2374-.0902.4833-.1409 1.2833-.2641 1.4815-.4506 1.9143-1.0002.0992-.126.2116-.2687.3673-.4426a.3549.3549 0 0 0 .0737-.1298c.1708-.1513.2724-.1099.4369-.0417.156.0646.3078.26.3695.4752.0291.1016.0619.2945-.0452.4444-.9043 1.2658-2.2216 1.2494-3.1676 1.0128zm2.094-3.988-.0525.141c-.133.3566-.2567.6881-.3334 1.003-.6674-.0021-1.3168-.2872-1.8105-.8024-.6279-.6551-.9131-1.5664-.7825-2.5004.1828-1.3079.1153-2.4468.079-3.0586-.005-.0857-.0095-.1607-.0122-.2199.2957-.2621 1.6659-.9962 2.6429-.7724.4459.1022.7176.4057.8305.928.5846 2.7038.0774 3.8307-.3302 4.7363-.084.1866-.1633.3629-.2311.5454zm7.3637 4.5725c-.0169.1768-.0358.376-.0618.5959l-.146.4383a.3547.3547 0 0 0-.0182.1077c-.0059.4747-.054.6489-.115.8693-.0634.2292-.1353.4891-.1794 1.0575-.11 1.4143-.8782 2.2267-2.4172 2.5565-1.5155.3251-1.7843-.4968-2.0212-1.2217a6.5824 6.5824 0 0 0-.0769-.2266c-.2154-.5858-.1911-1.4119-.1574-2.5551.0165-.5612-.0249-1.9013-.3302-2.6462.0044-.2932.0106-.5909.019-.8918a.3529.3529 0 0 0-.0153-.1126 1.4927 1.4927 0 0 0-.0439-.208c-.1226-.4283-.4213-.7866-.7797-.9351-.1424-.059-.4038-.1672-.7178-.0869.067-.276.1831-.5875.309-.9249l.0529-.142c.0595-.16.134-.3257.213-.5012.4265-.9476 1.0106-2.2453.3766-5.1772-.2374-1.0981-1.0304-1.6343-2.2324-1.5098-.7207.0746-1.3799.3654-1.7088.5321a5.6716 5.6716 0 0 0-.1958.1041c.0918-1.1064.4386-3.1741 1.7357-4.4823a4.0306 4.0306 0 0 1 .3033-.276.3532.3532 0 0 0 .1447-.0644c.7524-.5706 1.6945-.8506 2.802-.8325.4091.0067.8017.0339 1.1742.081 1.939.3544 3.2439 1.4468 4.0359 2.3827.8143.9623 1.2552 1.9315 1.4312 2.4543-1.3232-.1346-2.2234.1268-2.6797.779-.9926 1.4189.543 4.1729 1.2811 5.4964.1353.2426.2522.4522.2889.5413.2403.5825.5515.9713.7787 1.2552.0696.087.1372.1714.1885.245-.4008.1155-1.1208.3825-1.0552 1.717-.0123.1563-.0423.4469-.0834.8148-.0461.2077-.0702.4603-.0994.7662zm.8905-1.6211c-.0405-.8316.2691-.9185.5967-1.0105a2.8566 2.8566 0 0 0 .135-.0406 1.202 1.202 0 0 0 .1342.103c.5703.3765 1.5823.4213 3.0068.1344-.2016.1769-.5189.3994-.9533.6011-.4098.1903-1.0957.333-1.7473.3636-.7197.0336-1.0859-.0807-1.1721-.151zm.5695-9.2712c-.0059.3508-.0542.6692-.1054 1.0017-.055.3576-.112.7274-.1264 1.1762-.0142.4368.0404.8909.0932 1.3301.1066.887.216 1.8003-.2075 2.7014a3.5272 3.5272 0 0 1-.1876-.3856c-.0527-.1276-.1669-.3326-.3251-.6162-.6156-1.1041-2.0574-3.6896-1.3193-4.7446.3795-.5427 1.3408-.5661 2.1781-.463zm.2284 7.0137a12.3762 12.3762 0 0 0-.0853-.1074l-.0355-.0444c.7262-1.1995.5842-2.3862.4578-3.4385-.0519-.4318-.1009-.8396-.0885-1.2226.0129-.4061.0666-.7543.1185-1.0911.0639-.415.1288-.8443.1109-1.3505.0134-.0531.0188-.1158.0118-.1902-.0457-.4855-.5999-1.938-1.7294-3.253-.6076-.7073-1.4896-1.4972-2.6889-2.0395.5251-.1066 1.2328-.2035 2.0244-.1859 2.0515.0456 3.6746.8135 4.8242 2.2824a.908.908 0 0 1 .0667.1002c.7231 1.3556-.2762 6.2751-2.9867 10.5405zm-8.8166-6.1162c-.025.1794-.3089.4225-.6211.4225a.5821.5821 0 0 1-.0809-.0056c-.1873-.026-.3765-.144-.5059-.3156-.0458-.0605-.1203-.178-.1055-.2844.0055-.0401.0261-.0985.0925-.1488.1182-.0894.3518-.1226.6096-.0867.3163.0441.6426.1938.6113.4186zm7.9305-.4114c.0111.0792-.049.201-.1531.3102-.0683.0717-.212.1961-.4079.2232a.5456.5456 0 0 1-.075.0052c-.2935 0-.5414-.2344-.5607-.3717-.024-.1765.2641-.3106.5611-.352.297-.0414.6111.0088.6356.1851z"/></g>
+      <text x="1421" y="427" class="resource-title">Vectors</text>
+      <text x="1421" y="444" class="resource-meta">PGVECTOR</text>
+    </g>
+  </g><g>
+    <rect x="1750" y="140" width="300" height="120" rx="7" fill="#ffffff"
+      stroke="#596873" stroke-width="1.2" filter="url(#node-shadow)"/>
+    <rect x="1750" y="140" width="5" height="120" rx="2.5" fill="#1769aa"/>
+    <g transform="translate(1770 158) scale(1.5)"><path fill="#4285f4" d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></g>
+    <text x="1820" y="172" class="node-title">Model Gateway</text>
+    <text x="1820" y="192" class="node-meta">GEMINI · FALLBACK</text>
+    <text x="1772" y="222" class="node-detail">generation · safety · embeddings</text>
+  </g><g>
+    <rect x="1660" y="380" width="320" height="125" rx="7" fill="#ffffff"
+      stroke="#596873" stroke-width="1.2" filter="url(#node-shadow)"/>
+    <rect x="1660" y="380" width="5" height="125" rx="2.5" fill="#7255a5"/>
+    <g transform="translate(1680 398) scale(1.5)"><path fill="#7255a5" d="M13.85 0a4.16 4.16 0 0 0-2.95 1.217L1.456 10.66a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l9.442-9.442a2.49 2.49 0 0 1 3.541 0 2.49 2.49 0 0 1 0 3.541L8.59 12.97l-.1.1a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l.1-.098 7.03-7.034a2.49 2.49 0 0 1 3.542 0l.049.05a2.49 2.49 0 0 1 0 3.54l-8.54 8.54a1.96 1.96 0 0 0 0 2.755l1.753 1.753a.835.835 0 0 0 1.18 0 .835.835 0 0 0 0-1.18l-1.753-1.753a.266.266 0 0 1 0-.394l8.54-8.54a4.185 4.185 0 0 0 0-5.9l-.05-.05a4.16 4.16 0 0 0-2.95-1.218c-.2 0-.401.02-.6.048a4.17 4.17 0 0 0-1.17-3.552A4.16 4.16 0 0 0 13.85 0m0 3.333a.84.84 0 0 0-.59.245L6.275 10.56a4.186 4.186 0 0 0 0 5.902 4.186 4.186 0 0 0 5.902 0L19.16 9.48a.835.835 0 0 0 0-1.18.835.835 0 0 0-1.18 0l-6.985 6.984a2.49 2.49 0 0 1-3.54 0 2.49 2.49 0 0 1 0-3.54l6.983-6.985a.835.835 0 0 0 0-1.18.84.84 0 0 0-.59-.245"/></g>
+    <text x="1730" y="412" class="node-title">MCP Tool Gateway</text>
+    <text x="1730" y="432" class="node-meta">STREAMABLE HTTP · RBAC</text>
+    <text x="1682" y="462" class="node-detail">confirmation · idempotent adapters</text><text x="1682" y="481" class="node-detail">content · analytics · subscription</text>
+  </g><g>
+    <rect x="180" y="650" width="390" height="250" rx="9" fill="#fff9f0"
+      fill-opacity=".9" stroke="#b56b13" stroke-opacity=".72" stroke-width="1.25"
+      filter="url(#node-shadow)"/>
+    <rect x="180" y="650" width="6" height="250" rx="3" fill="#b56b13"/>
+    <g transform="translate(200 666) scale(1.5833333333333333)"><path fill="#6db33f" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="252" y="681" class="node-title">Content Control Service</text>
+    <text x="252" y="702" class="node-meta">CLOUD RUN · HTTP</text>
+    <line x1="200" y1="713" x2="550" y2="713"
+      stroke="#b56b13" stroke-opacity=".24"/>
+    <g>
+        <rect x="202" y="722" width="168" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#b56b13" stroke-opacity=".35"/>
+        <circle cx="216" cy="738" r="3.5" fill="#b56b13"/>
+        <text x="228" y="744" class="cluster-member">CRUD + Versioning</text>
+      </g><g>
+        <rect x="380" y="722" width="168" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#b56b13" stroke-opacity=".35"/>
+        <circle cx="394" cy="738" r="3.5" fill="#b56b13"/>
+        <text x="406" y="744" class="cluster-member">Audit</text>
+      </g><g>
+        <rect x="202" y="763" width="168" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#b56b13" stroke-opacity=".35"/>
+        <circle cx="216" cy="779" r="3.5" fill="#b56b13"/>
+        <text x="228" y="785" class="cluster-member">Durable Jobs</text>
+      </g><g>
+        <rect x="380" y="763" width="168" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#b56b13" stroke-opacity=".35"/>
+        <circle cx="394" cy="779" r="3.5" fill="#b56b13"/>
+        <text x="406" y="785" class="cluster-member">Outbox Relay</text>
+      </g>
+    <g>
+      <rect x="202" y="838" width="346" height="48" rx="5"
+        fill="#f3f8fc" fill-opacity=".78" stroke="#1769aa" stroke-opacity=".5"/>
+      <g transform="translate(212 850) scale(1)"><path fill="#336791" d="M23.5594 14.7228a.5269.5269 0 0 0-.0563-.1191c-.139-.2632-.4768-.3418-1.0074-.2321-1.6533.3411-2.2935.1312-2.5256-.0191 1.342-2.0482 2.445-4.522 3.0411-6.8297.2714-1.0507.7982-3.5237.1222-4.7316a1.5641 1.5641 0 0 0-.1509-.235C21.6931.9086 19.8007.0248 17.5099.0005c-1.4947-.0158-2.7705.3461-3.1161.4794a9.449 9.449 0 0 0-.5159-.0816 8.044 8.044 0 0 0-1.3114-.1278c-1.1822-.0184-2.2038.2642-3.0498.8406-.8573-.3211-4.7888-1.645-7.2219.0788C.9359 2.1526.3086 3.8733.4302 6.3043c.0409.818.5069 3.334 1.2423 5.7436.4598 1.5065.9387 2.7019 1.4334 3.582.553.9942 1.1259 1.5933 1.7143 1.7895.4474.1491 1.1327.1441 1.8581-.7279.8012-.9635 1.5903-1.8258 1.9446-2.2069.4351.2355.9064.3625 1.39.3772a.0569.0569 0 0 0 .0004.0041 11.0312 11.0312 0 0 0-.2472.3054c-.3389.4302-.4094.5197-1.5002.7443-.3102.064-1.1344.2339-1.1464.8115-.0025.1224.0329.2309.0919.3268.2269.4231.9216.6097 1.015.6331 1.3345.3335 2.5044.092 3.3714-.6787-.017 2.231.0775 4.4174.3454 5.0874.2212.5529.7618 1.9045 2.4692 1.9043.2505 0 .5263-.0291.8296-.0941 1.7819-.3821 2.5557-1.1696 2.855-2.9059.1503-.8707.4016-2.8753.5388-4.1012.0169-.0703.0357-.1207.057-.1362.0007-.0005.0697-.0471.4272.0307a.3673.3673 0 0 0 .0443.0068l.2539.0223.0149.001c.8468.0384 1.9114-.1426 2.5312-.4308.6438-.2988 1.8057-1.0323 1.5951-1.6698zM2.371 11.8765c-.7435-2.4358-1.1779-4.8851-1.2123-5.5719-.1086-2.1714.4171-3.6829 1.5623-4.4927 1.8367-1.2986 4.8398-.5408 6.108-.13-.0032.0032-.0066.0061-.0098.0094-2.0238 2.044-1.9758 5.536-1.9708 5.7495-.0002.0823.0066.1989.0162.3593.0348.5873.0996 1.6804-.0735 2.9184-.1609 1.1504.1937 2.2764.9728 3.0892.0806.0841.1648.1631.2518.2374-.3468.3714-1.1004 1.1926-1.9025 2.1576-.5677.6825-.9597.5517-1.0886.5087-.3919-.1307-.813-.5871-1.2381-1.3223-.4796-.839-.9635-2.0317-1.4155-3.5126zm6.0072 5.0871c-.1711-.0428-.3271-.1132-.4322-.1772.0889-.0394.2374-.0902.4833-.1409 1.2833-.2641 1.4815-.4506 1.9143-1.0002.0992-.126.2116-.2687.3673-.4426a.3549.3549 0 0 0 .0737-.1298c.1708-.1513.2724-.1099.4369-.0417.156.0646.3078.26.3695.4752.0291.1016.0619.2945-.0452.4444-.9043 1.2658-2.2216 1.2494-3.1676 1.0128zm2.094-3.988-.0525.141c-.133.3566-.2567.6881-.3334 1.003-.6674-.0021-1.3168-.2872-1.8105-.8024-.6279-.6551-.9131-1.5664-.7825-2.5004.1828-1.3079.1153-2.4468.079-3.0586-.005-.0857-.0095-.1607-.0122-.2199.2957-.2621 1.6659-.9962 2.6429-.7724.4459.1022.7176.4057.8305.928.5846 2.7038.0774 3.8307-.3302 4.7363-.084.1866-.1633.3629-.2311.5454zm7.3637 4.5725c-.0169.1768-.0358.376-.0618.5959l-.146.4383a.3547.3547 0 0 0-.0182.1077c-.0059.4747-.054.6489-.115.8693-.0634.2292-.1353.4891-.1794 1.0575-.11 1.4143-.8782 2.2267-2.4172 2.5565-1.5155.3251-1.7843-.4968-2.0212-1.2217a6.5824 6.5824 0 0 0-.0769-.2266c-.2154-.5858-.1911-1.4119-.1574-2.5551.0165-.5612-.0249-1.9013-.3302-2.6462.0044-.2932.0106-.5909.019-.8918a.3529.3529 0 0 0-.0153-.1126 1.4927 1.4927 0 0 0-.0439-.208c-.1226-.4283-.4213-.7866-.7797-.9351-.1424-.059-.4038-.1672-.7178-.0869.067-.276.1831-.5875.309-.9249l.0529-.142c.0595-.16.134-.3257.213-.5012.4265-.9476 1.0106-2.2453.3766-5.1772-.2374-1.0981-1.0304-1.6343-2.2324-1.5098-.7207.0746-1.3799.3654-1.7088.5321a5.6716 5.6716 0 0 0-.1958.1041c.0918-1.1064.4386-3.1741 1.7357-4.4823a4.0306 4.0306 0 0 1 .3033-.276.3532.3532 0 0 0 .1447-.0644c.7524-.5706 1.6945-.8506 2.802-.8325.4091.0067.8017.0339 1.1742.081 1.939.3544 3.2439 1.4468 4.0359 2.3827.8143.9623 1.2552 1.9315 1.4312 2.4543-1.3232-.1346-2.2234.1268-2.6797.779-.9926 1.4189.543 4.1729 1.2811 5.4964.1353.2426.2522.4522.2889.5413.2403.5825.5515.9713.7787 1.2552.0696.087.1372.1714.1885.245-.4008.1155-1.1208.3825-1.0552 1.717-.0123.1563-.0423.4469-.0834.8148-.0461.2077-.0702.4603-.0994.7662zm.8905-1.6211c-.0405-.8316.2691-.9185.5967-1.0105a2.8566 2.8566 0 0 0 .135-.0406 1.202 1.202 0 0 0 .1342.103c.5703.3765 1.5823.4213 3.0068.1344-.2016.1769-.5189.3994-.9533.6011-.4098.1903-1.0957.333-1.7473.3636-.7197.0336-1.0859-.0807-1.1721-.151zm.5695-9.2712c-.0059.3508-.0542.6692-.1054 1.0017-.055.3576-.112.7274-.1264 1.1762-.0142.4368.0404.8909.0932 1.3301.1066.887.216 1.8003-.2075 2.7014a3.5272 3.5272 0 0 1-.1876-.3856c-.0527-.1276-.1669-.3326-.3251-.6162-.6156-1.1041-2.0574-3.6896-1.3193-4.7446.3795-.5427 1.3408-.5661 2.1781-.463zm.2284 7.0137a12.3762 12.3762 0 0 0-.0853-.1074l-.0355-.0444c.7262-1.1995.5842-2.3862.4578-3.4385-.0519-.4318-.1009-.8396-.0885-1.2226.0129-.4061.0666-.7543.1185-1.0911.0639-.415.1288-.8443.1109-1.3505.0134-.0531.0188-.1158.0118-.1902-.0457-.4855-.5999-1.938-1.7294-3.253-.6076-.7073-1.4896-1.4972-2.6889-2.0395.5251-.1066 1.2328-.2035 2.0244-.1859 2.0515.0456 3.6746.8135 4.8242 2.2824a.908.908 0 0 1 .0667.1002c.7231 1.3556-.2762 6.2751-2.9867 10.5405zm-8.8166-6.1162c-.025.1794-.3089.4225-.6211.4225a.5821.5821 0 0 1-.0809-.0056c-.1873-.026-.3765-.144-.5059-.3156-.0458-.0605-.1203-.178-.1055-.2844.0055-.0401.0261-.0985.0925-.1488.1182-.0894.3518-.1226.6096-.0867.3163.0441.6426.1938.6113.4186zm7.9305-.4114c.0111.0792-.049.201-.1531.3102-.0683.0717-.212.1961-.4079.2232a.5456.5456 0 0 1-.075.0052c-.2935 0-.5414-.2344-.5607-.3717-.024-.1765.2641-.3106.5611-.352.297-.0414.6111.0088.6356.1851z"/></g>
+      <text x="244" y="857" class="resource-title">Content Store</text>
+      <text x="244" y="874" class="resource-meta">CONTENT · JOBS · OUTBOX</text>
+    </g>
+  </g><g>
+    <rect x="660" y="620" width="230" height="46" rx="23" fill="#ffffff"
+      stroke="#596873" stroke-width="1.3" filter="url(#node-shadow)"/>
+    <path d="M 867 624
+      C 851.36 624, 851.36 662, 867 662"
+      fill="none" stroke="#5f6f7a" stroke-width="1.15"/>
+    <g transform="translate(680 629) scale(1.1666666666666667)"><path fill="#111827" d="M9.71 2.136a1.43 1.43 0 0 0-2.047 0h-.007a1.48 1.48 0 0 0-.421 1.042c0 .41.161.777.422 1.039l.007.007c.257.264.616.426 1.019.426.404 0 .766-.162 1.027-.426l.003-.007c.261-.262.421-.629.421-1.039 0-.408-.159-.777-.421-1.042H9.71zM8.683 22.295c.404 0 .766-.167 1.027-.429l.003-.008c.261-.261.421-.631.421-1.036 0-.41-.159-.778-.421-1.044H9.71a1.42 1.42 0 0 0-1.027-.432 1.4 1.4 0 0 0-1.02.432h-.007c-.26.266-.422.634-.422 1.044 0 .406.161.775.422 1.036l.007.008c.258.262.617.429 1.02.429zm7.89-4.462c.359-.096.683-.33.882-.684l.027-.052a1.47 1.47 0 0 0 .114-1.067 1.454 1.454 0 0 0-.675-.896l-.021-.014a1.425 1.425 0 0 0-1.078-.132c-.36.091-.684.335-.881.686-.2.349-.241.75-.146 1.119.099.363.33.691.675.896h.002c.346.203.737.239 1.101.144zm-6.405-7.342a2.083 2.083 0 0 0-1.485-.627c-.58 0-1.103.242-1.482.627-.378.385-.612.916-.612 1.507s.233 1.124.612 1.514a2.08 2.08 0 0 0 2.967 0c.379-.39.612-.923.612-1.514s-.233-1.122-.612-1.507zm-.835-2.51c.843.141 1.6.552 2.178 1.144h.004c.092.093.182.196.265.299l1.446-.851a3.176 3.176 0 0 1-.047-1.808 3.149 3.149 0 0 1 1.456-1.926l.025-.016a3.062 3.062 0 0 1 2.345-.306c.77.21 1.465.721 1.898 1.482v.002c.431.757.518 1.626.313 2.408a3.145 3.145 0 0 1-1.456 1.928l-.198.118h-.02a3.095 3.095 0 0 1-2.154.201 3.127 3.127 0 0 1-1.514-.944l-1.444.848a4.162 4.162 0 0 1 0 2.879l1.444.846c.413-.47.939-.789 1.514-.944a3.041 3.041 0 0 1 2.371.319l.048.023v.002a3.17 3.17 0 0 1 1.408 1.906 3.215 3.215 0 0 1-.313 2.405l-.026.053-.003-.005a3.147 3.147 0 0 1-1.867 1.436 3.096 3.096 0 0 1-2.371-.318v-.006a3.156 3.156 0 0 1-1.456-1.927 3.175 3.175 0 0 1 .047-1.805l-1.446-.848a3.905 3.905 0 0 1-.265.294l-.004.005a3.938 3.938 0 0 1-2.178 1.138v1.699a3.09 3.09 0 0 1 1.56.862l.002.004c.565.572.914 1.368.914 2.243 0 .873-.35 1.664-.914 2.239l-.002.009a3.1 3.1 0 0 1-2.21.931 3.1 3.1 0 0 1-2.206-.93h-.002v-.009a3.186 3.186 0 0 1-.916-2.239c0-.875.35-1.672.916-2.243v-.004h.002a3.1 3.1 0 0 1 1.558-.862v-1.699a3.926 3.926 0 0 1-2.176-1.138l-.006-.005a4.098 4.098 0 0 1-1.173-2.874c0-1.122.452-2.136 1.173-2.872h.006a3.947 3.947 0 0 1 2.176-1.144V6.289a3.137 3.137 0 0 1-1.558-.864h-.002v-.004a3.192 3.192 0 0 1-.916-2.243c0-.871.35-1.669.916-2.243l.002-.002A3.084 3.084 0 0 1 8.683 0c.861 0 1.641.355 2.21.932v.002h.002c.565.574.914 1.372.914 2.243 0 .876-.35 1.667-.914 2.243l-.002.005a3.142 3.142 0 0 1-1.56.864v1.692zm8.121-1.129l-.012-.019a1.452 1.452 0 0 0-.87-.668 1.43 1.43 0 0 0-1.103.146h.002c-.347.2-.58.529-.677.896-.095.365-.054.768.146 1.119l.007.009c.2.347.519.579.874.673.357.103.755.059 1.098-.144l.019-.009a1.47 1.47 0 0 0 .657-.885 1.493 1.493 0 0 0-.141-1.118"/></g>
+    <text x="726" y="648" class="queue-title"
+      style="font-size:14.00px">Search Indexing</text>
+    <text x="775" y="684" text-anchor="middle" class="queue-meta">CONTENT.SEARCH.V1</text>
+  </g><g>
+    <rect x="660" y="790" width="230" height="46" rx="23" fill="#ffffff"
+      stroke="#596873" stroke-width="1.3" filter="url(#node-shadow)"/>
+    <path d="M 867 794
+      C 851.36 794, 851.36 832, 867 832"
+      fill="none" stroke="#5f6f7a" stroke-width="1.15"/>
+    <g transform="translate(680 799) scale(1.1666666666666667)"><path fill="#111827" d="M9.71 2.136a1.43 1.43 0 0 0-2.047 0h-.007a1.48 1.48 0 0 0-.421 1.042c0 .41.161.777.422 1.039l.007.007c.257.264.616.426 1.019.426.404 0 .766-.162 1.027-.426l.003-.007c.261-.262.421-.629.421-1.039 0-.408-.159-.777-.421-1.042H9.71zM8.683 22.295c.404 0 .766-.167 1.027-.429l.003-.008c.261-.261.421-.631.421-1.036 0-.41-.159-.778-.421-1.044H9.71a1.42 1.42 0 0 0-1.027-.432 1.4 1.4 0 0 0-1.02.432h-.007c-.26.266-.422.634-.422 1.044 0 .406.161.775.422 1.036l.007.008c.258.262.617.429 1.02.429zm7.89-4.462c.359-.096.683-.33.882-.684l.027-.052a1.47 1.47 0 0 0 .114-1.067 1.454 1.454 0 0 0-.675-.896l-.021-.014a1.425 1.425 0 0 0-1.078-.132c-.36.091-.684.335-.881.686-.2.349-.241.75-.146 1.119.099.363.33.691.675.896h.002c.346.203.737.239 1.101.144zm-6.405-7.342a2.083 2.083 0 0 0-1.485-.627c-.58 0-1.103.242-1.482.627-.378.385-.612.916-.612 1.507s.233 1.124.612 1.514a2.08 2.08 0 0 0 2.967 0c.379-.39.612-.923.612-1.514s-.233-1.122-.612-1.507zm-.835-2.51c.843.141 1.6.552 2.178 1.144h.004c.092.093.182.196.265.299l1.446-.851a3.176 3.176 0 0 1-.047-1.808 3.149 3.149 0 0 1 1.456-1.926l.025-.016a3.062 3.062 0 0 1 2.345-.306c.77.21 1.465.721 1.898 1.482v.002c.431.757.518 1.626.313 2.408a3.145 3.145 0 0 1-1.456 1.928l-.198.118h-.02a3.095 3.095 0 0 1-2.154.201 3.127 3.127 0 0 1-1.514-.944l-1.444.848a4.162 4.162 0 0 1 0 2.879l1.444.846c.413-.47.939-.789 1.514-.944a3.041 3.041 0 0 1 2.371.319l.048.023v.002a3.17 3.17 0 0 1 1.408 1.906 3.215 3.215 0 0 1-.313 2.405l-.026.053-.003-.005a3.147 3.147 0 0 1-1.867 1.436 3.096 3.096 0 0 1-2.371-.318v-.006a3.156 3.156 0 0 1-1.456-1.927 3.175 3.175 0 0 1 .047-1.805l-1.446-.848a3.905 3.905 0 0 1-.265.294l-.004.005a3.938 3.938 0 0 1-2.178 1.138v1.699a3.09 3.09 0 0 1 1.56.862l.002.004c.565.572.914 1.368.914 2.243 0 .873-.35 1.664-.914 2.239l-.002.009a3.1 3.1 0 0 1-2.21.931 3.1 3.1 0 0 1-2.206-.93h-.002v-.009a3.186 3.186 0 0 1-.916-2.239c0-.875.35-1.672.916-2.243v-.004h.002a3.1 3.1 0 0 1 1.558-.862v-1.699a3.926 3.926 0 0 1-2.176-1.138l-.006-.005a4.098 4.098 0 0 1-1.173-2.874c0-1.122.452-2.136 1.173-2.872h.006a3.947 3.947 0 0 1 2.176-1.144V6.289a3.137 3.137 0 0 1-1.558-.864h-.002v-.004a3.192 3.192 0 0 1-.916-2.243c0-.871.35-1.669.916-2.243l.002-.002A3.084 3.084 0 0 1 8.683 0c.861 0 1.641.355 2.21.932v.002h.002c.565.574.914 1.372.914 2.243 0 .876-.35 1.667-.914 2.243l-.002.005a3.142 3.142 0 0 1-1.56.864v1.692zm8.121-1.129l-.012-.019a1.452 1.452 0 0 0-.87-.668 1.43 1.43 0 0 0-1.103.146h.002c-.347.2-.58.529-.677.896-.095.365-.054.768.146 1.119l.007.009c.2.347.519.579.874.673.357.103.755.059 1.098-.144l.019-.009a1.47 1.47 0 0 0 .657-.885 1.493 1.493 0 0 0-.141-1.118"/></g>
+    <text x="726" y="818" class="queue-title"
+      style="font-size:14.00px">RAG Indexing</text>
+    <text x="775" y="854" text-anchor="middle" class="queue-meta">CONTENT.RAG.V1</text>
+  </g><g>
+    <rect x="1000" y="650" width="420" height="250" rx="9" fill="#f1fafb"
+      fill-opacity=".9" stroke="#087f95" stroke-opacity=".72" stroke-width="1.25"
+      filter="url(#node-shadow)"/>
+    <rect x="1000" y="650" width="6" height="250" rx="3" fill="#087f95"/>
+    <g transform="translate(1020 666) scale(1.5833333333333333)"><path fill="#6db33f" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="1072" y="681" class="node-title">Projection Workers</text>
+    <text x="1072" y="702" class="node-meta">2 CLOUD RUN CONSUMERS</text>
+    <line x1="1020" y1="713" x2="1400" y2="713"
+      stroke="#087f95" stroke-opacity=".24"/>
+    <g>
+        <rect x="1022" y="722" width="183" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#087f95" stroke-opacity=".35"/>
+        <circle cx="1036" cy="738" r="3.5" fill="#087f95"/>
+        <text x="1048" y="744" class="cluster-member">Search Indexer</text>
+      </g><g>
+        <rect x="1215" y="722" width="183" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#087f95" stroke-opacity=".35"/>
+        <circle cx="1229" cy="738" r="3.5" fill="#087f95"/>
+        <text x="1241" y="744" class="cluster-member">RAG Indexer</text>
+      </g><g>
+        <rect x="1022" y="763" width="183" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#087f95" stroke-opacity=".35"/>
+        <circle cx="1036" cy="779" r="3.5" fill="#087f95"/>
+        <text x="1048" y="785" class="cluster-member">Idempotent Upsert</text>
+      </g><g>
+        <rect x="1215" y="763" width="183" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#087f95" stroke-opacity=".35"/>
+        <circle cx="1229" cy="779" r="3.5" fill="#087f95"/>
+        <text x="1241" y="785" class="cluster-member">Replay + Rebuild</text>
+      </g>
+    <g>
+      <rect x="1022" y="838" width="184" height="48" rx="5"
+        fill="#f1fafb" fill-opacity=".78" stroke="#087f95" stroke-opacity=".5"/>
+      <g transform="translate(1032 850) scale(0.75)">
+  
+  <g fill="none" fill-rule="evenodd" transform="translate(2)">
+    <path fill="#1A1C21" d="M0 16c0 1.384.194 2.72.524 4H20a4 4 0 100-8H.524A16.07 16.07 0 000 16"/>
+    <path fill="#FEC514" d="M26.924 7.662A16.1 16.1 0 0028.48 6 15.958 15.958 0 0016 0C9.679 0 4.239 3.678 1.644 9H23.51c1.267 0 2.484-.481 3.414-1.338"/>
+    <path fill="#00BFB3" d="M23.511 23H1.644A15.994 15.994 0 0016 32a15.958 15.958 0 0012.48-6 16.1 16.1 0 00-1.556-1.662A5.046 5.046 0 0023.511 23"/>
+  </g>
+</g>
+      <text x="1064" y="857" class="resource-title">Search Index</text>
+      <text x="1064" y="874" class="resource-meta">OPENSEARCH</text>
+    </g><g>
+      <rect x="1214" y="838" width="184" height="48" rx="5"
+        fill="#f8f5fb" fill-opacity=".78" stroke="#7255a5" stroke-opacity=".5"/>
+      <g transform="translate(1224 850) scale(1)"><path fill="#336791" d="M23.5594 14.7228a.5269.5269 0 0 0-.0563-.1191c-.139-.2632-.4768-.3418-1.0074-.2321-1.6533.3411-2.2935.1312-2.5256-.0191 1.342-2.0482 2.445-4.522 3.0411-6.8297.2714-1.0507.7982-3.5237.1222-4.7316a1.5641 1.5641 0 0 0-.1509-.235C21.6931.9086 19.8007.0248 17.5099.0005c-1.4947-.0158-2.7705.3461-3.1161.4794a9.449 9.449 0 0 0-.5159-.0816 8.044 8.044 0 0 0-1.3114-.1278c-1.1822-.0184-2.2038.2642-3.0498.8406-.8573-.3211-4.7888-1.645-7.2219.0788C.9359 2.1526.3086 3.8733.4302 6.3043c.0409.818.5069 3.334 1.2423 5.7436.4598 1.5065.9387 2.7019 1.4334 3.582.553.9942 1.1259 1.5933 1.7143 1.7895.4474.1491 1.1327.1441 1.8581-.7279.8012-.9635 1.5903-1.8258 1.9446-2.2069.4351.2355.9064.3625 1.39.3772a.0569.0569 0 0 0 .0004.0041 11.0312 11.0312 0 0 0-.2472.3054c-.3389.4302-.4094.5197-1.5002.7443-.3102.064-1.1344.2339-1.1464.8115-.0025.1224.0329.2309.0919.3268.2269.4231.9216.6097 1.015.6331 1.3345.3335 2.5044.092 3.3714-.6787-.017 2.231.0775 4.4174.3454 5.0874.2212.5529.7618 1.9045 2.4692 1.9043.2505 0 .5263-.0291.8296-.0941 1.7819-.3821 2.5557-1.1696 2.855-2.9059.1503-.8707.4016-2.8753.5388-4.1012.0169-.0703.0357-.1207.057-.1362.0007-.0005.0697-.0471.4272.0307a.3673.3673 0 0 0 .0443.0068l.2539.0223.0149.001c.8468.0384 1.9114-.1426 2.5312-.4308.6438-.2988 1.8057-1.0323 1.5951-1.6698zM2.371 11.8765c-.7435-2.4358-1.1779-4.8851-1.2123-5.5719-.1086-2.1714.4171-3.6829 1.5623-4.4927 1.8367-1.2986 4.8398-.5408 6.108-.13-.0032.0032-.0066.0061-.0098.0094-2.0238 2.044-1.9758 5.536-1.9708 5.7495-.0002.0823.0066.1989.0162.3593.0348.5873.0996 1.6804-.0735 2.9184-.1609 1.1504.1937 2.2764.9728 3.0892.0806.0841.1648.1631.2518.2374-.3468.3714-1.1004 1.1926-1.9025 2.1576-.5677.6825-.9597.5517-1.0886.5087-.3919-.1307-.813-.5871-1.2381-1.3223-.4796-.839-.9635-2.0317-1.4155-3.5126zm6.0072 5.0871c-.1711-.0428-.3271-.1132-.4322-.1772.0889-.0394.2374-.0902.4833-.1409 1.2833-.2641 1.4815-.4506 1.9143-1.0002.0992-.126.2116-.2687.3673-.4426a.3549.3549 0 0 0 .0737-.1298c.1708-.1513.2724-.1099.4369-.0417.156.0646.3078.26.3695.4752.0291.1016.0619.2945-.0452.4444-.9043 1.2658-2.2216 1.2494-3.1676 1.0128zm2.094-3.988-.0525.141c-.133.3566-.2567.6881-.3334 1.003-.6674-.0021-1.3168-.2872-1.8105-.8024-.6279-.6551-.9131-1.5664-.7825-2.5004.1828-1.3079.1153-2.4468.079-3.0586-.005-.0857-.0095-.1607-.0122-.2199.2957-.2621 1.6659-.9962 2.6429-.7724.4459.1022.7176.4057.8305.928.5846 2.7038.0774 3.8307-.3302 4.7363-.084.1866-.1633.3629-.2311.5454zm7.3637 4.5725c-.0169.1768-.0358.376-.0618.5959l-.146.4383a.3547.3547 0 0 0-.0182.1077c-.0059.4747-.054.6489-.115.8693-.0634.2292-.1353.4891-.1794 1.0575-.11 1.4143-.8782 2.2267-2.4172 2.5565-1.5155.3251-1.7843-.4968-2.0212-1.2217a6.5824 6.5824 0 0 0-.0769-.2266c-.2154-.5858-.1911-1.4119-.1574-2.5551.0165-.5612-.0249-1.9013-.3302-2.6462.0044-.2932.0106-.5909.019-.8918a.3529.3529 0 0 0-.0153-.1126 1.4927 1.4927 0 0 0-.0439-.208c-.1226-.4283-.4213-.7866-.7797-.9351-.1424-.059-.4038-.1672-.7178-.0869.067-.276.1831-.5875.309-.9249l.0529-.142c.0595-.16.134-.3257.213-.5012.4265-.9476 1.0106-2.2453.3766-5.1772-.2374-1.0981-1.0304-1.6343-2.2324-1.5098-.7207.0746-1.3799.3654-1.7088.5321a5.6716 5.6716 0 0 0-.1958.1041c.0918-1.1064.4386-3.1741 1.7357-4.4823a4.0306 4.0306 0 0 1 .3033-.276.3532.3532 0 0 0 .1447-.0644c.7524-.5706 1.6945-.8506 2.802-.8325.4091.0067.8017.0339 1.1742.081 1.939.3544 3.2439 1.4468 4.0359 2.3827.8143.9623 1.2552 1.9315 1.4312 2.4543-1.3232-.1346-2.2234.1268-2.6797.779-.9926 1.4189.543 4.1729 1.2811 5.4964.1353.2426.2522.4522.2889.5413.2403.5825.5515.9713.7787 1.2552.0696.087.1372.1714.1885.245-.4008.1155-1.1208.3825-1.0552 1.717-.0123.1563-.0423.4469-.0834.8148-.0461.2077-.0702.4603-.0994.7662zm.8905-1.6211c-.0405-.8316.2691-.9185.5967-1.0105a2.8566 2.8566 0 0 0 .135-.0406 1.202 1.202 0 0 0 .1342.103c.5703.3765 1.5823.4213 3.0068.1344-.2016.1769-.5189.3994-.9533.6011-.4098.1903-1.0957.333-1.7473.3636-.7197.0336-1.0859-.0807-1.1721-.151zm.5695-9.2712c-.0059.3508-.0542.6692-.1054 1.0017-.055.3576-.112.7274-.1264 1.1762-.0142.4368.0404.8909.0932 1.3301.1066.887.216 1.8003-.2075 2.7014a3.5272 3.5272 0 0 1-.1876-.3856c-.0527-.1276-.1669-.3326-.3251-.6162-.6156-1.1041-2.0574-3.6896-1.3193-4.7446.3795-.5427 1.3408-.5661 2.1781-.463zm.2284 7.0137a12.3762 12.3762 0 0 0-.0853-.1074l-.0355-.0444c.7262-1.1995.5842-2.3862.4578-3.4385-.0519-.4318-.1009-.8396-.0885-1.2226.0129-.4061.0666-.7543.1185-1.0911.0639-.415.1288-.8443.1109-1.3505.0134-.0531.0188-.1158.0118-.1902-.0457-.4855-.5999-1.938-1.7294-3.253-.6076-.7073-1.4896-1.4972-2.6889-2.0395.5251-.1066 1.2328-.2035 2.0244-.1859 2.0515.0456 3.6746.8135 4.8242 2.2824a.908.908 0 0 1 .0667.1002c.7231 1.3556-.2762 6.2751-2.9867 10.5405zm-8.8166-6.1162c-.025.1794-.3089.4225-.6211.4225a.5821.5821 0 0 1-.0809-.0056c-.1873-.026-.3765-.144-.5059-.3156-.0458-.0605-.1203-.178-.1055-.2844.0055-.0401.0261-.0985.0925-.1488.1182-.0894.3518-.1226.6096-.0867.3163.0441.6426.1938.6113.4186zm7.9305-.4114c.0111.0792-.049.201-.1531.3102-.0683.0717-.212.1961-.4079.2232a.5456.5456 0 0 1-.075.0052c-.2935 0-.5414-.2344-.5607-.3717-.024-.1765.2641-.3106.5611-.352.297-.0414.6111.0088.6356.1851z"/></g>
+      <text x="1256" y="857" class="resource-title">Vectors</text>
+      <text x="1256" y="874" class="resource-meta">PGVECTOR</text>
+    </g>
+  </g><g>
+    <rect x="1430" y="780" width="260" height="46" rx="23" fill="#ffffff"
+      stroke="#596873" stroke-width="1.3" filter="url(#node-shadow)"/>
+    <path d="M 1667 784
+      C 1651.36 784, 1651.36 822, 1667 822"
+      fill="none" stroke="#5f6f7a" stroke-width="1.15"/>
+    <g transform="translate(1450 789) scale(1.1666666666666667)"><path fill="#111827" d="M9.71 2.136a1.43 1.43 0 0 0-2.047 0h-.007a1.48 1.48 0 0 0-.421 1.042c0 .41.161.777.422 1.039l.007.007c.257.264.616.426 1.019.426.404 0 .766-.162 1.027-.426l.003-.007c.261-.262.421-.629.421-1.039 0-.408-.159-.777-.421-1.042H9.71zM8.683 22.295c.404 0 .766-.167 1.027-.429l.003-.008c.261-.261.421-.631.421-1.036 0-.41-.159-.778-.421-1.044H9.71a1.42 1.42 0 0 0-1.027-.432 1.4 1.4 0 0 0-1.02.432h-.007c-.26.266-.422.634-.422 1.044 0 .406.161.775.422 1.036l.007.008c.258.262.617.429 1.02.429zm7.89-4.462c.359-.096.683-.33.882-.684l.027-.052a1.47 1.47 0 0 0 .114-1.067 1.454 1.454 0 0 0-.675-.896l-.021-.014a1.425 1.425 0 0 0-1.078-.132c-.36.091-.684.335-.881.686-.2.349-.241.75-.146 1.119.099.363.33.691.675.896h.002c.346.203.737.239 1.101.144zm-6.405-7.342a2.083 2.083 0 0 0-1.485-.627c-.58 0-1.103.242-1.482.627-.378.385-.612.916-.612 1.507s.233 1.124.612 1.514a2.08 2.08 0 0 0 2.967 0c.379-.39.612-.923.612-1.514s-.233-1.122-.612-1.507zm-.835-2.51c.843.141 1.6.552 2.178 1.144h.004c.092.093.182.196.265.299l1.446-.851a3.176 3.176 0 0 1-.047-1.808 3.149 3.149 0 0 1 1.456-1.926l.025-.016a3.062 3.062 0 0 1 2.345-.306c.77.21 1.465.721 1.898 1.482v.002c.431.757.518 1.626.313 2.408a3.145 3.145 0 0 1-1.456 1.928l-.198.118h-.02a3.095 3.095 0 0 1-2.154.201 3.127 3.127 0 0 1-1.514-.944l-1.444.848a4.162 4.162 0 0 1 0 2.879l1.444.846c.413-.47.939-.789 1.514-.944a3.041 3.041 0 0 1 2.371.319l.048.023v.002a3.17 3.17 0 0 1 1.408 1.906 3.215 3.215 0 0 1-.313 2.405l-.026.053-.003-.005a3.147 3.147 0 0 1-1.867 1.436 3.096 3.096 0 0 1-2.371-.318v-.006a3.156 3.156 0 0 1-1.456-1.927 3.175 3.175 0 0 1 .047-1.805l-1.446-.848a3.905 3.905 0 0 1-.265.294l-.004.005a3.938 3.938 0 0 1-2.178 1.138v1.699a3.09 3.09 0 0 1 1.56.862l.002.004c.565.572.914 1.368.914 2.243 0 .873-.35 1.664-.914 2.239l-.002.009a3.1 3.1 0 0 1-2.21.931 3.1 3.1 0 0 1-2.206-.93h-.002v-.009a3.186 3.186 0 0 1-.916-2.239c0-.875.35-1.672.916-2.243v-.004h.002a3.1 3.1 0 0 1 1.558-.862v-1.699a3.926 3.926 0 0 1-2.176-1.138l-.006-.005a4.098 4.098 0 0 1-1.173-2.874c0-1.122.452-2.136 1.173-2.872h.006a3.947 3.947 0 0 1 2.176-1.144V6.289a3.137 3.137 0 0 1-1.558-.864h-.002v-.004a3.192 3.192 0 0 1-.916-2.243c0-.871.35-1.669.916-2.243l.002-.002A3.084 3.084 0 0 1 8.683 0c.861 0 1.641.355 2.21.932v.002h.002c.565.574.914 1.372.914 2.243 0 .876-.35 1.667-.914 2.243l-.002.005a3.142 3.142 0 0 1-1.56.864v1.692zm8.121-1.129l-.012-.019a1.452 1.452 0 0 0-.87-.668 1.43 1.43 0 0 0-1.103.146h.002c-.347.2-.58.529-.677.896-.095.365-.054.768.146 1.119l.007.009c.2.347.519.579.874.673.357.103.755.059 1.098-.144l.019-.009a1.47 1.47 0 0 0 .657-.885 1.493 1.493 0 0 0-.141-1.118"/></g>
+    <text x="1496" y="808" class="queue-title"
+      style="font-size:14.00px">Notification Dispatch</text>
+    <text x="1560" y="844" text-anchor="middle" class="queue-meta">NOTIFICATION.DISPATCH.V1</text>
+  </g><g>
+    <rect x="1760" y="630" width="400" height="260" rx="9" fill="#fdf5f5"
+      fill-opacity=".9" stroke="#ba4a52" stroke-opacity=".72" stroke-width="1.25"
+      filter="url(#node-shadow)"/>
+    <rect x="1760" y="630" width="6" height="260" rx="3" fill="#ba4a52"/>
+    <g transform="translate(1780 646) scale(1.5833333333333333)"><path fill="#6db33f" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="1832" y="661" class="node-title">Notification Service</text>
+    <text x="1832" y="682" class="node-meta">CLOUD RUN · KAFKA CONSUMER</text>
+    <line x1="1780" y1="693" x2="2140" y2="693"
+      stroke="#ba4a52" stroke-opacity=".24"/>
+    <g>
+        <rect x="1782" y="702" width="173" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#ba4a52" stroke-opacity=".35"/>
+        <circle cx="1796" cy="718" r="3.5" fill="#ba4a52"/>
+        <text x="1808" y="724" class="cluster-member">Subscriber API</text>
+      </g><g>
+        <rect x="1965" y="702" width="173" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#ba4a52" stroke-opacity=".35"/>
+        <circle cx="1979" cy="718" r="3.5" fill="#ba4a52"/>
+        <text x="1991" y="724" class="cluster-member">Preference Fan-out</text>
+      </g><g>
+        <rect x="1782" y="743" width="173" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#ba4a52" stroke-opacity=".35"/>
+        <circle cx="1796" cy="759" r="3.5" fill="#ba4a52"/>
+        <text x="1808" y="765" class="cluster-member">Leased Delivery</text>
+      </g><g>
+        <rect x="1965" y="743" width="173" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#ba4a52" stroke-opacity=".35"/>
+        <circle cx="1979" cy="759" r="3.5" fill="#ba4a52"/>
+        <text x="1991" y="765" class="cluster-member">OTP + Recovery</text>
+      </g>
+    <g>
+      <rect x="1782" y="828" width="234.9" height="48" rx="5"
+        fill="#f3f8fc" fill-opacity=".78" stroke="#1769aa" stroke-opacity=".5"/>
+      <g transform="translate(1792 840) scale(1)"><path fill="#336791" d="M23.5594 14.7228a.5269.5269 0 0 0-.0563-.1191c-.139-.2632-.4768-.3418-1.0074-.2321-1.6533.3411-2.2935.1312-2.5256-.0191 1.342-2.0482 2.445-4.522 3.0411-6.8297.2714-1.0507.7982-3.5237.1222-4.7316a1.5641 1.5641 0 0 0-.1509-.235C21.6931.9086 19.8007.0248 17.5099.0005c-1.4947-.0158-2.7705.3461-3.1161.4794a9.449 9.449 0 0 0-.5159-.0816 8.044 8.044 0 0 0-1.3114-.1278c-1.1822-.0184-2.2038.2642-3.0498.8406-.8573-.3211-4.7888-1.645-7.2219.0788C.9359 2.1526.3086 3.8733.4302 6.3043c.0409.818.5069 3.334 1.2423 5.7436.4598 1.5065.9387 2.7019 1.4334 3.582.553.9942 1.1259 1.5933 1.7143 1.7895.4474.1491 1.1327.1441 1.8581-.7279.8012-.9635 1.5903-1.8258 1.9446-2.2069.4351.2355.9064.3625 1.39.3772a.0569.0569 0 0 0 .0004.0041 11.0312 11.0312 0 0 0-.2472.3054c-.3389.4302-.4094.5197-1.5002.7443-.3102.064-1.1344.2339-1.1464.8115-.0025.1224.0329.2309.0919.3268.2269.4231.9216.6097 1.015.6331 1.3345.3335 2.5044.092 3.3714-.6787-.017 2.231.0775 4.4174.3454 5.0874.2212.5529.7618 1.9045 2.4692 1.9043.2505 0 .5263-.0291.8296-.0941 1.7819-.3821 2.5557-1.1696 2.855-2.9059.1503-.8707.4016-2.8753.5388-4.1012.0169-.0703.0357-.1207.057-.1362.0007-.0005.0697-.0471.4272.0307a.3673.3673 0 0 0 .0443.0068l.2539.0223.0149.001c.8468.0384 1.9114-.1426 2.5312-.4308.6438-.2988 1.8057-1.0323 1.5951-1.6698zM2.371 11.8765c-.7435-2.4358-1.1779-4.8851-1.2123-5.5719-.1086-2.1714.4171-3.6829 1.5623-4.4927 1.8367-1.2986 4.8398-.5408 6.108-.13-.0032.0032-.0066.0061-.0098.0094-2.0238 2.044-1.9758 5.536-1.9708 5.7495-.0002.0823.0066.1989.0162.3593.0348.5873.0996 1.6804-.0735 2.9184-.1609 1.1504.1937 2.2764.9728 3.0892.0806.0841.1648.1631.2518.2374-.3468.3714-1.1004 1.1926-1.9025 2.1576-.5677.6825-.9597.5517-1.0886.5087-.3919-.1307-.813-.5871-1.2381-1.3223-.4796-.839-.9635-2.0317-1.4155-3.5126zm6.0072 5.0871c-.1711-.0428-.3271-.1132-.4322-.1772.0889-.0394.2374-.0902.4833-.1409 1.2833-.2641 1.4815-.4506 1.9143-1.0002.0992-.126.2116-.2687.3673-.4426a.3549.3549 0 0 0 .0737-.1298c.1708-.1513.2724-.1099.4369-.0417.156.0646.3078.26.3695.4752.0291.1016.0619.2945-.0452.4444-.9043 1.2658-2.2216 1.2494-3.1676 1.0128zm2.094-3.988-.0525.141c-.133.3566-.2567.6881-.3334 1.003-.6674-.0021-1.3168-.2872-1.8105-.8024-.6279-.6551-.9131-1.5664-.7825-2.5004.1828-1.3079.1153-2.4468.079-3.0586-.005-.0857-.0095-.1607-.0122-.2199.2957-.2621 1.6659-.9962 2.6429-.7724.4459.1022.7176.4057.8305.928.5846 2.7038.0774 3.8307-.3302 4.7363-.084.1866-.1633.3629-.2311.5454zm7.3637 4.5725c-.0169.1768-.0358.376-.0618.5959l-.146.4383a.3547.3547 0 0 0-.0182.1077c-.0059.4747-.054.6489-.115.8693-.0634.2292-.1353.4891-.1794 1.0575-.11 1.4143-.8782 2.2267-2.4172 2.5565-1.5155.3251-1.7843-.4968-2.0212-1.2217a6.5824 6.5824 0 0 0-.0769-.2266c-.2154-.5858-.1911-1.4119-.1574-2.5551.0165-.5612-.0249-1.9013-.3302-2.6462.0044-.2932.0106-.5909.019-.8918a.3529.3529 0 0 0-.0153-.1126 1.4927 1.4927 0 0 0-.0439-.208c-.1226-.4283-.4213-.7866-.7797-.9351-.1424-.059-.4038-.1672-.7178-.0869.067-.276.1831-.5875.309-.9249l.0529-.142c.0595-.16.134-.3257.213-.5012.4265-.9476 1.0106-2.2453.3766-5.1772-.2374-1.0981-1.0304-1.6343-2.2324-1.5098-.7207.0746-1.3799.3654-1.7088.5321a5.6716 5.6716 0 0 0-.1958.1041c.0918-1.1064.4386-3.1741 1.7357-4.4823a4.0306 4.0306 0 0 1 .3033-.276.3532.3532 0 0 0 .1447-.0644c.7524-.5706 1.6945-.8506 2.802-.8325.4091.0067.8017.0339 1.1742.081 1.939.3544 3.2439 1.4468 4.0359 2.3827.8143.9623 1.2552 1.9315 1.4312 2.4543-1.3232-.1346-2.2234.1268-2.6797.779-.9926 1.4189.543 4.1729 1.2811 5.4964.1353.2426.2522.4522.2889.5413.2403.5825.5515.9713.7787 1.2552.0696.087.1372.1714.1885.245-.4008.1155-1.1208.3825-1.0552 1.717-.0123.1563-.0423.4469-.0834.8148-.0461.2077-.0702.4603-.0994.7662zm.8905-1.6211c-.0405-.8316.2691-.9185.5967-1.0105a2.8566 2.8566 0 0 0 .135-.0406 1.202 1.202 0 0 0 .1342.103c.5703.3765 1.5823.4213 3.0068.1344-.2016.1769-.5189.3994-.9533.6011-.4098.1903-1.0957.333-1.7473.3636-.7197.0336-1.0859-.0807-1.1721-.151zm.5695-9.2712c-.0059.3508-.0542.6692-.1054 1.0017-.055.3576-.112.7274-.1264 1.1762-.0142.4368.0404.8909.0932 1.3301.1066.887.216 1.8003-.2075 2.7014a3.5272 3.5272 0 0 1-.1876-.3856c-.0527-.1276-.1669-.3326-.3251-.6162-.6156-1.1041-2.0574-3.6896-1.3193-4.7446.3795-.5427 1.3408-.5661 2.1781-.463zm.2284 7.0137a12.3762 12.3762 0 0 0-.0853-.1074l-.0355-.0444c.7262-1.1995.5842-2.3862.4578-3.4385-.0519-.4318-.1009-.8396-.0885-1.2226.0129-.4061.0666-.7543.1185-1.0911.0639-.415.1288-.8443.1109-1.3505.0134-.0531.0188-.1158.0118-.1902-.0457-.4855-.5999-1.938-1.7294-3.253-.6076-.7073-1.4896-1.4972-2.6889-2.0395.5251-.1066 1.2328-.2035 2.0244-.1859 2.0515.0456 3.6746.8135 4.8242 2.2824a.908.908 0 0 1 .0667.1002c.7231 1.3556-.2762 6.2751-2.9867 10.5405zm-8.8166-6.1162c-.025.1794-.3089.4225-.6211.4225a.5821.5821 0 0 1-.0809-.0056c-.1873-.026-.3765-.144-.5059-.3156-.0458-.0605-.1203-.178-.1055-.2844.0055-.0401.0261-.0985.0925-.1488.1182-.0894.3518-.1226.6096-.0867.3163.0441.6426.1938.6113.4186zm7.9305-.4114c.0111.0792-.049.201-.1531.3102-.0683.0717-.212.1961-.4079.2232a.5456.5456 0 0 1-.075.0052c-.2935 0-.5414-.2344-.5607-.3717-.024-.1765.2641-.3106.5611-.352.297-.0414.6111.0088.6356.1851z"/></g>
+      <text x="1824" y="847" class="resource-title">Delivery Store</text>
+      <text x="1824" y="864" class="resource-meta">SUBSCRIBERS · RETRY</text>
+    </g><g>
+      <rect x="2024.9" y="828" width="113.10000000000001" height="48" rx="5"
+        fill="#fdf5f5" fill-opacity=".78" stroke="#ba4a52" stroke-opacity=".5"/>
+      <g transform="translate(2034.9 840) scale(1)"><path fill="#d82c20" d="M22.71 13.145c-1.66 2.092-3.452 4.483-7.038 4.483-3.203 0-4.397-2.825-4.48-5.12.701 1.484 2.073 2.685 4.214 2.63 4.117-.133 6.94-3.852 6.94-7.239 0-4.05-3.022-6.972-8.268-6.972-3.752 0-8.4 1.428-11.455 3.685C2.59 6.937 3.885 9.958 4.35 9.626c2.648-1.904 4.748-3.13 6.784-3.744C8.12 9.244.886 17.05 0 18.425c.1 1.261 1.66 4.648 2.424 4.648.232 0 .431-.133.664-.365a100.49 100.49 0 0 0 5.54-6.765c.222 3.104 1.748 6.898 6.014 6.898 3.819 0 7.604-2.756 9.33-8.965.2-.764-.73-1.361-1.261-.73zm-4.349-5.013c0 1.959-1.926 2.922-3.685 2.922-.941 0-1.664-.247-2.235-.568 1.051-1.592 2.092-3.225 3.21-4.973 1.972.334 2.71 1.43 2.71 2.619z"/></g>
+      <text x="2066.9" y="847" class="resource-title">OTP State</text>
+      <text x="2066.9" y="864" class="resource-meta">REDIS · TTL</text>
+    </g>
+  </g><g>
+    <rect x="2260" y="700" width="170" height="125" rx="7" fill="#ffffff"
+      stroke="#596873" stroke-width="1.2" filter="url(#node-shadow)"/>
+    <rect x="2260" y="700" width="5" height="125" rx="2.5" fill="#ba4a52"/>
+    <g transform="translate(2280 718) scale(1.5)"><path fill="#ea4335" d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></g>
+    <text x="2330" y="732" class="node-title">Email</text>
+    <text x="2330" y="752" class="node-meta">SMTP · GMAIL</text>
+    <text x="2282" y="782" class="node-detail">verified delivery</text>
+  </g><g>
+    <rect x="230" y="1070" width="300" height="140" rx="7" fill="#ffffff"
+      stroke="#596873" stroke-width="1.2" filter="url(#node-shadow)"/>
+    <rect x="230" y="1070" width="5" height="140" rx="2.5" fill="#087f95"/>
+    <g transform="translate(250 1088) scale(1.5)"><path fill="#6db33f" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="300" y="1102" class="node-title">Tracking API</text>
+    <text x="300" y="1122" class="node-meta">CLOUD RUN · HTTP</text>
+    <text x="252" y="1152" class="node-detail">validate envelope · geo-snap city</text><text x="252" y="1171" class="node-detail">request ID · bounded payload</text>
+  </g><g>
+    <rect x="620" y="1110" width="230" height="46" rx="23" fill="#ffffff"
+      stroke="#596873" stroke-width="1.3" filter="url(#node-shadow)"/>
+    <path d="M 827 1114
+      C 811.36 1114, 811.36 1152, 827 1152"
+      fill="none" stroke="#5f6f7a" stroke-width="1.15"/>
+    <g transform="translate(640 1119) scale(1.1666666666666667)"><path fill="#111827" d="M9.71 2.136a1.43 1.43 0 0 0-2.047 0h-.007a1.48 1.48 0 0 0-.421 1.042c0 .41.161.777.422 1.039l.007.007c.257.264.616.426 1.019.426.404 0 .766-.162 1.027-.426l.003-.007c.261-.262.421-.629.421-1.039 0-.408-.159-.777-.421-1.042H9.71zM8.683 22.295c.404 0 .766-.167 1.027-.429l.003-.008c.261-.261.421-.631.421-1.036 0-.41-.159-.778-.421-1.044H9.71a1.42 1.42 0 0 0-1.027-.432 1.4 1.4 0 0 0-1.02.432h-.007c-.26.266-.422.634-.422 1.044 0 .406.161.775.422 1.036l.007.008c.258.262.617.429 1.02.429zm7.89-4.462c.359-.096.683-.33.882-.684l.027-.052a1.47 1.47 0 0 0 .114-1.067 1.454 1.454 0 0 0-.675-.896l-.021-.014a1.425 1.425 0 0 0-1.078-.132c-.36.091-.684.335-.881.686-.2.349-.241.75-.146 1.119.099.363.33.691.675.896h.002c.346.203.737.239 1.101.144zm-6.405-7.342a2.083 2.083 0 0 0-1.485-.627c-.58 0-1.103.242-1.482.627-.378.385-.612.916-.612 1.507s.233 1.124.612 1.514a2.08 2.08 0 0 0 2.967 0c.379-.39.612-.923.612-1.514s-.233-1.122-.612-1.507zm-.835-2.51c.843.141 1.6.552 2.178 1.144h.004c.092.093.182.196.265.299l1.446-.851a3.176 3.176 0 0 1-.047-1.808 3.149 3.149 0 0 1 1.456-1.926l.025-.016a3.062 3.062 0 0 1 2.345-.306c.77.21 1.465.721 1.898 1.482v.002c.431.757.518 1.626.313 2.408a3.145 3.145 0 0 1-1.456 1.928l-.198.118h-.02a3.095 3.095 0 0 1-2.154.201 3.127 3.127 0 0 1-1.514-.944l-1.444.848a4.162 4.162 0 0 1 0 2.879l1.444.846c.413-.47.939-.789 1.514-.944a3.041 3.041 0 0 1 2.371.319l.048.023v.002a3.17 3.17 0 0 1 1.408 1.906 3.215 3.215 0 0 1-.313 2.405l-.026.053-.003-.005a3.147 3.147 0 0 1-1.867 1.436 3.096 3.096 0 0 1-2.371-.318v-.006a3.156 3.156 0 0 1-1.456-1.927 3.175 3.175 0 0 1 .047-1.805l-1.446-.848a3.905 3.905 0 0 1-.265.294l-.004.005a3.938 3.938 0 0 1-2.178 1.138v1.699a3.09 3.09 0 0 1 1.56.862l.002.004c.565.572.914 1.368.914 2.243 0 .873-.35 1.664-.914 2.239l-.002.009a3.1 3.1 0 0 1-2.21.931 3.1 3.1 0 0 1-2.206-.93h-.002v-.009a3.186 3.186 0 0 1-.916-2.239c0-.875.35-1.672.916-2.243v-.004h.002a3.1 3.1 0 0 1 1.558-.862v-1.699a3.926 3.926 0 0 1-2.176-1.138l-.006-.005a4.098 4.098 0 0 1-1.173-2.874c0-1.122.452-2.136 1.173-2.872h.006a3.947 3.947 0 0 1 2.176-1.144V6.289a3.137 3.137 0 0 1-1.558-.864h-.002v-.004a3.192 3.192 0 0 1-.916-2.243c0-.871.35-1.669.916-2.243l.002-.002A3.084 3.084 0 0 1 8.683 0c.861 0 1.641.355 2.21.932v.002h.002c.565.574.914 1.372.914 2.243 0 .876-.35 1.667-.914 2.243l-.002.005a3.142 3.142 0 0 1-1.56.864v1.692zm8.121-1.129l-.012-.019a1.452 1.452 0 0 0-.87-.668 1.43 1.43 0 0 0-1.103.146h.002c-.347.2-.58.529-.677.896-.095.365-.054.768.146 1.119l.007.009c.2.347.519.579.874.673.357.103.755.059 1.098-.144l.019-.009a1.47 1.47 0 0 0 .657-.885 1.493 1.493 0 0 0-.141-1.118"/></g>
+    <text x="686" y="1138" class="queue-title"
+      style="font-size:14.00px">Visitor Ingestion</text>
+    <text x="735" y="1174" text-anchor="middle" class="queue-meta">ANALYTICS.RAW.V1</text>
+  </g><g>
+    <rect x="950" y="1010" width="430" height="260" rx="9" fill="#f1fafb"
+      fill-opacity=".9" stroke="#087f95" stroke-opacity=".72" stroke-width="1.25"
+      filter="url(#node-shadow)"/>
+    <rect x="950" y="1010" width="6" height="260" rx="3" fill="#087f95"/>
+    <g transform="translate(970 1026) scale(1.5833333333333333)"><path fill="#6db33f" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="1022" y="1041" class="node-title">Visitor Intelligence</text>
+    <text x="1022" y="1062" class="node-meta">CLOUD RUN · KAFKA CONSUMER</text>
+    <line x1="970" y1="1073" x2="1360" y2="1073"
+      stroke="#087f95" stroke-opacity=".24"/>
+    <g>
+        <rect x="972" y="1082" width="188" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#087f95" stroke-opacity=".35"/>
+        <circle cx="986" cy="1098" r="3.5" fill="#087f95"/>
+        <text x="998" y="1104" class="cluster-member">Ingest + Enrich</text>
+      </g><g>
+        <rect x="1170" y="1082" width="188" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#087f95" stroke-opacity=".35"/>
+        <circle cx="1184" cy="1098" r="3.5" fill="#087f95"/>
+        <text x="1196" y="1104" class="cluster-member">Session Aggregator</text>
+      </g><g>
+        <rect x="972" y="1123" width="188" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#087f95" stroke-opacity=".35"/>
+        <circle cx="986" cy="1139" r="3.5" fill="#087f95"/>
+        <text x="998" y="1145" class="cluster-member">Funnel + Journey</text>
+      </g><g>
+        <rect x="1170" y="1123" width="188" height="32" rx="5"
+          fill="#ffffff" fill-opacity=".96" stroke="#087f95" stroke-opacity=".35"/>
+        <circle cx="1184" cy="1139" r="3.5" fill="#087f95"/>
+        <text x="1196" y="1145" class="cluster-member">Query + Export</text>
+      </g>
+    <g>
+      <rect x="972" y="1208" width="219.76744186046514" height="48" rx="5"
+        fill="#f3f8fc" fill-opacity=".78" stroke="#1769aa" stroke-opacity=".5"/>
+      <g transform="translate(982 1220) scale(1)"><path fill="#336791" d="M23.5594 14.7228a.5269.5269 0 0 0-.0563-.1191c-.139-.2632-.4768-.3418-1.0074-.2321-1.6533.3411-2.2935.1312-2.5256-.0191 1.342-2.0482 2.445-4.522 3.0411-6.8297.2714-1.0507.7982-3.5237.1222-4.7316a1.5641 1.5641 0 0 0-.1509-.235C21.6931.9086 19.8007.0248 17.5099.0005c-1.4947-.0158-2.7705.3461-3.1161.4794a9.449 9.449 0 0 0-.5159-.0816 8.044 8.044 0 0 0-1.3114-.1278c-1.1822-.0184-2.2038.2642-3.0498.8406-.8573-.3211-4.7888-1.645-7.2219.0788C.9359 2.1526.3086 3.8733.4302 6.3043c.0409.818.5069 3.334 1.2423 5.7436.4598 1.5065.9387 2.7019 1.4334 3.582.553.9942 1.1259 1.5933 1.7143 1.7895.4474.1491 1.1327.1441 1.8581-.7279.8012-.9635 1.5903-1.8258 1.9446-2.2069.4351.2355.9064.3625 1.39.3772a.0569.0569 0 0 0 .0004.0041 11.0312 11.0312 0 0 0-.2472.3054c-.3389.4302-.4094.5197-1.5002.7443-.3102.064-1.1344.2339-1.1464.8115-.0025.1224.0329.2309.0919.3268.2269.4231.9216.6097 1.015.6331 1.3345.3335 2.5044.092 3.3714-.6787-.017 2.231.0775 4.4174.3454 5.0874.2212.5529.7618 1.9045 2.4692 1.9043.2505 0 .5263-.0291.8296-.0941 1.7819-.3821 2.5557-1.1696 2.855-2.9059.1503-.8707.4016-2.8753.5388-4.1012.0169-.0703.0357-.1207.057-.1362.0007-.0005.0697-.0471.4272.0307a.3673.3673 0 0 0 .0443.0068l.2539.0223.0149.001c.8468.0384 1.9114-.1426 2.5312-.4308.6438-.2988 1.8057-1.0323 1.5951-1.6698zM2.371 11.8765c-.7435-2.4358-1.1779-4.8851-1.2123-5.5719-.1086-2.1714.4171-3.6829 1.5623-4.4927 1.8367-1.2986 4.8398-.5408 6.108-.13-.0032.0032-.0066.0061-.0098.0094-2.0238 2.044-1.9758 5.536-1.9708 5.7495-.0002.0823.0066.1989.0162.3593.0348.5873.0996 1.6804-.0735 2.9184-.1609 1.1504.1937 2.2764.9728 3.0892.0806.0841.1648.1631.2518.2374-.3468.3714-1.1004 1.1926-1.9025 2.1576-.5677.6825-.9597.5517-1.0886.5087-.3919-.1307-.813-.5871-1.2381-1.3223-.4796-.839-.9635-2.0317-1.4155-3.5126zm6.0072 5.0871c-.1711-.0428-.3271-.1132-.4322-.1772.0889-.0394.2374-.0902.4833-.1409 1.2833-.2641 1.4815-.4506 1.9143-1.0002.0992-.126.2116-.2687.3673-.4426a.3549.3549 0 0 0 .0737-.1298c.1708-.1513.2724-.1099.4369-.0417.156.0646.3078.26.3695.4752.0291.1016.0619.2945-.0452.4444-.9043 1.2658-2.2216 1.2494-3.1676 1.0128zm2.094-3.988-.0525.141c-.133.3566-.2567.6881-.3334 1.003-.6674-.0021-1.3168-.2872-1.8105-.8024-.6279-.6551-.9131-1.5664-.7825-2.5004.1828-1.3079.1153-2.4468.079-3.0586-.005-.0857-.0095-.1607-.0122-.2199.2957-.2621 1.6659-.9962 2.6429-.7724.4459.1022.7176.4057.8305.928.5846 2.7038.0774 3.8307-.3302 4.7363-.084.1866-.1633.3629-.2311.5454zm7.3637 4.5725c-.0169.1768-.0358.376-.0618.5959l-.146.4383a.3547.3547 0 0 0-.0182.1077c-.0059.4747-.054.6489-.115.8693-.0634.2292-.1353.4891-.1794 1.0575-.11 1.4143-.8782 2.2267-2.4172 2.5565-1.5155.3251-1.7843-.4968-2.0212-1.2217a6.5824 6.5824 0 0 0-.0769-.2266c-.2154-.5858-.1911-1.4119-.1574-2.5551.0165-.5612-.0249-1.9013-.3302-2.6462.0044-.2932.0106-.5909.019-.8918a.3529.3529 0 0 0-.0153-.1126 1.4927 1.4927 0 0 0-.0439-.208c-.1226-.4283-.4213-.7866-.7797-.9351-.1424-.059-.4038-.1672-.7178-.0869.067-.276.1831-.5875.309-.9249l.0529-.142c.0595-.16.134-.3257.213-.5012.4265-.9476 1.0106-2.2453.3766-5.1772-.2374-1.0981-1.0304-1.6343-2.2324-1.5098-.7207.0746-1.3799.3654-1.7088.5321a5.6716 5.6716 0 0 0-.1958.1041c.0918-1.1064.4386-3.1741 1.7357-4.4823a4.0306 4.0306 0 0 1 .3033-.276.3532.3532 0 0 0 .1447-.0644c.7524-.5706 1.6945-.8506 2.802-.8325.4091.0067.8017.0339 1.1742.081 1.939.3544 3.2439 1.4468 4.0359 2.3827.8143.9623 1.2552 1.9315 1.4312 2.4543-1.3232-.1346-2.2234.1268-2.6797.779-.9926 1.4189.543 4.1729 1.2811 5.4964.1353.2426.2522.4522.2889.5413.2403.5825.5515.9713.7787 1.2552.0696.087.1372.1714.1885.245-.4008.1155-1.1208.3825-1.0552 1.717-.0123.1563-.0423.4469-.0834.8148-.0461.2077-.0702.4603-.0994.7662zm.8905-1.6211c-.0405-.8316.2691-.9185.5967-1.0105a2.8566 2.8566 0 0 0 .135-.0406 1.202 1.202 0 0 0 .1342.103c.5703.3765 1.5823.4213 3.0068.1344-.2016.1769-.5189.3994-.9533.6011-.4098.1903-1.0957.333-1.7473.3636-.7197.0336-1.0859-.0807-1.1721-.151zm.5695-9.2712c-.0059.3508-.0542.6692-.1054 1.0017-.055.3576-.112.7274-.1264 1.1762-.0142.4368.0404.8909.0932 1.3301.1066.887.216 1.8003-.2075 2.7014a3.5272 3.5272 0 0 1-.1876-.3856c-.0527-.1276-.1669-.3326-.3251-.6162-.6156-1.1041-2.0574-3.6896-1.3193-4.7446.3795-.5427 1.3408-.5661 2.1781-.463zm.2284 7.0137a12.3762 12.3762 0 0 0-.0853-.1074l-.0355-.0444c.7262-1.1995.5842-2.3862.4578-3.4385-.0519-.4318-.1009-.8396-.0885-1.2226.0129-.4061.0666-.7543.1185-1.0911.0639-.415.1288-.8443.1109-1.3505.0134-.0531.0188-.1158.0118-.1902-.0457-.4855-.5999-1.938-1.7294-3.253-.6076-.7073-1.4896-1.4972-2.6889-2.0395.5251-.1066 1.2328-.2035 2.0244-.1859 2.0515.0456 3.6746.8135 4.8242 2.2824a.908.908 0 0 1 .0667.1002c.7231 1.3556-.2762 6.2751-2.9867 10.5405zm-8.8166-6.1162c-.025.1794-.3089.4225-.6211.4225a.5821.5821 0 0 1-.0809-.0056c-.1873-.026-.3765-.144-.5059-.3156-.0458-.0605-.1203-.178-.1055-.2844.0055-.0401.0261-.0985.0925-.1488.1182-.0894.3518-.1226.6096-.0867.3163.0441.6426.1938.6113.4186zm7.9305-.4114c.0111.0792-.049.201-.1531.3102-.0683.0717-.212.1961-.4079.2232a.5456.5456 0 0 1-.075.0052c-.2935 0-.5414-.2344-.5607-.3717-.024-.1765.2641-.3106.5611-.352.297-.0414.6111.0088.6356.1851z"/></g>
+      <text x="1014" y="1227" class="resource-title">Analytics Store</text>
+      <text x="1014" y="1244" class="resource-meta">EVENTS · SESSIONS · ROLLUPS</text>
+    </g><g>
+      <rect x="1199.7674418604652" y="1208" width="158.2325581395349" height="48" rx="5"
+        fill="#fdf5f5" fill-opacity=".78" stroke="#ba4a52" stroke-opacity=".5"/>
+      <g transform="translate(1209.7674418604652 1220) scale(1)"><path fill="#d82c20" d="M22.71 13.145c-1.66 2.092-3.452 4.483-7.038 4.483-3.203 0-4.397-2.825-4.48-5.12.701 1.484 2.073 2.685 4.214 2.63 4.117-.133 6.94-3.852 6.94-7.239 0-4.05-3.022-6.972-8.268-6.972-3.752 0-8.4 1.428-11.455 3.685C2.59 6.937 3.885 9.958 4.35 9.626c2.648-1.904 4.748-3.13 6.784-3.744C8.12 9.244.886 17.05 0 18.425c.1 1.261 1.66 4.648 2.424 4.648.232 0 .431-.133.664-.365a100.49 100.49 0 0 0 5.54-6.765c.222 3.104 1.748 6.898 6.014 6.898 3.819 0 7.604-2.756 9.33-8.965.2-.764-.73-1.361-1.261-.73zm-4.349-5.013c0 1.959-1.926 2.922-3.685 2.922-.941 0-1.664-.247-2.235-.568 1.051-1.592 2.092-3.225 3.21-4.973 1.972.334 2.71 1.43 2.71 2.619z"/></g>
+      <text x="1241.7674418604652" y="1227" class="resource-title">Idempotency Cache</text>
+      <text x="1241.7674418604652" y="1244" class="resource-meta">VALKEY · SETNX</text>
+    </g>
+  </g><g>
+    <rect x="1450" y="1070" width="300" height="140" rx="7" fill="#ffffff"
+      stroke="#596873" stroke-width="1.2" filter="url(#node-shadow)"/>
+    <rect x="1450" y="1070" width="5" height="140" rx="2.5" fill="#b56b13"/>
+    <g transform="translate(1470 1088) scale(1.5)"><path fill="#6db33f" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="1520" y="1102" class="node-title">Alert Evaluator</text>
+    <text x="1520" y="1122" class="node-meta">VERSIONED RULE ENGINE</text>
+    <text x="1472" y="1152" class="node-detail">threshold window · incident ledger</text><text x="1472" y="1171" class="node-detail">deduped notification intent</text>
+  </g><g>
+    <rect x="1780" y="1110" width="210" height="46" rx="23" fill="#ffffff"
+      stroke="#596873" stroke-width="1.3" filter="url(#node-shadow)"/>
+    <path d="M 1967 1114
+      C 1951.36 1114, 1951.36 1152, 1967 1152"
+      fill="none" stroke="#5f6f7a" stroke-width="1.15"/>
+    <g transform="translate(1800 1119) scale(1.1666666666666667)"><path fill="#111827" d="M9.71 2.136a1.43 1.43 0 0 0-2.047 0h-.007a1.48 1.48 0 0 0-.421 1.042c0 .41.161.777.422 1.039l.007.007c.257.264.616.426 1.019.426.404 0 .766-.162 1.027-.426l.003-.007c.261-.262.421-.629.421-1.039 0-.408-.159-.777-.421-1.042H9.71zM8.683 22.295c.404 0 .766-.167 1.027-.429l.003-.008c.261-.261.421-.631.421-1.036 0-.41-.159-.778-.421-1.044H9.71a1.42 1.42 0 0 0-1.027-.432 1.4 1.4 0 0 0-1.02.432h-.007c-.26.266-.422.634-.422 1.044 0 .406.161.775.422 1.036l.007.008c.258.262.617.429 1.02.429zm7.89-4.462c.359-.096.683-.33.882-.684l.027-.052a1.47 1.47 0 0 0 .114-1.067 1.454 1.454 0 0 0-.675-.896l-.021-.014a1.425 1.425 0 0 0-1.078-.132c-.36.091-.684.335-.881.686-.2.349-.241.75-.146 1.119.099.363.33.691.675.896h.002c.346.203.737.239 1.101.144zm-6.405-7.342a2.083 2.083 0 0 0-1.485-.627c-.58 0-1.103.242-1.482.627-.378.385-.612.916-.612 1.507s.233 1.124.612 1.514a2.08 2.08 0 0 0 2.967 0c.379-.39.612-.923.612-1.514s-.233-1.122-.612-1.507zm-.835-2.51c.843.141 1.6.552 2.178 1.144h.004c.092.093.182.196.265.299l1.446-.851a3.176 3.176 0 0 1-.047-1.808 3.149 3.149 0 0 1 1.456-1.926l.025-.016a3.062 3.062 0 0 1 2.345-.306c.77.21 1.465.721 1.898 1.482v.002c.431.757.518 1.626.313 2.408a3.145 3.145 0 0 1-1.456 1.928l-.198.118h-.02a3.095 3.095 0 0 1-2.154.201 3.127 3.127 0 0 1-1.514-.944l-1.444.848a4.162 4.162 0 0 1 0 2.879l1.444.846c.413-.47.939-.789 1.514-.944a3.041 3.041 0 0 1 2.371.319l.048.023v.002a3.17 3.17 0 0 1 1.408 1.906 3.215 3.215 0 0 1-.313 2.405l-.026.053-.003-.005a3.147 3.147 0 0 1-1.867 1.436 3.096 3.096 0 0 1-2.371-.318v-.006a3.156 3.156 0 0 1-1.456-1.927 3.175 3.175 0 0 1 .047-1.805l-1.446-.848a3.905 3.905 0 0 1-.265.294l-.004.005a3.938 3.938 0 0 1-2.178 1.138v1.699a3.09 3.09 0 0 1 1.56.862l.002.004c.565.572.914 1.368.914 2.243 0 .873-.35 1.664-.914 2.239l-.002.009a3.1 3.1 0 0 1-2.21.931 3.1 3.1 0 0 1-2.206-.93h-.002v-.009a3.186 3.186 0 0 1-.916-2.239c0-.875.35-1.672.916-2.243v-.004h.002a3.1 3.1 0 0 1 1.558-.862v-1.699a3.926 3.926 0 0 1-2.176-1.138l-.006-.005a4.098 4.098 0 0 1-1.173-2.874c0-1.122.452-2.136 1.173-2.872h.006a3.947 3.947 0 0 1 2.176-1.144V6.289a3.137 3.137 0 0 1-1.558-.864h-.002v-.004a3.192 3.192 0 0 1-.916-2.243c0-.871.35-1.669.916-2.243l.002-.002A3.084 3.084 0 0 1 8.683 0c.861 0 1.641.355 2.21.932v.002h.002c.565.574.914 1.372.914 2.243 0 .876-.35 1.667-.914 2.243l-.002.005a3.142 3.142 0 0 1-1.56.864v1.692zm8.121-1.129l-.012-.019a1.452 1.452 0 0 0-.87-.668 1.43 1.43 0 0 0-1.103.146h.002c-.347.2-.58.529-.677.896-.095.365-.054.768.146 1.119l.007.009c.2.347.519.579.874.673.357.103.755.059 1.098-.144l.019-.009a1.47 1.47 0 0 0 .657-.885 1.493 1.493 0 0 0-.141-1.118"/></g>
+    <text x="1846" y="1138" class="queue-title"
+      style="font-size:14.00px">Alert Dispatch</text>
+    <text x="1885" y="1174" text-anchor="middle" class="queue-meta">ANALYTICS.ALERT.V1</text>
+  </g><g>
+    <rect x="180" y="1370" width="490" height="62" rx="8"
+      fill="#ffffff" fill-opacity=".98" stroke="#14805e"
+      stroke-width="1.2" stroke-dasharray="7 5" filter="url(#node-shadow)"/>
+    <g transform="translate(198 1386) scale(1.25)"><path fill="#3ecf8e" d="M11.9 1.036c-.015-.986-1.26-1.41-1.874-.637L.764 12.05C-.33 13.427.65 15.455 2.409 15.455h9.579l.113 7.51c.014.985 1.259 1.408 1.873.636l9.262-11.653c1.093-1.375.113-3.403-1.645-3.403h-9.642z"/></g>
+    <text x="240" y="1406" class="fabric-title">Identity + Policy</text>
+    <text x="652" y="1405" text-anchor="end" class="fabric-meta">AUTH · RBAC · POLICY · CONFIRM</text>
+  </g><g>
+    <rect x="710" y="1370" width="490" height="62" rx="8"
+      fill="#ffffff" fill-opacity=".98" stroke="#b56b13"
+      stroke-width="1.2" stroke-dasharray="7 5" filter="url(#node-shadow)"/>
+    <g transform="translate(728 1386) scale(1.25)"><path fill="#f46800" d="M23.02 10.59a8.578 8.578 0 0 0-.862-3.034 8.911 8.911 0 0 0-1.789-2.445c.337-1.342-.413-2.505-.413-2.505-1.292-.08-2.113.4-2.416.62-.052-.02-.102-.044-.154-.064-.22-.089-.446-.172-.677-.247-.231-.073-.47-.14-.711-.197a9.867 9.867 0 0 0-.875-.161C14.557.753 12.94 0 12.94 0c-1.804 1.145-2.147 2.744-2.147 2.744l-.018.093c-.098.029-.2.057-.298.088-.138.042-.275.094-.413.143-.138.055-.275.107-.41.166a8.869 8.869 0 0 0-1.557.87l-.063-.029c-2.497-.955-4.716.195-4.716.195-.203 2.658.996 4.33 1.235 4.636a11.608 11.608 0 0 0-.607 2.635C1.636 12.677.953 15.014.953 15.014c1.926 2.214 4.171 2.351 4.171 2.351.003-.002.006-.002.006-.005.285.509.615.994.986 1.446.156.19.32.371.488.548-.704 2.009.099 3.68.099 3.68 2.144.08 3.553-.937 3.849-1.173a9.784 9.784 0 0 0 3.164.501h.08l.055-.003.107-.002.103-.005.003.002c1.01 1.44 2.788 1.646 2.788 1.646 1.264-1.332 1.337-2.653 1.337-2.94v-.058c0-.02-.003-.039-.003-.06.265-.187.52-.387.758-.6a7.875 7.875 0 0 0 1.415-1.7c1.43.083 2.437-.885 2.437-.885-.236-1.49-1.085-2.216-1.264-2.354l-.018-.013-.016-.013a.217.217 0 0 1-.031-.02c.008-.092.016-.18.02-.27.011-.162.016-.323.016-.48v-.253l-.005-.098-.008-.135a1.891 1.891 0 0 0-.01-.13c-.003-.042-.008-.083-.013-.125l-.016-.124-.018-.122a6.215 6.215 0 0 0-2.032-3.73 6.015 6.015 0 0 0-3.222-1.46 6.292 6.292 0 0 0-.85-.048l-.107.002h-.063l-.044.003-.104.008a4.777 4.777 0 0 0-3.335 1.695c-.332.4-.592.84-.768 1.297a4.594 4.594 0 0 0-.312 1.817l.003.091c.005.055.007.11.013.164a3.615 3.615 0 0 0 .698 1.82 3.53 3.53 0 0 0 1.827 1.282c.33.098.66.14.971.137.039 0 .078 0 .114-.002l.063-.003c.02 0 .041-.003.062-.003.034-.002.065-.007.099-.01.007 0 .018-.003.028-.003l.031-.005.06-.008a1.18 1.18 0 0 0 .112-.02c.036-.008.072-.013.109-.024a2.634 2.634 0 0 0 .914-.415c.028-.02.056-.041.085-.065a.248.248 0 0 0 .039-.35.244.244 0 0 0-.309-.06l-.078.042c-.09.044-.184.083-.283.116a2.476 2.476 0 0 1-.475.096c-.028.003-.054.006-.083.006l-.083.002c-.026 0-.054 0-.08-.002l-.102-.006h-.012l-.024.006c-.016-.003-.031-.003-.044-.006-.031-.002-.06-.007-.091-.01a2.59 2.59 0 0 1-.724-.213 2.557 2.557 0 0 1-.667-.438 2.52 2.52 0 0 1-.805-1.475 2.306 2.306 0 0 1-.029-.444l.006-.122v-.023l.002-.031c.003-.021.003-.04.005-.06a3.163 3.163 0 0 1 1.352-2.29 3.12 3.12 0 0 1 .937-.43 2.946 2.946 0 0 1 .776-.101h.06l.07.002.045.003h.026l.07.005a4.041 4.041 0 0 1 1.635.49 3.94 3.94 0 0 1 1.602 1.662 3.77 3.77 0 0 1 .397 1.414l.005.076.003.075c.002.026.002.05.002.075 0 .024.003.052 0 .07v.065l-.002.073-.008.174a6.195 6.195 0 0 1-.08.639 5.1 5.1 0 0 1-.267.927 5.31 5.31 0 0 1-.624 1.13 5.052 5.052 0 0 1-3.237 2.014 4.82 4.82 0 0 1-.649.066l-.039.003h-.287a6.607 6.607 0 0 1-1.716-.265 6.776 6.776 0 0 1-3.4-2.274 6.75 6.75 0 0 1-.746-1.15 6.616 6.616 0 0 1-.714-2.596l-.005-.083-.002-.02v-.056l-.003-.073v-.096l-.003-.104v-.07l.003-.163c.008-.22.026-.45.054-.678a8.707 8.707 0 0 1 .28-1.355c.128-.444.286-.872.473-1.277a7.04 7.04 0 0 1 1.456-2.1 5.925 5.925 0 0 1 .953-.763c.169-.111.343-.213.524-.306.089-.05.182-.091.273-.135.047-.02.093-.042.138-.062a7.177 7.177 0 0 1 .714-.267l.145-.045c.049-.015.098-.026.148-.041.098-.029.197-.052.296-.076.049-.013.1-.02.15-.033l.15-.032.151-.028.076-.013.075-.01.153-.024c.057-.01.114-.013.171-.023l.169-.021c.036-.003.073-.008.106-.01l.073-.008.036-.003.042-.002c.057-.003.114-.008.171-.01l.086-.006h.023l.037-.003.145-.007a7.999 7.999 0 0 1 1.708.125 7.917 7.917 0 0 1 2.048.68 8.253 8.253 0 0 1 1.672 1.09l.09.077.089.078c.06.052.114.107.171.159.057.052.112.106.166.16.052.055.107.107.159.164a8.671 8.671 0 0 1 1.41 1.978c.012.026.028.052.04.078l.04.078.075.156c.023.051.05.1.07.153l.065.15a8.848 8.848 0 0 1 .45 1.34.19.19 0 0 0 .201.142.186.186 0 0 0 .172-.184c.01-.246.002-.532-.024-.856z"/></g>
+    <text x="770" y="1406" class="fabric-title">Observability</text>
+    <text x="1182" y="1405" text-anchor="end" class="fabric-meta">SLO · METRICS · TRACES · ALERTS</text>
+  </g><g>
+    <rect x="1240" y="1370" width="490" height="62" rx="8"
+      fill="#ffffff" fill-opacity=".98" stroke="#7255a5"
+      stroke-width="1.2" stroke-dasharray="7 5" filter="url(#node-shadow)"/>
+    <g transform="translate(1258 1386) scale(1.25)"><path fill="#111827" d="M9.71 2.136a1.43 1.43 0 0 0-2.047 0h-.007a1.48 1.48 0 0 0-.421 1.042c0 .41.161.777.422 1.039l.007.007c.257.264.616.426 1.019.426.404 0 .766-.162 1.027-.426l.003-.007c.261-.262.421-.629.421-1.039 0-.408-.159-.777-.421-1.042H9.71zM8.683 22.295c.404 0 .766-.167 1.027-.429l.003-.008c.261-.261.421-.631.421-1.036 0-.41-.159-.778-.421-1.044H9.71a1.42 1.42 0 0 0-1.027-.432 1.4 1.4 0 0 0-1.02.432h-.007c-.26.266-.422.634-.422 1.044 0 .406.161.775.422 1.036l.007.008c.258.262.617.429 1.02.429zm7.89-4.462c.359-.096.683-.33.882-.684l.027-.052a1.47 1.47 0 0 0 .114-1.067 1.454 1.454 0 0 0-.675-.896l-.021-.014a1.425 1.425 0 0 0-1.078-.132c-.36.091-.684.335-.881.686-.2.349-.241.75-.146 1.119.099.363.33.691.675.896h.002c.346.203.737.239 1.101.144zm-6.405-7.342a2.083 2.083 0 0 0-1.485-.627c-.58 0-1.103.242-1.482.627-.378.385-.612.916-.612 1.507s.233 1.124.612 1.514a2.08 2.08 0 0 0 2.967 0c.379-.39.612-.923.612-1.514s-.233-1.122-.612-1.507zm-.835-2.51c.843.141 1.6.552 2.178 1.144h.004c.092.093.182.196.265.299l1.446-.851a3.176 3.176 0 0 1-.047-1.808 3.149 3.149 0 0 1 1.456-1.926l.025-.016a3.062 3.062 0 0 1 2.345-.306c.77.21 1.465.721 1.898 1.482v.002c.431.757.518 1.626.313 2.408a3.145 3.145 0 0 1-1.456 1.928l-.198.118h-.02a3.095 3.095 0 0 1-2.154.201 3.127 3.127 0 0 1-1.514-.944l-1.444.848a4.162 4.162 0 0 1 0 2.879l1.444.846c.413-.47.939-.789 1.514-.944a3.041 3.041 0 0 1 2.371.319l.048.023v.002a3.17 3.17 0 0 1 1.408 1.906 3.215 3.215 0 0 1-.313 2.405l-.026.053-.003-.005a3.147 3.147 0 0 1-1.867 1.436 3.096 3.096 0 0 1-2.371-.318v-.006a3.156 3.156 0 0 1-1.456-1.927 3.175 3.175 0 0 1 .047-1.805l-1.446-.848a3.905 3.905 0 0 1-.265.294l-.004.005a3.938 3.938 0 0 1-2.178 1.138v1.699a3.09 3.09 0 0 1 1.56.862l.002.004c.565.572.914 1.368.914 2.243 0 .873-.35 1.664-.914 2.239l-.002.009a3.1 3.1 0 0 1-2.21.931 3.1 3.1 0 0 1-2.206-.93h-.002v-.009a3.186 3.186 0 0 1-.916-2.239c0-.875.35-1.672.916-2.243v-.004h.002a3.1 3.1 0 0 1 1.558-.862v-1.699a3.926 3.926 0 0 1-2.176-1.138l-.006-.005a4.098 4.098 0 0 1-1.173-2.874c0-1.122.452-2.136 1.173-2.872h.006a3.947 3.947 0 0 1 2.176-1.144V6.289a3.137 3.137 0 0 1-1.558-.864h-.002v-.004a3.192 3.192 0 0 1-.916-2.243c0-.871.35-1.669.916-2.243l.002-.002A3.084 3.084 0 0 1 8.683 0c.861 0 1.641.355 2.21.932v.002h.002c.565.574.914 1.372.914 2.243 0 .876-.35 1.667-.914 2.243l-.002.005a3.142 3.142 0 0 1-1.56.864v1.692zm8.121-1.129l-.012-.019a1.452 1.452 0 0 0-.87-.668 1.43 1.43 0 0 0-1.103.146h.002c-.347.2-.58.529-.677.896-.095.365-.054.768.146 1.119l.007.009c.2.347.519.579.874.673.357.103.755.059 1.098-.144l.019-.009a1.47 1.47 0 0 0 .657-.885 1.493 1.493 0 0 0-.141-1.118"/></g>
+    <text x="1300" y="1406" class="fabric-title">Recovery + Replay</text>
+    <text x="1712" y="1405" text-anchor="end" class="fabric-meta">OUTBOX · IDEMPOTENCY · DLQ / REPLAY</text>
+  </g><g>
+    <rect x="1770" y="1370" width="530" height="62" rx="8"
+      fill="#ffffff" fill-opacity=".98" stroke="#1769aa"
+      stroke-width="1.2" stroke-dasharray="7 5" filter="url(#node-shadow)"/>
+    <g transform="translate(1788 1386) scale(1.25)"><path fill="#4285f4" d="M12.19 2.38a9.344 9.344 0 0 0-9.234 6.893c.053-.02-.055.013 0 0-3.875 2.551-3.922 8.11-.247 10.941l.006-.007-.007.03a6.717 6.717 0 0 0 4.077 1.356h5.173l.03.03h5.192c6.687.053 9.376-8.605 3.835-12.35a9.365 9.365 0 0 0-2.821-4.552l-.043.043.006-.05A9.344 9.344 0 0 0 12.19 2.38zm-.358 4.146c1.244-.04 2.518.368 3.486 1.15a5.186 5.186 0 0 1 1.862 4.078v.518c3.53-.07 3.53 5.262 0 5.193h-5.193l-.008.009v-.04H6.785a2.59 2.59 0 0 1-1.067-.23h.001a2.597 2.597 0 1 1 3.437-3.437l3.013-3.012A6.747 6.747 0 0 0 8.11 8.24c.018-.01.04-.026.054-.023a5.186 5.186 0 0 1 3.67-1.69z"/></g>
+    <text x="1830" y="1406" class="fabric-title">Cost + Capacity</text>
+    <text x="2282" y="1405" text-anchor="end" class="fabric-meta">SCALE-TO-ZERO · BUDGET · QUOTAS</text>
+  </g></g>
+  <g></g>
+</svg>
