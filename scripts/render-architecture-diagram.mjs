@@ -325,7 +325,7 @@ function drawLane(lane) {
 }
 
 function drawActor(node, accent, configDir) {
-  const { x, y, w } = nodeBounds(node);
+  const { x, y, w, h } = nodeBounds(node);
   const center = x + w / 2;
   const brands = Array.isArray(node.brands) ? node.brands : [];
   const brandSize = brands.length > 1 ? 38 : 52;
@@ -341,7 +341,13 @@ function drawActor(node, accent, configDir) {
       configDir,
     )).join("")
     : brandIcon(node, center - 26, y + 2, 52, accent, configDir);
+  const frame = node.framed
+    ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="9"
+      fill="${PALETTE.node}" fill-opacity=".98" stroke="${accent.strong}"
+      stroke-opacity=".62" stroke-width="1.1" filter="url(#node-shadow)"/>`
+    : "";
   return `<g>
+    ${frame}
     ${actorIcons}
     <text x="${center}" y="${y + 76}" text-anchor="middle" class="node-title">${escapeXml(node.title)}</text>
     ${node.meta ? `<text x="${center}" y="${y + 96}" text-anchor="middle" class="node-meta">${escapeXml(node.meta)}</text>` : ""}

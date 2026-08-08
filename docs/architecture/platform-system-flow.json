@@ -1,33 +1,33 @@
 {
   "title": "Portfolio Microservice Platform",
-  "subtitle": "C4 container view · independently deployable services · explicit API, event and state ownership",
-  "summary": "11 RUNTIMES · 5 KAFKA TOPICS · 14 OWNED RESOURCES",
-  "description": "Workflow-oriented microservice architecture showing online AI serving, content projection, visitor intelligence, notification delivery, and explicit reliability semantics.",
+  "subtitle": "Production topology · synchronous APIs · event-driven projections · explicit state ownership",
+  "summary": "16 RUNTIMES · 7 EVENT STREAMS · 13 OWNED STATE STORES",
+  "description": "Staff-level container view of the portfolio edge, AI runtime, content control, notification delivery, visitor intelligence, observability, and recovery paths.",
   "theme": "light",
   "validateNoOverlap": true,
-  "width": 2500,
-  "height": 1490,
+  "width": 2800,
+  "height": 1790,
   "lanes": [
     {
       "id": "online",
-      "title": "01 · ONLINE AI SERVING",
-      "subtitle": "HTTPS / SSE · policy · retrieval · model and tool execution",
+      "title": "01 · EDGE + ONLINE AI SERVING",
+      "subtitle": "HTTPS / SSE · policy-aware orchestration · hybrid retrieval · MCP · immutable run telemetry",
       "x": 140,
       "y": 115,
-      "w": 2220,
-      "h": 450,
+      "w": 2510,
+      "h": 650,
       "accent": "green",
       "fillOpacity": 0.035,
       "strokeOpacity": 0.28
     },
     {
       "id": "content",
-      "title": "02 · CONTENT CONTROL + PROJECTIONS",
-      "subtitle": "Transactional outbox · independent Kafka topics · idempotent read models",
+      "title": "02 · CONTENT CONTROL + DELIVERY",
+      "subtitle": "Single source transaction · transactional outbox · independent projections · leased notification delivery",
       "x": 140,
-      "y": 585,
-      "w": 2220,
-      "h": 385,
+      "y": 785,
+      "w": 2510,
+      "h": 420,
       "accent": "orange",
       "fillOpacity": 0.035,
       "strokeOpacity": 0.28
@@ -35,11 +35,11 @@
     {
       "id": "analytics",
       "title": "03 · VISITOR INTELLIGENCE + ALERTING",
-      "subtitle": "First-party events · city-level enrichment · sessions · rollups · delivery intents",
+      "subtitle": "First-party events · city-level enrichment · idempotent ingestion · sessions · rollups · replay",
       "x": 140,
-      "y": 990,
-      "w": 2220,
-      "h": 300,
+      "y": 1225,
+      "w": 2510,
+      "h": 390,
       "accent": "cyan",
       "fillOpacity": 0.035,
       "strokeOpacity": 0.28
@@ -47,11 +47,11 @@
     {
       "id": "control-plane",
       "title": "04 · PLATFORM CONTROL PLANE",
-      "subtitle": "Cross-cutting governance · independent failure domains · no shared database",
+      "subtitle": "Cross-cutting governance · independent failure domains · bounded cost · operational recovery",
       "x": 140,
-      "y": 1305,
-      "w": 2220,
-      "h": 155,
+      "y": 1635,
+      "w": 2510,
+      "h": 130,
       "accent": "slate",
       "fillOpacity": 0.04,
       "strokeOpacity": 0.3
@@ -66,19 +66,19 @@
       "meta": "WEB / MOBILE",
       "accent": "cyan",
       "x": 20,
-      "y": 255,
+      "y": 285,
       "w": 105,
       "h": 112
     },
     {
       "id": "operator",
       "shape": "actor",
-      "icon": "user",
+      "icon": "shield",
       "title": "Operator",
       "meta": "ADMIN",
       "accent": "orange",
       "x": 20,
-      "y": 715,
+      "y": 920,
       "w": 105,
       "h": 112
     },
@@ -98,11 +98,12 @@
         }
       ],
       "icon": "model",
-      "title": "AI MCP Clients",
+      "title": "MCP Clients",
       "meta": "OPENAI · GEMINI",
       "accent": "purple",
-      "x": 2320,
-      "y": 410,
+      "framed": true,
+      "x": 2660,
+      "y": 360,
       "w": 120,
       "h": 112
     },
@@ -115,9 +116,9 @@
       "title": "Portfolio Edge",
       "meta": "NEXT.JS · VERCEL",
       "members": [
-        "Public UI",
+        "Portfolio UI",
         "Admin Console",
-        "API / BFF",
+        "Serverless API / BFF",
         "Chat + Tracking"
       ],
       "resources": [
@@ -125,26 +126,26 @@
           "brand": "supabase",
           "brandColor": "#3ecf8e",
           "icon": "lock",
-          "title": "Identity",
+          "title": "JWT Guard",
           "meta": "SUPABASE AUTH",
           "accent": "green",
-          "weight": 1.2
+          "weight": 1.25
         },
         {
           "brand": "redis",
           "brandColor": "#d82c20",
           "icon": "cache",
-          "title": "Session Cache",
+          "title": "Edge Limits",
           "meta": "VALKEY · TTL",
           "accent": "red",
-          "weight": 0.8
+          "weight": 0.75
         }
       ],
       "accent": "blue",
       "x": 180,
-      "y": 235,
-      "w": 350,
-      "h": 250
+      "y": 245,
+      "w": 360,
+      "h": 260
     },
     {
       "id": "agent-runtime",
@@ -155,46 +156,27 @@
       "title": "Agent Runtime",
       "meta": "CLOUD RUN · HTTP / SSE",
       "members": [
-        "Safety + Planner",
-        "Streaming",
-        "Retrieval Orchestration",
-        "Tool Execution"
+        "Safety + Intent Planner",
+        "Generation + Streaming",
+        "Conversation Compactor",
+        "Budget + Model Fallback"
       ],
       "resources": [
         {
           "brand": "redis",
           "brandColor": "#d82c20",
           "icon": "memory",
-          "title": "Conversation",
-          "meta": "REDIS · 30M TTL",
+          "title": "Conversation Memory",
+          "meta": "REDIS · 30M SLIDING TTL",
           "accent": "red",
-          "weight": 1.25
-        },
-        {
-          "brand": "postgresql",
-          "brandColor": "#336791",
-          "icon": "database",
-          "title": "Run Store",
-          "meta": "POSTGRES",
-          "accent": "blue",
-          "weight": 1
-        },
-        {
-          "brand": "elasticsearch",
-          "brandColor": "#005571",
-          "brandColorMode": "source",
-          "icon": "search",
-          "title": "Trace Index",
-          "meta": "OPENSEARCH",
-          "accent": "cyan",
           "weight": 1
         }
       ],
       "accent": "green",
-      "x": 650,
-      "y": 145,
-      "w": 430,
-      "h": 280
+      "x": 630,
+      "y": 165,
+      "w": 420,
+      "h": 300
     },
     {
       "id": "knowledge-service",
@@ -203,12 +185,12 @@
       "brandColor": "#6db33f",
       "icon": "search",
       "title": "Knowledge Service",
-      "meta": "CLOUD RUN · HYBRID RETRIEVAL",
+      "meta": "HYBRID BM25 + KNN · RRF",
       "members": [
-        "BM25 Search",
-        "Vector Search",
+        "Query + Permission Filter",
+        "BM25 + Vector Search",
         "RRF Fusion",
-        "Canonical Links"
+        "Canonical URL Resolver"
       ],
       "resources": [
         {
@@ -216,26 +198,26 @@
           "brandColor": "#005571",
           "brandColorMode": "source",
           "icon": "search",
-          "title": "Search Index",
+          "title": "Knowledge Index",
           "meta": "OPENSEARCH",
           "accent": "cyan",
-          "weight": 1
+          "weight": 1.15
         },
         {
           "brand": "postgresql",
           "brandColor": "#336791",
           "icon": "database",
-          "title": "Vectors",
+          "title": "Embeddings",
           "meta": "PGVECTOR",
           "accent": "purple",
-          "weight": 1
+          "weight": 0.85
         }
       ],
       "accent": "cyan",
-      "x": 1180,
-      "y": 220,
-      "w": 390,
-      "h": 250
+      "x": 1130,
+      "y": 150,
+      "w": 400,
+      "h": 280
     },
     {
       "id": "model-gateway",
@@ -243,15 +225,16 @@
       "brandColor": "#4285f4",
       "icon": "model",
       "title": "Model Gateway",
-      "meta": "GEMINI · FALLBACK",
+      "meta": "GEMINI · OPENAI",
       "details": [
-        "generation · safety · embeddings"
+        "safety · generation · embeddings",
+        "timeouts · retry · fallback"
       ],
       "accent": "blue",
-      "x": 1750,
-      "y": 140,
-      "w": 300,
-      "h": 120
+      "x": 1630,
+      "y": 145,
+      "w": 310,
+      "h": 130
     },
     {
       "id": "mcp-gateway",
@@ -259,15 +242,106 @@
       "brandColor": "#7255a5",
       "icon": "tool",
       "title": "MCP Tool Gateway",
-      "meta": "STREAMABLE HTTP · RBAC",
+      "meta": "TYPED TOOLS · RBAC",
       "details": [
-        "confirmation · idempotent adapters",
-        "content · analytics · subscription"
+        "risk policy · confirmation",
+        "idempotency · audit · sanitize"
       ],
       "accent": "purple",
-      "x": 1660,
-      "y": 380,
-      "w": 320,
+      "x": 1630,
+      "y": 330,
+      "w": 310,
+      "h": 135
+    },
+    {
+      "id": "public-mcp",
+      "brand": "modelcontextprotocol",
+      "brandColor": "#7255a5",
+      "icon": "api",
+      "title": "Public MCP Edge",
+      "meta": "STREAMABLE HTTP · STATELESS",
+      "details": [
+        "read-only registry · rate limit",
+        "response sanitization"
+      ],
+      "accent": "purple",
+      "x": 2210,
+      "y": 330,
+      "w": 340,
+      "h": 140
+    },
+    {
+      "id": "ai-topic",
+      "shape": "queue",
+      "brand": "apachekafka",
+      "brandColor": "#111827",
+      "icon": "queue",
+      "title": "Agent Events",
+      "meta": "AI.AGENT.EVENTS.V1",
+      "metaBelow": true,
+      "tubeHeight": 46,
+      "accent": "purple",
+      "x": 690,
+      "y": 590,
+      "w": 230,
+      "h": 68
+    },
+    {
+      "id": "agent-projectors",
+      "shape": "cluster",
+      "brand": "springboot",
+      "brandColor": "#6db33f",
+      "icon": "workflow",
+      "title": "Agent Event Projectors",
+      "meta": "2 KAFKA CONSUMERS · MANUAL ACK",
+      "members": [
+        "Audit Record Consumer",
+        "OpenSearch Consumer",
+        "Idempotent Bulk Index",
+        "Postgres Replay Source"
+      ],
+      "resources": [
+        {
+          "brand": "postgresql",
+          "brandColor": "#336791",
+          "icon": "database",
+          "title": "Run Audit",
+          "meta": "POSTGRES · JSONB",
+          "accent": "blue",
+          "weight": 1
+        },
+        {
+          "brand": "elasticsearch",
+          "brandColor": "#005571",
+          "brandColorMode": "source",
+          "icon": "search",
+          "title": "Event Store",
+          "meta": "OPENSEARCH",
+          "accent": "cyan",
+          "weight": 1
+        }
+      ],
+      "accent": "slate",
+      "x": 1030,
+      "y": 500,
+      "w": 440,
+      "h": 225
+    },
+    {
+      "id": "kibana",
+      "brand": "elasticsearch",
+      "brandColor": "#005571",
+      "brandColorMode": "source",
+      "icon": "chart",
+      "title": "Kibana Dashboard",
+      "meta": "OPENSEARCH · RUN TRACE · SAFETY",
+      "details": [
+        "filter by runId · zero-hit analysis"
+      ],
+      "accent": "cyan",
+      "x": 1580,
+      "y": 565,
+      "w": 330,
       "h": 125
     },
 
@@ -281,16 +355,16 @@
       "meta": "CLOUD RUN · HTTP",
       "members": [
         "CRUD + Versioning",
-        "Audit",
+        "Publish + Audit",
         "Durable Jobs",
-        "Outbox Relay"
+        "Transactional Outbox"
       ],
       "resources": [
         {
           "brand": "postgresql",
           "brandColor": "#336791",
           "icon": "database",
-          "title": "Content Store",
+          "title": "Content System of Record",
           "meta": "CONTENT · JOBS · OUTBOX",
           "accent": "blue",
           "weight": 1
@@ -298,9 +372,9 @@
       ],
       "accent": "orange",
       "x": 180,
-      "y": 650,
-      "w": 390,
-      "h": 250
+      "y": 855,
+      "w": 410,
+      "h": 275
     },
     {
       "id": "search-topic",
@@ -313,8 +387,8 @@
       "metaBelow": true,
       "tubeHeight": 46,
       "accent": "purple",
-      "x": 660,
-      "y": 620,
+      "x": 675,
+      "y": 830,
       "w": 230,
       "h": 68
     },
@@ -329,8 +403,8 @@
       "metaBelow": true,
       "tubeHeight": 46,
       "accent": "purple",
-      "x": 660,
-      "y": 790,
+      "x": 675,
+      "y": 1025,
       "w": 230,
       "h": 68
     },
@@ -340,11 +414,11 @@
       "brand": "springboot",
       "brandColor": "#6db33f",
       "icon": "search",
-      "title": "Projection Workers",
+      "title": "Content Projection Workers",
       "meta": "2 CLOUD RUN CONSUMERS",
       "members": [
         "Search Indexer",
-        "RAG Indexer",
+        "RAG Chunker",
         "Idempotent Upsert",
         "Replay + Rebuild"
       ],
@@ -354,7 +428,7 @@
           "brandColor": "#005571",
           "brandColorMode": "source",
           "icon": "search",
-          "title": "Search Index",
+          "title": "Content Search",
           "meta": "OPENSEARCH",
           "accent": "cyan",
           "weight": 1
@@ -363,7 +437,7 @@
           "brand": "postgresql",
           "brandColor": "#336791",
           "icon": "database",
-          "title": "Vectors",
+          "title": "RAG Chunks",
           "meta": "PGVECTOR",
           "accent": "purple",
           "weight": 1
@@ -371,24 +445,24 @@
       ],
       "accent": "cyan",
       "x": 1000,
-      "y": 650,
-      "w": 420,
-      "h": 250
+      "y": 855,
+      "w": 430,
+      "h": 275
     },
     {
-      "id": "notification-topic",
+      "id": "content-notification-topic",
       "shape": "queue",
       "brand": "apachekafka",
       "brandColor": "#111827",
       "icon": "queue",
-      "title": "Notification Dispatch",
-      "meta": "NOTIFICATION.DISPATCH.V1",
+      "title": "Content Notification",
+      "meta": "CONTENT.NOTIFICATION.V1",
       "metaBelow": true,
       "tubeHeight": 46,
       "accent": "purple",
-      "x": 1430,
-      "y": 780,
-      "w": 260,
+      "x": 1490,
+      "y": 1025,
+      "w": 270,
       "h": 68
     },
     {
@@ -400,18 +474,18 @@
       "title": "Notification Service",
       "meta": "CLOUD RUN · KAFKA CONSUMER",
       "members": [
-        "Subscriber API",
-        "Preference Fan-out",
-        "Leased Delivery",
-        "OTP + Recovery"
+        "Subscribe + Preferences",
+        "OTP Verification",
+        "Recipient Fan-out",
+        "Leased Email Worker"
       ],
       "resources": [
         {
           "brand": "postgresql",
           "brandColor": "#336791",
           "icon": "database",
-          "title": "Delivery Store",
-          "meta": "SUBSCRIBERS · RETRY",
+          "title": "Delivery Ledger",
+          "meta": "RECIPIENTS · RETRY · STATUS",
           "accent": "blue",
           "weight": 1.35
         },
@@ -426,25 +500,25 @@
         }
       ],
       "accent": "red",
-      "x": 1760,
-      "y": 630,
-      "w": 400,
-      "h": 260
+      "x": 1835,
+      "y": 835,
+      "w": 440,
+      "h": 285
     },
     {
       "id": "email-provider",
       "brand": "gmail",
       "brandColor": "#ea4335",
       "icon": "mail",
-      "title": "Email",
-      "meta": "SMTP · GMAIL",
+      "title": "Email Provider",
+      "meta": "SMTP · GMAIL RELAY",
       "details": [
-        "verified delivery"
+        "HTML + text · verified delivery"
       ],
       "accent": "red",
-      "x": 2260,
-      "y": 700,
-      "w": 170,
+      "x": 2440,
+      "y": 915,
+      "w": 190,
       "h": 125
     },
 
@@ -460,8 +534,8 @@
         "request ID · bounded payload"
       ],
       "accent": "cyan",
-      "x": 230,
-      "y": 1070,
+      "x": 200,
+      "y": 1340,
       "w": 300,
       "h": 140
     },
@@ -472,13 +546,13 @@
       "brandColor": "#111827",
       "icon": "queue",
       "title": "Visitor Ingestion",
-      "meta": "ANALYTICS.RAW.V1",
+      "meta": "ANALYTICS.RAW.EVENTS",
       "metaBelow": true,
       "tubeHeight": 46,
       "accent": "purple",
-      "x": 620,
-      "y": 1110,
-      "w": 230,
+      "x": 590,
+      "y": 1375,
+      "w": 240,
       "h": 68
     },
     {
@@ -488,12 +562,12 @@
       "brandColor": "#6db33f",
       "icon": "chart",
       "title": "Visitor Intelligence",
-      "meta": "CLOUD RUN · KAFKA CONSUMER",
+      "meta": "KAFKA CONSUMER · MANUAL ACK",
       "members": [
-        "Ingest + Enrich",
+        "Ingest + Geo Enrichment",
         "Session Aggregator",
-        "Funnel + Journey",
-        "Query + Export"
+        "5m / 1d Rollup + Retention",
+        "Funnel + Journey + Replay"
       ],
       "resources": [
         {
@@ -503,40 +577,57 @@
           "title": "Analytics Store",
           "meta": "EVENTS · SESSIONS · ROLLUPS",
           "accent": "blue",
-          "weight": 1.25
+          "weight": 1.3
         },
         {
           "brand": "redis",
           "brandColor": "#d82c20",
           "icon": "cache",
-          "title": "Idempotency Cache",
+          "title": "Dedup + Limits",
           "meta": "VALKEY · SETNX",
           "accent": "red",
-          "weight": 0.9
+          "weight": 0.7
         }
       ],
       "accent": "cyan",
-      "x": 950,
-      "y": 1010,
-      "w": 430,
-      "h": 260
+      "x": 930,
+      "y": 1280,
+      "w": 450,
+      "h": 285
+    },
+    {
+      "id": "visits-api",
+      "brand": "springboot",
+      "brandColor": "#6db33f",
+      "icon": "compass",
+      "title": "Public Visits API",
+      "meta": "READ MODEL · ETAG / 304",
+      "details": [
+        "summary · markers · sessions",
+        "30s response cache"
+      ],
+      "accent": "green",
+      "x": 1490,
+      "y": 1265,
+      "w": 300,
+      "h": 135
     },
     {
       "id": "alert-evaluator",
       "brand": "springboot",
       "brandColor": "#6db33f",
       "icon": "bell",
-      "title": "Alert Evaluator",
+      "title": "Visitor Alert Evaluator",
       "meta": "VERSIONED RULE ENGINE",
       "details": [
-        "threshold window · incident ledger",
+        "poll rollups · incident ledger",
         "deduped notification intent"
       ],
       "accent": "orange",
-      "x": 1450,
-      "y": 1070,
+      "x": 1490,
+      "y": 1435,
       "w": 300,
-      "h": 140
+      "h": 135
     },
     {
       "id": "alert-topic",
@@ -549,11 +640,28 @@
       "metaBelow": true,
       "tubeHeight": 46,
       "accent": "purple",
-      "x": 1780,
-      "y": 1110,
-      "w": 210,
+      "x": 1870,
+      "y": 1470,
+      "w": 230,
       "h": 68
     },
+    {
+      "id": "analytics-dlq",
+      "shape": "queue",
+      "brand": "apachekafka",
+      "brandColor": "#111827",
+      "icon": "retry",
+      "title": "Analytics DLQ",
+      "meta": "14D RETENTION · REPLAY",
+      "metaBelow": true,
+      "tubeHeight": 46,
+      "accent": "red",
+      "x": 2220,
+      "y": 1470,
+      "w": 230,
+      "h": 68
+    },
+
     {
       "id": "platform-security",
       "shape": "fabric",
@@ -564,8 +672,8 @@
       "meta": "AUTH · RBAC · POLICY · CONFIRM",
       "accent": "green",
       "x": 180,
-      "y": 1370,
-      "w": 490,
+      "y": 1682,
+      "w": 540,
       "h": 62
     },
     {
@@ -577,9 +685,9 @@
       "title": "Observability",
       "meta": "SLO · METRICS · TRACES · ALERTS",
       "accent": "orange",
-      "x": 710,
-      "y": 1370,
-      "w": 490,
+      "x": 760,
+      "y": 1682,
+      "w": 540,
       "h": 62
     },
     {
@@ -588,12 +696,12 @@
       "brand": "apachekafka",
       "brandColor": "#111827",
       "icon": "retry",
-      "title": "Recovery + Replay",
-      "meta": "OUTBOX · IDEMPOTENCY · DLQ / REPLAY",
+      "title": "Reliability + Replay",
+      "meta": "OUTBOX · IDEMPOTENCY · DLQ · REBUILD",
       "accent": "purple",
-      "x": 1240,
-      "y": 1370,
-      "w": 490,
+      "x": 1340,
+      "y": 1682,
+      "w": 570,
       "h": 62
     },
     {
@@ -605,9 +713,9 @@
       "title": "Cost + Capacity",
       "meta": "SCALE-TO-ZERO · BUDGET · QUOTAS",
       "accent": "blue",
-      "x": 1770,
-      "y": 1370,
-      "w": 530,
+      "x": 1950,
+      "y": 1682,
+      "w": 640,
       "h": 62
     }
   ],
@@ -640,11 +748,18 @@
       "toSide": "top",
       "kind": "primary",
       "via": [
-        { "x": 1120, "y": 112 },
-        { "x": 1620, "y": 108 }
+        { "x": 1090, "y": 105 },
+        { "x": 1510, "y": 105 }
       ],
       "label": "generate",
-      "labelAt": { "x": 1370, "y": 108 },
+      "labelAt": { "x": 1310, "y": 105 },
+      "routing": "smooth"
+    },
+    {
+      "from": "knowledge-service",
+      "to": "model-gateway",
+      "kind": "data",
+      "label": "embed / rerank",
       "routing": "smooth"
     },
     {
@@ -654,20 +769,55 @@
       "toSide": "left",
       "kind": "sync",
       "via": [
-        { "x": 1120, "y": 535 },
-        { "x": 1510, "y": 535 }
+        { "x": 1090, "y": 485 },
+        { "x": 1510, "y": 485 }
       ],
       "label": "tool call",
-      "labelAt": { "x": 1320, "y": 535 },
+      "labelAt": { "x": 1300, "y": 485 },
       "routing": "smooth"
     },
     {
       "from": "mcp-clients",
-      "to": "mcp-gateway",
+      "to": "public-mcp",
       "fromSide": "left",
       "toSide": "right",
       "kind": "primary",
-      "label": "Streamable HTTP",
+      "via": [
+        { "x": 2605, "y": 380 }
+      ],
+      "label": "/mcp",
+      "routing": "smooth"
+    },
+    {
+      "from": "public-mcp",
+      "to": "mcp-gateway",
+      "fromAt": { "x": 2210, "y": 365 },
+      "toAt": { "x": 1940, "y": 365 },
+      "kind": "sync",
+      "label": "read-only tools",
+      "routing": "smooth"
+    },
+    {
+      "from": "agent-runtime",
+      "to": "ai-topic",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "kind": "event",
+      "label": "6 event types / run",
+      "routing": "smooth"
+    },
+    {
+      "from": "ai-topic",
+      "to": "agent-projectors",
+      "kind": "event",
+      "label": "consume",
+      "routing": "smooth"
+    },
+    {
+      "from": "agent-projectors",
+      "to": "kibana",
+      "kind": "data",
+      "label": "query traces",
       "routing": "smooth"
     },
 
@@ -711,37 +861,72 @@
       "fromSide": "top",
       "toSide": "bottom",
       "kind": "data",
+      "via": [
+        { "x": 1420, "y": 800 },
+        { "x": 1490, "y": 750 },
+        { "x": 1490, "y": 455 }
+      ],
       "label": "projection refresh",
-      "labelAt": { "x": 1400, "y": 560 },
+      "labelAt": { "x": 1490, "y": 735 },
       "routing": "smooth"
     },
     {
       "from": "content-control",
-      "to": "notification-topic",
+      "to": "content-notification-topic",
       "fromSide": "bottom",
       "toSide": "left",
       "kind": "event",
       "via": [
-        { "x": 650, "y": 945 },
-        { "x": 1440, "y": 945 },
-        { "x": 1440, "y": 850 }
+        { "x": 610, "y": 1170 },
+        { "x": 1150, "y": 1170 },
+        { "x": 1400, "y": 1100 }
       ],
       "label": "article published",
-      "labelAt": { "x": 1120, "y": 945 },
+      "labelAt": { "x": 1120, "y": 1170 },
       "routing": "smooth"
     },
     {
-      "from": "notification-topic",
+      "from": "content-notification-topic",
       "to": "notification-service",
       "kind": "event",
       "label": "fan-out",
-      "labelAt": { "x": 1725, "y": 790 },
       "routing": "smooth"
     },
     {
       "from": "notification-service",
       "to": "email-provider",
       "kind": "primary",
+      "label": "SMTP",
+      "routing": "smooth"
+    },
+    {
+      "from": "mcp-gateway",
+      "to": "content-control",
+      "fromAt": { "x": 1630, "y": 440 },
+      "toSide": "top",
+      "kind": "sync",
+      "via": [
+        { "x": 1540, "y": 520 },
+        { "x": 1540, "y": 700 },
+        { "x": 900, "y": 735 },
+        { "x": 500, "y": 785 }
+      ],
+      "label": "admin.* tools",
+      "labelAt": { "x": 760, "y": 760 },
+      "routing": "smooth"
+    },
+    {
+      "from": "mcp-gateway",
+      "to": "notification-service",
+      "fromAt": { "x": 1940, "y": 440 },
+      "toSide": "top",
+      "kind": "sync",
+      "via": [
+        { "x": 2130, "y": 520 },
+        { "x": 2110, "y": 700 }
+      ],
+      "label": "subscription.* tools",
+      "labelAt": { "x": 2015, "y": 700 },
       "routing": "smooth"
     },
 
@@ -752,12 +937,11 @@
       "toSide": "left",
       "kind": "sync",
       "via": [
-        { "x": 150, "y": 555 },
-        { "x": 150, "y": 1040 },
-        { "x": 175, "y": 1140 }
+        { "x": 150, "y": 540 },
+        { "x": 150, "y": 1300 }
       ],
-      "label": "/api/track",
-      "labelAt": { "x": 150, "y": 555 },
+      "label": "/api/track · /api/click",
+      "labelAt": { "x": 150, "y": 1200 },
       "routing": "smooth"
     },
     {
@@ -770,12 +954,36 @@
       "from": "analytics-topic",
       "to": "analytics-aggregator",
       "kind": "event",
+      "label": "batch 100",
+      "routing": "smooth"
+    },
+    {
+      "from": "analytics-aggregator",
+      "to": "visits-api",
+      "kind": "data",
+      "label": "rollups + sessions",
+      "routing": "smooth"
+    },
+    {
+      "from": "portfolio-edge",
+      "to": "visits-api",
+      "fromSide": "right",
+      "toSide": "top",
+      "kind": "sync",
+      "via": [
+        { "x": 620, "y": 560 },
+        { "x": 760, "y": 1080 },
+        { "x": 1450, "y": 1200 }
+      ],
+      "label": "/api/analytics",
+      "labelAt": { "x": 1430, "y": 1210 },
       "routing": "smooth"
     },
     {
       "from": "analytics-aggregator",
       "to": "alert-evaluator",
       "kind": "data",
+      "label": "windowed rollups",
       "routing": "smooth"
     },
     {
@@ -785,13 +993,32 @@
       "routing": "smooth"
     },
     {
+      "from": "analytics-aggregator",
+      "to": "analytics-dlq",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "kind": "recovery",
+      "via": [
+        { "x": 1390, "y": 1590 },
+        { "x": 2180, "y": 1590 }
+      ],
+      "label": "parse / retry exhausted",
+      "labelAt": { "x": 1880, "y": 1590 },
+      "routing": "smooth"
+    },
+    {
       "from": "alert-topic",
       "to": "notification-service",
       "fromSide": "top",
       "toSide": "bottom",
       "kind": "event",
+      "via": [
+        { "x": 2140, "y": 1400 },
+        { "x": 2200, "y": 1250 },
+        { "x": 2160, "y": 1160 }
+      ],
       "label": "alert intent",
-      "labelAt": { "x": 1990, "y": 975 },
+      "labelAt": { "x": 2180, "y": 1280 },
       "routing": "smooth"
     }
   ]
