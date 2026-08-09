@@ -16,6 +16,7 @@ import {
   LogOut,
   Menu,
   Radio,
+  Route,
   ScrollText,
   ShieldCheck,
   Users,
@@ -61,6 +62,7 @@ const NAV_GROUPS = [
     label: "AI Operations",
     items: [
       { href: "/admin/conversations", label: "Conversations", icon: History },
+      { href: "/admin/operations", label: "Operations timeline", icon: Route },
       { href: "/admin/cost-guardrails", label: "Cost guardrails", icon: ShieldCheck },
       { href: "/admin/agent", label: "Operate console", icon: Bot },
       { href: KIBANA_DASHBOARD, label: "OpenSearch", icon: Gauge, external: true },
