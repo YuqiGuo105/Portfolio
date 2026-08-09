@@ -58,10 +58,25 @@
 .searchIcon { position: absolute; top: 50%; left: 11px; color: #8a949c; transform: translateY(-50%); pointer-events: none; }
 .input,
 .select { min-height: 36px; border: 1px solid #cfd6db; border-radius: 6px; background: #ffffff; color: #25313b; font: inherit; font-size: 13px; }
-.input { width: 100%; padding: 7px 11px 7px 34px; }
+.input {
+  width: 100%;
+  padding: 7px 11px 7px 34px;
+  caret-color: #25313b;
+  -webkit-text-fill-color: #25313b;
+}
+.input::placeholder {
+  color: #8a949c;
+  -webkit-text-fill-color: #8a949c;
+  opacity: 1;
+}
 .select { padding: 6px 30px 6px 10px; }
 .input:focus,
 .select:focus { border-color: #0f766e; outline: 2px solid rgba(15, 118, 110, 0.12); }
+.input:focus {
+  color: #25313b;
+  caret-color: #25313b;
+  -webkit-text-fill-color: #25313b;
+}
 .segmented { display: inline-flex; padding: 3px; border: 1px solid #d8dee2; border-radius: 7px; background: #f5f7f8; }
 .segment { min-height: 29px; padding: 5px 10px; border: 0; border-radius: 5px; background: transparent; color: #67727c; font: inherit; font-size: 12px; cursor: pointer; }
 .segmentActive { background: #ffffff; color: #0f766e; box-shadow: 0 1px 3px rgba(23, 33, 43, 0.12); font-weight: 700; }
