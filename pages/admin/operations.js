@@ -13,10 +13,12 @@ export default function OperationsTimelinePage() {
   const [data, setData] = useState({ events: [], summary: {} });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [projectionUnavailable, setProjectionUnavailable] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    setProjectionUnavailable(false);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
@@ -26,7 +28,13 @@ export default function OperationsTimelinePage() {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.message || `Timeline query failed: ${response.status}`);
+      const projectionOffline = response.status === 503
+        && body.error === "timeline_projection_unavailable";
+      setProjectionUnavailable(projectionOffline);
+      if (!response.ok) {
+        const message = body.message || `Timeline query failed: ${response.status}`;
+        throw new Error(projectionOffline ? `${message} Retrying automatically in 30 seconds.` : message);
+      }
       setData(body);
     } catch (requestError) {
       setError(requestError.message || "Operations timeline could not be loaded.");
@@ -36,6 +44,12 @@ export default function OperationsTimelinePage() {
   }, [submittedQuery]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!projectionUnavailable) return undefined;
+    const retry = window.setTimeout(load, 30_000);
+    return () => window.clearTimeout(retry);
+  }, [load, projectionUnavailable]);
 
   const events = useMemo(
     () => [...(data.events || [])].sort((a, b) => new Date(a.occurredAt) - new Date(b.occurredAt)),
@@ -62,10 +76,10 @@ export default function OperationsTimelinePage() {
         />
 
         <section className={ui.metrics} aria-label="Timeline summary">
-          <Metric icon={Workflow} label="Events" value={summary.events ?? 0} />
-          <Metric icon={Server} label="Services" value={summary.services ?? 0} />
-          <Metric icon={AlertTriangle} label="Failures" value={summary.failures ?? 0} danger={summary.failures > 0} />
-          <Metric icon={GitBranch} label="Retries" value={summary.retries ?? 0} />
+          <Metric icon={Workflow} label="Events" value={projectionUnavailable ? "—" : (summary.events ?? 0)} unavailable={projectionUnavailable} />
+          <Metric icon={Server} label="Services" value={projectionUnavailable ? "—" : (summary.services ?? 0)} unavailable={projectionUnavailable} />
+          <Metric icon={AlertTriangle} label="Failures" value={projectionUnavailable ? "—" : (summary.failures ?? 0)} danger={!projectionUnavailable && summary.failures > 0} unavailable={projectionUnavailable} />
+          <Metric icon={GitBranch} label="Retries" value={projectionUnavailable ? "—" : (summary.retries ?? 0)} unavailable={projectionUnavailable} />
         </section>
 
         <section className={ui.panel}>
@@ -112,12 +126,12 @@ export default function OperationsTimelinePage() {
   );
 }
 
-function Metric({ icon: Icon, label, value, danger = false }) {
+function Metric({ icon: Icon, label, value, danger = false, unavailable = false }) {
   return (
     <div className={ui.metric}>
       <div className={ui.metricLabel}><Icon size={14} /> {label}</div>
       <div className={`${ui.metricValue} ${danger ? styles.danger : ""}`}>{value}</div>
-      <div className={ui.metricHint}>Current trace result</div>
+      <div className={ui.metricHint}>{unavailable ? "Projection rebuilding" : "Current trace result"}</div>
     </div>
   );
 }
