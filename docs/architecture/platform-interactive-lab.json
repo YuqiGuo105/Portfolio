@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "title": "Interactive Architecture Lab",
+  "description": "Run a guided, read-only trace across the same production topology used by the README architecture diagram.",
+  "defaultScenario": "ask-agent",
+  "observability": [
+    {
+      "label": "Grafana",
+      "url": "https://loyalcaravan951.grafana.net/public-dashboards/154eccd6136f4daebe70faf015600aa9"
+    },
+    {
+      "label": "Kibana",
+      "url": "https://os-79250b0-yguo105-17e7.l.aivencloud.com/app/data-explorer/discover"
+    }
+  ],
+  "componentMetadata": {
+    "portfolio-edge": {
+      "responsibility": "Hosts the public portfolio, admin console, serverless BFF routes, chat streaming and first-party tracking entry points.",
+      "interfaces": ["HTTPS", "POST /api/track", "POST /api/click", "SSE chat stream"],
+      "reliability": ["Bounded edge payloads", "Valkey rate limits", "Supabase JWT validation"]
+    },
+    "agent-runtime": {
+      "responsibility": "Applies safety policy, plans one semantic execution branch, compacts conversation memory and streams the final answer.",
+      "interfaces": ["POST /api/chat", "SSE progress events", "ai.agent.events.v1"],
+      "reliability": ["30 minute sliding memory TTL", "Model fallback", "Daily cost admission"]
+    },
+    "knowledge-service": {
+      "responsibility": "Runs hybrid BM25 and vector retrieval, RRF fusion, confidence gating and canonical source resolution.",
+      "interfaces": ["Hybrid search API", "OpenSearch index", "pgvector embeddings"],
+      "reliability": ["Zero-hit fallback", "Idempotent projections", "Replayable index rebuild"]
+    },
+    "model-gateway": {
+      "responsibility": "Builds prompts, routes model tiers, enforces token budgets and normalizes provider streaming.",
+      "interfaces": ["Gemini adapter", "OpenAI adapter", "Embedding API"],
+      "reliability": ["Timeout and retry policy", "Provider fallback", "Budget-aware downgrade"]
+    },
+    "mcp-gateway": {
+      "responsibility": "Executes typed tools behind permission, confirmation, idempotency, audit and response-sanitization gates.",
+      "interfaces": ["MCP tool registry", "Admin adapters", "Subscription adapters"],
+      "reliability": ["SETNX idempotency", "Explicit write confirmation", "Sanitized tool outcomes"]
+    },
+    "content-control": {
+      "responsibility": "Owns versioned content, durable jobs and a transactional outbox in one PostgreSQL transaction boundary.",
+      "interfaces": ["Admin Content API", "content.search.v1", "content.rag.v1", "content.notification.v1"],
+      "reliability": ["Transactional outbox", "Optimistic version checks", "Durable retry jobs"]
+    },
+    "projection-workers": {
+      "responsibility": "Consumes independent search and RAG topics and materializes replaceable OpenSearch and pgvector read models.",
+      "interfaces": ["content.search.v1", "content.rag.v1", "Projection health API"],
+      "reliability": ["Manual acknowledgement", "Idempotent upsert", "Replay and rebuild"]
+    },
+    "notification-service": {
+      "responsibility": "Resolves recipients, leases delivery work and records per-recipient status before provider delivery.",
+      "interfaces": ["content.notification.v1", "analytics.alert.v1", "SMTP provider"],
+      "reliability": ["Recipient ledger", "Delivery lease", "Retry and DLQ"]
+    },
+    "tracking-api": {
+      "responsibility": "Validates first-party event envelopes, bounds payload size and reduces geolocation to city-level metadata.",
+      "interfaces": ["POST /api/track", "POST /api/click", "analytics.raw.events"],
+      "reliability": ["Request ID", "Payload validation", "Fail-open client delivery"]
+    },
+    "analytics-aggregator": {
+      "responsibility": "Deduplicates events, builds sessions, computes rollups and journeys, and provides replayable visitor intelligence.",
+      "interfaces": ["analytics.raw.events", "Visitor analytics store", "Rollup projections"],
+      "reliability": ["Manual acknowledgement", "Valkey dedup", "DLQ and replay"]
+    }
+  },
+  "scenarios": [
+    {
+      "key": "ask-agent",
+      "subsystemIndex": 0,
+      "label": "Ask AI Agent",
+      "summary": "A grounded portfolio question is planned, retrieved, generated and streamed to the viewer.",
+      "result": "Grounded answer streamed with canonical first-party sources",
+      "steps": [
+        { "nodeId": "visitor", "label": "Submit question", "detail": "The visitor asks about a portfolio project.", "latencyMs": 12, "operation": "request" },
+        { "nodeId": "portfolio-edge", "from": "visitor", "to": "portfolio-edge", "label": "Open chat stream", "detail": "The edge validates the session and opens SSE progress delivery.", "latencyMs": 28, "operation": "http", "cache": "rate-limit pass" },
+        { "nodeId": "agent-runtime", "from": "portfolio-edge", "to": "agent-runtime", "label": "Guard and plan", "detail": "Safety, intent and route planning select one execution branch.", "latencyMs": 186, "operation": "compute", "cache": "memory hit" },
+        { "nodeId": "knowledge-service", "from": "agent-runtime", "to": "knowledge-service", "label": "Retrieve evidence", "detail": "BM25 and vector results are fused and confidence-gated.", "latencyMs": 74, "operation": "read", "dataAction": "OpenSearch + pgvector read" },
+        { "nodeId": "model-gateway", "from": "agent-runtime", "to": "model-gateway", "label": "Generate answer", "detail": "The model gateway applies the selected tier, budget and provider policy.", "latencyMs": 642, "operation": "model", "dataAction": "token budget debit" },
+        { "nodeId": "agent-runtime", "from": "model-gateway", "to": "agent-runtime", "label": "Finalize", "detail": "Evidence, safety and canonical links are joined into one answer.", "latencyMs": 41, "operation": "compute" },
+        { "nodeId": "portfolio-edge", "from": "agent-runtime", "to": "portfolio-edge", "label": "Stream result", "detail": "Progress and answer tokens are delivered over the existing SSE channel.", "latencyMs": 19, "operation": "stream" }
+      ]
+    },
+    {
+      "key": "publish-content",
+      "subsystemIndex": 1,
+      "label": "Publish Article",
+      "summary": "One content transaction fans out into independently replayable search, RAG and notification projections.",
+      "result": "Published content searchable, retrievable and queued for subscriber delivery",
+      "steps": [
+        { "nodeId": "operator", "label": "Approve publish", "detail": "An authenticated operator confirms a versioned content change.", "latencyMs": 18, "operation": "request" },
+        { "nodeId": "content-control", "from": "operator", "to": "content-control", "label": "Commit content + outbox", "detail": "Content, audit and outbox rows commit in one PostgreSQL transaction.", "latencyMs": 63, "operation": "write", "dataAction": "PostgreSQL transaction" },
+        { "nodeId": "search-topic", "from": "content-control", "to": "search-topic", "label": "Publish search event", "detail": "The outbox relay emits the versioned search projection event.", "latencyMs": 31, "operation": "kafka" },
+        { "nodeId": "projection-workers", "from": "search-topic", "to": "projection-workers", "label": "Update search projection", "detail": "The consumer performs an idempotent OpenSearch upsert before acknowledgement.", "latencyMs": 92, "operation": "write", "dataAction": "OpenSearch upsert" },
+        { "nodeId": "rag-topic", "from": "content-control", "to": "rag-topic", "label": "Publish RAG event", "detail": "A separate topic preserves an independent retry and rebuild boundary.", "latencyMs": 33, "operation": "kafka" },
+        { "nodeId": "projection-workers", "from": "rag-topic", "to": "projection-workers", "label": "Replace embeddings", "detail": "Chunks and embeddings replace the previous version idempotently.", "latencyMs": 204, "operation": "write", "dataAction": "pgvector replace" },
+        { "nodeId": "content-notification-topic", "from": "content-control", "to": "content-notification-topic", "label": "Dispatch publication", "detail": "The publication event enters the recipient fan-out workflow.", "latencyMs": 27, "operation": "kafka" },
+        { "nodeId": "notification-service", "from": "content-notification-topic", "to": "notification-service", "label": "Lease recipients", "detail": "Recipient ledger rows are claimed with idempotent delivery keys.", "latencyMs": 81, "operation": "write", "dataAction": "delivery ledger write" },
+        { "nodeId": "email-provider", "from": "notification-service", "to": "email-provider", "label": "Deliver update", "detail": "The provider receives a concise HTML and text notification.", "latencyMs": 318, "operation": "provider" }
+      ]
+    },
+    {
+      "key": "track-visitor",
+      "subsystemIndex": 3,
+      "label": "Track Visitor",
+      "summary": "A bounded first-party event becomes a deduplicated session and cached public analytics projection.",
+      "result": "City-level visitor event included in sessions and rollups",
+      "steps": [
+        { "nodeId": "visitor", "label": "Interact with page", "detail": "The browser emits a page, click or reading progress event.", "latencyMs": 4, "operation": "client" },
+        { "nodeId": "portfolio-edge", "from": "visitor", "to": "portfolio-edge", "label": "Create event envelope", "detail": "Session, anonymous and request identifiers are attached at the first-party edge.", "latencyMs": 9, "operation": "compute" },
+        { "nodeId": "tracking-api", "from": "portfolio-edge", "to": "tracking-api", "label": "Validate and geo-snap", "detail": "The API validates the payload and stores only city-level location metadata.", "latencyMs": 24, "operation": "http" },
+        { "nodeId": "analytics-topic", "from": "tracking-api", "to": "analytics-topic", "label": "Append visitor event", "detail": "The accepted event is appended to the ingestion topic.", "latencyMs": 17, "operation": "kafka" },
+        { "nodeId": "analytics-aggregator", "from": "analytics-topic", "to": "analytics-aggregator", "label": "Dedup and aggregate", "detail": "The consumer applies SETNX dedup, sessionization and rollup updates.", "latencyMs": 58, "operation": "write", "cache": "dedup miss", "dataAction": "session + rollup write" },
+        { "nodeId": "visits-api", "from": "analytics-aggregator", "to": "visits-api", "label": "Refresh read model", "detail": "Public counts and map markers are served from the bounded projection.", "latencyMs": 16, "operation": "read", "cache": "30s cache refresh" },
+        { "nodeId": "portfolio-edge", "from": "visits-api", "to": "portfolio-edge", "label": "Render insights", "detail": "The dashboard receives the aggregated, privacy-bounded response.", "latencyMs": 21, "operation": "http" }
+      ]
+    },
+    {
+      "key": "send-notification",
+      "subsystemIndex": 2,
+      "label": "Send Notification",
+      "summary": "A durable notification intent is fanned out, leased, delivered and recorded without duplicate sends.",
+      "result": "Recipient delivery recorded with provider outcome",
+      "steps": [
+        { "nodeId": "content-control", "label": "Create notification intent", "detail": "A committed publication creates an outbox-backed notification event.", "latencyMs": 46, "operation": "write", "dataAction": "outbox insert" },
+        { "nodeId": "content-notification-topic", "from": "content-control", "to": "content-notification-topic", "label": "Publish intent", "detail": "Kafka preserves at-least-once delivery and replayability.", "latencyMs": 29, "operation": "kafka" },
+        { "nodeId": "notification-service", "from": "content-notification-topic", "to": "notification-service", "label": "Fan out and lease", "detail": "The service resolves active subscribers and claims recipient leases.", "latencyMs": 87, "operation": "write", "dataAction": "recipient ledger write" },
+        { "nodeId": "email-provider", "from": "notification-service", "to": "email-provider", "label": "Send email", "detail": "A provider request uses a stable idempotency key and verified sender.", "latencyMs": 311, "operation": "provider" },
+        { "nodeId": "notification-service", "from": "email-provider", "to": "notification-service", "label": "Record outcome", "detail": "Delivery status, attempt count and provider reference are persisted.", "latencyMs": 35, "operation": "write", "dataAction": "delivery status update" }
+      ]
+    },
+    {
+      "key": "execute-mcp",
+      "subsystemIndex": 0,
+      "label": "Execute MCP Tool",
+      "summary": "An external MCP client discovers and executes a sanitized portfolio tool through policy-aware adapters.",
+      "result": "Typed, sanitized tool result returned to the MCP client",
+      "steps": [
+        { "nodeId": "mcp-clients", "label": "Invoke tool", "detail": "OpenAI or Gemini submits a typed MCP request.", "latencyMs": 7, "operation": "request" },
+        { "nodeId": "public-mcp", "from": "mcp-clients", "to": "public-mcp", "label": "Validate MCP envelope", "detail": "The public edge enforces endpoint auth, rate limits and response bounds.", "latencyMs": 23, "operation": "http" },
+        { "nodeId": "mcp-gateway", "from": "public-mcp", "to": "mcp-gateway", "label": "Authorize tool", "detail": "Registry, permission and confirmation policy select the typed adapter.", "latencyMs": 31, "operation": "compute", "cache": "idempotency pass" },
+        { "nodeId": "content-control", "from": "mcp-gateway", "to": "content-control", "label": "Read content", "detail": "The adapter executes a bounded read against the content service.", "latencyMs": 49, "operation": "read", "dataAction": "PostgreSQL read" },
+        { "nodeId": "mcp-gateway", "from": "content-control", "to": "mcp-gateway", "label": "Sanitize result", "detail": "Secrets and internal-only fields are removed before serialization.", "latencyMs": 12, "operation": "compute" },
+        { "nodeId": "public-mcp", "from": "mcp-gateway", "to": "public-mcp", "label": "Return MCP result", "detail": "The edge returns a standards-compliant tool result with bounded metadata.", "latencyMs": 15, "operation": "http" },
+        { "nodeId": "mcp-clients", "from": "public-mcp", "to": "mcp-clients", "label": "Render result", "detail": "The client receives the public, sanitized portfolio response.", "latencyMs": 8, "operation": "response" }
+      ]
+    }
+  ]
+}

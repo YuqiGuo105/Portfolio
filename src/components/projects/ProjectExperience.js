@@ -1,7 +1,7 @@
-import PlatformArchitectureExperience from "./PlatformArchitectureExperience";
+import PlatformInteractiveArchitectureLab from "./PlatformInteractiveArchitectureLab";
 
 const EXPERIENCES = {
-  PLATFORM_SYSTEM_MAP: PlatformArchitectureExperience,
+  PLATFORM_SYSTEM_MAP: PlatformInteractiveArchitectureLab,
 };
 
 export default function ProjectExperience({ variant, systems }) {
