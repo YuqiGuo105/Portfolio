@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ArrowRight,
   BellRing,
   BarChart3,
   Check,
+  ChevronRight,
   Clock3,
   Download,
   ExternalLink,
+  Gauge,
   GitBranch,
   Globe2,
   Laptop,
@@ -193,6 +196,24 @@ export default function VisitorsPage() {
     }
   }
 
+  const inspectJourneySession = useCallback((sessionId) => {
+    if (!sessionId) return;
+    const nextFilters = {
+      ...EMPTY_FILTERS,
+      includeAdmin: filters.includeAdmin,
+      sessionId,
+    };
+    setDraft(nextFilters);
+    setFilters(nextFilters);
+    setPage(0);
+    window.requestAnimationFrame(() => {
+      document.getElementById("visitor-event-query")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [filters.includeAdmin]);
+
   const total = Number(pageInfo.totalElements || 0);
   const start = total === 0 ? 0 : page * PAGE_SIZE + 1;
   const end = Math.min((page + 1) * PAGE_SIZE, total);
@@ -241,6 +262,7 @@ export default function VisitorsPage() {
           error={intelligenceError}
           hours={hours}
           onRetry={loadIntelligence}
+          onInspectSession={inspectJourneySession}
         />
 
         <VisitorAlerts
@@ -254,7 +276,7 @@ export default function VisitorsPage() {
 
         {error && !loading && items.length > 0 && <div className={ui.errorBanner}>{error}</div>}
 
-        <section className={ui.panel}>
+        <section className={ui.panel} id="visitor-event-query">
           <form className={visitorStyles.queryForm} onSubmit={submitQuery}>
             <div className={visitorStyles.queryTop}>
               <div className={`${ui.searchWrap} ${visitorStyles.search}`}>
@@ -406,7 +428,7 @@ function VisitorPagination({
   );
 }
 
-function VisitorIntelligence({ data, loading, error, hours, onRetry }) {
+function VisitorIntelligence({ data, loading, error, hours, onRetry, onInspectSession }) {
   const funnel = data.funnel || [];
   const attribution = data.attribution || [];
   const topContent = data.topContent || [];
@@ -522,21 +544,14 @@ function VisitorIntelligence({ data, loading, error, hours, onRetry }) {
           <div className={`${visitorStyles.insightCard} ${visitorStyles.journeyCardWide}`}>
             <div className={visitorStyles.insightCardHeader}>
               <Target size={15} />
-              <span>Intent and journey</span>
+              <span>Visitor journey explorer</span>
             </div>
-            <div className={visitorStyles.journeyColumns}>
-              <JourneyList
-                title="High-intent sessions"
-                empty="No medium or high-intent session in this window."
-                journeys={highIntent}
-                showSignals
-              />
-              <JourneyList
-                title="Recent journeys"
-                empty="No projected journey in this window."
-                journeys={recentJourneys}
-              />
-            </div>
+            <JourneyExplorer
+              highIntent={highIntent}
+              recentJourneys={recentJourneys}
+              policy={data.policy}
+              onInspectSession={onInspectSession}
+            />
           </div>
         </div>
       )}
@@ -544,52 +559,200 @@ function VisitorIntelligence({ data, loading, error, hours, onRetry }) {
   );
 }
 
-function JourneyList({ title, empty, journeys, showSignals = false }) {
+function JourneyExplorer({ highIntent, recentJourneys, policy, onInspectSession }) {
+  const [mode, setMode] = useState(highIntent.length ? "high" : "recent");
+  const [selectedSessionId, setSelectedSessionId] = useState("");
+  const journeys = mode === "high" ? highIntent : recentJourneys;
+  const selected = journeys.find((journey) => journey.sessionId === selectedSessionId)
+    || journeys[0]
+    || null;
+
+  useEffect(() => {
+    if (mode === "high" && !highIntent.length && recentJourneys.length) setMode("recent");
+  }, [highIntent.length, mode, recentJourneys.length]);
+
+  useEffect(() => {
+    if (selected?.sessionId && selected.sessionId !== selectedSessionId) {
+      setSelectedSessionId(selected.sessionId);
+    }
+  }, [selected?.sessionId, selectedSessionId]);
+
+  const dimensions = useMemo(() => Object.entries(selected?.dimensionScores || {})
+    .sort((left, right) => right[1] - left[1]), [selected]);
+
   return (
-    <div className={visitorStyles.journeySection}>
-      <div className={visitorStyles.journeySectionTitle}>{title}</div>
-      <div className={visitorStyles.journeyList}>
-        {journeys.length ? journeys.map((journey) => (
-          <details className={visitorStyles.journeyRow} key={`${title}-${journey.sessionId}`}>
-            <summary>
-              <span className={visitorStyles.journeyScore} data-level={String(journey.intentLevel || "LOW").toLowerCase()}>
-                {journey.score ?? 0}
-              </span>
-              <span className={visitorStyles.journeySummary}>
-                <strong>{humanizeField(journey.dominantIntent || "exploration")}</strong>
-                <small>
-                  {displayPath(journey.entryPage) || "Unknown entry"} → {displayPath(journey.exitPage) || "Unknown exit"}
-                </small>
-              </span>
-              <span className={visitorStyles.journeyMeta}>
-                {formatDuration(journey.durationMs)} · {shortIdentifier(journey.sessionId)}
-              </span>
-            </summary>
-            <div className={visitorStyles.journeyDetails}>
-              <div className={visitorStyles.journeySteps}>
-                {(journey.steps || []).map((step) => (
-                  <span className={visitorStyles.journeyStep} key={step.eventId} title={formatDateTime(step.eventTime)}>
-                    <Route size={11} />
-                    <b>{humanizeEventName(step.eventName)}</b>
-                    <small>{displayPath(step.targetPath || step.pagePath) || "No path"}</small>
-                  </span>
-                ))}
-              </div>
-              {showSignals && (journey.contributingSignals || []).length > 0 && (
-                <div className={visitorStyles.signalList}>
-                  {journey.contributingSignals.slice(0, 5).map((signal) => (
-                    <span key={signal.signalKey}>
-                      <b>+{signal.score}</b> {signal.description}
-                    </span>
-                  ))}
+    <div className={visitorStyles.journeyExplorer}>
+      <div className={visitorStyles.journeyToolbar}>
+        <div className={visitorStyles.journeyTabs} role="tablist" aria-label="Journey collection">
+          <button
+            aria-selected={mode === "high"}
+            className={mode === "high" ? visitorStyles.journeyTabActive : ""}
+            onClick={() => setMode("high")}
+            role="tab"
+            type="button"
+          >
+            High intent <span>{highIntent.length}</span>
+          </button>
+          <button
+            aria-selected={mode === "recent"}
+            className={mode === "recent" ? visitorStyles.journeyTabActive : ""}
+            onClick={() => setMode("recent")}
+            role="tab"
+            type="button"
+          >
+            Recent <span>{recentJourneys.length}</span>
+          </button>
+        </div>
+        <span className={visitorStyles.journeyPolicy}>
+          Policy v{selected?.policyVersion || policy?.version || "-"} · model-free scoring
+        </span>
+      </div>
+
+      {!journeys.length ? (
+        <div className={visitorStyles.insightEmptySmall}>
+          {mode === "high"
+            ? "No medium or high-intent session in this window."
+            : "No projected journey in this window."}
+        </div>
+      ) : (
+        <div className={visitorStyles.journeyWorkspace}>
+          <div className={visitorStyles.journeySessionList} role="tablist" aria-label="Visitor sessions">
+            {journeys.map((journey) => (
+              <button
+                aria-selected={selected?.sessionId === journey.sessionId}
+                className={selected?.sessionId === journey.sessionId ? visitorStyles.journeySessionActive : ""}
+                key={`${mode}-${journey.sessionId}`}
+                onClick={() => setSelectedSessionId(journey.sessionId)}
+                role="tab"
+                type="button"
+              >
+                <span className={visitorStyles.journeyScore} data-level={String(journey.intentLevel || "LOW").toLowerCase()}>
+                  {journey.score ?? 0}
+                </span>
+                <span className={visitorStyles.journeySummary}>
+                  <strong>{humanizeField(journey.dominantIntent || "exploration")}</strong>
+                  <small>{journeyLocation(journey)} · {formatDuration(journey.durationMs)}</small>
+                  <small>{shortIdentifier(journey.sessionId)}</small>
+                </span>
+                <ChevronRight size={14} aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+
+          {selected && (
+            <div className={visitorStyles.journeyDetail} role="tabpanel">
+              <div className={visitorStyles.journeyDetailHeader}>
+                <div>
+                  <span className={visitorStyles.journeyEyebrow}>Selected session</span>
+                  <h3>{humanizeField(selected.dominantIntent || "exploration")}</h3>
+                  <p>
+                    {displayPath(selected.entryPage) || "Unknown entry"}
+                    <ArrowRight size={12} aria-hidden="true" />
+                    {displayPath(selected.exitPage) || "Unknown exit"}
+                  </p>
                 </div>
-              )}
+                <div className={visitorStyles.journeyHeaderActions}>
+                  <span className={visitorStyles.intentLevel} data-level={String(selected.intentLevel || "LOW").toLowerCase()}>
+                    {selected.intentLevel || "LOW"}
+                  </span>
+                  <button className={ui.buttonSecondary} type="button" onClick={() => onInspectSession(selected.sessionId)}>
+                    View event records
+                  </button>
+                </div>
+              </div>
+
+              <div className={visitorStyles.journeyFacts}>
+                <JourneyFact label="Intent score" value={`${selected.score || 0} / ${policy?.maxScore || 100}`} icon={<Gauge size={14} />} />
+                <JourneyFact label="Duration" value={formatDuration(selected.durationMs)} icon={<Clock3 size={14} />} />
+                <JourneyFact label="Events shown" value={(selected.steps || []).length} icon={<Route size={14} />} />
+                <JourneyFact label="Client" value={[selected.deviceType, selected.browser].filter(Boolean).join(" · ") || "Unknown"} icon={<Laptop size={14} />} />
+              </div>
+
+              <div className={visitorStyles.journeyAnalysisGrid}>
+                <div className={visitorStyles.journeyTimelineSection}>
+                  <div className={visitorStyles.journeySectionTitle}>Journey timeline</div>
+                  <div className={visitorStyles.journeyTimeline}>
+                    {(selected.steps || []).map((step, index, steps) => (
+                      <JourneyTimelineStep
+                        index={index}
+                        key={step.eventId}
+                        previous={steps[index - 1]}
+                        step={step}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className={visitorStyles.journeyReasoning}>
+                  <div className={visitorStyles.journeySectionTitle}>Why this score</div>
+                  <div className={visitorStyles.dimensionList}>
+                    {dimensions.length ? dimensions.map(([dimension, score]) => (
+                      <div className={visitorStyles.dimensionRow} key={dimension}>
+                        <span><b>{humanizeField(dimension)}</b><strong>{score}</strong></span>
+                        <div><span style={{ width: `${Math.max(2, Math.min(100, score))}%` }} /></div>
+                      </div>
+                    )) : <div className={visitorStyles.insightEmptySmall}>No dimension score.</div>}
+                  </div>
+                  <div className={visitorStyles.signalList}>
+                    {(selected.contributingSignals || []).length ? selected.contributingSignals.map((signal, index) => (
+                      <span key={signal.signalKey || `${signal.description}-${index}`}>
+                        <b>+{signal.score || 0}</b> {signal.description || humanizeField(signal.signalKey)}
+                      </span>
+                    )) : <span>No contributing signal recorded.</span>}
+                  </div>
+                </div>
+              </div>
             </div>
-          </details>
-        )) : <div className={visitorStyles.insightEmptySmall}>{empty}</div>}
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function JourneyFact({ icon, label, value }) {
+  return (
+    <div className={visitorStyles.journeyFact}>
+      <span>{icon}</span>
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function JourneyTimelineStep({ index, previous, step }) {
+  const path = displayPath(step.targetPath || step.pagePath) || "No path";
+  const delta = previous
+    ? Math.max(0, new Date(step.eventTime).getTime() - new Date(previous.eventTime).getTime())
+    : 0;
+  return (
+    <div className={visitorStyles.timelineStep}>
+      <div className={visitorStyles.timelineMarker}>
+        <span>{String(index + 1).padStart(2, "0")}</span>
+      </div>
+      <div className={visitorStyles.timelineCopy}>
+        <span className={visitorStyles.timelineMeta}>
+          <time dateTime={step.eventTime}>{formatTime(step.eventTime)}</time>
+          {index > 0 && <small>+{formatDuration(delta)}</small>}
+        </span>
+        <strong>{humanizeEventName(step.eventName)}</strong>
+        {path.startsWith("/") ? (
+          <a href={path} target="_blank" rel="noreferrer">{path}<ExternalLink size={10} /></a>
+        ) : <span className={visitorStyles.timelinePath}>{path}</span>}
+        <span className={visitorStyles.timelineSignals}>
+          {Number.isFinite(step.progressPercent) && <small>{step.progressPercent}% read</small>}
+          {Number.isFinite(step.engagedSeconds) && step.engagedSeconds > 0 && <small>{step.engagedSeconds}s engaged</small>}
+          {step.contentType && <small>{humanizeField(step.contentType)}</small>}
+        </span>
       </div>
     </div>
   );
+}
+
+function journeyLocation(journey) {
+  const segments = String(journey.geoAreaId || "").split(":").filter(Boolean);
+  if (segments.length >= 3) return `${segments[2]}, ${segments[1]}`;
+  return journey.country || "Unknown location";
 }
 
 function InsightNumber({ label, value, hint }) {
