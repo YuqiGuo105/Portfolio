@@ -1,20 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Clock3, ImagePlus, RefreshCw, Trash2, UploadCloud } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Clock3, ImagePlus, RefreshCw, Trash2, UploadCloud, X } from "lucide-react";
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { DataState, PageHeader, adminStyles as ui } from "../../src/components/admin/AdminUI";
 import { adminApi } from "../../src/lib/adminApi";
 import { supabase } from "../../src/supabase/supabaseClient";
+import { isIphonePhoto, prepareStoryImage } from "../../src/lib/storyImageUpload";
 import styles from "../../src/components/admin/StoryManager.module.css";
 
 export default function StoriesPage() {
   const [stories, setStories] = useState([]);
   const [config, setConfig] = useState({ maxBytes: 10 * 1024 * 1024, maxStories: 10, ttlSeconds: 86400 });
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const filesRef = useRef([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,41 +34,107 @@ export default function StoriesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const preview = useMemo(() => (file ? URL.createObjectURL(file) : ""), [file]);
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  const remainingSlots = Math.max(0, Number(config.maxStories || 10) - stories.length);
+  const selectedBytes = useMemo(() => files.reduce((total, item) => total + item.file.size, 0), [files]);
+
+  useEffect(() => { filesRef.current = files; }, [files]);
+  useEffect(() => () => {
+    filesRef.current.forEach((item) => URL.revokeObjectURL(item.preview));
+  }, []);
+
+  async function selectPhotos(event) {
+    const selected = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!selected.length || uploading) return;
+    setError("");
+    setNotice("");
+
+    const available = Math.max(0, remainingSlots - files.length);
+    if (!available) {
+      setError(`The active story limit is ${config.maxStories || 10}. Remove a story before adding another photo.`);
+      return;
+    }
+
+    const accepted = [];
+    const rejected = [];
+    for (const original of selected.slice(0, available)) {
+      try {
+        const converted = await prepareStoryImage(original);
+        if (converted.size > Number(config.maxBytes || 0)) {
+          throw new Error(`${original.name} exceeds the ${maxMb || 10} MB upload limit after conversion.`);
+        }
+        accepted.push({
+          id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${accepted.length}`,
+          file: converted,
+          originalName: original.name,
+          converted: isIphonePhoto(original),
+          preview: URL.createObjectURL(converted),
+          status: "ready",
+          error: "",
+        });
+      } catch (err) {
+        rejected.push(err.message || `${original.name} could not be prepared.`);
+      }
+    }
+
+    if (selected.length > available) rejected.push(`${selected.length - available} photo(s) exceeded the active story limit.`);
+    if (accepted.length) setFiles((current) => [...current, ...accepted]);
+    if (rejected.length) setError(rejected.join(" "));
+  }
 
   async function uploadStory(event) {
     event.preventDefault();
-    if (!file || uploading) return;
+    if (!files.length || uploading) return;
     setUploading(true);
     setError("");
     setNotice("");
     try {
-      const prepared = await adminApi.stories.prepareUpload({
-        contentType: file.type,
-        size: file.size,
-        description,
-      });
-      const { error: uploadError } = await supabase.storage
-        .from(prepared.bucket)
-        .uploadToSignedUrl(prepared.path, prepared.token, file, { contentType: file.type });
-      if (uploadError) throw uploadError;
-      await adminApi.stories.finalize({
-        id: prepared.id,
-        path: prepared.path,
-        contentType: file.type,
-        size: file.size,
-        description,
-      });
-      setFile(null);
-      setDescription("");
-      setNotice("Story published. It will expire automatically after 24 hours.");
+      let published = 0;
+      let failed = 0;
+      // Upload in reverse so the API's newest-first order preserves the selected sequence.
+      for (const item of [...files].reverse()) {
+        setFiles((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: "uploading", error: "" } : entry));
+        try {
+          const prepared = await adminApi.stories.prepareUpload({
+            contentType: item.file.type,
+            size: item.file.size,
+            description,
+          });
+          const { error: uploadError } = await supabase.storage
+            .from(prepared.bucket)
+            .uploadToSignedUrl(prepared.path, prepared.token, item.file, { contentType: item.file.type });
+          if (uploadError) throw uploadError;
+          await adminApi.stories.finalize({
+            id: prepared.id,
+            path: prepared.path,
+            contentType: item.file.type,
+            size: item.file.size,
+            description,
+          });
+          published += 1;
+          URL.revokeObjectURL(item.preview);
+          setFiles((current) => current.filter((entry) => entry.id !== item.id));
+        } catch (err) {
+          failed += 1;
+          setFiles((current) => current.map((entry) => entry.id === item.id
+            ? { ...entry, status: "error", error: err.message || "Upload failed." }
+            : entry));
+        }
+      }
+      if (published) {
+        if (!failed) setDescription("");
+        setNotice(`${published} ${published === 1 ? "story" : "stories"} published. ${failed ? `${failed} failed and can be retried.` : "They will expire automatically after 24 hours."}`);
+      }
+      if (failed && !published) setError("No stories were published. Review the failed photos and retry.");
       await load();
-    } catch (err) {
-      setError(err.message || "Story upload failed.");
     } finally {
       setUploading(false);
     }
+  }
+
+  function removeSelected(item) {
+    URL.revokeObjectURL(item.preview);
+    setFiles((current) => current.filter((entry) => entry.id !== item.id));
   }
 
   async function removeStory(story) {
@@ -82,7 +150,7 @@ export default function StoriesPage() {
   }
 
   const maxMb = Math.floor(Number(config.maxBytes || 0) / 1024 / 1024);
-  const atCapacity = stories.length >= Number(config.maxStories || 10);
+  const atCapacity = remainingSlots === 0;
 
   return (
     <AdminLayout>
@@ -101,7 +169,7 @@ export default function StoriesPage() {
           <Metric label="Active stories" value={stories.length} hint={`${config.maxStories || 10} maximum`} />
           <Metric label="Lifetime" value="24h" hint="Sliding is disabled" />
           <Metric label="Storage" value="Private" hint="Signed URLs only" />
-          <Metric label="Upload limit" value={`${maxMb || 10} MB`} hint="JPEG, PNG or WebP" />
+          <Metric label="Upload limit" value={`${maxMb || 10} MB each`} hint="JPEG, PNG, WebP or iPhone HEIC" />
         </section>
 
         {error && <div className={ui.errorBanner}>{error}</div>}
@@ -111,20 +179,45 @@ export default function StoriesPage() {
           <form className={styles.uploadPanel} onSubmit={uploadStory}>
             <div className={styles.panelHeading}>
               <ImagePlus size={18} aria-hidden="true" />
-              <div><h2>New story</h2><p>The browser uploads directly to Storage using a short-lived signed token.</p></div>
+              <div><h2>New stories</h2><p>Select multiple photos. iPhone HEIC images are converted privately in your browser before upload.</p></div>
             </div>
 
-            <label className={`${styles.dropzone} ${file ? styles.dropzoneSelected : ""}`}>
-              {preview ? <img src={preview} alt="Selected story preview" /> : <UploadCloud size={32} aria-hidden="true" />}
-              <span>{file ? file.name : "Choose a photo"}</span>
-              <small>{file ? formatBytes(file.size) : `JPEG, PNG or WebP · up to ${maxMb || 10} MB`}</small>
+            <label className={styles.dropzone}>
+              <UploadCloud size={32} aria-hidden="true" />
+              <span>{files.length ? "Add more photos" : "Choose photos"}</span>
+              <small>JPEG, PNG, WebP or HEIC · up to {maxMb || 10} MB each · {Math.max(0, remainingSlots - files.length)} slots available</small>
               <input
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
-                disabled={uploading || atCapacity}
-                onChange={(event) => setFile(event.target.files?.[0] || null)}
+                accept="image/*,.heic,.heif"
+                multiple
+                disabled={uploading || atCapacity || files.length >= remainingSlots}
+                onChange={selectPhotos}
               />
             </label>
+
+            {files.length > 0 && (
+              <div className={styles.selection} aria-label="Selected story photos">
+                <div className={styles.selectionSummary}>
+                  <strong>{files.length} selected</strong>
+                  <span>{formatBytes(selectedBytes)} total</span>
+                </div>
+                <div className={styles.selectionGrid}>
+                  {files.map((item, index) => (
+                    <article className={`${styles.selectedItem} ${item.status === "error" ? styles.selectedItemError : ""}`} key={item.id}>
+                      <img src={item.preview} alt={`Selected story ${index + 1}`} />
+                      <span className={styles.order}>{String(index + 1).padStart(2, "0")}</span>
+                      <button type="button" onClick={() => removeSelected(item)} disabled={uploading} aria-label={`Remove ${item.originalName}`} title="Remove photo">
+                        <X size={14} />
+                      </button>
+                      <div className={styles.selectedMeta}>
+                        <strong>{item.originalName}</strong>
+                        <small>{item.status === "uploading" ? "Publishing…" : item.status === "error" ? item.error : item.converted ? "HEIC → JPEG · Ready" : "Ready"}</small>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <label className={styles.field}>
               <span>Caption</span>
@@ -138,8 +231,8 @@ export default function StoriesPage() {
               <small>{description.length} / 160</small>
             </label>
 
-            <button type="submit" className={ui.buttonPrimary} disabled={!file || uploading || atCapacity}>
-              <UploadCloud size={15} /> {uploading ? "Publishing…" : atCapacity ? "Story limit reached" : "Publish story"}
+            <button type="submit" className={ui.buttonPrimary} disabled={!files.length || uploading || atCapacity}>
+              <UploadCloud size={15} /> {uploading ? "Publishing stories…" : atCapacity ? "Story limit reached" : files.length ? `Publish ${files.length} ${files.length === 1 ? "story" : "stories"}` : "Publish stories"}
             </button>
           </form>
 
