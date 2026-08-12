@@ -13,6 +13,7 @@ const ALLOWED_TYPES = new Map([
   ["image/png", "png"],
   ["image/webp", "webp"],
 ]);
+const BUCKET_MIME_TYPES = [...ALLOWED_TYPES.keys(), "application/json"];
 
 let bucketReady;
 
@@ -34,11 +35,23 @@ export async function ensureStoryBucket() {
   if (!bucketReady) {
     bucketReady = (async () => {
       const { data, error } = await supabaseServer.storage.getBucket(BUCKET);
-      if (data && !error) return;
+      if (data && !error) {
+        const configuredTypes = Array.isArray(data.allowed_mime_types) ? data.allowed_mime_types : [];
+        const needsPolicyUpdate = BUCKET_MIME_TYPES.some((type) => !configuredTypes.includes(type));
+        if (!needsPolicyUpdate) return;
+
+        const updated = await supabaseServer.storage.updateBucket(BUCKET, {
+          public: false,
+          fileSizeLimit: MAX_BYTES,
+          allowedMimeTypes: BUCKET_MIME_TYPES,
+        });
+        if (updated.error) throw updated.error;
+        return;
+      }
       const created = await supabaseServer.storage.createBucket(BUCKET, {
         public: false,
         fileSizeLimit: MAX_BYTES,
-        allowedMimeTypes: [...ALLOWED_TYPES.keys()],
+        allowedMimeTypes: BUCKET_MIME_TYPES,
       });
       if (created.error && !String(created.error.message || "").toLowerCase().includes("already exists")) {
         throw created.error;
