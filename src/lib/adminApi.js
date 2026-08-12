@@ -76,6 +76,20 @@ function attachmentFilename(value) {
 }
 
 export const adminApi = {
+  stories: {
+    list() {
+      return request("/api/admin/stories");
+    },
+    prepareUpload(payload) {
+      return request("/api/admin/stories", { method: "POST", body: JSON.stringify({ operation: "prepare-upload", ...payload }) });
+    },
+    finalize(payload) {
+      return request("/api/admin/stories", { method: "POST", body: JSON.stringify({ operation: "finalize", ...payload }) });
+    },
+    remove(id) {
+      return request(`/api/admin/stories?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+  },
   subscribers: {
     list({ status = "ALL", query = "", limit = 50, offset = 0 } = {}) {
       const params = new URLSearchParams({

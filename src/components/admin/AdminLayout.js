@@ -11,6 +11,7 @@ import {
   FileText,
   Gauge,
   History,
+  Images,
   Eye,
   LayoutDashboard,
   LogOut,
@@ -48,6 +49,7 @@ const NAV_GROUPS = [
       { href: "/admin/blogs", label: "Tech blogs", icon: FileText },
       { href: "/admin/life-blogs", label: "Life blogs", icon: BookOpen },
       { href: "/admin/projects", label: "Projects", icon: BriefcaseBusiness },
+      { href: "/admin/stories", label: "Stories", icon: Images },
     ],
   },
   {

@@ -202,37 +202,22 @@ const Index = () => {
   useEffect(() => {
     const fetchStories = async () => {
       try {
-        const endpoint = process.env.NEXT_PUBLIC_STORIES_ENDPOINT;
-        const owner = encodeURIComponent(process.env.NEXT_PUBLIC_STORIES_OWNER);
-        if (!endpoint || !process.env.NEXT_PUBLIC_STORIES_OWNER) {
-          console.warn(
-            "Stories endpoint/owner env vars missing – skipping stories fetch."
-          );
-          setStories([]);
-          setIsPlaying(false);
-          return;
-        }
-        const res = await fetch(`${endpoint}/records/owner/${owner}`);
+        const res = await fetch("/api/stories");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const data = await res.json();
-        if (!data || data.length === 0) {
+        const payload = await res.json();
+        const data = Array.isArray(payload?.stories) ? payload.stories : [];
+        if (data.length === 0) {
           setStories([]);
           setIsPlaying(false);
           return;
         }
-
-        // Normalise → {id, url, createdAt, description}
-        const formatted = data.map((item, idx) => ({
-          id: item.id ?? idx,
+        const formatted = data.map((item) => ({
+          id: item.id,
           url: item.url,
           description: item.description ?? "",
-          createdAt: (item.createdAt?.seconds ?? 0) * 1000,
+          createdAt: Date.parse(item.createdAt),
         }));
-
-        // Newest first (optional)
         formatted.sort((a, b) => b.createdAt - a.createdAt);
-
         setStories(formatted);
       } catch (err) {
         console.error("❌ Failed to fetch stories:", err);
@@ -822,6 +807,15 @@ const Index = () => {
                   cursor: "pointer",
                 }}
                 onClick={openStoryModal}
+                role="button"
+                tabIndex={0}
+                aria-label={stories.length ? "Open profile stories" : "Open GitHub profile"}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openStoryModal();
+                  }
+                }}
               >
                 <div
                   style={{
@@ -832,8 +826,8 @@ const Index = () => {
                     transition: "transform 0.3s ease",
                   }}
                 >
-                  {/* 渐变圆环 — always visible */}
-                  <div
+                  {/* Instagram-style ring only appears when an active story exists. */}
+                  {stories.length > 0 && <div
                       style={{
                         position: "absolute",
                         top: "-10px",
@@ -847,7 +841,7 @@ const Index = () => {
                         animation: "verticalGradient 8s linear infinite",
                         backgroundSize: "100% 400%",
                       }}
-                    />
+                    />}
 
                   <img
                     src="/assets/images/profile.png"
@@ -857,7 +851,7 @@ const Index = () => {
                       borderRadius: "380px",
                       position: "relative",
                       zIndex: 1,
-                      border: "5px solid white",
+                      border: stories.length ? "5px solid white" : "0",
                       boxSizing: "border-box",
                     }}
                   />
