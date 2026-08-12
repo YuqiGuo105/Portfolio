@@ -646,9 +646,9 @@ function JourneyExplorer({ highIntent, recentJourneys, policy, onInspectSession 
                   <span className={visitorStyles.journeyEyebrow}>Selected session</span>
                   <h3>{humanizeField(selected.dominantIntent || "exploration")}</h3>
                   <p>
-                    {displayPath(selected.entryPage) || "Unknown entry"}
+                    <span>{displayPath(selected.entryPage) || "Unknown entry"}</span>
                     <ArrowRight size={12} aria-hidden="true" />
-                    {displayPath(selected.exitPage) || "Unknown exit"}
+                    <span>{displayPath(selected.exitPage) || "Unknown exit"}</span>
                   </p>
                 </div>
                 <div className={visitorStyles.journeyHeaderActions}>

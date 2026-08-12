@@ -11,6 +11,13 @@
   letter-spacing: 0;
 }
 
+/* Keep public-theme button effects from leaking into admin controls. */
+.shell button::before,
+.shell button::after {
+  content: none !important;
+  display: none !important;
+}
+
 .sidebar {
   position: fixed;
   inset: 0 auto 0 0;

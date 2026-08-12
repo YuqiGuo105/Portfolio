@@ -90,6 +90,8 @@
 .journeyDetailHeader { display: flex; min-height: 88px; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 16px; border-bottom: 1px solid #e8ecef; }
 .journeyDetailHeader h3 { margin: 3px 0 4px; color: #24313a; font-size: 18px; line-height: 1.2; }
 .journeyDetailHeader p { display: flex; max-width: 620px; align-items: center; gap: 6px; margin: 0; overflow: hidden; color: #77838b; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.journeyDetailHeader p span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.journeyDetailHeader p svg { flex: 0 0 auto; }
 .journeyEyebrow { color: #0f766e; font-size: 8px; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; }
 .journeyHeaderActions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
 .intentLevel { display: inline-flex; min-height: 26px; align-items: center; padding: 4px 8px; border: 1px solid #d2dadf; border-radius: 4px; background: #f5f7f8; color: #68747c; font-size: 8px; font-weight: 850; letter-spacing: 0.05em; }
@@ -302,12 +304,27 @@
   .insightGrid { grid-template-columns: 1fr; }
   .insightCard { border-right: 0; border-bottom: 1px solid #e8ecef; }
   .insightCard:last-child { border-bottom: 0; }
-  .journeyToolbar { align-items: flex-start; flex-direction: column; }
+  .journeyExplorer { width: 100%; overflow: hidden; }
+  .journeyToolbar { min-width: 0; align-items: flex-start; flex-direction: column; }
+  .journeyPolicy { max-width: 100%; overflow-wrap: anywhere; }
   .journeyWorkspace { grid-template-columns: 1fr; }
   .journeySessionList { display: grid; max-height: 230px; grid-template-columns: repeat(2, minmax(0, 1fr)); border-right: 0; border-bottom: 1px solid #e3e8eb; }
   .journeySessionList > button { border-right: 1px solid #e9edef; }
-  .journeyDetailHeader { flex-direction: column; }
+  .journeyDetailHeader { min-width: 0; flex-direction: column; }
+  .journeyDetailHeader > div:first-child { width: 100%; min-width: 0; }
+  .journeyDetailHeader p {
+    display: grid;
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: start;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+  .journeyDetailHeader p span { overflow: visible; overflow-wrap: anywhere; text-overflow: clip; word-break: break-word; }
   .journeyHeaderActions { width: 100%; justify-content: space-between; }
+  .journeyHeaderActions button { min-width: 0; max-width: 100%; white-space: normal; }
   .journeyFacts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .journeyFact:nth-child(2) { border-right: 0; }
   .journeyFact:nth-child(-n + 2) { border-bottom: 1px solid #e8ecef; }
@@ -335,7 +352,10 @@
   .journeyTabs button { flex: 1; justify-content: center; }
   .journeySessionList { grid-template-columns: 1fr; }
   .journeySessionList > button { border-right: 0; }
+  .journeyDetailHeader p { grid-template-columns: minmax(0, 1fr); }
+  .journeyDetailHeader p svg { transform: rotate(90deg); }
   .journeyHeaderActions { align-items: stretch; flex-direction: column; }
+  .journeyHeaderActions button { width: 100%; line-height: 1.25; }
   .intentLevel { width: fit-content; }
   .journeyFacts { grid-template-columns: 1fr; }
   .journeyFact, .journeyFact:nth-child(2) { border-right: 0; border-bottom: 1px solid #e8ecef; }
