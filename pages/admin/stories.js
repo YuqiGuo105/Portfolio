@@ -100,19 +100,24 @@ export default function StoriesPage() {
       for (const item of [...files].reverse()) {
         setFiles((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: "uploading", error: "" } : entry));
         try {
+          const contentType = item.file.type;
           const prepared = await adminApi.stories.prepareUpload({
-            contentType: item.file.type,
+            contentType,
             size: item.file.size,
             description,
           });
+          // storage-js 2.x wraps Blob/File values in FormData and may preserve an
+          // incorrect MIME reported by iOS. ArrayBuffer forces the binary path,
+          // where the explicit content type is sent as the request header.
+          const body = await item.file.arrayBuffer();
           const { error: uploadError } = await supabase.storage
             .from(prepared.bucket)
-            .uploadToSignedUrl(prepared.path, prepared.token, item.file, { contentType: item.file.type });
+            .uploadToSignedUrl(prepared.path, prepared.token, body, { contentType });
           if (uploadError) throw uploadError;
           await adminApi.stories.finalize({
             id: prepared.id,
             path: prepared.path,
-            contentType: item.file.type,
+            contentType,
             size: item.file.size,
             description,
           });
