@@ -16,11 +16,15 @@ export default function StoriesPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [progress, setProgress] = useState(null);
   const filesRef = useRef([]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ clearFeedback = true } = {}) => {
     setLoading(true);
-    setError("");
+    if (clearFeedback) {
+      setError("");
+      setNotice("");
+    }
     try {
       const payload = await adminApi.stories.list();
       setStories(Array.isArray(payload.stories) ? payload.stories : []);
@@ -88,6 +92,7 @@ export default function StoriesPage() {
     setUploading(true);
     setError("");
     setNotice("");
+    setProgress({ completed: 0, total: files.length });
     try {
       let published = 0;
       let failed = 0;
@@ -119,16 +124,19 @@ export default function StoriesPage() {
           setFiles((current) => current.map((entry) => entry.id === item.id
             ? { ...entry, status: "error", error: err.message || "Upload failed." }
             : entry));
+        } finally {
+          setProgress((current) => current ? { ...current, completed: current.completed + 1 } : current);
         }
       }
       if (published) {
         if (!failed) setDescription("");
         setNotice(`${published} ${published === 1 ? "story" : "stories"} published. ${failed ? `${failed} failed and can be retried.` : "They will expire automatically after 24 hours."}`);
       }
-      if (failed && !published) setError("No stories were published. Review the failed photos and retry.");
-      await load();
+      if (failed && !published) setError(`Upload failed for all ${failed} ${failed === 1 ? "photo" : "photos"}. Review the message on each photo, then retry.`);
+      if (published) await load({ clearFeedback: false });
     } finally {
       setUploading(false);
+      setProgress(null);
     }
   }
 
@@ -172,8 +180,13 @@ export default function StoriesPage() {
           <Metric label="Upload limit" value={`${maxMb || 10} MB each`} hint="JPEG, PNG, WebP or iPhone HEIC" />
         </section>
 
-        {error && <div className={ui.errorBanner}>{error}</div>}
-        {notice && <div className={styles.successBanner}>{notice}</div>}
+        {error && <div className={ui.errorBanner} role="alert">{error}</div>}
+        {notice && <div className={styles.successBanner} role="status">{notice}</div>}
+        {progress && (
+          <div className={styles.progressBanner} role="status" aria-live="polite">
+            Publishing {Math.min(progress.completed + 1, progress.total)} of {progress.total} photos…
+          </div>
+        )}
 
         <section className={styles.workspace}>
           <form className={styles.uploadPanel} onSubmit={uploadStory}>
@@ -211,7 +224,7 @@ export default function StoriesPage() {
                       </button>
                       <div className={styles.selectedMeta}>
                         <strong>{item.originalName}</strong>
-                        <small>{item.status === "uploading" ? "Publishing…" : item.status === "error" ? item.error : item.converted ? "HEIC → JPEG · Ready" : "Ready"}</small>
+                        <small>{item.status === "uploading" ? "Publishing…" : item.status === "error" ? `Failed · ${item.error}` : item.converted ? "HEIC → JPEG · Ready" : `${item.file.type.replace("image/", "").toUpperCase()} · Ready`}</small>
                       </div>
                     </article>
                   ))}

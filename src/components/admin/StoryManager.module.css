@@ -27,6 +27,7 @@
 .field textarea:focus { border-color: #0f766e; outline: 2px solid rgba(15, 118, 110, 0.12); }
 .field small { justify-self: end; color: #89939a; font-weight: 500; }
 .successBanner { padding: 11px 13px; border: 1px solid #b9ddd6; border-radius: 7px; background: #edf8f6; color: #0b6a62; font-size: 13px; }
+.progressBanner { padding: 11px 13px; border: 1px solid #b8d6e6; border-radius: 7px; background: #eef7fb; color: #165d7a; font-size: 13px; font-weight: 700; }
 .library { min-height: 420px; }
 .storyGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .storyItem { position: relative; display: grid; min-width: 0; grid-template-columns: 74px minmax(0, 1fr) 38px; align-items: center; gap: 12px; padding: 10px; border: 1px solid #e1e6e9; border-radius: 7px; background: #fafcfc; }
