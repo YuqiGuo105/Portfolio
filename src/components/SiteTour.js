@@ -472,7 +472,7 @@ export default function SiteTour() {
                             {idx === effectiveSteps.length - 1 ? null : <ArrowRight size={14} aria-hidden="true" />}
                         </button>
                     </div>
-                </div> : <div className="st-collapsed-status">Step {idx + 1} of {effectiveSteps.length} · click expand to continue</div>}
+                </div> : <div className="st-collapsed-status">{idx + 1} / {effectiveSteps.length}</div>}
             </div>
 
             <style jsx global>{`
@@ -502,11 +502,36 @@ export default function SiteTour() {
                     transition: opacity 160ms ease;
                     max-height: calc(100vh - 32px);
                     overflow-y: auto;
+                    -webkit-user-select: none;
+                    user-select: none;
                 }
 
                 .st-pop.is-collapsed {
-                    padding: 13px 15px;
+                    padding: 9px 12px;
                     overflow: hidden;
+                }
+
+                .st-pop.is-collapsed .st-hd {
+                    min-height: 32px;
+                }
+
+                .st-pop.is-collapsed .st-kicker {
+                    display: none;
+                }
+
+                .st-pop.is-collapsed .st-title {
+                    margin-top: 0;
+                    overflow: hidden;
+                    font-size: 14px;
+                    line-height: 1.2;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                .st-pop.is-collapsed .st-collapse,
+                .st-pop.is-collapsed .st-x {
+                    width: 28px;
+                    height: 28px;
                 }
 
                 .st-hd {
@@ -644,9 +669,12 @@ export default function SiteTour() {
                 }
 
                 .st-paths > span {
+                    display: block;
                     color: #7b858a;
                     font-size: 10px;
                     font-weight: 800;
+                    line-height: 1.3;
+                    text-align: center;
                     text-transform: uppercase;
                 }
 
@@ -657,8 +685,12 @@ export default function SiteTour() {
                 }
 
                 .st-paths button {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
                     min-width: 0;
-                    padding: 8px;
+                    min-height: 42px;
+                    padding: 8px 6px;
                     border: 1px solid #dce5e5;
                     border-radius: 5px;
                     background: #fff;
@@ -666,6 +698,8 @@ export default function SiteTour() {
                     cursor: pointer;
                     font-size: 10px;
                     font-weight: 800;
+                    line-height: 1.2;
+                    text-align: center;
                 }
 
                 .st-paths button:hover {
@@ -815,10 +849,19 @@ export default function SiteTour() {
                 }
 
                 .st-collapsed-status {
-                    margin-top: 5px;
+                    position: absolute;
+                    top: 50%;
+                    right: 82px;
+                    max-width: 130px;
+                    margin-top: 0;
+                    overflow: hidden;
                     color: #7b858a;
-                    font-size: 10px;
+                    font-size: 9px;
                     font-weight: 700;
+                    line-height: 1;
+                    text-overflow: ellipsis;
+                    transform: translateY(-50%);
+                    white-space: nowrap;
                 }
 
                 .st-actions {
@@ -1007,7 +1050,31 @@ export default function SiteTour() {
 
                     .st-paths {
                         grid-template-columns: 1fr;
-                        gap: 8px;
+                        gap: 7px;
+                        padding-top: 12px;
+                    }
+
+                    .st-paths > div {
+                        gap: 7px;
+                    }
+
+                    .st-paths button {
+                        min-height: 46px;
+                        padding: 8px 4px;
+                        font-size: 11px;
+                    }
+
+                    .st-pop.is-collapsed {
+                        width: min(330px, calc(100vw - 20px)) !important;
+                    }
+
+                    .st-pop.is-collapsed .st-title {
+                        max-width: 145px;
+                    }
+
+                    .st-pop.is-collapsed .st-collapsed-status {
+                        right: 76px;
+                        max-width: 92px;
                     }
 
                     .st-map {
