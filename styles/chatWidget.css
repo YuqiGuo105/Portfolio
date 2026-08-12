@@ -680,7 +680,7 @@
     line-height: 1.55;
   }
 
-  .cw-guide-hover-card button {
+  .cw-guide-hover-card a {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -691,6 +691,7 @@
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
+    text-decoration: none;
   }
 
   body.dark-skin .cw-guide-keyword:hover,
@@ -706,7 +707,7 @@
   }
 
   body.dark-skin .cw-guide-hover-label,
-  body.dark-skin .cw-guide-hover-card button {
+  body.dark-skin .cw-guide-hover-card a {
     color: #5eead4;
   }
 

@@ -132,16 +132,20 @@ export default function GuideHighlights() {
     >
       <span className="cw-guide-hover-label">{step.title}</span>
       <p>{step.card.content}</p>
-      <button
-        type="button"
-        onClick={() => {
-          element.scrollIntoView({ behavior: "smooth", block: "center" })
+      <a
+        href={step.card.href}
+        onClick={(event) => {
+          if (window.location.pathname === step.route) {
+            event.preventDefault()
+            element.scrollIntoView({ behavior: "smooth", block: "center" })
+            window.history.replaceState(null, "", step.card.href)
+          }
           setActive(null)
         }}
       >
         {step.card.action}
         <ArrowUpRight size={15} aria-hidden="true" />
-      </button>
+      </a>
     </div>,
     document.body,
   )

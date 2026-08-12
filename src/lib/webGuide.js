@@ -1,13 +1,13 @@
 const PENDING_GUIDE_KEY = "__pending_web_guide_v1"
 
 const GUIDE_TARGETS = Object.freeze({
-  "home.about": { route: "/", targetId: "tour-about" },
-  "home.background": { route: "/", targetId: "tour-background" },
-  "home.projects": { route: "/", targetId: "tour-projects" },
-  "home.techBlogs": { route: "/", targetId: "tour-techblogs" },
-  "home.lifeBlogs": { route: "/", targetId: "tour-life" },
-  "home.dashboard": { route: "/", targetId: "tour-real-time-data" },
-  "home.contact": { route: "/", targetId: "tour-contact" },
+  "home.about": { route: "/", targetId: "tour-about", href: "/#tour-about" },
+  "home.background": { route: "/", targetId: "tour-background", href: "/#tour-background" },
+  "home.projects": { route: "/", targetId: "tour-projects", href: "/#tour-projects" },
+  "home.techBlogs": { route: "/", targetId: "tour-techblogs", href: "/#tour-techblogs" },
+  "home.lifeBlogs": { route: "/", targetId: "tour-life", href: "/#tour-life" },
+  "home.dashboard": { route: "/", targetId: "tour-real-time-data", href: "/#tour-real-time-data" },
+  "home.contact": { route: "/", targetId: "tour-contact", href: "/#tour-contact" },
 })
 
 const DEFAULT_CONTROLS = Object.freeze({
@@ -51,13 +51,15 @@ export function normalizeWebGuidePlan(raw) {
       targetKey,
       route: target.route,
       targetId: target.targetId,
+      href: target.href,
       title,
       content,
       card: {
         title,
         content,
+        href: target.href,
         action: cleanText(candidate?.card?.action, 60)
-          || (language === "zh" ? "查看此区域" : "View this section"),
+          || (language === "zh" ? "打开此区域" : "Open this section"),
       },
     })
     if (steps.length >= 7) break
@@ -65,7 +67,7 @@ export function normalizeWebGuidePlan(raw) {
 
   if (!steps.length) return null
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     language,
     autoStart: raw.autoStart === true,
     startMode: raw.startMode === "START_NOW" ? "START_NOW" : "OFFER",

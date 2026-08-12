@@ -800,7 +800,7 @@ const Index = () => {
         <section className="section section-started">
           <div className="container">
             {/* Hero Started */}
-            <div className="hero-started">
+            <div className="hero-started" id="tour-hero">
               <div
                 className="slide"
                 style={{
