@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, ExternalLink, ListTree, Pause, Play, Volume2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Copy, ExternalLink, ListTree, Mail, Pause, Play, Volume2 } from "lucide-react"
 import { consumePendingWebGuide } from "../lib/webGuide"
 
 const DEFAULT_CONTROLS = { previous: "Prev", next: "Next", done: "Done", close: "Close" }
@@ -56,6 +56,7 @@ export default function SiteTour() {
                 content: "Explore deep dives, system design notes, and hands-on write-ups that showcase how I approach new challenges.",
                 meta: "System design · Backend · Infrastructure",
                 action: { href: "/blogs?type=technical", label: "Read technical writing" },
+                interaction: { type: "activate", targetId: "tour-techblogs", label: "Show Tech Blogs" },
             },
             {
                 id: "life",
@@ -65,6 +66,7 @@ export default function SiteTour() {
                 content: "Get a glimpse of my hobbies, travels, and the moments outside of code that keep me inspired.",
                 meta: "Travel · Photography · Life outside code",
                 action: { href: "/blogs?type=life", label: "Explore life stories" },
+                interaction: { type: "activate", targetId: "tour-life", label: "Show Life Blogs" },
             },
             {
                 id: "realtime",
@@ -82,6 +84,8 @@ export default function SiteTour() {
                 title: "Contact Me",
                 content: "Wrap up with the best ways to reach me, whether you want to collaborate, hire, or just say hello.",
                 meta: "Recruiting · Collaboration · Direct contact",
+                interaction: { type: "copy", value: "yuqi.guo17@gmail.com", label: "Copy email" },
+                action: { href: "mailto:yuqi.guo17@gmail.com", label: "Write an email" },
             },
         ],
         []
@@ -106,6 +110,7 @@ export default function SiteTour() {
     const [mapOpen, setMapOpen] = useState(false)
     const [autoPlay, setAutoPlay] = useState(false)
     const [collapsed, setCollapsed] = useState(false)
+    const [interactionDone, setInteractionDone] = useState(false)
     const scheduleUpdateRect = useCallback(() => {
         if (!open) return
         if (!activeElRef.current) return
@@ -127,6 +132,7 @@ export default function SiteTour() {
         setMapOpen(false)
         setAutoPlay(false)
         setCollapsed(false)
+        setInteractionDone(false)
         activeElRef.current = null
         if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("cw:site-tour:end"))
@@ -140,6 +146,7 @@ export default function SiteTour() {
             if (!el) return
             activeElRef.current = el
             setUiReady(false)
+            setInteractionDone(false)
             setAnchorRect(null)
             el.scrollIntoView({ behavior: "smooth", block: "center" })
             const start = performance.now()
@@ -327,9 +334,31 @@ export default function SiteTour() {
         window.speechSynthesis.speak(utterance)
     }
 
-    const jumpTo = (stepId) => {
-        const nextIndex = effectiveSteps.findIndex((step) => step.id === stepId)
-        if (nextIndex >= 0) setIdx(nextIndex)
+    const runInteraction = async () => {
+        const interaction = current?.interaction
+        if (!interaction) return
+        if (interaction.type === "activate") {
+            document.getElementById(interaction.targetId)?.click()
+            setInteractionDone(true)
+            return
+        }
+        if (interaction.type === "copy") {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(interaction.value)
+            } else {
+                const input = document.createElement("textarea")
+                input.value = interaction.value
+                input.setAttribute("readonly", "")
+                input.style.position = "fixed"
+                input.style.opacity = "0"
+                document.body.appendChild(input)
+                input.select()
+                document.execCommand("copy")
+                input.remove()
+            }
+            setInteractionDone(true)
+            window.setTimeout(() => setInteractionDone(false), 1800)
+        }
     }
 
     return createPortal(
@@ -387,17 +416,6 @@ export default function SiteTour() {
                     </button>
                 ) : null}
 
-                {!collapsed && steps === null ? (
-                    <div className="st-paths" aria-label="Explore by interest">
-                        <span>Explore by interest</span>
-                        <div>
-                            <button type="button" onClick={() => jumpTo("background")}>Recruiter</button>
-                            <button type="button" onClick={() => jumpTo("projects")}>Engineer</button>
-                            <button type="button" onClick={() => jumpTo("techblogs")}>Writing</button>
-                        </div>
-                    </div>
-                ) : null}
-
                 {!collapsed ? <div className="st-rail" aria-label={`Step ${idx + 1} of ${effectiveSteps.length}`}>
                     {effectiveSteps.map((step, stepIndex) => (
                         <button
@@ -445,11 +463,27 @@ export default function SiteTour() {
                     </ol>
                 ) : null}
 
-                {!collapsed && currentAction ? (
-                    <a className="st-context-link" href={currentAction.href}>
-                        {currentAction.label}
-                        <ExternalLink size={14} aria-hidden="true" />
-                    </a>
+                {!collapsed && (currentAction || current?.interaction) ? (
+                    <div className="st-step-actions">
+                        {current?.interaction ? (
+                            <button type="button" className="st-interaction" onClick={runInteraction}>
+                                {interactionDone
+                                    ? <Check size={14} aria-hidden="true" />
+                                    : current.interaction.type === "copy"
+                                        ? <Copy size={14} aria-hidden="true" />
+                                        : <Play size={14} aria-hidden="true" />}
+                                {interactionDone ? "Done" : current.interaction.label}
+                            </button>
+                        ) : null}
+                        {currentAction ? (
+                            <a className="st-context-link" href={currentAction.href}>
+                                {currentAction.href.startsWith("mailto:")
+                                    ? <Mail size={14} aria-hidden="true" />
+                                    : <ExternalLink size={14} aria-hidden="true" />}
+                                {currentAction.label}
+                            </a>
+                        ) : null}
+                    </div>
                 ) : null}
 
                 {!collapsed ? <div className="st-ft">
@@ -658,56 +692,6 @@ export default function SiteTour() {
                     font-size: 16px;
                 }
 
-                .st-paths {
-                    display: grid;
-                    grid-template-columns: auto 1fr;
-                    align-items: center;
-                    gap: 14px;
-                    margin-top: 14px;
-                    padding-top: 14px;
-                    border-top: 1px solid #ebeef5;
-                }
-
-                .st-paths > span {
-                    display: block;
-                    color: #7b858a;
-                    font-size: 10px;
-                    font-weight: 800;
-                    line-height: 1.3;
-                    text-align: center;
-                    text-transform: uppercase;
-                }
-
-                .st-paths > div {
-                    display: grid;
-                    grid-template-columns: repeat(3, minmax(0, 1fr));
-                    gap: 6px;
-                }
-
-                .st-paths button {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    min-width: 0;
-                    min-height: 42px;
-                    padding: 8px 6px;
-                    border: 1px solid #dce5e5;
-                    border-radius: 5px;
-                    background: #fff;
-                    color: #435157;
-                    cursor: pointer;
-                    font-size: 10px;
-                    font-weight: 800;
-                    line-height: 1.2;
-                    text-align: center;
-                }
-
-                .st-paths button:hover {
-                    border-color: #82c7bd;
-                    background: rgba(15, 118, 110, 0.06);
-                    color: #0f766e;
-                }
-
                 .st-rail {
                     display: grid;
                     grid-template-columns: repeat(${effectiveSteps.length}, minmax(0, 1fr));
@@ -805,21 +789,40 @@ export default function SiteTour() {
                     font-size: 9px;
                 }
 
-                .st-context-link {
+                .st-step-actions {
+                    display: flex;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    margin-top: 10px;
+                }
+
+                .st-context-link,
+                .st-interaction {
                     display: inline-flex;
                     align-items: center;
+                    justify-content: center;
                     gap: 7px;
-                    margin-top: 9px;
+                    min-height: 34px;
+                    padding: 7px 10px;
+                    border: 1px solid rgba(15, 118, 110, 0.22);
+                    border-radius: 5px;
+                    background: rgba(15, 118, 110, 0.05);
                     color: #0f766e;
                     font-size: 11px;
                     font-weight: 800;
                     text-decoration: none;
                 }
 
-                .st-context-link:hover {
+                .st-interaction {
+                    cursor: pointer;
+                }
+
+                .st-context-link:hover,
+                .st-interaction:hover {
+                    border-color: #82c7bd;
+                    background: rgba(15, 118, 110, 0.1);
                     color: #0b8b7d;
-                    text-decoration: underline;
-                    text-underline-offset: 3px;
                 }
 
                 .st-ft {
@@ -966,14 +969,10 @@ export default function SiteTour() {
                     color: rgba(248, 250, 252, 0.94);
                 }
 
-                body.dark-skin .st-paths {
-                    border-top-color: rgba(255, 255, 255, 0.12);
-                }
-
-                body.dark-skin .st-paths button {
-                    border-color: rgba(255, 255, 255, 0.15);
-                    background: rgba(255, 255, 255, 0.04);
-                    color: rgba(226, 232, 240, 0.82);
+                body.dark-skin .st-context-link,
+                body.dark-skin .st-interaction {
+                    border-color: rgba(94, 234, 212, 0.22);
+                    background: rgba(94, 234, 212, 0.08);
                 }
 
                 body.dark-skin .st-autoplay {
@@ -1048,20 +1047,13 @@ export default function SiteTour() {
                         font-size: 13px;
                     }
 
-                    .st-paths {
-                        grid-template-columns: 1fr;
-                        gap: 7px;
-                        padding-top: 12px;
+                    .st-step-actions {
+                        display: grid;
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
                     }
 
-                    .st-paths > div {
-                        gap: 7px;
-                    }
-
-                    .st-paths button {
-                        min-height: 46px;
-                        padding: 8px 4px;
-                        font-size: 11px;
+                    .st-step-actions > :only-child {
+                        grid-column: 1 / -1;
                     }
 
                     .st-pop.is-collapsed {
