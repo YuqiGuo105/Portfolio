@@ -1,5 +1,6 @@
 import { requireAdminUser } from "../../../src/lib/agentServiceProxy";
 import { supabaseServer } from "../../../src/supabase/supabaseServer";
+import { isLoopbackUrl } from "../../../src/lib/analyticsHostFilter";
 
 const PROD_DEFAULT = "https://portfolio-analytics-aggregator-702193211434.us-central1.run.app";
 const EXPORT_FORMATS = new Set(["csv", "json"]);
@@ -62,7 +63,7 @@ export default async function handler(req, res) {
     }
 
     const payload = await fetchVisitorPage(base, token, params);
-    const items = Array.isArray(payload.items) ? payload.items : [];
+    const items = filterLocalhostRecords(payload.items);
     const contentByPath = await loadContentReferences(items);
 
     return res.status(200).json({
@@ -141,10 +142,10 @@ async function loadExportRows(base, token, queryParams) {
     pageParams.set("page", String(pageNumber));
     return fetchVisitorPage(base, token, pageParams);
   });
-  const items = [
+  const items = filterLocalhostRecords([
     ...(Array.isArray(firstPage.items) ? firstPage.items : []),
     ...remainingPages.flatMap((page) => (Array.isArray(page.items) ? page.items : [])),
-  ].slice(0, EXPORT_MAX_ROWS);
+  ]).slice(0, EXPORT_MAX_ROWS);
 
   return {
     items,
@@ -304,6 +305,14 @@ function normalizePath(value) {
   } catch {
     return String(value).split(/[?#]/)[0].replace(/\/+$/, "") || "/";
   }
+}
+
+function filterLocalhostRecords(items) {
+  return (Array.isArray(items) ? items : []).filter((item) => ![
+    item?.pageUrl,
+    item?.targetUrl,
+    item?.referrer,
+  ].some((value) => isLoopbackUrl(value)));
 }
 
 function firstValue(...values) {

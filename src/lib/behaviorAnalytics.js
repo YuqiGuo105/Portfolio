@@ -1,3 +1,5 @@
+import { isLoopbackHostname } from "./analyticsHostFilter";
+
 const CONSENT_KEY = "yuqi_analytics_consent";
 const ANON_COOKIE = "yuqi_analytics_id";
 const SESSION_KEY = "yuqi_analytics_session";
@@ -98,6 +100,7 @@ function currentPath(value) {
 
 export function trackBehavior(eventName, context = {}) {
   if (typeof window === "undefined" || !ALLOWED_EVENTS.has(eventName)) return false;
+  if (isLoopbackHostname(window.location.hostname)) return false;
   const consentState = getAnalyticsConsent();
   if (consentState === "denied") return false;
 
@@ -125,6 +128,9 @@ export function trackBehavior(eventName, context = {}) {
 }
 
 export function startPageBehaviorTracking(page) {
+  if (typeof window === "undefined" || isLoopbackHostname(window.location.hostname)) {
+    return () => {};
+  }
   const startedAt = Date.now();
   const milestones = new Set();
   trackBehavior("page_view", { page });

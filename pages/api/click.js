@@ -8,6 +8,7 @@ import { supabaseServer } from '../../src/supabase/supabaseServer';
 import { produceRawEvent } from '../../src/lib/kafkaProducer';
 import { uuidv7 } from '../../src/lib/uuidv7';
 import { isRateLimited } from '../../src/lib/rateLimiter';
+import { isLocalAnalyticsRequest } from '../../src/lib/analyticsHostFilter';
 
 // 允许的来源域名
 const ALLOWED_ORIGINS = ['https://www.yuqi.site', 'https://yuqi.site'];
@@ -63,6 +64,10 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (isLocalAnalyticsRequest(req)) {
+    return res.status(204).end();
   }
 
   // 1. Origin / Referer check

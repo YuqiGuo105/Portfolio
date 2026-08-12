@@ -15,6 +15,7 @@ import { useRouter } from 'next/router';
 import LogInDialog from "../src/components/LogInDialog";
 import SiteTour from "../src/components/SiteTour";
 import GuideHighlights from "../src/components/GuideHighlights";
+import { isLoopbackHostname } from "../src/lib/analyticsHostFilter";
 
 const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL;
 const LEETCODE_URL = process.env.NEXT_PUBLIC_LEETCODE_URL;
@@ -231,6 +232,7 @@ const Index = () => {
 
   // Helper to record a click event
   const recordClick = async (clickEvent, targetUrl) => {
+    if (isLoopbackHostname(window.location.hostname)) return;
     const localTime = new Date().toISOString();
     try {
       await fetch("/api/click", {
