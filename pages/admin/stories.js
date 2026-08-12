@@ -3,8 +3,8 @@ import { Clock3, ImagePlus, RefreshCw, Trash2, UploadCloud, X } from "lucide-rea
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { DataState, PageHeader, adminStyles as ui } from "../../src/components/admin/AdminUI";
 import { adminApi } from "../../src/lib/adminApi";
-import { supabase } from "../../src/supabase/supabaseClient";
 import { isIphonePhoto, prepareStoryImage } from "../../src/lib/storyImageUpload";
+import { uploadStoryToSignedUrl } from "../../src/lib/storySignedUpload";
 import styles from "../../src/components/admin/StoryManager.module.css";
 
 export default function StoriesPage() {
@@ -106,14 +106,11 @@ export default function StoriesPage() {
             size: item.file.size,
             description,
           });
-          // storage-js 2.x wraps Blob/File values in FormData and may preserve an
-          // incorrect MIME reported by iOS. ArrayBuffer forces the binary path,
-          // where the explicit content type is sent as the request header.
-          const body = await item.file.arrayBuffer();
-          const { error: uploadError } = await supabase.storage
-            .from(prepared.bucket)
-            .uploadToSignedUrl(prepared.path, prepared.token, body, { contentType });
-          if (uploadError) throw uploadError;
+          await uploadStoryToSignedUrl({
+            signedUrl: prepared.signedUrl,
+            file: item.file,
+            contentType,
+          });
           await adminApi.stories.finalize({
             id: prepared.id,
             path: prepared.path,

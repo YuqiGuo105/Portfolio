@@ -60,8 +60,8 @@ export async function prepareStoryUpload(input) {
   const id = randomUUID();
   const path = `${ITEM_PREFIX}/${id}.${extension}`;
   const { data, error } = await supabaseServer.storage.from(BUCKET).createSignedUploadUrl(path);
-  if (error || !data?.token) throw error || new Error("Supabase did not return an upload token.");
-  return { id, path, token: data.token, bucket: BUCKET, description };
+  if (error || !data?.signedUrl) throw error || new Error("Supabase did not return a signed upload URL.");
+  return { id, path, signedUrl: data.signedUrl, bucket: BUCKET, description };
 }
 
 export async function finalizeStory({ id, path, contentType, size, description, actor }) {
