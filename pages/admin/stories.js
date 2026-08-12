@@ -3,7 +3,7 @@ import { Clock3, ImagePlus, RefreshCw, Trash2, UploadCloud, X } from "lucide-rea
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { DataState, PageHeader, adminStyles as ui } from "../../src/components/admin/AdminUI";
 import { adminApi } from "../../src/lib/adminApi";
-import { isIphonePhoto, prepareStoryImage } from "../../src/lib/storyImageUpload";
+import { isIphonePhoto, prepareStoryImage, storyImageContentType } from "../../src/lib/storyImageUpload";
 import { uploadStoryToSignedUrl } from "../../src/lib/storySignedUpload";
 import styles from "../../src/components/admin/StoryManager.module.css";
 
@@ -64,12 +64,15 @@ export default function StoriesPage() {
     for (const original of selected.slice(0, available)) {
       try {
         const converted = await prepareStoryImage(original);
+        const contentType = storyImageContentType(converted);
+        if (!contentType) throw new Error(`${original.name} has no supported image type after preparation.`);
         if (converted.size > Number(config.maxBytes || 0)) {
           throw new Error(`${original.name} exceeds the ${maxMb || 10} MB upload limit after conversion.`);
         }
         accepted.push({
           id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${accepted.length}`,
           file: converted,
+          contentType,
           originalName: original.name,
           converted: isIphonePhoto(original),
           preview: URL.createObjectURL(converted),
@@ -100,24 +103,37 @@ export default function StoriesPage() {
       for (const item of [...files].reverse()) {
         setFiles((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: "uploading", error: "" } : entry));
         try {
-          const contentType = item.file.type;
-          const prepared = await adminApi.stories.prepareUpload({
-            contentType,
-            size: item.file.size,
-            description,
-          });
-          await uploadStoryToSignedUrl({
-            signedUrl: prepared.signedUrl,
-            file: item.file,
-            contentType,
-          });
-          await adminApi.stories.finalize({
+          const contentType = item.contentType;
+          let prepared;
+          try {
+            prepared = await adminApi.stories.prepareUpload({
+              contentType,
+              size: item.file.size,
+              description,
+            });
+          } catch (err) {
+            throw new Error(`Prepare failed · ${err.message || "Upload could not be prepared."}`);
+          }
+          try {
+            await uploadStoryToSignedUrl({
+              signedUrl: prepared.signedUrl,
+              file: item.file,
+              contentType,
+            });
+          } catch (err) {
+            throw new Error(`Storage failed · ${err.message || "Image upload failed."}`);
+          }
+          try {
+            await adminApi.stories.finalize({
             id: prepared.id,
             path: prepared.path,
             contentType,
             size: item.file.size,
             description,
-          });
+            });
+          } catch (err) {
+            throw new Error(`Finalize failed · ${err.message || "Story could not be published."}`);
+          }
           published += 1;
           URL.revokeObjectURL(item.preview);
           setFiles((current) => current.filter((entry) => entry.id !== item.id));
@@ -226,7 +242,7 @@ export default function StoriesPage() {
                       </button>
                       <div className={styles.selectedMeta}>
                         <strong>{item.originalName}</strong>
-                        <small>{item.status === "uploading" ? "Publishing…" : item.status === "error" ? `Failed · ${item.error}` : item.converted ? "HEIC → JPEG · Ready" : `${item.file.type.replace("image/", "").toUpperCase()} · Ready`}</small>
+                        <small>{item.status === "uploading" ? "Publishing…" : item.status === "error" ? `Failed · ${item.error}` : item.converted ? "HEIC → JPEG · Ready" : `${item.contentType.replace("image/", "").toUpperCase()} · Ready`}</small>
                       </div>
                     </article>
                   ))}

@@ -35,6 +35,14 @@ export async function prepareStoryImage(file) {
   throw new Error(`${file?.name || "This file"} is not a supported photo.`);
 }
 
+export function storyImageContentType(file) {
+  const extension = fileExtension(file?.name);
+  const fromExtension = MIME_BY_EXTENSION.get(extension);
+  if (fromExtension) return fromExtension;
+  const declaredType = String(file?.type || "").toLowerCase();
+  return DISPLAY_TYPES.has(declaredType) ? declaredType : "";
+}
+
 async function detectImageType(file, extension) {
   const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
