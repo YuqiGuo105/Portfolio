@@ -27,10 +27,10 @@ const SSR_UPSTREAM = (
 // as a fallback for older backend revisions; new code paths key on `window`.
 // The label is kept short so the tab row stays compact on mobile.
 const RANGE_OPTIONS = [
-  { id: "7d",  label: "Last 7 days" },
-  { id: "30d", label: "Last 30 days" },
-  { id: "90d", label: "Last 90 days" },
-  { id: "all", label: "All time" },
+  { id: "7d",  label: "Last 7 days", shortLabel: "7 days" },
+  { id: "30d", label: "Last 30 days", shortLabel: "30 days" },
+  { id: "90d", label: "Last 90 days", shortLabel: "90 days" },
+  { id: "all", label: "All time", shortLabel: "All time" },
 ];
 
 const num = (v) => (typeof v === "number" ? v : Number(v ?? 0));
@@ -217,7 +217,8 @@ export default function AnalyticsPage({ initialSummary = null }) {
                   className={`range-tab${window === opt.id ? " is-active" : ""}`}
                   onClick={() => setWindow(opt.id)}
                 >
-                  {opt.label}
+                  <span className="range-label-full">{opt.label}</span>
+                  <span className="range-label-short">{opt.shortLabel}</span>
                 </button>
               ))}
             </div>
@@ -379,6 +380,8 @@ export default function AnalyticsPage({ initialSummary = null }) {
             font-size: clamp(0.66rem, 3vw, 0.78rem);
             line-height: 1.15;
           }
+          .range-tab .range-label-full { display: none; }
+          .range-tab .range-label-short { display: inline; }
         }
 
         .back-link {
@@ -445,6 +448,7 @@ export default function AnalyticsPage({ initialSummary = null }) {
           background: #6366f1;
           color: #ffffff;
         }
+        .range-label-short { display: none; }
 
         .alert-error {
           background: rgba(239, 68, 68, 0.12);
