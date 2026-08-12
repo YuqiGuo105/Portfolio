@@ -8,7 +8,13 @@ A modern Next.js portfolio application for showcasing projects, blogs, CV, visit
 
 ## Architecture
 
-<img src="docs/architecture/platform-system-flow.svg" alt="Portfolio microservice platform architecture" width="100%" />
+<a href="https://www.yuqi.site/architecture" title="Open the interactive architecture viewer">
+  <img src="docs/architecture/platform-system-flow.svg" alt="Portfolio microservice platform architecture" width="100%" />
+</a>
+
+**[Open the interactive architecture viewer →](https://www.yuqi.site/architecture)**
+
+Zoom from 50% to 250%, fit the complete topology, or open the source SVG for lossless inspection.
 
 > **Maintain this diagram:** edit [`docs/architecture/platform-system-flow.json`](docs/architecture/platform-system-flow.json), then run `node scripts/render-architecture-diagram.mjs docs/architecture/platform-system-flow.json`.
 
@@ -28,10 +34,16 @@ confirmation-required action before the backend tool executes.
 
 <img src="docs/readme-assets/admin-mcp-operate-console.png" alt="Admin MCP operate console" width="900" />
 
-Visitor alert rules are evaluated by the analytics platform and delivered through
-the notification pipeline. The email below shows the end-to-end operational
-alert received by an administrator after a configured regional rule was
-triggered.
+Visitor alert policies are versioned and evaluated against deduplicated time-window
+rollups. A triggered rule creates an idempotent alert intent, publishes it through
+Kafka, and hands it to the notification service for recipient fan-out. The email
+worker claims each recipient with a delivery lease, records attempts in the
+delivery ledger, and retries transient provider failures without duplicating a
+successful send.
+
+The screenshot below is a real administrator alert from the production path:
+`visitor event → session/rollup aggregation → rule evaluation → alert dispatch →
+notification lease/retry → Gmail delivery`.
 
 <img src="docs/readme-assets/admin-visitor-alert-email.png" alt="Admin visitor alert email" width="900" />
 
