@@ -367,12 +367,17 @@ export default function AnalyticsPage({ initialSummary = null }) {
           .header-title { flex: 0 0 auto; width: 100%; }
           .range-tabs {
             width: 100%;
-            justify-content: center;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 3px;
+            padding: 3px;
           }
           .range-tab {
-            padding: 6px 12px;
-            font-size: 0.8rem;
+            width: 100%;
+            min-width: 0;
+            padding: 8px 3px;
+            font-size: clamp(0.66rem, 3vw, 0.78rem);
+            line-height: 1.15;
           }
         }
 

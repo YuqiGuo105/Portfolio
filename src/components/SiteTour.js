@@ -416,22 +416,6 @@ export default function SiteTour() {
                     </button>
                 ) : null}
 
-                {!collapsed ? <div className="st-rail" aria-label={`Step ${idx + 1} of ${effectiveSteps.length}`}>
-                    {effectiveSteps.map((step, stepIndex) => (
-                        <button
-                            key={step.id || stepIndex}
-                            type="button"
-                            className={stepIndex === idx ? "is-current" : stepIndex < idx ? "is-complete" : ""}
-                            onClick={() => setIdx(stepIndex)}
-                            aria-label={`Go to ${step.title || `step ${stepIndex + 1}`}`}
-                            aria-current={stepIndex === idx ? "step" : undefined}
-                            title={step.title}
-                        >
-                            <span />
-                        </button>
-                    ))}
-                </div> : null}
-
                 {!collapsed ? <button
                     type="button"
                     className="st-map-toggle"
@@ -485,6 +469,22 @@ export default function SiteTour() {
                         ) : null}
                     </div>
                 ) : null}
+
+                {!collapsed ? <div className="st-rail" aria-label={`Step ${idx + 1} of ${effectiveSteps.length}`}>
+                    {effectiveSteps.map((step, stepIndex) => (
+                        <button
+                            key={step.id || stepIndex}
+                            type="button"
+                            className={stepIndex === idx ? "is-current" : stepIndex < idx ? "is-complete" : ""}
+                            onClick={() => setIdx(stepIndex)}
+                            aria-label={`Go to ${step.title || `step ${stepIndex + 1}`}`}
+                            aria-current={stepIndex === idx ? "step" : undefined}
+                            title={step.title}
+                        >
+                            <span />
+                        </button>
+                    ))}
+                </div> : null}
 
                 {!collapsed ? <div className="st-ft">
                     <button
@@ -696,7 +696,9 @@ export default function SiteTour() {
                     display: grid;
                     grid-template-columns: repeat(${effectiveSteps.length}, minmax(0, 1fr));
                     gap: 4px;
-                    margin-top: 13px;
+                    margin-top: 12px;
+                    padding-top: 10px;
+                    border-top: 1px solid #ebeef5;
                 }
 
                 .st-rail button {
@@ -999,6 +1001,10 @@ export default function SiteTour() {
 
                 body.dark-skin .st-rail button span {
                     background: rgba(255, 255, 255, 0.13);
+                }
+
+                body.dark-skin .st-rail {
+                    border-top-color: rgba(255, 255, 255, 0.12);
                 }
 
                 body.dark-skin .st-rail button:hover span,
