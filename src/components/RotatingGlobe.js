@@ -1204,7 +1204,7 @@ const RotatingGlobe = ({
           attached.autoRotate = true;
           attached.autoRotateSpeed = 0.55;
         }
-      }, 5000);
+      }, 2000);
     };
 
     // Always-on sampler. sampleCameraToRefs is throttled (90ms) and early-exits
