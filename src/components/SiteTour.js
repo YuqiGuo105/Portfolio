@@ -10,7 +10,7 @@ function getRect(el) {
     return { top: r.top, left: r.left, width: r.width, height: r.height }
 }
 
-export default function SiteTour() {
+export default function SiteTour({ launchRequest = null }) {
     const STATIC_STEPS = useMemo(
         () => [
             {
@@ -109,6 +109,7 @@ export default function SiteTour() {
     const [uiReady, setUiReady] = useState(false)
     const [mapOpen, setMapOpen] = useState(false)
     const [autoPlay, setAutoPlay] = useState(false)
+    const [autoPlayIntervalMs, setAutoPlayIntervalMs] = useState(5200)
     const [collapsed, setCollapsed] = useState(false)
     const [interactionDone, setInteractionDone] = useState(false)
     const scheduleUpdateRect = useCallback(() => {
@@ -131,6 +132,7 @@ export default function SiteTour() {
         setControls(DEFAULT_CONTROLS)
         setMapOpen(false)
         setAutoPlay(false)
+        setAutoPlayIntervalMs(5200)
         setCollapsed(false)
         setInteractionDone(false)
         activeElRef.current = null
@@ -190,6 +192,8 @@ export default function SiteTour() {
                 stepsRef.current = dynamic
             }
             if (e?.detail?.controls) setControls(e.detail.controls)
+            setAutoPlay(Boolean(e?.detail?.autoPlay))
+            setAutoPlayIntervalMs(Number(e?.detail?.autoPlayIntervalMs) || 5200)
             window.dispatchEvent(new CustomEvent("cw:guide:highlights", {
                 detail: {
                     language: e?.detail?.language || "en",
@@ -240,6 +244,21 @@ export default function SiteTour() {
     }, [go])
 
     useEffect(() => {
+        if (!launchRequest?.steps?.length) return
+        const dynamic = launchRequest.steps
+        setSteps(dynamic)
+        stepsRef.current = dynamic
+        setControls(launchRequest.controls || DEFAULT_CONTROLS)
+        setAutoPlay(Boolean(launchRequest.autoPlay))
+        setAutoPlayIntervalMs(Number(launchRequest.autoPlayIntervalMs) || 5200)
+        setOpen(true)
+        setIdx(0)
+        setCollapsed(false)
+        setMapOpen(false)
+        requestAnimationFrame(() => go(0))
+    }, [go, launchRequest])
+
+    useEffect(() => {
         if (!open) return
         go(idx)
     }, [open, idx, go])
@@ -263,9 +282,9 @@ export default function SiteTour() {
         const timer = window.setTimeout(() => {
             if (idx >= effectiveSteps.length - 1) setAutoPlay(false)
             else setIdx((value) => value + 1)
-        }, 5200)
+        }, Number(effectiveSteps[idx]?.durationMs) || autoPlayIntervalMs)
         return () => window.clearTimeout(timer)
-    }, [autoPlay, effectiveSteps.length, idx, open])
+    }, [autoPlay, autoPlayIntervalMs, effectiveSteps, idx, open])
 
     useEffect(() => {
         if (!open) return
@@ -386,7 +405,7 @@ export default function SiteTour() {
             >
                 <div className="st-hd">
                     <div>
-                        <span className="st-kicker">Portfolio tour</span>
+                        <span className="st-kicker">{current?.kicker || "Portfolio tour"}</span>
                         <div className="st-title">{current?.title}</div>
                     </div>
                     <div className="st-window-actions">
@@ -405,6 +424,24 @@ export default function SiteTour() {
 
                 {!collapsed ? <div className="st-bd">{current?.content}</div> : null}
                 {!collapsed && current?.meta ? <div className="st-meta">{current.meta}</div> : null}
+
+                {!collapsed && current?.items?.length ? (
+                    <div className="st-evidence-list" aria-label="Supporting evidence">
+                        {current.items.map((item, itemIndex) => (
+                            <a
+                                key={item.url || `${item.title}-${itemIndex}`}
+                                className="st-evidence-item"
+                                href={item.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <span className="st-evidence-repo">{item.eyebrow}</span>
+                                <strong>{item.title}</strong>
+                                <ExternalLink size={13} aria-hidden="true" />
+                            </a>
+                        ))}
+                    </div>
+                ) : null}
 
                 {!collapsed && current?.pronunciation ? (
                     <button type="button" className="st-pronounce" onClick={pronounceName}>
@@ -662,6 +699,58 @@ export default function SiteTour() {
                     font-size: 11px;
                     font-weight: 700;
                     line-height: 1.4;
+                }
+
+                .st-evidence-list {
+                    display: grid;
+                    gap: 6px;
+                    margin-top: 13px;
+                }
+
+                .st-evidence-item {
+                    position: relative;
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 3px 10px;
+                    min-width: 0;
+                    padding: 9px 11px;
+                    border: 1px solid #e4e8eb;
+                    border-radius: 5px;
+                    background: #f8faf9;
+                    color: #263238;
+                    text-decoration: none;
+                }
+
+                .st-evidence-item:hover {
+                    border-color: #82c7bd;
+                    background: rgba(15, 118, 110, 0.06);
+                    color: #0f766e;
+                }
+
+                .st-evidence-item strong {
+                    min-width: 0;
+                    overflow: hidden;
+                    font-size: 11px;
+                    line-height: 1.35;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                .st-evidence-item > svg {
+                    grid-column: 2;
+                    grid-row: 1 / span 2;
+                    align-self: center;
+                    color: #0f766e;
+                }
+
+                .st-evidence-repo {
+                    color: #778389;
+                    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                    font-size: 8px;
+                    font-weight: 800;
+                    letter-spacing: 0.04em;
+                    line-height: 1.2;
+                    text-transform: uppercase;
                 }
 
                 .st-pronounce {
@@ -1018,6 +1107,18 @@ export default function SiteTour() {
 
                 body.dark-skin .st-bd {
                     color: rgba(226, 232, 240, 0.82);
+                }
+
+                body.dark-skin .st-evidence-item {
+                    border-color: rgba(255, 255, 255, 0.12);
+                    background: rgba(255, 255, 255, 0.05);
+                    color: rgba(248, 250, 252, 0.9);
+                }
+
+                body.dark-skin .st-evidence-item:hover {
+                    border-color: rgba(94, 234, 212, 0.36);
+                    background: rgba(94, 234, 212, 0.09);
+                    color: #5eead4;
                 }
 
                 body.dark-skin .st-count {

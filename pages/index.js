@@ -15,6 +15,7 @@ import LogInDialog from "../src/components/LogInDialog";
 import SiteTour from "../src/components/SiteTour";
 import GuideHighlights from "../src/components/GuideHighlights";
 import { isLoopbackHostname } from "../src/lib/analyticsHostFilter";
+import { BriefcaseBusiness, Clock3, GitPullRequest } from "lucide-react";
 
 const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL;
 const LEETCODE_URL = process.env.NEXT_PUBLIC_LEETCODE_URL;
@@ -61,6 +62,8 @@ const Index = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [pendingNext, setPendingNext] = useState(null);
   const [githubCommits, setGithubCommits] = useState("600+");
+  const [openSourcePullRequests, setOpenSourcePullRequests] = useState([]);
+  const [siteTourRequest, setSiteTourRequest] = useState(null);
   const [githubModalOpen, setGithubModalOpen] = useState(false);
   const [isLightSkin, setIsLightSkin] = useState(false);
   const [blogTab, setBlogTab] = useState("tech");
@@ -158,6 +161,11 @@ const Index = () => {
         const res = await fetch("/api/github-contributions");
         if (!res.ok) return;
         const json = await res.json();
+        setOpenSourcePullRequests(
+          Array.isArray(json.openSourcePullRequests)
+            ? json.openSourcePullRequests
+            : []
+        );
         if (json.total && json.total > 0) {
           const count = json.total;
           if (count >= 1_000_000) {
@@ -273,6 +281,89 @@ const Index = () => {
     setProgress(0);
     setIsPlaying(true);
     setIsProfileModalOpen(true);
+  };
+
+  const startRecruiterBrief = () => {
+    const pullRequestEvidence = openSourcePullRequests.slice(0, 4).map((pullRequest) => ({
+      eyebrow: `${pullRequest.repository} · PR #${pullRequest.number}`,
+      title: pullRequest.title,
+      url: pullRequest.url,
+    }));
+
+    const steps = [
+      {
+        id: "recruiter-intro",
+        targetId: "tour-hero",
+        kicker: "60-second recruiter brief",
+        title: "Yuqi Guo",
+        content: "Software engineer focused on production backend systems, distributed workflows, and applied AI infrastructure.",
+        meta: "Goldman Sachs · Java / Spring Boot · Distributed systems",
+        pronunciation: true,
+        durationMs: 8000,
+      },
+      {
+        id: "recruiter-experience",
+        targetId: "tour-background",
+        kicker: "60-second recruiter brief",
+        title: "Production Experience",
+        content: "Experience building secure backend services, event-driven processing, document workflows, data access layers, and operational controls.",
+        meta: "Ownership · Reliability · Financial systems",
+        action: { href: "/cv", label: "Review resume" },
+        durationMs: 8000,
+      },
+      {
+        id: "recruiter-projects",
+        targetId: "tour-projects",
+        kicker: "60-second recruiter brief",
+        title: "Systems, Not Screenshots",
+        content: "The flagship portfolio platform demonstrates service boundaries, Kafka workflows, transactional outbox, RAG, MCP, observability, and recovery paths.",
+        meta: "Architecture · Delivery · Production operations",
+        action: { href: "/work-single/7c3715bf-7722-4df5-9e83-5d7e9493ea2c", label: "Explore platform" },
+        durationMs: 9000,
+      },
+      {
+        id: "recruiter-open-source",
+        targetId: "tour-open-source",
+        kicker: "60-second recruiter brief",
+        title: "Open-Source Contributions",
+        content: pullRequestEvidence.length
+          ? "Merged changes in established Java, Kubernetes, and AI ecosystems provide public evidence of debugging, reliability, and maintainability work."
+          : "Public contribution history is available on GitHub, including merged work across Java, Kubernetes, and AI ecosystems.",
+        meta: `${openSourcePullRequests.length || "Public"} recent external merged PRs`,
+        items: pullRequestEvidence,
+        action: { href: "https://github.com/YuqiGuo105?tab=pullrequests", label: "View GitHub evidence" },
+        durationMs: 12000,
+      },
+      {
+        id: "recruiter-operations",
+        targetId: "tour-real-time-data",
+        kicker: "60-second recruiter brief",
+        title: "Operated Like a Product",
+        content: "Live service health, visitor intelligence, cost controls, traces, retries, and admin workflows make the platform observable and operable.",
+        meta: "Monitoring · Analytics · Reliability",
+        action: { href: "/analytics", label: "View live platform" },
+        durationMs: 9000,
+      },
+      {
+        id: "recruiter-contact",
+        targetId: "tour-contact",
+        kicker: "60-second recruiter brief",
+        title: "Continue the Conversation",
+        content: "Review the full resume, connect on LinkedIn, or reach out directly for backend and distributed-systems opportunities.",
+        meta: "Resume · LinkedIn · Contact",
+        interaction: { type: "copy", value: "yuqi.guo17@gmail.com", label: "Copy email" },
+        action: { href: "/cv", label: "Open resume" },
+        durationMs: 8000,
+      },
+    ];
+
+    setSiteTourRequest({
+      requestId: Date.now(),
+      steps,
+      autoPlay: true,
+      autoPlayIntervalMs: 8000,
+      controls: { previous: "Back", next: "Continue", done: "Finish", close: "Close" },
+    });
   };
 
   // 手动切换故事
@@ -702,15 +793,11 @@ const Index = () => {
                 onError={(e) => { e.target.style.display = "none"; }}
               />
               <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                <div style={{ color: isLightSkin ? "#1c2528" : "#e6edf3", fontWeight: 600, fontSize: "14px" }}>Recent Activity</div>
-                {[
-                  { repo: "YuqiGuo105/Portfolio", label: "6 commits", icon: "fa-code-branch" },
-                  { repo: "kubernetes-client/java", label: "1 commit + PR", icon: "fa-code-pull-request" },
-                  { repo: "YuqiGuo105/ai-agent-platform", label: "active", icon: "fa-robot" },
-                ].map((item) => (
+                <div style={{ color: isLightSkin ? "#1c2528" : "#e6edf3", fontWeight: 600, fontSize: "14px" }}>External merged pull requests</div>
+                {openSourcePullRequests.map((item) => (
                   <a
-                    key={item.repo}
-                    href={`https://github.com/${item.repo}`}
+                    key={item.url}
+                    href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
@@ -727,12 +814,22 @@ const Index = () => {
                     onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,128,89,0.10)"}
                     onMouseLeave={(e) => e.currentTarget.style.background = isLightSkin ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)"}
                   >
-                    <i className={`fas ${item.icon}`} style={{ color: "#ff8059", fontSize: "13px", width: 16 }} />
-                    <span style={{ color: isLightSkin ? "#1c2528" : "#e6edf3", fontSize: "13px", flex: 1 }}>{item.repo}</span>
-                    <span style={{ color: isLightSkin ? "#6b7280" : "#7d8590", fontSize: "12px" }}>{item.label}</span>
+                    <GitPullRequest size={15} style={{ color: "#ff8059", flexShrink: 0 }} />
+                    <span style={{ color: isLightSkin ? "#1c2528" : "#e6edf3", fontSize: "13px", flex: 1, minWidth: 0 }}>
+                      <strong style={{ display: "block" }}>{item.repository} #{item.number}</strong>
+                      <span style={{ display: "block", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: isLightSkin ? "#6b7280" : "#9aa4af" }}>{item.title}</span>
+                    </span>
+                    <span style={{ color: isLightSkin ? "#6b7280" : "#7d8590", fontSize: "11px", whiteSpace: "nowrap" }}>
+                      {item.mergedAt ? new Date(item.mergedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "Merged"}
+                    </span>
                     <i className="fas fa-external-link-alt" style={{ color: isLightSkin ? "#9ca3af" : "#7d8590", fontSize: "10px" }} />
                   </a>
                 ))}
+                {!openSourcePullRequests.length ? (
+                  <div style={{ padding: "12px 14px", color: isLightSkin ? "#6b7280" : "#9aa4af", fontSize: "13px" }}>
+                    Open the GitHub profile to review public pull-request history.
+                  </div>
+                ) : null}
               </div>
               <div style={{ marginTop: "18px", textAlign: "center" }}>
                 <a
@@ -870,6 +967,19 @@ const Index = () => {
                       <i aria-hidden="true" className="fab fa-instagram" />
                     </a>
                   </div>
+                  <button
+                    id="tour-open-source"
+                    type="button"
+                    className="recruiter-brief-trigger"
+                    onClick={startRecruiterBrief}
+                  >
+                    <BriefcaseBusiness size={17} aria-hidden="true" />
+                    <span>
+                      <strong>60-second recruiter brief</strong>
+                      <small>Experience, systems, and open-source evidence</small>
+                    </span>
+                    <Clock3 size={15} aria-hidden="true" />
+                  </button>
                 </div>
               </div>
               <div className="info-list">
@@ -1258,6 +1368,73 @@ const Index = () => {
           
           {/* Border styling for blogs */}
           <style jsx global>{`
+            .recruiter-brief-trigger {
+              display: inline-flex;
+              align-items: center;
+              gap: 10px;
+              min-height: 46px;
+              margin-top: 20px;
+              padding: 8px 12px;
+              border: 1px solid rgba(15, 118, 110, 0.25);
+              border-radius: 6px;
+              background: rgba(15, 118, 110, 0.06);
+              color: #0f766e;
+              cursor: pointer;
+              text-align: left;
+              transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+            }
+
+            .recruiter-brief-trigger::before,
+            .recruiter-brief-trigger::after {
+              content: none !important;
+              display: none !important;
+            }
+
+            .recruiter-brief-trigger:hover {
+              border-color: rgba(15, 118, 110, 0.48);
+              background: rgba(15, 118, 110, 0.11);
+              transform: translateY(-1px);
+            }
+
+            .recruiter-brief-trigger > span {
+              display: grid;
+              flex: 1;
+              gap: 2px;
+            }
+
+            .recruiter-brief-trigger strong {
+              color: #1f2933;
+              font-size: 12px;
+              line-height: 1.2;
+            }
+
+            .recruiter-brief-trigger small {
+              color: #718087;
+              font-size: 9px;
+              line-height: 1.3;
+            }
+
+            body.dark-skin .recruiter-brief-trigger {
+              border-color: rgba(94, 234, 212, 0.24);
+              background: rgba(94, 234, 212, 0.08);
+              color: #5eead4;
+            }
+
+            body.dark-skin .recruiter-brief-trigger strong {
+              color: rgba(248, 250, 252, 0.94);
+            }
+
+            body.dark-skin .recruiter-brief-trigger small {
+              color: rgba(226, 232, 240, 0.66);
+            }
+
+            @media (max-width: 600px) {
+              .recruiter-brief-trigger {
+                width: 100%;
+                max-width: 360px;
+              }
+            }
+
             /* ── Tech / Life animated text toggle ── */
             #Blog-section .blog-switch {
               display: flex;
@@ -1750,7 +1927,7 @@ const Index = () => {
         <DashboardPanels />
           <ContactForm />
         <GuideHighlights />
-        <SiteTour />
+        <SiteTour launchRequest={siteTourRequest} />
       </Layout>
     </>
   );

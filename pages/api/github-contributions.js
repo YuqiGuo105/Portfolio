@@ -8,6 +8,64 @@
 
 const GITHUB_USERNAME = "YuqiGuo105";
 const START_YEAR = 2023;
+const OPEN_SOURCE_PR_LIMIT = 6;
+
+function isExternalRepository(nameWithOwner) {
+  const owner = String(nameWithOwner || "").split("/")[0];
+  return owner && owner.toLowerCase() !== GITHUB_USERNAME.toLowerCase();
+}
+
+function normalizePullRequest(pullRequest) {
+  const repository = pullRequest?.repository?.nameWithOwner;
+  if (!repository || !isExternalRepository(repository)) return null;
+
+  return {
+    repository,
+    number: pullRequest.number,
+    title: pullRequest.title,
+    url: pullRequest.url,
+    mergedAt: pullRequest.mergedAt,
+  };
+}
+
+async function fetchOpenSourcePullRequests(token) {
+  const query = `
+    query {
+      search(
+        query: "is:pr is:merged author:${GITHUB_USERNAME} sort:updated-desc"
+        type: ISSUE
+        first: 50
+      ) {
+        nodes {
+          ... on PullRequest {
+            number
+            title
+            url
+            mergedAt
+            repository { nameWithOwner }
+          }
+        }
+      }
+    }
+  `;
+
+  const response = await fetch("https://api.github.com/graphql", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query }),
+  });
+
+  if (!response.ok) return [];
+  const payload = await response.json();
+  return (payload?.data?.search?.nodes || [])
+    .map(normalizePullRequest)
+    .filter(Boolean)
+    .sort((left, right) => new Date(right.mergedAt) - new Date(left.mergedAt))
+    .slice(0, OPEN_SOURCE_PR_LIMIT);
+}
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -60,24 +118,67 @@ export default async function handler(req, res) {
       total += count;
     }
 
+    const openSourcePullRequests = await fetchOpenSourcePullRequests(token);
+
     res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=7200");
-    return res.status(200).json({ total, byYear });
+    return res.status(200).json({
+      total,
+      byYear,
+      openSourcePullRequestCount: openSourcePullRequests.length,
+      openSourcePullRequests,
+    });
   } catch (err) {
     return fallbackSearchApi(res);
   }
 }
 
+async function fetchPublicOpenSourcePullRequests() {
+  const response = await fetch(
+    `https://api.github.com/search/issues?q=type:pr+is:merged+author:${GITHUB_USERNAME}&sort=updated&order=desc&per_page=50`,
+    { headers: { Accept: "application/vnd.github+json" } }
+  );
+  if (!response.ok) return [];
+
+  const payload = await response.json();
+  return (payload.items || [])
+    .map((item) => {
+      const repository = String(item.repository_url || "")
+        .replace("https://api.github.com/repos/", "");
+      if (!isExternalRepository(repository)) return null;
+      return {
+        repository,
+        number: item.number,
+        title: item.title,
+        url: item.html_url,
+        mergedAt: item.pull_request?.merged_at || item.closed_at,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, OPEN_SOURCE_PR_LIMIT);
+}
+
 async function fallbackSearchApi(res) {
   try {
-    const resp = await fetch(
-      `https://api.github.com/search/commits?q=author:${GITHUB_USERNAME}&per_page=1`,
-      { headers: { Accept: "application/vnd.github.cloak-preview+json" } }
-    );
-    if (!resp.ok) return res.status(200).json({ total: 0 });
-    const json = await resp.json();
+    const [commitResponse, openSourcePullRequests] = await Promise.all([
+      fetch(
+        `https://api.github.com/search/commits?q=author:${GITHUB_USERNAME}&per_page=1`,
+        { headers: { Accept: "application/vnd.github.cloak-preview+json" } }
+      ),
+      fetchPublicOpenSourcePullRequests(),
+    ]);
+    const commitPayload = commitResponse.ok ? await commitResponse.json() : {};
     res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=7200");
-    return res.status(200).json({ total: json.total_count || 0, source: "search_api" });
+    return res.status(200).json({
+      total: commitPayload.total_count || 0,
+      source: "search_api",
+      openSourcePullRequestCount: openSourcePullRequests.length,
+      openSourcePullRequests,
+    });
   } catch (_) {
-    return res.status(200).json({ total: 0 });
+    return res.status(200).json({
+      total: 0,
+      openSourcePullRequestCount: 0,
+      openSourcePullRequests: [],
+    });
   }
 }
