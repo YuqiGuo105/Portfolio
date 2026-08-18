@@ -39,9 +39,9 @@ export function absoluteUrl(pathOrUrl) {
  */
 const SeoHead = ({
   title,
-  description = "Portfolio and blog of Yuqi Guo (郭育奇) featuring project showcases and tech articles.",
+  description = "Explore Yuqi Guo's software engineering portfolio: distributed systems, backend platforms, AI infrastructure, production projects, and technical writing.",
   keywords = "Yuqi Guo, 郭育奇, portfolio, blog, projects, software engineer",
-  image = "/assets/images/profile_guyuqi.jpg",
+  image = "/assets/images/yuqi-guo-profile-512.png",
   url,
   noindex = false,
   type = 'website',
@@ -49,8 +49,8 @@ const SeoHead = ({
 }) => {
   const router = useRouter();
 
-  const siteTitle = "Yuqi Guo's Blog";
-  const metaTitle = title ? `${title} | ${siteTitle}` : siteTitle;
+  const siteTitle = "Yuqi Guo | Software Engineer Portfolio";
+  const metaTitle = title ? `${title} | Yuqi Guo` : siteTitle;
 
   // Prefer the caller-supplied canonical; otherwise derive one from the
   // current path so every page has a self-referencing canonical instead
@@ -59,7 +59,10 @@ const SeoHead = ({
   const metaUrl = absoluteUrl(url || routerPath);
   const metaImage = image && /^https?:\/\//i.test(image) ? image : `${SITE_URL}${image || ''}`;
 
-  const robots = noindex ? 'noindex, nofollow' : 'index, follow';
+  const robots = noindex
+    ? 'noindex, nofollow'
+    : 'index, follow, max-image-preview:large';
+  const usesProfileImage = image === '/assets/images/yuqi-guo-profile-512.png';
 
   // JSON-LD may be a single object or an array of objects — normalize.
   const jsonLdBlocks = jsonLd
@@ -77,12 +80,18 @@ const SeoHead = ({
       <link rel="canonical" href={metaUrl} />
       {/* Open Graph / Facebook */}
       <meta property="og:type" content={type} />
+      <meta property="og:site_name" content="Yuqi Guo Portfolio" />
       <meta property="og:url" content={metaUrl} />
       <meta property="og:title" content={metaTitle} />
       <meta property="og:description" content={description} />
       <meta property="og:image" content={metaImage} />
+      <meta property="og:image:secure_url" content={metaImage} />
+      {usesProfileImage && <meta property="og:image:type" content="image/png" />}
+      {usesProfileImage && <meta property="og:image:width" content="512" />}
+      {usesProfileImage && <meta property="og:image:height" content="512" />}
+      <meta property="og:image:alt" content={title ? `${title} preview` : 'Yuqi Guo profile portrait'} />
       {/* Twitter */}
-      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:card" content={usesProfileImage ? 'summary' : 'summary_large_image'} />
       <meta property="twitter:url" content={metaUrl} />
       <meta name="twitter:title" content={metaTitle} />
       <meta name="twitter:description" content={description} />

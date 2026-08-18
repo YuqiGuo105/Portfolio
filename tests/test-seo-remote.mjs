@@ -80,6 +80,14 @@ function findMeta(html, name) {
   const m = html.match(re);
   return m ? m[1] : null;
 }
+function findPropertyMeta(html, property) {
+  const re = new RegExp(
+    `<meta[^>]+property=["']${property}["'][^>]*content=["']([^"']*)["']`,
+    'i',
+  );
+  const m = html.match(re);
+  return m ? m[1] : null;
+}
 function findLink(html, rel) {
   const re = new RegExp(
     `<link[^>]+rel=["']${rel}["'][^>]*href=["']([^"']*)["']`,
@@ -134,9 +142,10 @@ console.log('\n=== / (homepage) ===');
   assert('/ → 200', status === 200, `got ${status}`);
   const ld = extractJsonLd(text);
   const types = ld.map((o) => o && o['@type']).filter(Boolean);
+  const profile = ld.find((o) => o && o['@type'] === 'ProfilePage');
   assert(
-    'homepage JSON-LD has Person',
-    types.includes('Person'),
+    'homepage JSON-LD has ProfilePage with Person',
+    !!profile && profile.mainEntity && profile.mainEntity['@type'] === 'Person',
     `types=${JSON.stringify(types)}`,
   );
   assert(
@@ -148,6 +157,22 @@ console.log('\n=== / (homepage) ===');
   assert(
     'WebSite JSON-LD has SearchAction potentialAction',
     !!site && site.potentialAction && site.potentialAction['@type'] === 'SearchAction',
+  );
+  assert(
+    'ProfilePage uses a crawlable square profile image',
+    !!profile &&
+      profile.primaryImageOfPage &&
+      profile.primaryImageOfPage.width === 512 &&
+      profile.primaryImageOfPage.height === 512 &&
+      /^https:\/\//.test(profile.primaryImageOfPage.contentUrl || ''),
+  );
+  assert(
+    'homepage Open Graph image uses the profile portrait',
+    /yuqi-guo-profile-512\.png$/.test(findPropertyMeta(text, 'og:image') || ''),
+  );
+  assert(
+    'homepage favicon uses the profile portrait',
+    /yuqi-guo-profile-512\.png$/.test(findLink(text, 'icon') || ''),
   );
   const canonical = findLink(text, 'canonical');
   assert('homepage has <link rel="canonical">', !!canonical, `got '${canonical}'`);

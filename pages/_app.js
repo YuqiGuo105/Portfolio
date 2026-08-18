@@ -8,11 +8,27 @@ import "../styles/carousel.css";
 import "../styles/chatWidget.css";
 
 const SITE_URL = "https://www.yuqi.site";
+const PROFILE_IMAGE_PATH = "/assets/images/yuqi-guo-profile-512.png";
+const PROFILE_IMAGE_URL = `${SITE_URL}${PROFILE_IMAGE_PATH}`;
+const PROFILE_IMAGE = {
+  "@type": "ImageObject",
+  "@id": `${SITE_URL}/#profile-image`,
+  url: PROFILE_IMAGE_URL,
+  contentUrl: PROFILE_IMAGE_URL,
+  width: 512,
+  height: 512,
+  caption: "Yuqi Guo",
+};
 const SITE_PROFILE_JSON_LD = [
   {
     "@context": "https://schema.org",
     "@type": "ProfilePage",
+    "@id": `${SITE_URL}/#profile-page`,
     url: SITE_URL,
+    name: "Yuqi Guo | Software Engineer Portfolio",
+    description:
+      "Portfolio of Yuqi Guo, a software engineer specializing in distributed systems, backend platforms, and AI infrastructure.",
+    primaryImageOfPage: PROFILE_IMAGE,
     mainEntity: {
       "@id": `${SITE_URL}/#person`,
       "@type": "Person",
@@ -20,10 +36,34 @@ const SITE_PROFILE_JSON_LD = [
       alternateName: "郭育奇",
       identifier: "yuqi-guo",
       url: SITE_URL,
-      image: `${SITE_URL}/assets/images/profile_guyuqi.jpg`,
+      image: { "@id": `${SITE_URL}/#profile-image` },
       jobTitle: "Software Engineer",
       description:
         "Software engineer specializing in backend systems, distributed platforms, and AI infrastructure.",
+      worksFor: {
+        "@type": "Organization",
+        name: "Goldman Sachs",
+        url: "https://www.goldmansachs.com/",
+      },
+      alumniOf: [
+        {
+          "@type": "CollegeOrUniversity",
+          name: "Syracuse University",
+          url: "https://www.syracuse.edu/",
+        },
+        {
+          "@type": "CollegeOrUniversity",
+          name: "University of Liverpool",
+          url: "https://www.liverpool.ac.uk/",
+        },
+      ],
+      knowsAbout: [
+        "Distributed systems",
+        "Backend engineering",
+        "Microservices",
+        "Event-driven architecture",
+        "AI infrastructure",
+      ],
       sameAs: [
         "https://github.com/YuqiGuo105",
         "https://www.linkedin.com/in/y-guo-6080733a5/",
@@ -33,8 +73,12 @@ const SITE_PROFILE_JSON_LD = [
   {
     "@context": "https://schema.org",
     "@type": "WebSite",
+    "@id": `${SITE_URL}/#website`,
     url: SITE_URL,
-    name: "Yuqi Guo's Portfolio",
+    name: "Yuqi Guo Portfolio",
+    alternateName: "yuqi.site",
+    description:
+      "Software engineering portfolio covering distributed systems, backend platforms, AI infrastructure, projects, and technical writing.",
     author: { "@id": `${SITE_URL}/#person` },
     about: { "@id": `${SITE_URL}/#person` },
     potentialAction: {
@@ -48,6 +92,7 @@ const SITE_PROFILE_JSON_LD = [
 function MyApp({ Component, pageProps }) {
   const router = useRouter();
   const cleanupTracking = useRef(null);
+  const isHomePage = router.pathname === "/";
 
   // One tracker owns page views, engagement time and reading milestones.
   useEffect(() => {
@@ -71,23 +116,37 @@ function MyApp({ Component, pageProps }) {
   return (
     <Fragment>
       <Head>
-        <title>Yuqi Guo Portfolio</title>
-        <meta
-          name="description"
-          content="Portfolio and blog of Yuqi Guo, featuring distributed systems, backend engineering, AI infrastructure, projects, and technical writing."
-        />
-        <meta
-          name="keywords"
-          content="Yuqi Guo, 郭育奇, software engineer, backend engineer, distributed systems, AI platform, portfolio"
-        />
-        <meta name="author" content="Yuqi Guo (郭育奇)" />
-        {SITE_PROFILE_JSON_LD.map((entry) => (
-          <script
-            key={entry["@type"]}
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(entry) }}
-          />
-        ))}
+        {isHomePage && (
+          <>
+            <title>Yuqi Guo | Software Engineer Portfolio</title>
+            <meta
+              name="description"
+              content="Explore Yuqi Guo's software engineering portfolio: distributed systems, backend platforms, AI infrastructure, production projects, and technical writing."
+            />
+            <meta
+              name="keywords"
+              content="Yuqi Guo, 郭育奇, software engineer, backend engineer, distributed systems, AI platform, portfolio"
+            />
+            <meta name="author" content="Yuqi Guo (郭育奇)" />
+            <meta property="og:type" content="profile" />
+            <meta property="og:site_name" content="Yuqi Guo Portfolio" />
+            <meta property="og:image" content={PROFILE_IMAGE_URL} />
+            <meta property="og:image:secure_url" content={PROFILE_IMAGE_URL} />
+            <meta property="og:image:type" content="image/png" />
+            <meta property="og:image:width" content="512" />
+            <meta property="og:image:height" content="512" />
+            <meta property="og:image:alt" content="Yuqi Guo profile portrait" />
+            <meta name="twitter:card" content="summary" />
+            <meta name="twitter:image" content={PROFILE_IMAGE_URL} />
+            {SITE_PROFILE_JSON_LD.map((entry) => (
+              <script
+                key={entry["@type"]}
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(entry) }}
+              />
+            ))}
+          </>
+        )}
         {/* <!-- Fonts --> */}
         <link
           rel="stylesheet"
@@ -147,8 +206,8 @@ function MyApp({ Component, pageProps }) {
         />
 
         {/* <!-- Favicon --> */}
-        <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
-        <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+        <link rel="icon" href={PROFILE_IMAGE_PATH} type="image/png" sizes="512x512" />
+        <link rel="apple-touch-icon" href={PROFILE_IMAGE_PATH} sizes="512x512" />
       </Head>
       {!Component.hasCustomSeo && <SeoHead />}
       <Component {...pageProps} />{" "}
