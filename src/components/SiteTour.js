@@ -10,7 +10,7 @@ function getRect(el) {
     return { top: r.top, left: r.left, width: r.width, height: r.height }
 }
 
-export default function SiteTour({ launchRequest = null }) {
+export default function SiteTour() {
     const STATIC_STEPS = useMemo(
         () => [
             {
@@ -242,21 +242,6 @@ export default function SiteTour({ launchRequest = null }) {
             window.removeEventListener("cw:site-tour:dynamic", onDynamic)
         }
     }, [go])
-
-    useEffect(() => {
-        if (!launchRequest?.steps?.length) return
-        const dynamic = launchRequest.steps
-        setSteps(dynamic)
-        stepsRef.current = dynamic
-        setControls(launchRequest.controls || DEFAULT_CONTROLS)
-        setAutoPlay(Boolean(launchRequest.autoPlay))
-        setAutoPlayIntervalMs(Number(launchRequest.autoPlayIntervalMs) || 5200)
-        setOpen(true)
-        setIdx(0)
-        setCollapsed(false)
-        setMapOpen(false)
-        requestAnimationFrame(() => go(0))
-    }, [go, launchRequest])
 
     useEffect(() => {
         if (!open) return

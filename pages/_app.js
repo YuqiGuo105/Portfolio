@@ -206,8 +206,8 @@ function MyApp({ Component, pageProps }) {
         />
 
         {/* <!-- Favicon --> */}
-        <link rel="icon" href={PROFILE_IMAGE_PATH} type="image/png" sizes="512x512" />
-        <link rel="apple-touch-icon" href={PROFILE_IMAGE_PATH} sizes="512x512" />
+        <link rel="shortcut icon" href="/favicon.ico?v=20260818" type="image/x-icon" />
+        <link rel="icon" href="/favicon.ico?v=20260818" type="image/x-icon" />
       </Head>
       {!Component.hasCustomSeo && <SeoHead />}
       <Component {...pageProps} />{" "}
