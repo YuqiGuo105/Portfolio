@@ -7,6 +7,44 @@ import "../styles/globals.css";
 import "../styles/carousel.css";
 import "../styles/chatWidget.css";
 
+const SITE_URL = "https://www.yuqi.site";
+const SITE_PROFILE_JSON_LD = [
+  {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    url: SITE_URL,
+    mainEntity: {
+      "@id": `${SITE_URL}/#person`,
+      "@type": "Person",
+      name: "Yuqi Guo",
+      alternateName: "郭育奇",
+      identifier: "yuqi-guo",
+      url: SITE_URL,
+      image: `${SITE_URL}/assets/images/profile_guyuqi.jpg`,
+      jobTitle: "Software Engineer",
+      description:
+        "Software engineer specializing in backend systems, distributed platforms, and AI infrastructure.",
+      sameAs: [
+        "https://github.com/YuqiGuo105",
+        "https://www.linkedin.com/in/y-guo-6080733a5/",
+      ],
+    },
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    url: SITE_URL,
+    name: "Yuqi Guo's Portfolio",
+    author: { "@id": `${SITE_URL}/#person` },
+    about: { "@id": `${SITE_URL}/#person` },
+    potentialAction: {
+      "@type": "SearchAction",
+      target: `${SITE_URL}/blogs?tag={search_term_string}`,
+      "query-input": "required name=search_term_string",
+    },
+  },
+];
+
 function MyApp({ Component, pageProps }) {
   const router = useRouter();
   const cleanupTracking = useRef(null);
@@ -33,7 +71,23 @@ function MyApp({ Component, pageProps }) {
   return (
     <Fragment>
       <Head>
-        <title>Yuqi Guo's Blog</title>
+        <title>Yuqi Guo Portfolio</title>
+        <meta
+          name="description"
+          content="Portfolio and blog of Yuqi Guo, featuring distributed systems, backend engineering, AI infrastructure, projects, and technical writing."
+        />
+        <meta
+          name="keywords"
+          content="Yuqi Guo, 郭育奇, software engineer, backend engineer, distributed systems, AI platform, portfolio"
+        />
+        <meta name="author" content="Yuqi Guo (郭育奇)" />
+        {SITE_PROFILE_JSON_LD.map((entry) => (
+          <script
+            key={entry["@type"]}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(entry) }}
+          />
+        ))}
         {/* <!-- Fonts --> */}
         <link
           rel="stylesheet"

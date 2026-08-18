@@ -3,7 +3,6 @@ import Link from "next/link";
 import ContactForm from "../src/components/ContactForm";
 import TestimonialSlider from "../src/components/TestimonialSlider";
 import Layout from "../src/layout/Layout";
-import SeoHead, { SITE_URL, absoluteUrl } from "../src/components/SeoHead";
 import DashboardPanels from "../src/components/DashboardPanels";
 import {useEffect, useState, useRef} from "react";
 import {supabase} from "../src/supabase/supabaseClient";
@@ -358,51 +357,6 @@ const Index = () => {
 
   return (
     <>
-      <SeoHead
-        title="Yuqi Guo Portfolio"
-        description="Explore the software engineering portfolio of Yuqi Guo (郭育奇), featuring backend projects, professional experience, and technical articles."
-        keywords="Yuqi Guo, 郭育奇, software engineer, portfolio, backend engineer, Goldman Sachs"
-        url={absoluteUrl('/')}
-        jsonLd={[
-          // ProfilePage schema identifies the portfolio owner and keeps
-          // alternate public names machine-readable for search engines.
-          {
-            '@context': 'https://schema.org',
-            '@type': 'ProfilePage',
-            url: SITE_URL,
-            mainEntity: {
-              '@id': `${SITE_URL}/#person`,
-              '@type': 'Person',
-              name: 'Yuqi Guo',
-              alternateName: '郭育奇',
-              identifier: 'yuqi-guo',
-              url: SITE_URL,
-              image: absoluteUrl('/assets/images/profile_guyuqi.jpg'),
-              jobTitle: 'Software Engineer',
-              description: 'Software engineer specializing in backend systems, distributed platforms, and AI infrastructure.',
-              sameAs: [
-                'https://github.com/YuqiGuo105',
-                'https://www.linkedin.com/in/y-guo-6080733a5/',
-              ],
-            },
-          },
-          // WebSite schema — enables the sitelinks search box in SERPs
-          // pointing at the tag-search route on /blogs.
-          {
-            '@context': 'https://schema.org',
-            '@type': 'WebSite',
-            url: SITE_URL,
-            name: "Yuqi Guo's Portfolio",
-            author: { '@id': `${SITE_URL}/#person` },
-            about: { '@id': `${SITE_URL}/#person` },
-            potentialAction: {
-              '@type': 'SearchAction',
-              target: `${SITE_URL}/blogs?tag={search_term_string}`,
-              'query-input': 'required name=search_term_string',
-            },
-          },
-        ]}
-      />
       <Layout>
         <Modal
           isOpen={isProfileModalOpen}
@@ -1801,6 +1755,5 @@ const Index = () => {
     </>
   );
 };
-Index.hasCustomSeo = true;
 
 export default Index;
