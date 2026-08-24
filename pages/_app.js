@@ -2,6 +2,7 @@ import Head from "next/head";
 import { Fragment, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import SeoHead from "../src/components/SeoHead";
+import MobilePullToRefresh from "../src/components/MobilePullToRefresh";
 import { startPageBehaviorTracking } from "../src/lib/behaviorAnalytics";
 import "../styles/globals.css";
 import "../styles/carousel.css";
@@ -213,6 +214,7 @@ function MyApp({ Component, pageProps }) {
         <link rel="icon" href="/favicon.ico?v=20260818" type="image/x-icon" />
       </Head>
       {!Component.hasCustomSeo && <SeoHead />}
+      <MobilePullToRefresh />
       <Component {...pageProps} />{" "}
     </Fragment>
   );

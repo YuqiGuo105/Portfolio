@@ -1,0 +1,95 @@
+.indicator {
+  --pull-distance: 0px;
+  --pull-progress: 0;
+  position: fixed;
+  z-index: 10020;
+  top: max(8px, env(safe-area-inset-top));
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 7px 13px 7px 8px;
+  color: #172126;
+  background: rgba(250, 248, 244, 0.96);
+  border: 1px solid rgba(23, 33, 38, 0.15);
+  border-radius: 24px;
+  box-shadow: 0 8px 28px rgba(18, 28, 33, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(
+    -50%,
+    calc(-58px + min(var(--pull-distance), 58px)),
+    0
+  );
+  transition: opacity 120ms ease, transform 120ms ease;
+  will-change: transform, opacity;
+}
+
+.visible {
+  opacity: calc(0.5 + (var(--pull-progress) * 0.5));
+}
+
+.icon {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: #137a6b;
+  border-radius: 50%;
+  background: rgba(19, 122, 107, 0.1);
+  transform: rotate(calc(var(--pull-progress) * 160deg));
+}
+
+.label {
+  white-space: nowrap;
+  font-family: "Rubik", sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.refreshing {
+  opacity: 1;
+  transform: translate3d(-50%, 0, 0);
+}
+
+.refreshing .icon {
+  animation: pullRefreshSpin 720ms linear infinite;
+}
+
+:global(body.dark-skin) .indicator {
+  color: #f1f5f4;
+  background: rgba(18, 28, 35, 0.96);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.34);
+}
+
+:global(body.dark-skin) .icon {
+  color: #68d6c4;
+  background: rgba(104, 214, 196, 0.13);
+}
+
+@keyframes pullRefreshSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (hover: hover), (pointer: fine) {
+  .indicator {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicator,
+  .icon {
+    transition: none;
+  }
+
+  .refreshing .icon {
+    animation-duration: 1.4s;
+  }
+}
