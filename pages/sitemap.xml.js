@@ -44,9 +44,16 @@ function buildSitemap(entries) {
     if (e.lastmod)   parts.push(`    <lastmod>${xmlEscape(e.lastmod)}</lastmod>`);
     if (e.changefreq) parts.push(`    <changefreq>${xmlEscape(e.changefreq)}</changefreq>`);
     if (e.priority)  parts.push(`    <priority>${xmlEscape(e.priority)}</priority>`);
+    for (const image of e.images || []) {
+      parts.push('    <image:image>');
+      parts.push(`      <image:loc>${xmlEscape(image.loc)}</image:loc>`);
+      if (image.title) parts.push(`      <image:title>${xmlEscape(image.title)}</image:title>`);
+      if (image.caption) parts.push(`      <image:caption>${xmlEscape(image.caption)}</image:caption>`);
+      parts.push('    </image:image>');
+    }
     return `  <url>\n${parts.join('\n')}\n  </url>`;
   });
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlBlocks.join('\n')}\n</urlset>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${urlBlocks.join('\n')}\n</urlset>\n`;
 }
 
 export async function getServerSideProps({ res }) {
@@ -54,12 +61,18 @@ export async function getServerSideProps({ res }) {
   // errors should NOT 500 the sitemap — we fall back to just the static
   // routes so Google can still crawl the top of the site.
   let blogRows = [];
+  let lifeBlogRows = [];
   let projectRows = [];
   try {
-    const [blogsRes, projectsRes] = await Promise.all([
+    const [blogsRes, lifeBlogsRes, projectsRes] = await Promise.all([
       supabaseServer
         .from('Blogs')
-        .select('id,updated_at,created_at')
+        .select('id,date')
+        .order('id', { ascending: false })
+        .limit(5000),
+      supabaseServer
+        .from('life_blogs')
+        .select('id,published_at,created_at')
         .order('id', { ascending: false })
         .limit(5000),
       supabaseServer
@@ -69,6 +82,7 @@ export async function getServerSideProps({ res }) {
         .limit(5000),
     ]);
     if (!blogsRes.error && Array.isArray(blogsRes.data))       blogRows    = blogsRes.data;
+    if (!lifeBlogsRes.error && Array.isArray(lifeBlogsRes.data)) lifeBlogRows = lifeBlogsRes.data;
     if (!projectsRes.error && Array.isArray(projectsRes.data)) projectRows = projectsRes.data;
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -82,15 +96,29 @@ export async function getServerSideProps({ res }) {
       loc: `${SITE_URL}${r.path}`,
       changefreq: r.changefreq,
       priority: r.priority,
+      images: r.path === '/' ? [{
+        loc: `${SITE_URL}/assets/images/yuqi-guo-profile-512.png`,
+        title: 'Yuqi Guo software engineer profile',
+        caption: 'Yuqi Guo (郭育奇), software engineer and portfolio owner',
+      }] : [],
     });
   }
 
   for (const row of blogRows) {
     entries.push({
       loc: `${SITE_URL}/blog-single/${row.id}`,
-      lastmod: toIsoDate(row.updated_at || row.created_at),
+      lastmod: toIsoDate(row.date),
       changefreq: 'weekly',
       priority: '0.7',
+    });
+  }
+
+  for (const row of lifeBlogRows) {
+    entries.push({
+      loc: `${SITE_URL}/life-blog/${row.id}`,
+      lastmod: toIsoDate(row.published_at || row.created_at),
+      changefreq: 'weekly',
+      priority: '0.6',
     });
   }
 

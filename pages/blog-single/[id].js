@@ -21,7 +21,7 @@ export async function getServerSideProps({ params, res }) {
 
   const { data, error } = await supabaseServer
     .from('Blogs')
-    .select('id,title,description,content,category,date,tags,created_at,updated_at')
+    .select('id,title,description,content,category,date,tags')
     .eq('id', id)
     .single();
 
@@ -55,8 +55,8 @@ export async function getServerSideProps({ params, res }) {
         category: data.category || '',
         date: data.date || '',
         tags: data.tags || '',
-        createdAt: data.created_at || null,
-        updatedAt: data.updated_at || null,
+        createdAt: data.date || null,
+        updatedAt: data.date || null,
       },
     },
   };

@@ -13,7 +13,7 @@
  *   /blog-single/<garbage-id>  → HTTP 404
  *   /work-single/<garbage-id>  → HTTP 404
  *   /analytics     → contains `noindex` in <meta name="robots">
- *   /sitemap.xml   → valid XML with <urlset>, /blog-single/ and /work-single/ entries
+ *   /sitemap.xml   → valid XML with content URLs and a discoverable profile image
  *   /robots.txt    → contains sitemap reference (best-effort)
  */
 
@@ -123,15 +123,25 @@ let sitemapText = '';
     /<urlset[^>]*>/.test(text),
     'no <urlset> element',
   );
-  const blogUrls = [...text.matchAll(/<loc>[^<]*\/blog-single\/(\d+)<\/loc>/g)].map((m) => m[1]);
-  const workUrls = [...text.matchAll(/<loc>[^<]*\/work-single\/(\d+)<\/loc>/g)].map((m) => m[1]);
+  const blogUrls = [...text.matchAll(/<loc>[^<]*\/blog-single\/([^/<]+)<\/loc>/g)].map((m) => m[1]);
+  const lifeBlogUrls = [...text.matchAll(/<loc>[^<]*\/life-blog\/([^/<]+)<\/loc>/g)].map((m) => m[1]);
+  const workUrls = [...text.matchAll(/<loc>[^<]*\/work-single\/([^/<]+)<\/loc>/g)].map((m) => m[1]);
   assert(`sitemap has blog entries (found ${blogUrls.length})`, blogUrls.length > 0);
+  assert(`sitemap has life blog entries (found ${lifeBlogUrls.length})`, lifeBlogUrls.length > 0);
   assert(`sitemap has project entries (found ${workUrls.length})`, workUrls.length > 0);
   sampleBlogId = blogUrls[0];
   sampleProjectId = workUrls[0];
   assert(
     'sitemap includes homepage',
     /<loc>[^<]*\/<\/loc>/.test(text) || text.includes(`<loc>${BASE}/</loc>`),
+  );
+  assert(
+    'sitemap declares the Google image namespace',
+    /xmlns:image=["']http:\/\/www\.google\.com\/schemas\/sitemap-image\/1\.1["']/.test(text),
+  );
+  assert(
+    'sitemap includes the crawlable profile portrait',
+    text.includes('<image:loc>https://www.yuqi.site/assets/images/yuqi-guo-profile-512.png</image:loc>'),
   );
 }
 
@@ -147,6 +157,17 @@ console.log('\n=== / (homepage) ===');
     'homepage JSON-LD has ProfilePage with Person',
     !!profile && profile.mainEntity && profile.mainEntity['@type'] === 'Person',
     `types=${JSON.stringify(types)}`,
+  );
+  assert(
+    'Person JSON-LD connects the Chinese and GitHub identities',
+    Array.isArray(profile?.mainEntity?.alternateName) &&
+      profile.mainEntity.alternateName.includes('郭育奇') &&
+      profile.mainEntity.alternateName.includes('YuqiGuo105'),
+  );
+  assert(
+    'Person JSON-LD uses the canonical LinkedIn profile',
+    Array.isArray(profile?.mainEntity?.sameAs) &&
+      profile.mainEntity.sameAs.includes('https://www.linkedin.com/in/y-guo-6080733a5/'),
   );
   assert(
     'homepage JSON-LD has WebSite',
@@ -170,10 +191,7 @@ console.log('\n=== / (homepage) ===');
     'homepage Open Graph image uses the profile portrait',
     /yuqi-guo-profile-512\.png$/.test(findPropertyMeta(text, 'og:image') || ''),
   );
-  assert(
-    'homepage favicon uses the profile portrait',
-    /yuqi-guo-profile-512\.png$/.test(findLink(text, 'icon') || ''),
-  );
+  assert('homepage favicon uses the site icon', /favicon\.ico/.test(findLink(text, 'icon') || ''));
   const canonical = findLink(text, 'canonical');
   assert('homepage has <link rel="canonical">', !!canonical, `got '${canonical}'`);
 }

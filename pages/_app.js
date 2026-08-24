@@ -17,7 +17,7 @@ const PROFILE_IMAGE = {
   contentUrl: PROFILE_IMAGE_URL,
   width: 512,
   height: 512,
-  caption: "Yuqi Guo",
+  caption: "Yuqi Guo profile portrait",
 };
 const SITE_PROFILE_JSON_LD = [
   {
@@ -28,18 +28,20 @@ const SITE_PROFILE_JSON_LD = [
     name: "Yuqi Guo | Software Engineer Portfolio",
     description:
       "Portfolio of Yuqi Guo, a software engineer specializing in distributed systems, backend platforms, and AI infrastructure.",
+    inLanguage: ["en-US", "zh-CN"],
     primaryImageOfPage: PROFILE_IMAGE,
     mainEntity: {
       "@id": `${SITE_URL}/#person`,
       "@type": "Person",
       name: "Yuqi Guo",
-      alternateName: "郭育奇",
+      alternateName: ["郭育奇", "YuqiGuo105"],
       identifier: "yuqi-guo",
       url: SITE_URL,
       image: { "@id": `${SITE_URL}/#profile-image` },
       jobTitle: "Software Engineer",
       description:
         "Software engineer specializing in backend systems, distributed platforms, and AI infrastructure.",
+      knowsLanguage: ["English", "Chinese"],
       worksFor: {
         "@type": "Organization",
         name: "Goldman Sachs",
@@ -62,7 +64,7 @@ const SITE_PROFILE_JSON_LD = [
         "Backend engineering",
         "Microservices",
         "Event-driven architecture",
-        "AI infrastructure",
+        "Artificial intelligence infrastructure",
       ],
       sameAs: [
         "https://github.com/YuqiGuo105",
@@ -76,9 +78,10 @@ const SITE_PROFILE_JSON_LD = [
     "@id": `${SITE_URL}/#website`,
     url: SITE_URL,
     name: "Yuqi Guo Portfolio",
-    alternateName: "yuqi.site",
+    alternateName: ["yuqi.site", "郭育奇的个人网站"],
     description:
       "Software engineering portfolio covering distributed systems, backend platforms, AI infrastructure, projects, and technical writing.",
+    inLanguage: ["en-US", "zh-CN"],
     author: { "@id": `${SITE_URL}/#person` },
     about: { "@id": `${SITE_URL}/#person` },
     potentialAction: {
