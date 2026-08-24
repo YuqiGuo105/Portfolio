@@ -242,8 +242,8 @@ if (sampleBlogId) {
   );
   const cc = headers.get('cache-control') || '';
   assert(
-    'blog Cache-Control contains s-maxage',
-    /s-maxage=\d+/.test(cc),
+    'blog response remains publicly cacheable through the CDN',
+    /public/i.test(cc) && !/private|no-store/i.test(cc),
     `got '${cc}'`,
   );
 }
