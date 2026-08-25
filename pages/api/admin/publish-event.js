@@ -24,50 +24,15 @@
  *   "idempotencyKey": string (optional, generated UUID if omitted)
  * }
  */
-import { createClient } from "@supabase/supabase-js";
 import { forward, methodGuard } from "../../../src/lib/notificationServiceProxy";
-
-// Supabase admin client (service role) — used server-side only to validate sessions.
-// Never expose this key to the browser.
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-/** Emails allowed to call this route. Falls back to NEXT_PUBLIC_ADMIN_EMAIL if set. */
-function getAllowedEmails() {
-  const raw = process.env.ADMIN_ALLOWED_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "";
-  return raw
-    .split(",")
-    .map((e) => e.trim())
-    .filter(Boolean);
-}
+import { requireAdminUser } from "../../../src/lib/agentServiceProxy";
 
 export default async function handler(req, res) {
   if (!methodGuard(req, res, ["POST"])) return;
 
-  // ── 1. Supabase auth check ────────────────────────────────────────────────
-  const authHeader = req.headers["authorization"] || "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+  const auth = await requireAdminUser(req, res);
+  if (!auth) return;
 
-  if (!token) {
-    return res.status(401).json({ error: "unauthenticated", message: "No Supabase session token." });
-  }
-
-  let user;
-  try {
-    const { data, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !data?.user) throw error || new Error("No user returned");
-    user = data.user;
-  } catch (err) {
-    return res.status(401).json({ error: "invalid_session", message: "Supabase session invalid or expired." });
-  }
-
-  const allowedEmails = getAllowedEmails();
-  if (allowedEmails.length > 0 && !allowedEmails.includes(user.email)) {
-    return res.status(403).json({ error: "access_denied", message: "Your account is not authorised." });
-  }
-
-  // ── 2. Forward to Spring POST /api/content-events (injects X-Internal-Token) ─
+  // Forward only after the shared Supabase + admin-role guard succeeds.
   await forward(req, res, { path: "/api/content-events", method: "POST" });
 }

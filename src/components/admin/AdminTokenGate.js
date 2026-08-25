@@ -1,15 +1,17 @@
 // src/components/admin/AdminTokenGate.js
 // Wraps any admin page. Requires both a Supabase session and an authorization
-// probe against the admin service, which owns the email allow-list.
+// probe against the admin service, which owns the admin registry and RBAC.
 //
 // This replaced the legacy `sessionStorage.admin_token` check — the admin
 // panel now relies on the same Supabase session that the rest of the site
-// uses, and the admin-service validates the JWT + email allow-list server-side.
+// uses. The admin-service validates the JWT, account status, role, and owner
+// capability server-side before protected content is rendered.
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../../supabase/supabaseClient';
 import { verifyAdminSession } from '../../lib/writerApi';
+import { AdminSessionProvider } from './AdminSessionContext';
 
 const ACCESS_CHECK_TIMEOUT_MS = 10_000;
 const ACCESS_RECHECK_MS = 60_000;
@@ -27,11 +29,12 @@ function withTimeout(promise, timeoutMs) {
   return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
 }
 
-export default function AdminTokenGate({ children }) {
+export default function AdminTokenGate({ children, requiredPermission = 'admin.read' }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [checkError, setCheckError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+  const [profile, setProfile] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -51,6 +54,7 @@ export default function AdminTokenGate({ children }) {
       redirecting = true;
       authorized = false;
       setReady(false);
+      setProfile(null);
       void router.replace(loginUrl(reason));
     };
 
@@ -59,6 +63,7 @@ export default function AdminTokenGate({ children }) {
       redirecting = true;
       authorized = false;
       setReady(false);
+      setProfile(null);
       await supabase.auth.signOut().catch(() => {});
       if (active) {
         void router.replace(loginUrl(reason));
@@ -72,6 +77,7 @@ export default function AdminTokenGate({ children }) {
       inFlightCheck = (async () => {
         if (initial) {
           setReady(false);
+          setProfile(null);
           setCheckError('');
         }
 
@@ -107,7 +113,15 @@ export default function AdminTokenGate({ children }) {
           );
           if (!active) return;
           if (result.authorized) {
+            if (!result.profile?.permissions?.includes(requiredPermission)) {
+              authorized = false;
+              setProfile(null);
+              setReady(false);
+              setCheckError('Your admin role does not permit access to this page.');
+              return;
+            }
             authorized = true;
+            setProfile(result.profile);
             setCheckError('');
             setReady(true);
             return;
@@ -172,7 +186,7 @@ export default function AdminTokenGate({ children }) {
       document.removeEventListener('visibilitychange', recheckAfterResume);
       authListener?.subscription?.unsubscribe?.();
     };
-  }, [router, retryKey]);
+  }, [requiredPermission, router, retryKey]);
 
   if (checkError) {
     return (
@@ -242,5 +256,5 @@ export default function AdminTokenGate({ children }) {
       </div>
     );
   }
-  return children;
+  return <AdminSessionProvider value={profile}>{children}</AdminSessionProvider>;
 }

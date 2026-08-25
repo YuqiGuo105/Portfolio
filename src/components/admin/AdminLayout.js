@@ -20,10 +20,12 @@ import {
   Route,
   ScrollText,
   ShieldCheck,
+  UserCog,
   Users,
   X,
 } from "lucide-react";
 import AdminTokenGate from "./AdminTokenGate";
+import { useAdminSession } from "./AdminSessionContext";
 import { supabase } from "../../supabase/supabaseClient";
 import styles from "./AdminLayout.module.css";
 
@@ -74,15 +76,25 @@ const NAV_GROUPS = [
     label: "System",
     items: [
       { href: "/admin/jobs", label: "Jobs & audit", icon: ScrollText },
+      { href: "/admin/users", label: "Admin users", icon: UserCog, ownerOnly: true },
       { href: ADMIN_SERVICE_SWAGGER, label: "Admin API", icon: Radio, external: true },
       { href: NOTIFICATION_SERVICE_SWAGGER, label: "Notification API", icon: Radio, external: true },
     ],
   },
 ];
 
-export default function AdminLayout({ children }) {
+export default function AdminLayout({ children, requiredPermission = "admin.read" }) {
+  return (
+    <AdminTokenGate requiredPermission={requiredPermission}>
+      <AdminShell>{children}</AdminShell>
+    </AdminTokenGate>
+  );
+}
+
+function AdminShell({ children }) {
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
+  const adminSession = useAdminSession();
 
   useEffect(() => {
     setNavOpen(false);
@@ -124,7 +136,6 @@ export default function AdminLayout({ children }) {
   }
 
   return (
-    <AdminTokenGate>
       <div className={styles.shell}>
         <header className={styles.mobileHeader}>
           <button
@@ -159,7 +170,7 @@ export default function AdminLayout({ children }) {
             {NAV_GROUPS.map((group) => (
               <div key={group.label} className={styles.navGroup}>
                 <div className={styles.navGroupTitle}>{group.label}</div>
-                {group.items.map(navItem)}
+                {group.items.filter((item) => !item.ownerOnly || adminSession?.owner).map(navItem)}
               </div>
             ))}
           </nav>
@@ -180,6 +191,5 @@ export default function AdminLayout({ children }) {
           <div className={styles.content}>{children}</div>
         </main>
       </div>
-    </AdminTokenGate>
   );
 }

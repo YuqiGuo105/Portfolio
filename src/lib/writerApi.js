@@ -4,7 +4,8 @@
 // Auth model: this client sends `Authorization: Bearer <Supabase JWT>` —
 // pulled live from the Supabase session — so every request uses the same
 // identity that the user logged in with at Portfolio. The admin-service
-// validates the JWT signature + the email allow-list (ADMIN_ALLOWED_EMAILS).
+// validates the JWT signature and resolves authorization through its owner
+// policy and admin_users registry.
 //
 // The legacy `X-Admin-Secret` flow (`sessionStorage.admin_token`) is no
 // longer used by the browser. That header remains supported server-to-server
@@ -159,18 +160,61 @@ export const writerApi = {
       return request('GET', `/api/admin/content?${params.toString()}`);
     },
   },
+  adminUsers: {
+    list: ({ status, role, limit = 100, offset = 0 } = {}) => {
+      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+      if (status && status !== "ALL") params.set("status", status);
+      if (role && role !== "ALL") params.set("role", role);
+      return request("GET", `/api/admin/users?${params.toString()}`);
+    },
+    upsert: (data) => request("POST", "/api/admin/users", data),
+    updateStatus: (userId, status, note = "") => request(
+      "PATCH",
+      `/api/admin/users/${encodeURIComponent(userId)}/status`,
+      { status, note }
+    ),
+  },
+  recovery: {
+    failures: ({ kind, limit = 50 } = {}) => {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (kind && kind !== "ALL") params.set("kind", kind);
+      return request("GET", `/api/admin/recovery/failures?${params.toString()}`);
+    },
+    retry: (kind, id) => request(
+      "POST",
+      `/api/admin/recovery/failures/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/retry`,
+      {}
+    ),
+    replayOutbox: (eventId) => request(
+      "POST",
+      `/api/admin/outbox-events/${encodeURIComponent(eventId)}/replay`,
+      {}
+    ),
+    drain: () => request("POST", "/api/admin/recovery/drain", {}),
+  },
 };
 
 /** Probe the admin API; authorization remains owned by the admin service. */
 export async function verifyAdminSession() {
   try {
-    await request('GET', '/api/admin/content?type=BLOG&limit=1&offset=0');
-    return { authorized: true, status: 200, code: null };
+    const profile = await request('GET', '/api/admin/users/me');
+    return {
+      authorized: true,
+      status: 200,
+      code: null,
+      profile: {
+        email: profile?.email || '',
+        role: profile?.role || '',
+        owner: Boolean(profile?.owner),
+        permissions: Array.isArray(profile?.permissions) ? profile.permissions : ['admin.read'],
+      },
+    };
   } catch (error) {
     return {
       authorized: false,
       status: Number(error?.status) || 0,
       code: error?.code || (error?.status ? 'admin_api_error' : 'admin_api_unavailable'),
+      profile: null,
     };
   }
 }

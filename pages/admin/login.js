@@ -3,10 +3,18 @@
 // On success the Supabase session is stored by @supabase/supabase-js and
 // the admin pages read it via AdminTokenGate / writerApi.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { supabase } from '../../src/supabase/supabaseClient';
 import { verifyAdminSession } from '../../src/lib/writerApi';
+
+const NOT_ALLOWED_MESSAGE = 'Not allowed. This account is not an authorized administrator.';
+
+function showNotAllowed() {
+  toast.error(NOT_ALLOWED_MESSAGE, { toastId: 'admin-not-allowed' });
+}
 
 function sanitizeRedirect(target) {
   if (typeof target !== 'string') return '/admin';
@@ -30,7 +38,7 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  async function routeAuthorizedSession() {
+  const routeAuthorizedSession = useCallback(async () => {
     const result = await verifyAdminSession();
     if (result.authorized) {
       await router.replace(sanitizeRedirect(router.query.redirect));
@@ -39,13 +47,14 @@ export default function AdminLogin() {
 
     if (result.status === 401 || result.status === 403) {
       await supabase.auth.signOut().catch(() => {});
-      setError('This account is not authorized to access the admin panel.');
+      setError(NOT_ALLOWED_MESSAGE);
+      showNotAllowed();
       return false;
     }
 
     setError('The admin service is unavailable, so access could not be verified. Please try again.');
     return false;
-  }
+  }, [router]);
 
   // Existing OAuth/password sessions must still pass the backend allow-list.
   useEffect(() => {
@@ -55,7 +64,8 @@ export default function AdminLogin() {
     async function checkExistingSession() {
       setCheckingSession(true);
       if (router.query.reason === 'unauthorized') {
-        setError('This account is not authorized to access the admin panel.');
+        setError(NOT_ALLOWED_MESSAGE);
+        showNotAllowed();
       } else if (router.query.reason === 'session_expired') {
         setError('Your admin session expired. Sign in again to continue.');
       } else if (router.query.reason === 'oauth_error') {
@@ -78,7 +88,7 @@ export default function AdminLogin() {
     return () => {
       active = false;
     };
-  }, [router.isReady, router.query.redirect, router.query.reason]);
+  }, [routeAuthorizedSession, router.isReady, router.query.message, router.query.reason]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -129,11 +139,11 @@ export default function AdminLogin() {
 
   return (
     <div className="login-page">
+      <ToastContainer position="top-center" autoClose={5000} newestOnTop />
       <div className="login-card">
         <h1 className="login-title">Admin Panel</h1>
         <p className="login-subtitle">
-          Sign in with your Supabase account. Only emails in the admin allow-list
-          can access content management.
+          Sign in with an authorized administrator account.
         </p>
         <form onSubmit={handleSubmit} className="login-form">
           <label className="field">

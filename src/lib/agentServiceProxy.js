@@ -38,13 +38,47 @@ function getAgentBase() {
 
 function getAllowedAdminEmails() {
   const raw =
-    process.env.ADMIN_ALLOWED_EMAILS ||
-    process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
-    "";
+    process.env.ADMIN_ALLOWED_EMAILS || "";
   return raw
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
+}
+
+function getWriterApiBase() {
+  const base = process.env.WRITER_API_URL || process.env.NEXT_PUBLIC_WRITER_API_URL || "";
+  return base ? base.replace(/\/+$/, "") : "";
+}
+
+function rolesForAdminRole(role) {
+  const normalized = String(role || "").trim().toUpperCase();
+  if (normalized === "ADMIN") return "EDITOR,PUBLISHER,ADMIN";
+  if (normalized === "PUBLISHER") return "EDITOR,PUBLISHER";
+  if (normalized === "EDITOR") return "EDITOR";
+  return "";
+}
+
+async function resolveAdminRolesFromAdminService(token) {
+  const base = getWriterApiBase();
+  if (!base || !token) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3500);
+  try {
+    const response = await fetch(`${base}/api/admin/users/me`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const body = await response.json().catch(() => ({}));
+    return rolesForAdminRole(body.role);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
@@ -53,8 +87,8 @@ function getAllowedAdminEmails() {
  *
  * `roles` is a comma-separated string matching what the agent service expects
  * in IntentRequest.userRoles. Mapping:
- *   - signed-in user             → "VIEWER"
- *   - signed-in admin email      → "VIEWER,EDITOR,PUBLISHER,ADMIN"
+ *   - signed-in user             → "VIEWER" (public chat only)
+ *   - signed-in administrator    → role hierarchy without a VIEWER admin role
  *
  * If `allowAnonymous: true` is set, missing/invalid sessions resolve to a
  * synthetic anonymous identity with VIEWER role. Use this for read-only chat.
@@ -94,8 +128,8 @@ export async function requireSupabaseUser(req, res, { allowAnonymous = false } =
   }
 
   const email = (user.email || "").toLowerCase();
-  const isAdmin = getAllowedAdminEmails().includes(email);
-  const roles = isAdmin ? "VIEWER,EDITOR,PUBLISHER,ADMIN" : "VIEWER";
+  const roles = await resolveAdminRolesFromAdminService(token)
+    || (getAllowedAdminEmails().includes(email) ? "EDITOR,PUBLISHER,ADMIN" : "VIEWER");
   return { email, roles, anonymous: false };
 }
 
