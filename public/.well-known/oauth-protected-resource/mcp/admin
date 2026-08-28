@@ -4,7 +4,6 @@
     "https://iyvhmpdfrnznxgyvvkvx.supabase.co/auth/v1"
   ],
   "scopes_supported": [
-    "openid",
     "email",
     "profile"
   ],

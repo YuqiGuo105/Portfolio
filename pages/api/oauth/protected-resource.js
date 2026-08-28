@@ -3,7 +3,7 @@ const metadata = {
   authorization_servers: [
     "https://iyvhmpdfrnznxgyvvkvx.supabase.co/auth/v1",
   ],
-  scopes_supported: ["openid", "email", "profile"],
+  scopes_supported: ["email", "profile"],
   bearer_methods_supported: ["header"],
   resource_documentation:
     "https://github.com/YuqiGuo105/portfolio-mcp-server/blob/main/docs/CLIENT_INTEGRATIONS.md",
