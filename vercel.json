@@ -9,6 +9,21 @@
       "destination": "/api/oauth/protected-resource"
     }
   ],
+  "headers": [
+    {
+      "source": "/.well-known/oauth-protected-resource/mcp/admin",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=300, s-maxage=300"
+        }
+      ]
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/story-cleanup",
