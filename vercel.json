@@ -1,4 +1,14 @@
 {
+  "rewrites": [
+    {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "/api/oauth/protected-resource"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/mcp/admin",
+      "destination": "/api/oauth/protected-resource"
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/story-cleanup",
