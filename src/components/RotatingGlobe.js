@@ -17,7 +17,6 @@ const log = (...a) => {
 };
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-const smoothstep = (t) => t * t * (3 - 2 * t);
 
 const isFiniteNumber = (n) => Number.isFinite(n) && !Number.isNaN(n);
 
@@ -231,42 +230,29 @@ const clusterByMiles = (points, minMiles) => {
 /**
  * Build pins to display based on zoom buckets.
  */
-const buildDisplayPins = (normalizedRawPins, zoomT) => {
+const buildDisplayPins = (normalizedRawPins, zoomLevel) => {
   const raw = Array.isArray(normalizedRawPins) ? normalizedRawPins : [];
   if (!raw.length) return [];
 
-  // zoomT: 0 near, 1 far
-  const z = clamp(Number(zoomT) || 0.75, 0, 1);
+  const level = ["world", "continent", "local"].includes(zoomLevel)
+    ? zoomLevel
+    : "world";
+  const policy = {
+    world: { clusterMiles: 160, maxPins: 60 },
+    continent: { clusterMiles: 40, maxPins: 110 },
+    local: { clusterMiles: 32, maxPins: 500 },
+  }[level];
 
-  const isWorld = z >= 0.78;
-  const isContinent = z >= 0.48 && z < 0.78;
-  const isLocal = z < 0.48;
-
-  let clusterMiles = 1800;
-  let maxPins = 40;
-
-  if (isWorld) {
-    const t = clamp((z - 0.78) / (1 - 0.78), 0, 1);
-    clusterMiles = 1700 + (2800 - 1700) * smoothstep(t);
-    maxPins = 40;
-  } else if (isContinent) {
-    const t = clamp((z - 0.48) / (0.78 - 0.48), 0, 1);
-    clusterMiles = 650 + (1350 - 650) * smoothstep(t);
-    maxPins = 110;
-  } else {
-    const localT = clamp(z / 0.48, 0, 1);
-    clusterMiles = 50;
-    maxPins = Math.round(160 + (360 - 160) * smoothstep(localT));
-  }
-
-  const clusters = clusterByMiles(raw, clusterMiles);
+  const clusters = clusterByMiles(raw, policy.clusterMiles);
   clusters.sort((a, b) => (b.count || 0) - (a.count || 0));
 
-  return clusters.slice(0, maxPins).map((c) => ({
+  return clusters.slice(0, policy.maxPins).map((c) => ({
     lat: c.lat,
     lng: c.lng,
     label: c.label || "Unknown",
-    weight: 1,
+    count: c.count || 1,
+    members: c.members || 1,
+    weight: c.count || 1,
   }));
 };
 
@@ -331,7 +317,7 @@ const RotatingGlobe = ({
   const [size, setSize] = useState({ w: 1, h: 1 });
 
   // zoom tracking
-  const [stableZoomT, setStableZoomT] = useState(0.75);
+  const [stableZoomLevel, setStableZoomLevel] = useState("world");
   const liveZoomRef = useRef(0.75);
   const debounceTimerRef = useRef(null);
   const minDistanceRef = useRef(120);
@@ -1125,8 +1111,7 @@ const RotatingGlobe = ({
   const scheduleStableCommit = () => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
-      const z = liveZoomRef.current;
-      setStableZoomT((prev) => (prev === z ? prev : z));
+      setStableZoomLevel(computeLevelFromAltitude(getCurrentPOV().altitude));
     }, DEBOUNCE_MS);
   };
 
@@ -1233,7 +1218,7 @@ const RotatingGlobe = ({
       sampleCameraToRefs(true);
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
-        setStableZoomT(liveZoomRef.current);
+        setStableZoomLevel(computeLevelFromAltitude(getCurrentPOV().altitude));
       }, 0);
     }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1364,63 +1349,12 @@ const RotatingGlobe = ({
   }, [pinsSig]);
 
   const displayPins = useMemo(() => {
-    const usingBackendProjection = Boolean(
-      apiBaseClean && initialServerPinsReady && !serverPinsError && serverPins.length
-    );
-    if (usingBackendProjection) {
-      // The API already selected COUNTRY / REGION / METRO for this zoom.
-      // Do not merge those semantic areas again in the browser: doing so hid
-      // valid countries at world view and made zoom-level counts unstable.
-      return normalizedPins
-        .slice()
-        .sort((a, b) => (b.count || 0) - (a.count || 0))
-        .map((pin) => ({ ...pin, weight: pin.count || 1 }));
-    }
-
-    // Server-aggregated pins are already one-row-per-geo_area_id, but that
-    // is a *categorical* dedup — the metro of SF has one row for SF, one
-    // for Oakland, one for San Jose, one for Palo Alto, etc. Their
-    // centroids sit within 5–40 miles of each other so at max zoom they
-    // visually stack. Run them through the same proximity clusterer as
-    // the fallback path so nearby city pins merge into a single pin
-    // anchored on the heaviest city, while world/continent zooms keep
-    // countries visible via the wider mile threshold.
-    const z = clamp(Number(stableZoomT) || 0.75, 0, 1);
-    const isWorld = z >= 0.78;
-    const isContinent = z >= 0.48 && z < 0.78;
-
-    let clusterMiles;
-    let maxPins;
-    if (isWorld) {
-      const t = clamp((z - 0.78) / (1 - 0.78), 0, 1);
-      clusterMiles = 1700 + (2800 - 1700) * smoothstep(t);
-      maxPins = serverPins && serverPins.length ? 220 : 40;
-    } else if (isContinent) {
-      const t = clamp((z - 0.48) / (0.78 - 0.48), 0, 1);
-      clusterMiles = 650 + (1350 - 650) * smoothstep(t);
-      maxPins = serverPins && serverPins.length ? 520 : 110;
-    } else {
-      // Local. A ~30px pin at typical mobile-viewport altitudes covers
-      // ~20 visible miles; merging within 50 miles ensures neighboring
-      // cities inside one metro (SF/Oakland/San Jose, NYC/Newark/JC,
-      // LA/Long Beach/Anaheim, …) collapse to a single pin instead of a
-      // stacked blob.
-      clusterMiles = 50;
-      const localT = clamp(z / 0.48, 0, 1);
-      maxPins = serverPins && serverPins.length
-        ? 1100
-        : Math.round(160 + (360 - 160) * smoothstep(localT));
-    }
-
-    const clusters = clusterByMiles(normalizedPins, clusterMiles);
-    clusters.sort((a, b) => (b.count || 0) - (a.count || 0));
-    return clusters.slice(0, maxPins).map((c) => ({
-      lat: c.lat,
-      lng: c.lng,
-      label: c.label || "Unknown",
-      weight: 1,
-    }));
-  }, [apiBaseClean, normalizedPins, stableZoomT, serverPins, initialServerPinsReady, serverPinsError]);
+    // The backend projection deduplicates exact geo areas. This second,
+    // presentation-only pass combines nearby cities by great-circle distance
+    // so dense metros remain legible. The threshold narrows as users zoom in;
+    // no city names or coordinates are encoded in the policy.
+    return buildDisplayPins(normalizedPins, stableZoomLevel);
+  }, [normalizedPins, stableZoomLevel]);
 
   // HTML marker element (kept lightweight).
   //
