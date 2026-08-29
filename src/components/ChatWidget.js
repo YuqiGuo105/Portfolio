@@ -6109,6 +6109,7 @@ function LauncherButton({ onOpen, onDragStart }) {
 export default function ChatWidget() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [tourActive, setTourActive] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [offset, setOffset] = useState(() => {
     if (typeof window !== "undefined") {
@@ -6144,10 +6145,9 @@ export default function ChatWidget() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const collapseForMobile = () => {
+    const collapseForTour = () => {
       if (typeof window === "undefined") return
-      const isMobile = window.matchMedia?.("(max-width: 767px)")?.matches ?? window.innerWidth < 768
-      if (!isMobile) return
+      setTourActive(true)
       setOpen((prev) => {
         if (prev) tourCollapsedRef.current = true
         return false
@@ -6156,18 +6156,34 @@ export default function ChatWidget() {
 
     const reopenAfterTour = () => {
       if (typeof window === "undefined") return
-      const isMobile = window.matchMedia?.("(max-width: 767px)")?.matches ?? window.innerWidth < 768
-      if (!isMobile || !tourCollapsedRef.current) return
+      setTourActive(false)
+      if (!tourCollapsedRef.current) return
       tourCollapsedRef.current = false
       setOpen(true)
     }
 
-    window.addEventListener("cw:site-tour:start", collapseForMobile)
-    window.addEventListener("cw:site-tour:end", reopenAfterTour)
-    return () => {
-      window.removeEventListener("cw:site-tour:start", collapseForMobile)
-      window.removeEventListener("cw:site-tour:end", reopenAfterTour)
+    const syncTourVisibility = (event) => {
+      if (event?.detail?.active) collapseForTour()
+      else reopenAfterTour()
     }
+
+    window.addEventListener("cw:site-tour:start", collapseForTour)
+    window.addEventListener("cw:site-tour:end", reopenAfterTour)
+    window.addEventListener("cw:site-tour:visibility", syncTourVisibility)
+    return () => {
+      window.removeEventListener("cw:site-tour:start", collapseForTour)
+      window.removeEventListener("cw:site-tour:end", reopenAfterTour)
+      window.removeEventListener("cw:site-tour:visibility", syncTourVisibility)
+    }
+  }, [])
+
+  useEffect(() => {
+    const openFromGuide = () => {
+      setTourActive(false)
+      setOpen(true)
+    }
+    window.addEventListener("cw:chat:open", openFromGuide)
+    return () => window.removeEventListener("cw:chat:open", openFromGuide)
   }, [])
 
   useEffect(() => {
@@ -6230,7 +6246,7 @@ export default function ChatWidget() {
   if (!mounted || !rootRef.current) return null
 
   return createPortal(
-    open ? (
+    tourActive ? null : open ? (
       <Fragment>
         <Overlay onClick={handleClose} />
         <ChatWindow onMinimize={handleClose} onDragStart={startDrag} routerPathname={router.pathname} pageHighlightRef={pageHighlightRef} />

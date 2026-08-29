@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Bot, ChevronDown, ChevronUp, ExternalLink, ListT
 import { consumePendingWebGuide } from "../lib/webGuide"
 
 const DEFAULT_CONTROLS = { previous: "Prev", next: "Next", done: "Done", close: "Close" }
-const CHINESE_NAME_AUDIO = "/assets/audio/tour/v2/chinese-name.wav"
+const CHINESE_NAME_AUDIO = "/assets/audio/tour/v3/chinese-name.wav"
 const HIGH_QUALITY_VOICE_HINT = /enhanced|premium|neural|natural|siri|online/i
 const LOW_QUALITY_VOICE_HINT = /compact|espeak|festival|novelty/i
 
@@ -400,6 +400,19 @@ export default function SiteTour() {
             window.removeEventListener("cw:site-tour:dynamic", onDynamic)
         }
     }, [go])
+
+    useEffect(() => {
+        if (typeof window === "undefined") return
+        const syncVisibility = (active) => {
+            window.dispatchEvent(new CustomEvent("cw:site-tour:visibility", {
+                detail: { active },
+            }))
+        }
+        syncVisibility(open)
+        return () => {
+            if (open) syncVisibility(false)
+        }
+    }, [open])
 
     useEffect(() => {
         if (!open) return
