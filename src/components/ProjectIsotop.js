@@ -1,21 +1,41 @@
 import Isotope from "isotope-layout";
 import Link from "next/link";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import ProjectSystemCover, { supportsSystemCover } from "./projects/ProjectSystemCover";
+import OpenSourceContributionCover from "./projects/OpenSourceContributionCover";
 import { supabase } from "../supabase/supabaseClient";
 
-const FILTERS = [
+const BASE_FILTERS = [
   { key: "all", label: "All", icon: "fa-border-all" },
   { key: "Full-Stack", label: "Full Stack", icon: "fa-layer-group" },
   { key: "Backend", label: "Backend", icon: "fa-server" },
   { key: "Web-Infra", label: "Web Infra", icon: "fa-cloud" },
 ];
 
+const categoryKey = (category) => category.trim().replace(/\s+/g, "-");
+
 const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
   const isotope = useRef();
   const [filterKey, setFilterKey] = useState("all");
   const [projects, setProjects] = useState([]);
   const [projectSystems, setProjectSystems] = useState({});
+
+  const filters = useMemo(() => {
+    const known = new Set(BASE_FILTERS.map(({ key }) => key));
+    const discovered = [];
+
+    projects.forEach((project) => {
+      (project.category || "").split(",").forEach((rawCategory) => {
+        const label = rawCategory.trim();
+        const key = categoryKey(label);
+        if (!label || known.has(key)) return;
+        known.add(key);
+        discovered.push({ key, label, icon: "fa-code-branch" });
+      });
+    });
+
+    return [...BASE_FILTERS, ...discovered];
+  }, [projects]);
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -91,7 +111,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
   return (
     <Fragment>
       <div className="proj-filters">
-        {FILTERS.map(({ key, label, icon }) => (
+        {filters.map(({ key, label, icon }) => (
           <button
             type="button"
             key={key}
@@ -108,7 +128,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
       <div className="proj-grid row">
         {projects.map((project) => {
           const categoryClasses = project.category
-            ? project.category.split(",").map((category) => category.trim().replace(/\s+/g, "-")).join(" ")
+            ? project.category.split(",").map(categoryKey).join(" ")
             : "";
           const techList = project.technology
             ? project.technology.split(",").map((technology) => technology.trim()).filter(Boolean)
@@ -130,6 +150,8 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
                   <div className="proj-card-image">
                     {hasSystemCover ? (
                       <ProjectSystemCover system={projectSystem} />
+                    ) : project.cover_variant === "OPEN_SOURCE_CONTRIBUTION" ? (
+                      <OpenSourceContributionCover />
                     ) : (
                       <img src={project.image_url} alt={project.title} />
                     )}
