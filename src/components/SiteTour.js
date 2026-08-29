@@ -1,13 +1,115 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Copy, ExternalLink, ListTree, Mail, Pause, Play, Volume2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, ExternalLink, ListTree, MessageCircle, Pause, Play, Volume2 } from "lucide-react"
 import { consumePendingWebGuide } from "../lib/webGuide"
 
 const DEFAULT_CONTROLS = { previous: "Prev", next: "Next", done: "Done", close: "Close" }
+const HIGH_QUALITY_VOICE_HINT = /enhanced|premium|neural|natural|siri|online/i
+const LOW_QUALITY_VOICE_HINT = /compact|espeak|festival|novelty/i
+
+function selectNaturalVoice(voices, locale) {
+    if (!Array.isArray(voices) || voices.length === 0) return null
+    const target = String(locale || "en-US").toLowerCase()
+    const language = target.split("-")[0]
+
+    return voices
+        .map((voice, index) => {
+            const voiceLocale = String(voice.lang || "").toLowerCase()
+            const searchable = `${voice.name || ""} ${voice.voiceURI || ""}`
+            let score = 0
+            if (voiceLocale === target) score += 120
+            else if (voiceLocale.split("-")[0] === language) score += 80
+            if (HIGH_QUALITY_VOICE_HINT.test(searchable)) score += 45
+            if (voice.localService) score += 18
+            if (voice.default) score += 12
+            if (LOW_QUALITY_VOICE_HINT.test(searchable)) score -= 80
+            return { voice, index, score }
+        })
+        .filter(({ voice }) => String(voice.lang || "").toLowerCase().split("-")[0] === language)
+        .sort((left, right) => right.score - left.score || left.index - right.index)[0]?.voice || null
+}
+
+function createNaturalUtterance(text, locale, voices) {
+    const utterance = new SpeechSynthesisUtterance(text)
+    const selectedVoice = selectNaturalVoice(voices, locale)
+    utterance.lang = locale
+    utterance.voice = selectedVoice
+    utterance.rate = locale.toLowerCase().startsWith("zh") ? 0.84 : 0.9
+    utterance.pitch = 1.02
+    utterance.volume = 1
+    return utterance
+}
 
 function getRect(el) {
     const r = el.getBoundingClientRect()
     return { top: r.top, left: r.left, width: r.width, height: r.height }
+}
+
+function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max)
+}
+
+function rectsOverlap(a, b, padding = 0) {
+    return !(
+        a.right + padding < b.left
+        || a.left - padding > b.right
+        || a.bottom + padding < b.top
+        || a.top - padding > b.bottom
+    )
+}
+
+function MrPotRig() {
+    const imageHref = "/assets/images/mr-pot-tour-guide.png"
+
+    return (
+        <svg className="st-pet-rig" viewBox="0 0 1024 1280" aria-hidden="true">
+            <defs>
+                <clipPath id="st-pet-steam-clip">
+                    <rect x="500" y="20" width="205" height="205" />
+                </clipPath>
+                <clipPath id="st-pet-head-clip">
+                    <path d="M238 195h730v405H850v115h-60v55H300V600h-62z" />
+                </clipPath>
+                <clipPath id="st-pet-core-clip">
+                    <path d="M458 742h292l45 122-30 150H438l-18-145z" />
+                </clipPath>
+                <clipPath id="st-pet-left-arm-clip">
+                    <path d="M320 745h175v285H320z" />
+                </clipPath>
+                <clipPath id="st-pet-right-arm-clip">
+                    <path d="M725 590h285v330H725z" />
+                </clipPath>
+                <clipPath id="st-pet-left-leg-clip">
+                    <path d="M405 965h210v215H405z" />
+                </clipPath>
+                <clipPath id="st-pet-right-leg-clip">
+                    <path d="M570 965h245v215H570z" />
+                </clipPath>
+            </defs>
+
+            <g className="st-pet-layer st-pet-steam" clipPath="url(#st-pet-steam-clip)">
+                <image href={imageHref} width="1024" height="1280" />
+            </g>
+            <g className="st-pet-layer st-pet-head" clipPath="url(#st-pet-head-clip)">
+                <image href={imageHref} width="1024" height="1280" />
+            </g>
+            <g className="st-pet-layer st-pet-core" clipPath="url(#st-pet-core-clip)">
+                <image href={imageHref} width="1024" height="1280" />
+            </g>
+            <g className="st-pet-layer st-pet-arm st-pet-arm-left" clipPath="url(#st-pet-left-arm-clip)">
+                <image href={imageHref} width="1024" height="1280" />
+            </g>
+            <g className="st-pet-layer st-pet-arm st-pet-arm-right" clipPath="url(#st-pet-right-arm-clip)">
+                <image href={imageHref} width="1024" height="1280" />
+            </g>
+            <g className="st-pet-layer st-pet-leg st-pet-leg-left" clipPath="url(#st-pet-left-leg-clip)">
+                <image href={imageHref} width="1024" height="1280" />
+            </g>
+            <g className="st-pet-layer st-pet-leg st-pet-leg-right" clipPath="url(#st-pet-right-leg-clip)">
+                <image href={imageHref} width="1024" height="1280" />
+            </g>
+        </svg>
+    )
 }
 
 export default function SiteTour() {
@@ -21,6 +123,7 @@ export default function SiteTour() {
                 content: "Full-stack, backend, and mobile engineer building production-minded distributed systems, AI platforms, and polished user experiences.",
                 meta: "Software engineering · Microservices · Distributed systems",
                 pronunciation: true,
+                narration: "/assets/audio/tour/v1/hero.mp3",
             },
             {
                 id: "about",
@@ -29,6 +132,7 @@ export default function SiteTour() {
                 title: "About Me",
                 content: "Start with a quick snapshot of who I am, what I love building, and how to pronounce my name.",
                 meta: "Profile · Engineering focus · Current role",
+                narration: "/assets/audio/tour/v1/about.mp3",
             },
             {
                 id: "background",
@@ -38,6 +142,7 @@ export default function SiteTour() {
                 content: "See where I've studied, the teams I've contributed to, and the technical domains I've focused on.",
                 meta: "Experience · Education · Technical foundation",
                 action: { href: "/cv", label: "View CV" },
+                narration: "/assets/audio/tour/v1/background.mp3",
             },
             {
                 id: "projects",
@@ -47,6 +152,7 @@ export default function SiteTour() {
                 content: "Browse the flagship projects I've shipped, the problems they solve, and the stacks I used to build them.",
                 meta: "Distributed systems · AI platform · Production operations",
                 action: { href: "/works-list", label: "Explore all projects" },
+                narration: "/assets/audio/tour/v1/projects.mp3",
             },
             {
                 id: "techblogs",
@@ -56,7 +162,7 @@ export default function SiteTour() {
                 content: "Explore deep dives, system design notes, and hands-on write-ups that showcase how I approach new challenges.",
                 meta: "System design · Backend · Infrastructure",
                 action: { href: "/blogs?type=technical", label: "Read technical writing" },
-                interaction: { type: "activate", targetId: "tour-techblogs", label: "Show Tech Blogs" },
+                narration: "/assets/audio/tour/v1/tech-blogs.mp3",
             },
             {
                 id: "life",
@@ -66,7 +172,7 @@ export default function SiteTour() {
                 content: "Get a glimpse of my hobbies, travels, and the moments outside of code that keep me inspired.",
                 meta: "Travel · Photography · Life outside code",
                 action: { href: "/blogs?type=life", label: "Explore life stories" },
-                interaction: { type: "activate", targetId: "tour-life", label: "Show Life Blogs" },
+                narration: "/assets/audio/tour/v1/life.mp3",
             },
             {
                 id: "realtime",
@@ -76,6 +182,7 @@ export default function SiteTour() {
                 content: "See live market moves, quick currency conversions, and a snapshot of the weather I'm tracking right now.",
                 meta: "Live services · Visitor intelligence · Observability",
                 action: { href: "/analytics", label: "Open analytics" },
+                narration: "/assets/audio/tour/v1/dashboard.mp3",
             },
             {
                 id: "contact",
@@ -84,8 +191,7 @@ export default function SiteTour() {
                 title: "Contact Me",
                 content: "Wrap up with the best ways to reach me, whether you want to collaborate, hire, or just say hello.",
                 meta: "Recruiting · Collaboration · Direct contact",
-                interaction: { type: "copy", value: "yuqi.guo17@gmail.com", label: "Copy email" },
-                action: { href: "mailto:yuqi.guo17@gmail.com", label: "Write an email" },
+                narration: "/assets/audio/tour/v1/contact.mp3",
             },
         ],
         []
@@ -109,9 +215,33 @@ export default function SiteTour() {
     const [uiReady, setUiReady] = useState(false)
     const [mapOpen, setMapOpen] = useState(false)
     const [autoPlay, setAutoPlay] = useState(false)
-    const [autoPlayIntervalMs, setAutoPlayIntervalMs] = useState(5200)
     const [collapsed, setCollapsed] = useState(false)
-    const [interactionDone, setInteractionDone] = useState(false)
+    const [guideLanguage, setGuideLanguage] = useState("en")
+    const [petSpeaking, setPetSpeaking] = useState(false)
+    const [petFacing, setPetFacing] = useState(1)
+    const [petWalking, setPetWalking] = useState(false)
+    const [petDragging, setPetDragging] = useState(false)
+    const [petReady, setPetReady] = useState(false)
+    const [availableVoices, setAvailableVoices] = useState([])
+    const [petTransform, setPetTransform] = useState("translate3d(-120px, 120px, 0)")
+    const petPositionRef = useRef({ x: -120, y: 120 })
+    const narrationAudioRef = useRef(null)
+    const petBaseRef = useRef({ x: -120, y: 120 })
+    const petMoveTimerRef = useRef(0)
+    const petPatrolTimerRef = useRef(0)
+    const petDraggingRef = useRef(false)
+    const petDragRef = useRef({
+        pointerId: null,
+        offsetX: 0,
+        offsetY: 0,
+        startX: 0,
+        startY: 0,
+        lastX: 0,
+        moved: false,
+    })
+    const movePetTo = useCallback((position) => {
+        setPetTransform(`translate3d(${position.x}px, ${position.y}px, 0)`)
+    }, [])
     const scheduleUpdateRect = useCallback(() => {
         if (!open) return
         if (!activeElRef.current) return
@@ -132,11 +262,23 @@ export default function SiteTour() {
         setControls(DEFAULT_CONTROLS)
         setMapOpen(false)
         setAutoPlay(false)
-        setAutoPlayIntervalMs(5200)
         setCollapsed(false)
-        setInteractionDone(false)
+        setPetSpeaking(false)
+        setPetReady(false)
+        setPetWalking(false)
+        setPetDragging(false)
+        petDraggingRef.current = false
+        petDragRef.current.pointerId = null
+        petDragRef.current.moved = false
         activeElRef.current = null
         if (typeof window !== "undefined") {
+            narrationAudioRef.current?.pause()
+            narrationAudioRef.current = null
+            window.speechSynthesis?.cancel()
+            window.clearTimeout(petMoveTimerRef.current)
+            window.clearInterval(petPatrolTimerRef.current)
+            petPositionRef.current = { x: -120, y: 120 }
+            setPetTransform("translate3d(-120px, 120px, 0)")
             window.dispatchEvent(new CustomEvent("cw:site-tour:end"))
         }
     }, [])
@@ -148,7 +290,6 @@ export default function SiteTour() {
             if (!el) return
             activeElRef.current = el
             setUiReady(false)
-            setInteractionDone(false)
             setAnchorRect(null)
             el.scrollIntoView({ behavior: "smooth", block: "center" })
             const start = performance.now()
@@ -184,7 +325,20 @@ export default function SiteTour() {
     }
 
     useEffect(() => {
+        if (typeof window === "undefined" || !("speechSynthesis" in window)) return undefined
+        const synth = window.speechSynthesis
+        const refreshVoices = () => setAvailableVoices(synth.getVoices())
+        refreshVoices()
+        synth.addEventListener?.("voiceschanged", refreshVoices)
+        return () => synth.removeEventListener?.("voiceschanged", refreshVoices)
+    }, [])
+
+    useEffect(() => {
         const onStart = (e) => {
+            const requestedLanguage = e?.detail?.language
+                || document.documentElement.lang
+                || navigator.language
+            setGuideLanguage(String(requestedLanguage).toLowerCase().startsWith("zh") ? "zh" : "en")
             // Allow dynamic steps to be passed directly with the start event
             if (e?.detail?.steps?.length > 0) {
                 const dynamic = e.detail.steps
@@ -192,8 +346,6 @@ export default function SiteTour() {
                 stepsRef.current = dynamic
             }
             if (e?.detail?.controls) setControls(e.detail.controls)
-            setAutoPlay(Boolean(e?.detail?.autoPlay))
-            setAutoPlayIntervalMs(Number(e?.detail?.autoPlayIntervalMs) || 5200)
             window.dispatchEvent(new CustomEvent("cw:guide:highlights", {
                 detail: {
                     language: e?.detail?.language || "en",
@@ -208,6 +360,7 @@ export default function SiteTour() {
         }
         const onDynamic = (e) => {
             if (e?.detail?.steps?.length > 0) {
+                setGuideLanguage(String(e?.detail?.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en")
                 const dynamic = e.detail.steps
                 setSteps(dynamic)
                 stepsRef.current = dynamic
@@ -246,7 +399,44 @@ export default function SiteTour() {
     useEffect(() => {
         if (!open) return
         go(idx)
+        narrationAudioRef.current?.pause()
+        narrationAudioRef.current = null
+        window.speechSynthesis?.cancel()
+        setPetSpeaking(false)
     }, [open, idx, go])
+
+    useEffect(() => {
+        if (!open || typeof window === "undefined") return undefined
+
+        const currentNarration = effectiveSteps[idx]?.narration
+        const nextNarration = effectiveSteps[idx + 1]?.narration
+        const controller = new AbortController()
+        let idleHandle = null
+        let timeoutHandle = null
+        const warm = (url) => {
+            if (!url) return
+            window.fetch(url, {
+                cache: "force-cache",
+                priority: "low",
+                signal: controller.signal,
+            }).catch(() => {})
+        }
+
+        warm(currentNarration)
+        if (nextNarration) {
+            if ("requestIdleCallback" in window) {
+                idleHandle = window.requestIdleCallback(() => warm(nextNarration), { timeout: 1800 })
+            } else {
+                timeoutHandle = window.setTimeout(() => warm(nextNarration), 800)
+            }
+        }
+
+        return () => {
+            controller.abort()
+            if (idleHandle !== null) window.cancelIdleCallback?.(idleHandle)
+            if (timeoutHandle !== null) window.clearTimeout(timeoutHandle)
+        }
+    }, [effectiveSteps, idx, open])
 
     useEffect(() => {
         if (!open) return
@@ -267,9 +457,9 @@ export default function SiteTour() {
         const timer = window.setTimeout(() => {
             if (idx >= effectiveSteps.length - 1) setAutoPlay(false)
             else setIdx((value) => value + 1)
-        }, Number(effectiveSteps[idx]?.durationMs) || autoPlayIntervalMs)
+        }, 5200)
         return () => window.clearTimeout(timer)
-    }, [autoPlay, autoPlayIntervalMs, effectiveSteps, idx, open])
+    }, [autoPlay, effectiveSteps.length, idx, open])
 
     useEffect(() => {
         if (!open) return
@@ -311,6 +501,118 @@ export default function SiteTour() {
         return () => cancelAnimationFrame(frame)
     }, [mapOpen, open])
 
+    useEffect(() => {
+        if (!open || !uiReady || typeof window === "undefined") return
+
+        const viewportWidth = window.innerWidth
+        const viewportHeight = window.innerHeight
+        const mobile = viewportWidth < 640
+        const petWidth = mobile ? 64 : 88
+        const petHeight = mobile ? 82 : 112
+        const margin = mobile ? 12 : 22
+        const dialogRect = popRef.current?.getBoundingClientRect()
+        const target = anchorRect
+            ? {
+                left: anchorRect.left,
+                top: anchorRect.top,
+                width: anchorRect.width,
+                height: anchorRect.height,
+                right: anchorRect.left + anchorRect.width,
+                bottom: anchorRect.top + anchorRect.height,
+              }
+            : null
+
+        const candidates = target
+            ? [
+                { x: target.right - petWidth - 24, y: target.top - petHeight - 16 },
+                { x: target.left + 24, y: target.top - petHeight - 16 },
+                { x: target.right + 16, y: target.top + Math.min(72, target.height * 0.25) },
+                { x: target.left - petWidth - 16, y: target.top + Math.min(72, target.height * 0.25) },
+                { x: target.right - petWidth - 24, y: target.bottom + 16 },
+                { x: target.left + 24, y: target.bottom + 16 },
+              ]
+            : []
+
+        candidates.push(
+            { x: margin, y: viewportHeight - petHeight - margin },
+            { x: viewportWidth - petWidth - margin, y: viewportHeight - petHeight - margin },
+            { x: margin, y: mobile ? 92 : 120 },
+            { x: viewportWidth - petWidth - margin, y: mobile ? 92 : 120 },
+        )
+
+        const safeCandidates = candidates
+            .map((candidate) => ({
+                x: clamp(candidate.x, margin, viewportWidth - petWidth - margin),
+                y: clamp(candidate.y, mobile ? 82 : 96, viewportHeight - petHeight - margin),
+            }))
+            .filter((candidate) => {
+                if (!dialogRect) return true
+                const petRect = {
+                    left: candidate.x,
+                    top: candidate.y,
+                    right: candidate.x + petWidth,
+                    bottom: candidate.y + petHeight,
+                }
+                return !rectsOverlap(petRect, dialogRect, 14)
+            })
+
+        const destination = safeCandidates[idx % Math.max(1, safeCandidates.length)]
+            || { x: margin, y: viewportHeight - petHeight - margin }
+        const previous = petPositionRef.current
+
+        petBaseRef.current = destination
+        if (Math.abs(destination.x - previous.x) > 4) {
+            setPetFacing(destination.x > previous.x ? 1 : -1)
+        }
+        setPetWalking(true)
+        setPetReady(true)
+        petPositionRef.current = destination
+        movePetTo(destination)
+        window.clearTimeout(petMoveTimerRef.current)
+        petMoveTimerRef.current = window.setTimeout(() => setPetWalking(false), 820)
+
+        window.clearInterval(petPatrolTimerRef.current)
+        petPatrolTimerRef.current = window.setInterval(() => {
+            if (petDraggingRef.current) return
+            const base = petBaseRef.current
+            const current = petPositionRef.current
+            const direction = Math.random() > 0.5 ? 1 : -1
+            const next = {
+                x: clamp(base.x + direction * (mobile ? 26 : 52), margin, viewportWidth - petWidth - margin),
+                y: clamp(base.y + (Math.random() > 0.5 ? 8 : -8), mobile ? 82 : 96, viewportHeight - petHeight - margin),
+            }
+            setPetFacing(next.x >= current.x ? 1 : -1)
+            setPetWalking(true)
+            petPositionRef.current = next
+            movePetTo(next)
+            window.clearTimeout(petMoveTimerRef.current)
+            petMoveTimerRef.current = window.setTimeout(() => setPetWalking(false), 760)
+        }, 3600)
+
+        return () => {
+            window.clearTimeout(petMoveTimerRef.current)
+            window.clearInterval(petPatrolTimerRef.current)
+        }
+    }, [anchorRect, idx, movePetTo, open, uiReady])
+
+    useEffect(() => {
+        if (!petDragging || typeof window === "undefined") return
+        const releaseDrag = () => {
+            petDragRef.current.pointerId = null
+            petDraggingRef.current = false
+            setPetDragging(false)
+            setPetWalking(false)
+        }
+        window.addEventListener("pointerup", releaseDrag)
+        window.addEventListener("pointercancel", releaseDrag)
+        window.addEventListener("blur", releaseDrag)
+        return () => {
+            window.removeEventListener("pointerup", releaseDrag)
+            window.removeEventListener("pointercancel", releaseDrag)
+            window.removeEventListener("blur", releaseDrag)
+        }
+    }, [petDragging])
+
     if (typeof window === "undefined") return null
     if (!open) return null
 
@@ -329,40 +631,162 @@ export default function SiteTour() {
         pointerEvents: uiReady ? "auto" : "none",
     }
 
-    const pronounceName = () => {
-        if (!("speechSynthesis" in window)) return
-        window.speechSynthesis.cancel()
-        const utterance = new SpeechSynthesisUtterance("郭育奇")
-        utterance.lang = "zh-CN"
-        utterance.rate = 0.72
+    const speakWithBrowserFallback = (text, locale, rate = 0.94) => {
+        if (!("speechSynthesis" in window)) {
+            setPetSpeaking(false)
+            return
+        }
+        const utterance = createNaturalUtterance(text, locale, availableVoices)
+        utterance.rate = rate
+        utterance.onend = () => setPetSpeaking(false)
+        utterance.onerror = () => setPetSpeaking(false)
+        setPetSpeaking(true)
         window.speechSynthesis.speak(utterance)
     }
 
-    const runInteraction = async () => {
-        const interaction = current?.interaction
-        if (!interaction) return
-        if (interaction.type === "activate") {
-            document.getElementById(interaction.targetId)?.click()
-            setInteractionDone(true)
+    const pronounceName = () => {
+        if (petSpeaking) {
+            narrationAudioRef.current?.pause()
+            narrationAudioRef.current = null
+            window.speechSynthesis?.cancel()
+            setPetSpeaking(false)
             return
         }
-        if (interaction.type === "copy") {
-            if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(interaction.value)
-            } else {
-                const input = document.createElement("textarea")
-                input.value = interaction.value
-                input.setAttribute("readonly", "")
-                input.style.position = "fixed"
-                input.style.opacity = "0"
-                document.body.appendChild(input)
-                input.select()
-                document.execCommand("copy")
-                input.remove()
-            }
-            setInteractionDone(true)
-            window.setTimeout(() => setInteractionDone(false), 1800)
+        narrationAudioRef.current?.pause()
+        window.speechSynthesis?.cancel()
+        const audio = new Audio("/assets/audio/tour/v1/chinese-name.wav")
+        narrationAudioRef.current = audio
+        let fallbackStarted = false
+        const fallback = () => {
+            if (fallbackStarted) return
+            fallbackStarted = true
+            narrationAudioRef.current = null
+            speakWithBrowserFallback("郭育奇", "zh-CN", 0.76)
         }
+        audio.onended = () => {
+            narrationAudioRef.current = null
+            setPetSpeaking(false)
+        }
+        audio.onerror = fallback
+        setPetSpeaking(true)
+        audio.play().catch(fallback)
+    }
+
+    const speakCurrentStep = () => {
+        if (!current) return
+        if (petSpeaking) {
+            narrationAudioRef.current?.pause()
+            narrationAudioRef.current = null
+            window.speechSynthesis?.cancel()
+            setPetSpeaking(false)
+            return
+        }
+
+        if (current.narration) {
+            window.speechSynthesis?.cancel()
+            const audio = new Audio(current.narration)
+            narrationAudioRef.current = audio
+            let fallbackStarted = false
+            const fallback = () => {
+                if (fallbackStarted) return
+                fallbackStarted = true
+                narrationAudioRef.current = null
+                speakWithBrowserFallback(
+                    `${current.title}. ${current.content}`,
+                    guideLanguage === "zh" ? "zh-CN" : "en-US"
+                )
+            }
+            audio.onended = () => {
+                narrationAudioRef.current = null
+                setPetSpeaking(false)
+            }
+            audio.onerror = fallback
+            setPetSpeaking(true)
+            audio.play().catch(fallback)
+            return
+        }
+
+        window.speechSynthesis?.cancel()
+        const locale = guideLanguage === "zh" ? "zh-CN" : "en-US"
+        speakWithBrowserFallback(`${current.title}. ${current.content}`, locale)
+    }
+
+    const askMrPot = () => {
+        close()
+        window.setTimeout(() => {
+            window.dispatchEvent(new CustomEvent("cw:chat:open"))
+        }, 0)
+    }
+
+    const petDimensions = () => {
+        const mobile = window.innerWidth < 640
+        return {
+            width: mobile ? 64 : 88,
+            height: mobile ? 82 : 112,
+            margin: mobile ? 12 : 22,
+            minY: mobile ? 82 : 96,
+        }
+    }
+
+    const startPetDrag = (event) => {
+        if (!petReady || (event.pointerType === "mouse" && event.button !== 0)) return
+        const rect = event.currentTarget.getBoundingClientRect()
+        petDragRef.current = {
+            pointerId: event.pointerId,
+            offsetX: event.clientX - rect.left,
+            offsetY: event.clientY - rect.top,
+            startX: event.clientX,
+            startY: event.clientY,
+            lastX: event.clientX,
+            moved: false,
+        }
+        petDraggingRef.current = true
+        setPetDragging(true)
+        setPetWalking(false)
+        petPositionRef.current = { x: rect.left, y: rect.top }
+        petBaseRef.current = { x: rect.left, y: rect.top }
+        movePetTo({ x: rect.left, y: rect.top })
+        window.clearTimeout(petMoveTimerRef.current)
+        event.currentTarget.setPointerCapture?.(event.pointerId)
+        event.preventDefault()
+    }
+
+    const movePetDrag = (event) => {
+        const drag = petDragRef.current
+        if (!petDraggingRef.current || drag.pointerId !== event.pointerId) return
+        const { width, height, margin, minY } = petDimensions()
+        const next = {
+            x: clamp(event.clientX - drag.offsetX, margin, window.innerWidth - width - margin),
+            y: clamp(event.clientY - drag.offsetY, minY, window.innerHeight - height - margin),
+        }
+        const deltaX = event.clientX - drag.lastX
+        if (Math.abs(deltaX) > 2) setPetFacing(deltaX > 0 ? 1 : -1)
+        if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 5) {
+            drag.moved = true
+        }
+        drag.lastX = event.clientX
+        petPositionRef.current = next
+        petBaseRef.current = next
+        movePetTo(next)
+        event.preventDefault()
+    }
+
+    const stopPetDrag = (event) => {
+        const drag = petDragRef.current
+        if (!petDraggingRef.current || drag.pointerId !== event.pointerId) return
+        event.currentTarget.releasePointerCapture?.(event.pointerId)
+        drag.pointerId = null
+        petDraggingRef.current = false
+        setPetDragging(false)
+        setPetWalking(false)
+    }
+
+    const activatePet = () => {
+        if (petDragRef.current.moved) {
+            petDragRef.current.moved = false
+            return
+        }
+        speakCurrentStep()
     }
 
     return createPortal(
@@ -382,6 +806,38 @@ export default function SiteTour() {
             )}
 
             <div
+                className={`st-roaming-pet${petReady ? " is-ready" : ""}${petWalking ? " is-walking" : ""}${petSpeaking ? " is-speaking" : ""}${petDragging ? " is-dragging" : ""}`}
+                style={{
+                    transform: petTransform,
+                    "--st-pet-facing": petFacing,
+                }}
+                role="button"
+                tabIndex={0}
+                draggable={false}
+                aria-grabbed={petDragging}
+                aria-label={guideLanguage === "zh" ? "拖动 Mr.Pot，或点击听当前区域讲解" : "Drag Mr.Pot, or click to narrate this section"}
+                onDragStart={(event) => event.preventDefault()}
+                onClick={activatePet}
+                onPointerDown={startPetDrag}
+                onPointerMove={movePetDrag}
+                onPointerUp={stopPetDrag}
+                onPointerCancel={stopPetDrag}
+                onLostPointerCapture={stopPetDrag}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") speakCurrentStep()
+                }}
+            >
+                <div className="st-roaming-bubble">
+                    <strong>{guideLanguage === "zh" ? "跟我来" : "Follow me"}</strong>
+                    <span>{current?.title}</span>
+                </div>
+                <div className="st-roaming-pet-body">
+                    <MrPotRig />
+                </div>
+                <span className="st-roaming-shadow" />
+            </div>
+
+            <div
                 ref={popRef}
                 className={`st-pop st-center${collapsed ? " is-collapsed" : ""}`}
                 style={popStyle}
@@ -389,9 +845,30 @@ export default function SiteTour() {
                 aria-modal="true"
             >
                 <div className="st-hd">
-                    <div>
-                        <span className="st-kicker">{current?.kicker || "Portfolio tour"}</span>
-                        <div className="st-title">{current?.title}</div>
+                    <div className="st-guide-heading">
+                        <div className="st-heading-copy">
+                            <span className="st-kicker">
+                                {guideLanguage === "zh" ? "Mr.Pot 正在导览" : "Guided by Mr.Pot"}
+                            </span>
+                            <div className="st-title">{current?.title}</div>
+                            {!collapsed ? (
+                                <div className="st-pet-actions">
+                                    <button type="button" onClick={speakCurrentStep} aria-pressed={petSpeaking}>
+                                        <Volume2 size={13} aria-hidden="true" />
+                                        {guideLanguage === "zh"
+                                            ? petSpeaking ? "停止讲解" : "听 Mr.Pot 讲解"
+                                            : petSpeaking ? "Stop narration" : "Hear Mr.Pot"}
+                                    </button>
+                                    <button type="button" onClick={askMrPot}>
+                                        <MessageCircle size={13} aria-hidden="true" />
+                                        {guideLanguage === "zh" ? "问 Mr.Pot" : "Ask Mr.Pot"}
+                                    </button>
+                                    <span className="st-ai-voice">
+                                        {guideLanguage === "zh" ? "AI 合成语音" : "AI voice"}
+                                    </span>
+                                </div>
+                            ) : null}
+                        </div>
                     </div>
                     <div className="st-window-actions">
                         <button
@@ -410,33 +887,31 @@ export default function SiteTour() {
                 {!collapsed ? <div className="st-bd">{current?.content}</div> : null}
                 {!collapsed && current?.meta ? <div className="st-meta">{current.meta}</div> : null}
 
-                {!collapsed && current?.items?.length ? (
-                    <div className="st-evidence-list" aria-label="Supporting evidence">
-                        {current.items.map((item, itemIndex) => (
-                            <a
-                                key={item.url || `${item.title}-${itemIndex}`}
-                                className="st-evidence-item"
-                                href={item.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                <span className="st-evidence-repo">{item.eyebrow}</span>
-                                <strong>{item.title}</strong>
-                                <ExternalLink size={13} aria-hidden="true" />
-                            </a>
-                        ))}
-                    </div>
-                ) : null}
-
                 {!collapsed && current?.pronunciation ? (
                     <button type="button" className="st-pronounce" onClick={pronounceName}>
                         <Volume2 size={17} aria-hidden="true" />
                         <span>
-                            <strong>郭育奇</strong>
-                            Hear my name
+                            <strong>Hear my Chinese name</strong>
+                            Play pronunciation
                         </span>
                     </button>
                 ) : null}
+
+                {!collapsed ? <div className="st-rail" aria-label={`Step ${idx + 1} of ${effectiveSteps.length}`}>
+                    {effectiveSteps.map((step, stepIndex) => (
+                        <button
+                            key={step.id || stepIndex}
+                            type="button"
+                            className={stepIndex === idx ? "is-current" : stepIndex < idx ? "is-complete" : ""}
+                            onClick={() => setIdx(stepIndex)}
+                            aria-label={`Go to ${step.title || `step ${stepIndex + 1}`}`}
+                            aria-current={stepIndex === idx ? "step" : undefined}
+                            title={step.title}
+                        >
+                            <span />
+                        </button>
+                    ))}
+                </div> : null}
 
                 {!collapsed ? <button
                     type="button"
@@ -469,44 +944,12 @@ export default function SiteTour() {
                     </ol>
                 ) : null}
 
-                {!collapsed && (currentAction || current?.interaction) ? (
-                    <div className="st-step-actions">
-                        {current?.interaction ? (
-                            <button type="button" className="st-interaction" onClick={runInteraction}>
-                                {interactionDone
-                                    ? <Check size={14} aria-hidden="true" />
-                                    : current.interaction.type === "copy"
-                                        ? <Copy size={14} aria-hidden="true" />
-                                        : <Play size={14} aria-hidden="true" />}
-                                {interactionDone ? "Done" : current.interaction.label}
-                            </button>
-                        ) : null}
-                        {currentAction ? (
-                            <a className="st-context-link" href={currentAction.href}>
-                                {currentAction.href.startsWith("mailto:")
-                                    ? <Mail size={14} aria-hidden="true" />
-                                    : <ExternalLink size={14} aria-hidden="true" />}
-                                {currentAction.label}
-                            </a>
-                        ) : null}
-                    </div>
+                {!collapsed && currentAction ? (
+                    <a className="st-context-link" href={currentAction.href}>
+                        {currentAction.label}
+                        <ExternalLink size={14} aria-hidden="true" />
+                    </a>
                 ) : null}
-
-                {!collapsed ? <div className="st-rail" aria-label={`Step ${idx + 1} of ${effectiveSteps.length}`}>
-                    {effectiveSteps.map((step, stepIndex) => (
-                        <button
-                            key={step.id || stepIndex}
-                            type="button"
-                            className={stepIndex === idx ? "is-current" : stepIndex < idx ? "is-complete" : ""}
-                            onClick={() => setIdx(stepIndex)}
-                            aria-label={`Go to ${step.title || `step ${stepIndex + 1}`}`}
-                            aria-current={stepIndex === idx ? "step" : undefined}
-                            title={step.title}
-                        >
-                            <span />
-                        </button>
-                    ))}
-                </div> : null}
 
                 {!collapsed ? <div className="st-ft">
                     <button
@@ -528,7 +971,7 @@ export default function SiteTour() {
                             {idx === effectiveSteps.length - 1 ? null : <ArrowRight size={14} aria-hidden="true" />}
                         </button>
                     </div>
-                </div> : <div className="st-collapsed-status">{idx + 1} / {effectiveSteps.length}</div>}
+                </div> : <div className="st-collapsed-status">Step {idx + 1} of {effectiveSteps.length} · click expand to continue</div>}
             </div>
 
             <style jsx global>{`
@@ -558,43 +1001,403 @@ export default function SiteTour() {
                     transition: opacity 160ms ease;
                     max-height: calc(100vh - 32px);
                     overflow-y: auto;
-                    -webkit-user-select: none;
-                    user-select: none;
                 }
 
                 .st-pop.is-collapsed {
-                    padding: 9px 12px;
+                    padding: 13px 15px;
                     overflow: hidden;
-                }
-
-                .st-pop.is-collapsed .st-hd {
-                    min-height: 32px;
-                }
-
-                .st-pop.is-collapsed .st-kicker {
-                    display: none;
-                }
-
-                .st-pop.is-collapsed .st-title {
-                    margin-top: 0;
-                    overflow: hidden;
-                    font-size: 14px;
-                    line-height: 1.2;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                }
-
-                .st-pop.is-collapsed .st-collapse,
-                .st-pop.is-collapsed .st-x {
-                    width: 28px;
-                    height: 28px;
                 }
 
                 .st-hd {
                     display: flex;
-                    align-items: center;
+                    align-items: flex-start;
                     justify-content: space-between;
                     gap: 10px;
+                }
+
+                .st-guide-heading {
+                    display: flex;
+                    align-items: center;
+                    min-width: 0;
+                    gap: 14px;
+                }
+
+                .st-heading-copy {
+                    min-width: 0;
+                }
+
+                .st-roaming-pet {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    z-index: 10002;
+                    width: 88px;
+                    height: 112px;
+                    opacity: 0;
+                    transform: translate3d(-120px, 120px, 0);
+                    cursor: grab;
+                    outline: none;
+                    pointer-events: none;
+                    touch-action: none;
+                    user-select: none;
+                    transition:
+                        transform 820ms cubic-bezier(0.2, 0.72, 0.22, 1),
+                        opacity 180ms ease;
+                    will-change: transform;
+                }
+
+                .st-roaming-pet.is-ready {
+                    opacity: 1;
+                    pointer-events: auto;
+                }
+
+                .st-roaming-pet.is-dragging {
+                    cursor: grabbing;
+                    transition: opacity 180ms ease;
+                }
+
+                .st-roaming-pet:focus-visible .st-roaming-pet-body {
+                    filter: drop-shadow(0 0 0.32rem rgba(45, 212, 191, 0.95));
+                }
+
+                .st-roaming-pet-body {
+                    position: relative;
+                    z-index: 2;
+                    width: 88px;
+                    height: 112px;
+                    filter: drop-shadow(0 8px 9px rgba(15, 23, 42, 0.2));
+                }
+
+                .st-pet-rig {
+                    display: block;
+                    width: 100%;
+                    height: 100%;
+                    overflow: visible;
+                    pointer-events: none;
+                    -webkit-user-drag: none;
+                    transform: scaleX(var(--st-pet-facing, 1));
+                    transform-origin: center;
+                    transition: transform 120ms ease;
+                }
+
+                .st-pet-layer {
+                    transform-box: fill-box;
+                }
+
+                .st-pet-head,
+                .st-pet-core {
+                    transform-origin: 50% 88%;
+                    animation: st-pet-breathe 2.6s ease-in-out infinite;
+                }
+
+                .st-pet-steam {
+                    transform-origin: 50% 100%;
+                    animation: st-pet-steam-drift 2.1s ease-in-out infinite alternate;
+                }
+
+                .st-pet-arm-left {
+                    transform-origin: 78% 13%;
+                    animation: st-pet-arm-rest-left 3.2s ease-in-out infinite;
+                }
+
+                .st-pet-arm-right {
+                    transform-origin: 16% 54%;
+                    animation: st-pet-wave 3.8s ease-in-out infinite;
+                }
+
+                .st-pet-leg-left,
+                .st-pet-leg-right {
+                    transform-origin: 50% 12%;
+                }
+
+                .st-roaming-pet.is-walking .st-pet-head,
+                .st-roaming-pet.is-walking .st-pet-core {
+                    animation: st-pet-step-body 260ms ease-in-out infinite alternate;
+                }
+
+                .st-roaming-pet.is-walking .st-pet-arm-left {
+                    animation: st-pet-arm-swing-left 310ms ease-in-out infinite alternate;
+                }
+
+                .st-roaming-pet.is-walking .st-pet-arm-right {
+                    animation: st-pet-arm-swing-right 310ms ease-in-out infinite alternate;
+                }
+
+                .st-roaming-pet.is-walking .st-pet-leg-left {
+                    animation: st-pet-leg-step-left 260ms ease-in-out infinite alternate;
+                }
+
+                .st-roaming-pet.is-walking .st-pet-leg-right {
+                    animation: st-pet-leg-step-right 260ms ease-in-out infinite alternate;
+                }
+
+                .st-roaming-pet.is-walking .st-pet-steam {
+                    animation: st-pet-steam-walk 380ms ease-in-out infinite alternate;
+                }
+
+                .st-roaming-pet.is-speaking .st-pet-arm-right {
+                    animation: st-pet-talk-wave 520ms ease-in-out infinite alternate;
+                }
+
+                .st-roaming-pet.is-speaking .st-pet-steam {
+                    animation: st-pet-steam-speak 700ms ease-in-out infinite;
+                }
+
+                .st-roaming-pet.is-dragging .st-pet-head,
+                .st-roaming-pet.is-dragging .st-pet-core {
+                    animation: st-pet-drag-body 620ms ease-in-out infinite alternate;
+                }
+
+                .st-roaming-pet.is-dragging .st-pet-arm-left {
+                    animation: st-pet-drag-arm-left 620ms ease-in-out infinite alternate;
+                }
+
+                .st-roaming-pet.is-dragging .st-pet-arm-right {
+                    animation: st-pet-drag-arm-right 620ms ease-in-out infinite alternate;
+                }
+
+                .st-roaming-pet.is-dragging .st-pet-leg-left {
+                    transform: rotate(1.5deg) translateY(3px);
+                }
+
+                .st-roaming-pet.is-dragging .st-pet-leg-right {
+                    transform: rotate(-1.5deg) translateY(3px);
+                }
+
+                .st-roaming-shadow {
+                    position: absolute;
+                    right: 17px;
+                    bottom: 2px;
+                    left: 17px;
+                    z-index: 1;
+                    height: 8px;
+                    border-radius: 50%;
+                    background: rgba(15, 23, 42, 0.22);
+                    filter: blur(3px);
+                    transition: transform 180ms ease, opacity 180ms ease;
+                }
+
+                .st-roaming-pet.is-walking .st-roaming-shadow {
+                    opacity: 0.6;
+                    transform: scaleX(0.82);
+                }
+
+                .st-roaming-bubble {
+                    position: absolute;
+                    bottom: calc(100% - 7px);
+                    left: 50%;
+                    z-index: 4;
+                    width: max-content;
+                    max-width: 190px;
+                    padding: 8px 10px;
+                    border: 1px solid rgba(15, 118, 110, 0.2);
+                    border-radius: 7px;
+                    background: rgba(255, 255, 255, 0.96);
+                    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.14);
+                    color: #45545c;
+                    opacity: 1;
+                    transform: translateX(-50%) translateY(0);
+                    transition: opacity 160ms ease, transform 160ms ease;
+                    text-align: center;
+                    pointer-events: none;
+                }
+
+                .st-roaming-bubble::after {
+                    position: absolute;
+                    top: 100%;
+                    left: 50%;
+                    border: 6px solid transparent;
+                    border-top-color: rgba(255, 255, 255, 0.96);
+                    content: "";
+                    transform: translateX(-50%);
+                }
+
+                .st-roaming-bubble strong,
+                .st-roaming-bubble span {
+                    display: block;
+                }
+
+                .st-roaming-bubble strong {
+                    color: #0f766e;
+                    font-size: 9px;
+                    letter-spacing: 0.04em;
+                    text-transform: uppercase;
+                }
+
+                .st-roaming-bubble span {
+                    max-width: 166px;
+                    overflow: hidden;
+                    font-size: 11px;
+                    font-weight: 800;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                .st-roaming-pet.is-walking .st-roaming-bubble {
+                    opacity: 0.18;
+                    transform: translateX(-50%) translateY(5px);
+                }
+
+                .st-roaming-pet.is-dragging .st-roaming-bubble {
+                    opacity: 0;
+                    transform: translateX(-50%) translateY(7px);
+                }
+
+                .st-roaming-pet.is-speaking .st-roaming-pet-body::before,
+                .st-roaming-pet.is-speaking .st-roaming-pet-body::after {
+                    position: absolute;
+                    top: 23px;
+                    right: -5px;
+                    width: 8px;
+                    height: 14px;
+                    border: 2px solid #0f766e;
+                    border-top-color: transparent;
+                    border-bottom-color: transparent;
+                    border-left: 0;
+                    border-radius: 0 14px 14px 0;
+                    content: "";
+                    animation: st-pet-sound 900ms ease-out infinite;
+                }
+
+                .st-roaming-pet.is-speaking .st-roaming-pet-body::after {
+                    top: 17px;
+                    right: -12px;
+                    width: 13px;
+                    height: 26px;
+                    animation-delay: 180ms;
+                }
+
+                .st-pet-actions {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 5px;
+                    margin-top: 8px;
+                }
+
+                .st-pet-actions button {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    min-height: 27px;
+                    padding: 5px 8px;
+                    border: 1px solid rgba(15, 118, 110, 0.2);
+                    border-radius: 4px;
+                    background: rgba(15, 118, 110, 0.05);
+                    color: #0f766e;
+                    cursor: pointer;
+                    font-size: 9px;
+                    font-weight: 800;
+                }
+
+                .st-pet-actions button:hover {
+                    border-color: rgba(15, 118, 110, 0.42);
+                    background: rgba(15, 118, 110, 0.1);
+                }
+
+                .st-ai-voice {
+                    align-self: center;
+                    color: #7b8794;
+                    font-size: 8px;
+                    font-weight: 700;
+                    letter-spacing: 0;
+                }
+
+                .st-pop.is-collapsed .st-guide-heading {
+                    gap: 9px;
+                }
+
+                .st-pop.is-collapsed .st-title {
+                    max-width: 245px;
+                    margin-top: 3px;
+                    overflow: hidden;
+                    font-size: 14px;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                @keyframes st-pet-breathe {
+                    0%, 100% { transform: translateY(0) scaleY(1); }
+                    50% { transform: translateY(-1px) scaleY(1.008); }
+                }
+
+                @keyframes st-pet-steam-drift {
+                    0% { transform: translateX(-5px) rotate(-4deg) scaleY(0.96); opacity: 0.76; }
+                    100% { transform: translateX(5px) rotate(4deg) scaleY(1.04); opacity: 1; }
+                }
+
+                @keyframes st-pet-arm-rest-left {
+                    0%, 72%, 100% { transform: rotate(0); }
+                    82% { transform: rotate(1.8deg) translateY(1px); }
+                    91% { transform: rotate(-1deg); }
+                }
+
+                @keyframes st-pet-wave {
+                    0%, 64%, 100% { transform: rotate(0); }
+                    72% { transform: rotate(-2.5deg); }
+                    80% { transform: rotate(2.5deg); }
+                    88% { transform: rotate(-2deg); }
+                    95% { transform: rotate(1.5deg); }
+                }
+
+                @keyframes st-pet-step-body {
+                    0% { transform: translateY(0) rotate(-0.6deg); }
+                    100% { transform: translateY(-4px) rotate(0.6deg); }
+                }
+
+                @keyframes st-pet-arm-swing-left {
+                    0% { transform: rotate(-2.5deg) translateY(1px); }
+                    100% { transform: rotate(3deg) translateY(-1px); }
+                }
+
+                @keyframes st-pet-arm-swing-right {
+                    0% { transform: rotate(2.5deg) translateY(-1px); }
+                    100% { transform: rotate(-3deg) translateY(1px); }
+                }
+
+                @keyframes st-pet-leg-step-left {
+                    0% { transform: rotate(-2deg) translateY(1px); }
+                    100% { transform: rotate(2deg) translateY(-2px); }
+                }
+
+                @keyframes st-pet-leg-step-right {
+                    0% { transform: rotate(2deg) translateY(-2px); }
+                    100% { transform: rotate(-2deg) translateY(1px); }
+                }
+
+                @keyframes st-pet-steam-walk {
+                    0% { transform: translateX(-8px) rotate(-7deg) scaleY(0.94); }
+                    100% { transform: translateX(7px) rotate(6deg) scaleY(1.05); }
+                }
+
+                @keyframes st-pet-talk-wave {
+                    0% { transform: rotate(-3deg); }
+                    100% { transform: rotate(3deg); }
+                }
+
+                @keyframes st-pet-steam-speak {
+                    0%, 100% { transform: scale(0.96); opacity: 0.72; }
+                    50% { transform: scale(1.08) translateY(-4px); opacity: 1; }
+                }
+
+                @keyframes st-pet-drag-body {
+                    0% { transform: rotate(-1.5deg) translateY(0); }
+                    100% { transform: rotate(1.5deg) translateY(2px); }
+                }
+
+                @keyframes st-pet-drag-arm-left {
+                    0% { transform: rotate(1deg) translateY(1px); }
+                    100% { transform: rotate(3deg) translateY(3px); }
+                }
+
+                @keyframes st-pet-drag-arm-right {
+                    0% { transform: rotate(-1deg) translateY(1px); }
+                    100% { transform: rotate(2deg) translateY(3px); }
+                }
+
+                @keyframes st-pet-sound {
+                    0% { opacity: 0; transform: scale(0.75); }
+                    45% { opacity: 0.9; }
+                    100% { opacity: 0; transform: scale(1.12); }
                 }
 
                 .st-window-actions {
@@ -686,58 +1489,6 @@ export default function SiteTour() {
                     line-height: 1.4;
                 }
 
-                .st-evidence-list {
-                    display: grid;
-                    gap: 6px;
-                    margin-top: 13px;
-                }
-
-                .st-evidence-item {
-                    position: relative;
-                    display: grid;
-                    grid-template-columns: minmax(0, 1fr) auto;
-                    gap: 3px 10px;
-                    min-width: 0;
-                    padding: 9px 11px;
-                    border: 1px solid #e4e8eb;
-                    border-radius: 5px;
-                    background: #f8faf9;
-                    color: #263238;
-                    text-decoration: none;
-                }
-
-                .st-evidence-item:hover {
-                    border-color: #82c7bd;
-                    background: rgba(15, 118, 110, 0.06);
-                    color: #0f766e;
-                }
-
-                .st-evidence-item strong {
-                    min-width: 0;
-                    overflow: hidden;
-                    font-size: 11px;
-                    line-height: 1.35;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                }
-
-                .st-evidence-item > svg {
-                    grid-column: 2;
-                    grid-row: 1 / span 2;
-                    align-self: center;
-                    color: #0f766e;
-                }
-
-                .st-evidence-repo {
-                    color: #778389;
-                    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-                    font-size: 8px;
-                    font-weight: 800;
-                    letter-spacing: 0.04em;
-                    line-height: 1.2;
-                    text-transform: uppercase;
-                }
-
                 .st-pronounce {
                     display: flex;
                     align-items: center;
@@ -770,9 +1521,7 @@ export default function SiteTour() {
                     display: grid;
                     grid-template-columns: repeat(${effectiveSteps.length}, minmax(0, 1fr));
                     gap: 4px;
-                    margin-top: 12px;
-                    padding-top: 10px;
-                    border-top: 1px solid #ebeef5;
+                    margin-top: 13px;
                 }
 
                 .st-rail button {
@@ -865,40 +1614,21 @@ export default function SiteTour() {
                     font-size: 9px;
                 }
 
-                .st-step-actions {
-                    display: flex;
-                    align-items: center;
-                    flex-wrap: wrap;
-                    gap: 8px;
-                    margin-top: 10px;
-                }
-
-                .st-context-link,
-                .st-interaction {
+                .st-context-link {
                     display: inline-flex;
                     align-items: center;
-                    justify-content: center;
                     gap: 7px;
-                    min-height: 34px;
-                    padding: 7px 10px;
-                    border: 1px solid rgba(15, 118, 110, 0.22);
-                    border-radius: 5px;
-                    background: rgba(15, 118, 110, 0.05);
+                    margin-top: 9px;
                     color: #0f766e;
                     font-size: 11px;
                     font-weight: 800;
                     text-decoration: none;
                 }
 
-                .st-interaction {
-                    cursor: pointer;
-                }
-
-                .st-context-link:hover,
-                .st-interaction:hover {
-                    border-color: #82c7bd;
-                    background: rgba(15, 118, 110, 0.1);
+                .st-context-link:hover {
                     color: #0b8b7d;
+                    text-decoration: underline;
+                    text-underline-offset: 3px;
                 }
 
                 .st-ft {
@@ -928,19 +1658,10 @@ export default function SiteTour() {
                 }
 
                 .st-collapsed-status {
-                    position: absolute;
-                    top: 50%;
-                    right: 82px;
-                    max-width: 130px;
-                    margin-top: 0;
-                    overflow: hidden;
+                    margin-top: 5px;
                     color: #7b858a;
-                    font-size: 9px;
+                    font-size: 10px;
                     font-weight: 700;
-                    line-height: 1;
-                    text-overflow: ellipsis;
-                    transform: translateY(-50%);
-                    white-space: nowrap;
                 }
 
                 .st-actions {
@@ -1024,6 +1745,26 @@ export default function SiteTour() {
                     color: rgba(248, 250, 252, 0.92);
                 }
 
+                body.dark-skin .st-pet-actions button {
+                    border-color: rgba(94, 234, 212, 0.22);
+                    background: rgba(94, 234, 212, 0.08);
+                    color: #5eead4;
+                }
+
+                body.dark-skin .st-roaming-bubble {
+                    border-color: rgba(94, 234, 212, 0.24);
+                    background: rgba(15, 23, 42, 0.96);
+                    color: rgba(226, 232, 240, 0.86);
+                }
+
+                body.dark-skin .st-roaming-bubble::after {
+                    border-top-color: rgba(15, 23, 42, 0.96);
+                }
+
+                body.dark-skin .st-roaming-bubble strong {
+                    color: #5eead4;
+                }
+
                 body.dark-skin .st-kicker,
                 body.dark-skin .st-meta,
                 body.dark-skin .st-context-link {
@@ -1043,12 +1784,6 @@ export default function SiteTour() {
 
                 body.dark-skin .st-pronounce strong {
                     color: rgba(248, 250, 252, 0.94);
-                }
-
-                body.dark-skin .st-context-link,
-                body.dark-skin .st-interaction {
-                    border-color: rgba(94, 234, 212, 0.22);
-                    background: rgba(94, 234, 212, 0.08);
                 }
 
                 body.dark-skin .st-autoplay {
@@ -1077,10 +1812,6 @@ export default function SiteTour() {
                     background: rgba(255, 255, 255, 0.13);
                 }
 
-                body.dark-skin .st-rail {
-                    border-top-color: rgba(255, 255, 255, 0.12);
-                }
-
                 body.dark-skin .st-rail button:hover span,
                 body.dark-skin .st-rail button.is-current span {
                     background: #2dd4bf;
@@ -1092,18 +1823,6 @@ export default function SiteTour() {
 
                 body.dark-skin .st-bd {
                     color: rgba(226, 232, 240, 0.82);
-                }
-
-                body.dark-skin .st-evidence-item {
-                    border-color: rgba(255, 255, 255, 0.12);
-                    background: rgba(255, 255, 255, 0.05);
-                    color: rgba(248, 250, 252, 0.9);
-                }
-
-                body.dark-skin .st-evidence-item:hover {
-                    border-color: rgba(94, 234, 212, 0.36);
-                    background: rgba(94, 234, 212, 0.09);
-                    color: #5eead4;
                 }
 
                 body.dark-skin .st-count {
@@ -1131,34 +1850,36 @@ export default function SiteTour() {
                         padding: 16px;
                     }
 
+                    .st-guide-heading {
+                        gap: 9px;
+                    }
+
+                    .st-roaming-pet {
+                        width: 64px;
+                        height: 82px;
+                    }
+
+                    .st-roaming-pet-body {
+                        width: 64px;
+                        height: 82px;
+                    }
+
+                    .st-roaming-bubble {
+                        max-width: 142px;
+                        padding: 6px 8px;
+                    }
+
+                    .st-roaming-bubble span {
+                        max-width: 122px;
+                        font-size: 10px;
+                    }
+
                     .st-title {
-                        font-size: 22px;
+                        font-size: 20px;
                     }
 
                     .st-bd {
                         font-size: 13px;
-                    }
-
-                    .st-step-actions {
-                        display: grid;
-                        grid-template-columns: repeat(2, minmax(0, 1fr));
-                    }
-
-                    .st-step-actions > :only-child {
-                        grid-column: 1 / -1;
-                    }
-
-                    .st-pop.is-collapsed {
-                        width: min(330px, calc(100vw - 20px)) !important;
-                    }
-
-                    .st-pop.is-collapsed .st-title {
-                        max-width: 145px;
-                    }
-
-                    .st-pop.is-collapsed .st-collapsed-status {
-                        right: 76px;
-                        max-width: 92px;
                     }
 
                     .st-map {
@@ -1172,6 +1893,17 @@ export default function SiteTour() {
                     .st-btn {
                         height: 38px;
                         padding-inline: 9px;
+                    }
+                }
+
+                @media (prefers-reduced-motion: reduce) {
+                    .st-roaming-pet,
+                    .st-pet-rig,
+                    .st-pet-layer,
+                    .st-roaming-pet.is-speaking .st-roaming-pet-body::before,
+                    .st-roaming-pet.is-speaking .st-roaming-pet-body::after {
+                        animation: none !important;
+                        transition: none !important;
                     }
                 }
             `}</style>
