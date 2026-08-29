@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, ExternalLink, ListTree, MessageCircle, Pause, Play, Volume2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, Bot, ChevronDown, ChevronUp, ExternalLink, ListTree, MessageCircle, Pause, Play, Volume2, X } from "lucide-react"
 import { consumePendingWebGuide } from "../lib/webGuide"
 
 const DEFAULT_CONTROLS = { previous: "Prev", next: "Next", done: "Done", close: "Close" }
+const CHINESE_NAME_AUDIO = "/assets/audio/tour/v2/chinese-name.wav"
 const HIGH_QUALITY_VOICE_HINT = /enhanced|premium|neural|natural|siri|online/i
 const LOW_QUALITY_VOICE_HINT = /compact|espeak|festival|novelty/i
 
@@ -74,7 +75,7 @@ function MrPotRig() {
                     <path d="M458 742h292l45 122-30 150H438l-18-145z" />
                 </clipPath>
                 <clipPath id="st-pet-left-arm-clip">
-                    <path d="M320 745h175v285H320z" />
+                    <path d="M178 696h314v355H178z" />
                 </clipPath>
                 <clipPath id="st-pet-right-arm-clip">
                     <path d="M725 590h285v330H725z" />
@@ -222,6 +223,7 @@ export default function SiteTour() {
     const [petWalking, setPetWalking] = useState(false)
     const [petDragging, setPetDragging] = useState(false)
     const [petReady, setPetReady] = useState(false)
+    const [petHidden, setPetHidden] = useState(false)
     const [availableVoices, setAvailableVoices] = useState([])
     const [petTransform, setPetTransform] = useState("translate3d(-120px, 120px, 0)")
     const petPositionRef = useRef({ x: -120, y: 120 })
@@ -265,6 +267,7 @@ export default function SiteTour() {
         setCollapsed(false)
         setPetSpeaking(false)
         setPetReady(false)
+        setPetHidden(false)
         setPetWalking(false)
         setPetDragging(false)
         petDraggingRef.current = false
@@ -356,6 +359,7 @@ export default function SiteTour() {
             setOpen(true)
             setIdx(0)
             setCollapsed(false)
+            setPetHidden(false)
             requestAnimationFrame(() => go(0))
         }
         const onDynamic = (e) => {
@@ -369,6 +373,7 @@ export default function SiteTour() {
                 setOpen(true)
                 setIdx(0)
                 setCollapsed(false)
+                setPetHidden(false)
                 requestAnimationFrame(() => go(0))
             }
         }
@@ -423,6 +428,7 @@ export default function SiteTour() {
         }
 
         warm(currentNarration)
+        if (effectiveSteps[idx]?.pronunciation) warm(CHINESE_NAME_AUDIO)
         if (nextNarration) {
             if ("requestIdleCallback" in window) {
                 idleHandle = window.requestIdleCallback(() => warm(nextNarration), { timeout: 1800 })
@@ -502,14 +508,14 @@ export default function SiteTour() {
     }, [mapOpen, open])
 
     useEffect(() => {
-        if (!open || !uiReady || typeof window === "undefined") return
+        if (!open || !uiReady || petHidden || typeof window === "undefined") return
 
         const viewportWidth = window.innerWidth
         const viewportHeight = window.innerHeight
         const mobile = viewportWidth < 640
         const petWidth = mobile ? 64 : 88
         const petHeight = mobile ? 82 : 112
-        const margin = mobile ? 12 : 22
+        const margin = mobile ? 20 : 28
         const dialogRect = popRef.current?.getBoundingClientRect()
         const target = anchorRect
             ? {
@@ -593,7 +599,7 @@ export default function SiteTour() {
             window.clearTimeout(petMoveTimerRef.current)
             window.clearInterval(petPatrolTimerRef.current)
         }
-    }, [anchorRect, idx, movePetTo, open, uiReady])
+    }, [anchorRect, idx, movePetTo, open, petHidden, uiReady])
 
     useEffect(() => {
         if (!petDragging || typeof window === "undefined") return
@@ -654,7 +660,8 @@ export default function SiteTour() {
         }
         narrationAudioRef.current?.pause()
         window.speechSynthesis?.cancel()
-        const audio = new Audio("/assets/audio/tour/v1/chinese-name.wav")
+        const audio = new Audio(CHINESE_NAME_AUDIO)
+        audio.preload = "auto"
         narrationAudioRef.current = audio
         let fallbackStarted = false
         const fallback = () => {
@@ -669,6 +676,7 @@ export default function SiteTour() {
         }
         audio.onerror = fallback
         setPetSpeaking(true)
+        audio.load()
         audio.play().catch(fallback)
     }
 
@@ -723,7 +731,7 @@ export default function SiteTour() {
         return {
             width: mobile ? 64 : 88,
             height: mobile ? 82 : 112,
-            margin: mobile ? 12 : 22,
+            margin: mobile ? 20 : 28,
             minY: mobile ? 82 : 96,
         }
     }
@@ -805,37 +813,62 @@ export default function SiteTour() {
                 />
             )}
 
-            <div
+            {!petHidden ? <div
                 className={`st-roaming-pet${petReady ? " is-ready" : ""}${petWalking ? " is-walking" : ""}${petSpeaking ? " is-speaking" : ""}${petDragging ? " is-dragging" : ""}`}
                 style={{
                     transform: petTransform,
                     "--st-pet-facing": petFacing,
                 }}
-                role="button"
-                tabIndex={0}
+                role="group"
                 draggable={false}
                 aria-grabbed={petDragging}
-                aria-label={guideLanguage === "zh" ? "拖动 Mr.Pot，或点击听当前区域讲解" : "Drag Mr.Pot, or click to narrate this section"}
                 onDragStart={(event) => event.preventDefault()}
-                onClick={activatePet}
                 onPointerDown={startPetDrag}
                 onPointerMove={movePetDrag}
                 onPointerUp={stopPetDrag}
                 onPointerCancel={stopPetDrag}
                 onLostPointerCapture={stopPetDrag}
-                onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") speakCurrentStep()
-                }}
             >
+                <button
+                    type="button"
+                    className="st-pet-close"
+                    aria-label={guideLanguage === "zh" ? "关闭 Mr.Pot" : "Close Mr.Pot"}
+                    title={guideLanguage === "zh" ? "关闭 Mr.Pot" : "Close Mr.Pot"}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                        event.stopPropagation()
+                        narrationAudioRef.current?.pause()
+                        narrationAudioRef.current = null
+                        window.speechSynthesis?.cancel()
+                        window.clearInterval(petPatrolTimerRef.current)
+                        setPetSpeaking(false)
+                        setPetWalking(false)
+                        setPetHidden(true)
+                    }}
+                >
+                    <X size={13} aria-hidden="true" />
+                </button>
                 <div className="st-roaming-bubble">
                     <strong>{guideLanguage === "zh" ? "跟我来" : "Follow me"}</strong>
                     <span>{current?.title}</span>
                 </div>
-                <div className="st-roaming-pet-body">
+                <div
+                    className="st-roaming-pet-body"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={guideLanguage === "zh" ? "点击 Mr.Pot 听当前区域讲解" : "Click Mr.Pot to narrate this section"}
+                    onClick={activatePet}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault()
+                            speakCurrentStep()
+                        }
+                    }}
+                >
                     <MrPotRig />
                 </div>
                 <span className="st-roaming-shadow" />
-            </div>
+            </div> : null}
 
             <div
                 ref={popRef}
@@ -853,6 +886,12 @@ export default function SiteTour() {
                             <div className="st-title">{current?.title}</div>
                             {!collapsed ? (
                                 <div className="st-pet-actions">
+                                    {petHidden ? (
+                                        <button type="button" onClick={() => setPetHidden(false)}>
+                                            <Bot size={13} aria-hidden="true" />
+                                            {guideLanguage === "zh" ? "显示 Mr.Pot" : "Show Mr.Pot"}
+                                        </button>
+                                    ) : null}
                                     <button type="button" onClick={speakCurrentStep} aria-pressed={petSpeaking}>
                                         <Volume2 size={13} aria-hidden="true" />
                                         {guideLanguage === "zh"
@@ -1066,6 +1105,56 @@ export default function SiteTour() {
                     width: 88px;
                     height: 112px;
                     filter: drop-shadow(0 8px 9px rgba(15, 23, 42, 0.2));
+                    overflow: visible;
+                }
+
+                .st-pet-close {
+                    position: absolute;
+                    top: 7px;
+                    right: -8px;
+                    z-index: 6;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 23px;
+                    height: 23px;
+                    padding: 0;
+                    border: 1px solid rgba(15, 23, 42, 0.15);
+                    border-radius: 50%;
+                    background: rgba(255, 255, 255, 0.96);
+                    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
+                    color: #334155;
+                    cursor: pointer;
+                    opacity: 0.82;
+                    transform: scale(0.96);
+                    transition: opacity 160ms ease, transform 160ms ease, background 160ms ease;
+                }
+
+                .st-roaming-pet:hover .st-pet-close,
+                .st-roaming-pet:focus-within .st-pet-close,
+                .st-pet-close:focus-visible {
+                    opacity: 1;
+                    transform: scale(1);
+                }
+
+                .st-pet-close:hover {
+                    background: #f8fafc;
+                }
+
+                .st-pet-close::before,
+                .st-pet-close::after {
+                    display: none !important;
+                    content: none !important;
+                }
+
+                body.dark-skin .st-pet-close {
+                    border-color: rgba(255, 255, 255, 0.2);
+                    background: rgba(30, 41, 59, 0.96);
+                    color: #f8fafc;
+                }
+
+                body.dark-skin .st-pet-close:hover {
+                    background: #334155;
                 }
 
                 .st-pet-rig {
@@ -1862,6 +1951,15 @@ export default function SiteTour() {
                     .st-roaming-pet-body {
                         width: 64px;
                         height: 82px;
+                    }
+
+                    .st-pet-close {
+                        top: 4px;
+                        right: -9px;
+                        width: 25px;
+                        height: 25px;
+                        opacity: 1;
+                        transform: scale(1);
                     }
 
                     .st-roaming-bubble {
