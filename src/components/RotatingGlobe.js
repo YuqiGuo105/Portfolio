@@ -6,11 +6,9 @@ import { supabase as supabaseClient } from "../supabase/supabaseClient";
 
 /* ============================================================
    RotatingGlobe
-   ✅ Supabase-focused pins (no extra backend):
-   - Reads from (in order): visitor_pin_cells -> visitor_pins_grid_mv -> visitor_pin_region
-   - Uses current POV to fetch pins for focused area (debounced)
-   - Robust column guessing (lat/lng/cnt/level)
-   - Falls back to `pins` prop if server fetch fails / empty
+   - Primary path: typed Analytics API with viewport-aware LOD.
+   - Legacy Supabase discovery remains only for callers without apiBase.
+   - Falls back to the cached `pins` prop when the API is unavailable.
    ============================================================ */
 
 const DEBUG_PINS = false;
@@ -29,6 +27,22 @@ const normalizeLng = (lng) => {
   while (x > 180) x -= 360;
   while (x < -180) x += 360;
   return x;
+};
+
+const pinIdentity = (pin) => {
+  const lat = Number(pin?.lat ?? pin?.latitude);
+  const lng = normalizeLng(Number(pin?.lng ?? pin?.longitude));
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return `${lat.toFixed(4)}|${lng.toFixed(4)}`;
+};
+
+const mergePinProjections = (baseline, focused) => {
+  const merged = new Map();
+  for (const pin of [...(baseline || []), ...(focused || [])]) {
+    const key = pinIdentity(pin);
+    if (key) merged.set(key, pin);
+  }
+  return Array.from(merged.values());
 };
 
 const pickFiniteNumber = (...vals) => {
@@ -301,6 +315,11 @@ const RotatingGlobe = ({
   const fetchingRef = useRef(false);
   const fetchTimerRef = useRef(null);
   const lastFetchKeyRef = useRef("");
+  const backendAbortRef = useRef(null);
+  const backendRequestIdRef = useRef(0);
+  // The complete city projection for the selected time window. A focused
+  // viewport response refreshes this baseline; it must never replace it.
+  const backendWorldPinsRef = useRef([]);
   // Coarse key of the last focused window we sampled (POV center + zoom
   // bucket). Used to decide when a camera move warrants a re-fetch.
   const lastFocusKeyRef = useRef("");
@@ -324,16 +343,18 @@ const RotatingGlobe = ({
 
   const effectivePins = useMemo(() => {
     const hasSb = !!sb && typeof sb.from === "function";
-    if (!hasSb) return pins;
+    const hasRemoteSource = Boolean(apiBaseClean) || hasSb;
+    if (!hasRemoteSource) return pins;
 
-    // Before the first successful/failed server fetch, show NO pins + loading overlay (prevents wrong init pins)
-    if (!initialServerPinsReady) return serverPins;
+    // Keep the cached bootstrap visible while the first live request wakes a
+    // cold backend. Once ready, the API response becomes authoritative.
+    if (!initialServerPinsReady) return serverPins.length ? serverPins : pins;
 
     // If server fetch fails (RLS/columns/etc.), fall back to client-provided pins
     if (serverPinsError) return pins;
 
     return serverPins && serverPins.length ? serverPins : pins;
-  }, [sb, pins, serverPins, initialServerPinsReady, serverPinsError]);
+  }, [apiBaseClean, sb, pins, serverPins, initialServerPinsReady, serverPinsError]);
 
   const normalizedPins = useMemo(() => {
     const raw = Array.isArray(effectivePins) ? effectivePins : [];
@@ -701,22 +722,33 @@ const RotatingGlobe = ({
   };
 
   // Fetch pins for the currently focused area from the analytics backend
-  // (`/api/public/visits/markers/area`). This is the live path used on every
+  // (`/api/public/visits/markers`). This is the live path used on every
   // zoom / pan once the camera settles: it sends the visible lat/lng window
-  // plus the current zoom bucket (world / continent / local) and the server
-  // returns just the matching aggregated markers. The result replaces
-  // `serverPins`, so `displayPins` re-renders without a full prop reload.
+  // plus a city-only public resolution. Zoom controls the viewport, never
+  // geographic precision: every city remains exactly one aggregate pin.
+  // The result refreshes the focused subset while preserving the complete
+  // city projection loaded for the same time window.
   const fetchAreaPinsFromBackend = async (force = false) => {
     if (!apiBaseClean) return;
-    if (fetchingRef.current && !force) return;
 
     const { lat, lng, altitude } = getCurrentPOV();
-    const level = computeLevelFromAltitude(altitude);
-    const delta = computeDeltaDeg(level);
+    const zoomBucket = computeLevelFromAltitude(altitude);
+    const delta = computeDeltaDeg(zoomBucket);
+    const isWorld = zoomBucket === "world";
 
-    const key = `api|${level}|${Math.round(lat * 10) / 10}|${Math.round(lng * 10) / 10}|${windowParam}`;
+    // The world view is the complete city projection; closer views use a bbox.
+    // Omitting the world bbox also avoids rejecting an all-time
+    // request whose calculated square-degree area exceeds the API guardrail.
+    const key = isWorld
+      ? `api|city|world|${windowParam}`
+      : `api|city|${zoomBucket}|${Math.round(lat * 10) / 10}|${Math.round(lng * 10) / 10}|${windowParam}`;
     if (!force && key === lastFetchKeyRef.current) return;
     lastFetchKeyRef.current = key;
+
+    backendAbortRef.current?.abort();
+    const controller = new AbortController();
+    backendAbortRef.current = controller;
+    const requestId = ++backendRequestIdRef.current;
 
     if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
     loadingDelayRef.current = setTimeout(() => setPinsLoading(true), 120);
@@ -731,54 +763,85 @@ const RotatingGlobe = ({
     // interprets as `lng >= lngMin OR lng <= lngMax`.
     const lngMin = normalizeLng(lng - delta);
     const lngMax = normalizeLng(lng + delta);
-    const limit = level === "world" ? 220 : level === "continent" ? 700 : 1600;
+    const limit = 1600;
 
     const params = new URLSearchParams({
       window: windowParam,
-      latMin: String(latMin),
-      latMax: String(latMax),
-      lngMin: String(lngMin),
-      lngMax: String(lngMax),
-      level,
+      level: "METRO",
       limit: String(limit),
     });
-    const url = `${apiBaseClean}/visits/markers/area?${params.toString()}`;
+    if (!isWorld) {
+      params.set("latMin", String(latMin));
+      params.set("latMax", String(latMax));
+      params.set("lngMin", String(lngMin));
+      params.set("lngMax", String(lngMax));
+    }
+    const url = `${apiBaseClean}/visits/markers?${params.toString()}`;
 
     try {
-      const res = await fetch(url, { headers: { accept: "application/json" } });
-      if (!res.ok) throw new Error(`area markers ${res.status}`);
-      const rows = await res.json();
-      const arr = Array.isArray(rows) ? rows : [];
+      const res = await fetch(url, {
+        headers: { accept: "application/json" },
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`markers ${res.status}`);
+      const body = await res.json();
+      if (requestId !== backendRequestIdRef.current) return;
+      const arr = Array.isArray(body) ? body : Array.isArray(body?.items) ? body.items : [];
 
       // The backend returns {lat, lng, count, name, country, ...} which is
       // the same shape pages/analytics.js already feeds into the `pins`
       // prop, so reuse the same normalization path.
       const nextPins = arr
         .filter((m) => m && m.lat != null && m.lng != null)
-        .map((m) => ({
-          lat: Number(m.lat),
-          lng: Number(m.lng),
-          label: `${m.name || m.country || m.geoAreaId || ""}: ${Number(m.count) || 0}`,
-          weight: 1,
-          count: Number(m.count) || 0,
-        }));
+        .map((m) => {
+          const pageViews = Number(m.pageViews ?? m.count) || 0;
+          const visitorSessions = Number(m.visitorSessions ?? m.estimatedVisitors) || 0;
+          const place = m.name || m.country || m.geoAreaId || "Unknown";
+          const metric = visitorSessions > 0
+            ? `${visitorSessions} visitor sessions · ${pageViews} page views`
+            : `${pageViews} page views`;
+          return {
+            lat: Number(m.lat),
+            lng: Number(m.lng),
+            label: `${place} · ${metric}`,
+            weight: visitorSessions || pageViews || 1,
+            count: visitorSessions || pageViews || 1,
+            geoLevel: m.geoLevel,
+          };
+        });
 
-      log("fetched area pins:", arr.length, "=>", nextPins.length, "level=", level);
-      setServerPins(nextPins);
-    } catch (e) {
-      log("backend area fetch failed:", e?.message || e);
-      setServerPinsError(true);
-      setServerPins([]); // displayPins will fall back to the `pins` prop
-    } finally {
-      fetchingRef.current = false;
-      if (loadingDelayRef.current) {
-        clearTimeout(loadingDelayRef.current);
-        loadingDelayRef.current = null;
+      log("fetched city pins:", arr.length, "=>", nextPins.length, "zoom=", zoomBucket);
+      if (isWorld) {
+        backendWorldPinsRef.current = nextPins;
+        setServerPins(nextPins);
+      } else {
+        setServerPins((current) =>
+          mergePinProjections(
+            backendWorldPinsRef.current.length ? backendWorldPinsRef.current : current,
+            nextPins
+          )
+        );
       }
-      setPinsLoading(false);
-      if (!initialFetchDoneRef.current) {
-        initialFetchDoneRef.current = true;
-        setInitialServerPinsReady(true);
+    } catch (e) {
+      if (e?.name === "AbortError") return;
+      if (requestId !== backendRequestIdRef.current) return;
+      log("backend area fetch failed:", e?.message || e);
+      // A transient viewport failure must not blank the globe. Preserve the
+      // last confirmed projection and use caller-provided pins only when the
+      // backend has never produced a usable baseline.
+      setServerPinsError(backendWorldPinsRef.current.length === 0);
+    } finally {
+      if (requestId === backendRequestIdRef.current) {
+        fetchingRef.current = false;
+        if (loadingDelayRef.current) {
+          clearTimeout(loadingDelayRef.current);
+          loadingDelayRef.current = null;
+        }
+        setPinsLoading(false);
+        if (!initialFetchDoneRef.current) {
+          initialFetchDoneRef.current = true;
+          setInitialServerPinsReady(true);
+        }
       }
     }
   };
@@ -787,6 +850,25 @@ const RotatingGlobe = ({
   useEffect(() => {
     let mounted = true;
     (async () => {
+      if (apiBaseClean) {
+        backendWorldPinsRef.current = [];
+        let tries = 0;
+        const tick = () => {
+          if (!mounted) return;
+          const g = globeRef.current;
+          if (g && typeof g.pointOfView === "function") {
+            pinModeRef.current = "bootstrap";
+            setPinMode("bootstrap");
+            didAutoFocusRef.current = true;
+            fetchAreaPinsFromBackend(true);
+            return;
+          }
+          if (tries++ < 30) setTimeout(tick, 50);
+          else fetchAreaPinsFromBackend(true);
+        };
+        tick();
+        return;
+      }
       if (!sb) return;
       await discoverPinSource();
       if (!mounted) return;
@@ -813,9 +895,10 @@ const RotatingGlobe = ({
       mounted = false;
       if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
       if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
+      backendAbortRef.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sb]);
+  }, [apiBaseClean, sb, windowParam]);
 
   /* ------------------ layout / controls ------------------ */
 
@@ -1096,7 +1179,6 @@ const RotatingGlobe = ({
         if (pinModeRef.current !== "focused") {
           pinModeRef.current = "focused";
           setPinMode("focused");
-          setServerPins([]);
         }
         scheduleFetchPins(false);
       }
@@ -1145,16 +1227,10 @@ const RotatingGlobe = ({
       }
     } catch {}
 
-    // initial sample
+    // Initial sampling is separate from data loading. The source-discovery
+    // effect owns the first fetch so startup cannot launch competing requests.
     setTimeout(() => {
       sampleCameraToRefs(true);
-
-      if (pinModeRef.current !== "focused") {
-        pinModeRef.current = "focused";
-        setPinMode("focused");
-        setServerPins([]);
-      }
-      scheduleFetchPins(true);
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
         setStableZoomT(liveZoomRef.current);
@@ -1166,7 +1242,7 @@ const RotatingGlobe = ({
 
   // Enable auto-rotate once after initial server fetch (keeps init stable)
   useEffect(() => {
-    if (!sb) return;
+    if (!apiBaseClean && !sb) return;
     if (!initialFetchDoneRef.current) return;
     if (userInteractedRef.current) return;
 
@@ -1176,7 +1252,7 @@ const RotatingGlobe = ({
 
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.55;
-  }, [serverPins, sb]);
+  }, [serverPins, sb, apiBaseClean]);
   // Stop auto-rotate once user interacts, and continuously sample the camera
   // so BOTH zoom (wheel / pinch) and pan (drag / rotate) re-fetch focused
   // pins. react-globe.gl creates the OrbitControls instance asynchronously, so
@@ -1262,13 +1338,14 @@ const RotatingGlobe = ({
       clearInactivityTimer();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sb]);
+  }, [sb, apiBaseClean]);
 
   // Auto-focus once when pins arrive (prevents "pins on back side" == looks empty)
   useEffect(() => {
     const g = globeRef.current;
     if (!g) return;
     if (!normalizedPins.length) return;
+    if (apiBaseClean) return; // API bootstrap intentionally keeps the world view.
     if (sb && !serverPins.length) return; // wait for server pins to avoid wrong init jump
     if (userInteractedRef.current) return;
     if (didAutoFocusRef.current) return;
@@ -1287,6 +1364,19 @@ const RotatingGlobe = ({
   }, [pinsSig]);
 
   const displayPins = useMemo(() => {
+    const usingBackendProjection = Boolean(
+      apiBaseClean && initialServerPinsReady && !serverPinsError && serverPins.length
+    );
+    if (usingBackendProjection) {
+      // The API already selected COUNTRY / REGION / METRO for this zoom.
+      // Do not merge those semantic areas again in the browser: doing so hid
+      // valid countries at world view and made zoom-level counts unstable.
+      return normalizedPins
+        .slice()
+        .sort((a, b) => (b.count || 0) - (a.count || 0))
+        .map((pin) => ({ ...pin, weight: pin.count || 1 }));
+    }
+
     // Server-aggregated pins are already one-row-per-geo_area_id, but that
     // is a *categorical* dedup — the metro of SF has one row for SF, one
     // for Oakland, one for San Jose, one for Palo Alto, etc. Their
@@ -1330,7 +1420,7 @@ const RotatingGlobe = ({
       label: c.label || "Unknown",
       weight: 1,
     }));
-  }, [normalizedPins, stableZoomT, serverPins]);
+  }, [apiBaseClean, normalizedPins, stableZoomT, serverPins, initialServerPinsReady, serverPinsError]);
 
   // HTML marker element (kept lightweight).
   //
@@ -1363,12 +1453,11 @@ const RotatingGlobe = ({
   const htmlElement = (d) => {
     const lat = Number(d?.lat);
     const lng = Number(d?.lng);
-    const key = `${lat.toFixed(4)}|${lng.toFixed(4)}`;
+    const label = String(d?.label || "Unknown");
+    const key = `${lat.toFixed(4)}|${lng.toFixed(4)}|${label}`;
 
     const cached = elCacheRef.current.get(key);
     if (cached) return cached;
-
-    const label = String(d?.label || "Unknown");
 
     // Outer wrapper: CSS2DRenderer centres THIS on the coord. Give it a
     // zero footprint so it acts purely as the anchor point; the visible
@@ -1422,7 +1511,9 @@ const RotatingGlobe = ({
 
   // prevent cache growing forever
   useEffect(() => {
-    const keep = new Set(displayPins.map((p) => `${p.lat.toFixed(4)}|${p.lng.toFixed(4)}`));
+    const keep = new Set(displayPins.map((p) =>
+      `${p.lat.toFixed(4)}|${p.lng.toFixed(4)}|${String(p.label || "Unknown")}`
+    ));
     const map = elCacheRef.current;
     if (map.size > 1400) {
       for (const k of map.keys()) {
@@ -1436,6 +1527,7 @@ const RotatingGlobe = ({
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
       if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
+      backendAbortRef.current?.abort();
     };
   }, []);
 
