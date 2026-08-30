@@ -2,7 +2,6 @@ import Isotope from "isotope-layout";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import ProjectSystemCover, { supportsSystemCover } from "./projects/ProjectSystemCover";
-import OpenSourceContributionCover from "./projects/OpenSourceContributionCover";
 import { supabase } from "../supabase/supabaseClient";
 
 const BASE_FILTERS = [
@@ -150,8 +149,6 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
                   <div className="proj-card-image">
                     {hasSystemCover ? (
                       <ProjectSystemCover system={projectSystem} />
-                    ) : project.cover_variant === "OPEN_SOURCE_CONTRIBUTION" ? (
-                      <OpenSourceContributionCover />
                     ) : (
                       <img src={project.image_url} alt={project.title} />
                     )}
