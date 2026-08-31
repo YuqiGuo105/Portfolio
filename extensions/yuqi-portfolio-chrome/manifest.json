@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Yuqi Portfolio Companion",
+  "version": "0.1.0",
+  "description": "A secure side panel for Yuqi's portfolio, admin console, visitor rules, and future MCP operations.",
+  "permissions": [
+    "activeTab",
+    "sidePanel",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.yuqi.site/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Open Yuqi Portfolio Companion"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

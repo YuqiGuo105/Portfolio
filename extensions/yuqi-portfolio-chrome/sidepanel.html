@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Yuqi Portfolio Companion</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">Y</div>
+      <div>
+        <p class="eyebrow">YUQI.SITE</p>
+        <h1>Portfolio Companion</h1>
+      </div>
+      <span class="status" title="The extension only connects to yuqi.site">FIRST PARTY</span>
+    </header>
+
+    <main>
+      <section class="context-panel" aria-labelledby="context-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">ACTIVE CONTEXT</p>
+            <h2 id="context-title">Current page</h2>
+          </div>
+          <button id="refresh-context" class="icon-button" type="button" title="Refresh page context" aria-label="Refresh page context">↻</button>
+        </div>
+        <p id="page-title" class="page-title">Loading current tab...</p>
+        <p id="page-url" class="page-url"></p>
+        <p id="page-description" class="page-description"></p>
+        <div id="selection-block" class="selection-block" hidden>
+          <p class="eyebrow">SELECTED TEXT</p>
+          <blockquote id="page-selection"></blockquote>
+        </div>
+      </section>
+
+      <section aria-labelledby="actions-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">QUICK ACTIONS</p>
+            <h2 id="actions-title">Open a workspace</h2>
+          </div>
+        </div>
+        <div class="action-grid">
+          <button type="button" data-route="portfolio"><strong>Portfolio</strong><span>Public experience</span></button>
+          <button type="button" data-route="admin"><strong>Admin</strong><span>Protected console</span></button>
+          <button type="button" data-route="visitorRules"><strong>Visitor rules</strong><span>Rules and incidents</span></button>
+          <button type="button" data-route="mcpOperations"><strong>MCP operations</strong><span>Confirmed tools</span></button>
+        </div>
+      </section>
+
+      <section class="security-panel" aria-labelledby="security-title">
+        <p class="eyebrow">SECURITY BOUNDARY</p>
+        <h2 id="security-title">Server-owned authorization</h2>
+        <ul>
+          <li>No admin secret or service-role key is stored in the extension.</li>
+          <li>Admin routes reuse the portfolio login and server-side role checks.</li>
+          <li>Future MCP writes remain previewed, confirmed, and idempotent.</li>
+        </ul>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>
