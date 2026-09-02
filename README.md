@@ -8,13 +8,9 @@ A modern Next.js portfolio application for showcasing projects, blogs, CV, visit
 
 ## Architecture
 
-<a href="https://www.yuqi.site/architecture" title="Open the interactive architecture viewer">
+<p align="center">
   <img src="docs/architecture/platform-system-flow.svg" alt="Portfolio microservice platform architecture" width="100%" />
-</a>
-
-**[Open the interactive architecture viewer →](https://www.yuqi.site/architecture)**
-
-Zoom from 50% to 250%, fit the complete topology, or open the source SVG for lossless inspection.
+</p>
 
 > **Maintain this diagram:** edit [`docs/architecture/platform-system-flow.json`](docs/architecture/platform-system-flow.json), then run `node scripts/render-architecture-diagram.mjs docs/architecture/platform-system-flow.json`.
 
@@ -22,30 +18,47 @@ Zoom from 50% to 250%, fit the complete topology, or open the source SVG for los
 
 ## Admin / MCP Operations
 
-The admin page is the protected operator surface for the portfolio platform. It
-centralizes content management, subscriber and notification views, visitor logs,
-agent conversations, cost guardrails, and MCP-style operations behind Supabase
-authentication and an allow-listed admin identity.
+Sign in to the protected admin console, enter a platform command, review the
+proposed action, and confirm it. Read operations run immediately; write
+operations require explicit approval.
 
-The operate console lets an admin issue natural-language platform commands.
-Read-only requests can run immediately; write operations such as publish,
-reindex, retry, alert policy changes, and send-test flows are staged first as a
-confirmation-required action before the backend tool executes.
+<p align="center">
+  <img src="docs/readme-assets/admin-mcp-operate-console.png" alt="Admin MCP operate console" width="760" />
+</p>
 
-<img src="docs/readme-assets/admin-mcp-operate-console.png" alt="Admin MCP operate console" width="900" />
+### Connect from Codex
 
-Visitor alert policies are versioned and evaluated against deduplicated time-window
-rollups. A triggered rule creates an idempotent alert intent, publishes it through
-Kafka, and hands it to the notification service for recipient fan-out. The email
-worker claims each recipient with a delivery lease, records attempts in the
-delivery ledger, and retries transient provider failures without duplicating a
-successful send.
+Open **+ → Plugins**, select **Yuqi Portfolio**, and ask Codex to use its tools.
+For direct MCP setup:
 
-The screenshot below is a real administrator alert from the production path:
-`visitor event → session/rollup aggregation → rule evaluation → alert dispatch →
-notification lease/retry → Gmail delivery`.
+```sh
+codex mcp add yuqi-portfolio --url https://www.yuqi.site/mcp
+codex mcp add yuqi-portfolio-admin --url https://www.yuqi.site/mcp/admin
+```
 
-<img src="docs/readme-assets/admin-visitor-alert-email.png" alt="Admin visitor alert email" width="900" />
+Complete sign-in when prompted for admin tools. Write operations still require
+explicit confirmation.
+
+<p align="center">
+  <img src="docs/readme-assets/codex-yuqi-portfolio-plugin.png" alt="Yuqi Portfolio plugin available in Codex" width="680" />
+</p>
+
+---
+
+## Chrome Extension: Application Copilot
+
+Application Copilot is a Chrome Manifest V3 extension that runs directly on job
+application pages. Select **Auto-fill Application**, review the resolved fields,
+and apply the approved values. Resume attachment is automatic; final submission
+remains manual.
+
+<p align="center">
+  <a href="https://github.com/YuqiGuo105/portfolio-application-copilot">
+    <img src="docs/readme-assets/application-copilot-autofill.png" alt="Portfolio Application Copilot reviewing an autofilled job application" width="820" />
+  </a>
+</p>
+
+**[View the Chrome extension repository →](https://github.com/YuqiGuo105/portfolio-application-copilot)**
 
 ---
 
@@ -59,6 +72,7 @@ notification lease/retry → Gmail delivery`.
 | **portfolio-admin-service**        | [YuqiGuo105/portfolio-admin-service](https://github.com/YuqiGuo105/portfolio-admin-service)               | Content CRUD, optimistic concurrency, transactional outbox, Kafka publishing, OpenSearch indexer, RAG indexer |
 | **portfolio-notification-service** | [YuqiGuo105/portfolio-notification-service](https://github.com/YuqiGuo105/portfolio-notification-service) | Subscription APIs, notification dispatch, email sender worker, retry handling, delivery tracking              |
 | **portfolio-analytics-platform**   | [YuqiGuo105/portfolio-analytics-platform](https://github.com/YuqiGuo105/portfolio-analytics-platform)     | Spring Boot Kafka batch consumer, UA/IP/geo enrichment, Valkey dedup, pre-aggregated 5m + 1d rollups, public visits API, alerts service |
+| **portfolio-application-copilot**  | [YuqiGuo105/portfolio-application-copilot](https://github.com/YuqiGuo105/portfolio-application-copilot)   | Chrome MV3 assisted application UI, MCP career workflow, encrypted application memory, and private resume vault |
 
 ---
 
@@ -67,6 +81,7 @@ notification lease/retry → Gmail delivery`.
 * **Modern portfolio frontend** built with Next.js, including projects, blogs, CV, parallax project detail pages, and guided navigation.
 * **AI chat assistant** with RAG retrieval, multi-round reasoning, intent classification, and MCP tool execution.
 * **Public MCP integration** that gives ChatGPT, Claude, GitHub Copilot, Cursor, and other MCP clients read-only access to projects, articles, stored architecture diagrams, and public profile data.
+* **Application Copilot** that combines an authenticated Chrome extension, MCP workflow, deterministic field resolution, private resume assets, and explicit review before any sensitive field is applied.
 * **Admin dashboard** for managing blogs, projects, life posts, and portfolio content.
 * **Kafka-driven content pipeline** that publishes content change events to search, RAG, and notification consumers.
 * **Professional search stack** using OpenSearch for indexed portfolio search and ranking.
