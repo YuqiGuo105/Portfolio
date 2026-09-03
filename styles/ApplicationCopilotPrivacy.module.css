@@ -1,0 +1,95 @@
+.page {
+  min-height: 100vh;
+  background: #f7f9f9;
+  color: #17242c;
+  font-family: Inter, Arial, sans-serif;
+}
+
+.header,
+.policy {
+  width: min(820px, calc(100% - 40px));
+  margin: 0 auto;
+}
+
+.header {
+  padding: 56px 0 32px;
+}
+
+.brand {
+  display: inline-block;
+  margin-bottom: 44px;
+  color: #0f766e;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 12px;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.header h1 {
+  margin: 0;
+  color: #142c3a;
+  font-size: clamp(38px, 6vw, 64px);
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+.header p {
+  margin: 20px 0 0;
+  color: #52626c;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.policy {
+  padding: 8px 0 72px;
+}
+
+.policy p,
+.policy li {
+  color: #485b65;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.policy h2 {
+  margin: 38px 0 20px;
+  color: #183847;
+  font-size: 25px;
+  letter-spacing: 0;
+}
+
+.policy li + li {
+  margin-top: 9px;
+}
+
+.policy a {
+  color: #0f766e;
+}
+
+@media (max-width: 760px) {
+  .header,
+  .policy {
+    width: min(100% - 28px, 820px);
+  }
+
+  .header {
+    padding-top: 32px;
+  }
+
+  .brand {
+    margin-bottom: 32px;
+  }
+
+  .header p {
+    font-size: 16px;
+  }
+}
