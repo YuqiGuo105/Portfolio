@@ -53,12 +53,13 @@ and apply the approved values. Resume attachment is automatic; final submission
 remains manual.
 
 <p align="center">
-  <a href="https://github.com/YuqiGuo105/portfolio-application-copilot">
+  <a href="https://chromewebstore.google.com/detail/yuqi-application-copilot/kgebalpnomjfemfeeiaphpaomkkccebd">
     <img src="docs/readme-assets/application-copilot-autofill.png" alt="Portfolio Application Copilot reviewing an autofilled job application" width="820" />
   </a>
 </p>
 
-**[View the Chrome extension repository →](https://github.com/YuqiGuo105/portfolio-application-copilot)**
+**[Install Application Copilot from the Chrome Web Store →](https://chromewebstore.google.com/detail/yuqi-application-copilot/kgebalpnomjfemfeeiaphpaomkkccebd)**
+[View source code](https://github.com/YuqiGuo105/portfolio-application-copilot)
 
 ---
 
