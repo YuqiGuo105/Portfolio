@@ -22,8 +22,10 @@ try {
   await input.fill('What verification label appears in the attached PDF? Reply with the exact label.');
   const grantResponse = page.waitForResponse(r => r.url().includes('/attachments/upload-url') && r.request().method() === 'POST');
   const uploadResponse = page.waitForResponse(r => r.url().includes('/content?') && r.request().method() === 'PUT');
+  uploadResponse.catch(() => {});
   await page.locator('#__chat_widget_root input[type=file]').setInputFiles({ name: 'synthetic-verification.pdf', mimeType: 'application/pdf', buffer: pdf });
   const permission = await grantResponse;
+  assert.equal(permission.status(), 201, 'Upload grant failed');
   grant = await permission.json();
   sessionId = permission.request().postDataJSON().sessionId;
   deviceId = permission.request().headers()['x-cw-device-id'];

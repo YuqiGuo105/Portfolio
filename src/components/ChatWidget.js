@@ -4029,7 +4029,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         {voiceOpen && <VoiceInput onClose={() => setVoiceOpen(false)} onInsert={text => {
           setInput(previous => previous.trimEnd() + (previous.trim() ? " " : "") + text)
           touchSession()
-          textareaRef.current?.focus()
+          requestAnimationFrame(() => textareaRef.current?.focus())
         }} />}
         {composerFiles.length > 0 ? (
           <div className="cw-tray">
@@ -4051,7 +4051,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
 
         <div
           style={{
-            display: "flex",
+            display: voiceOpen ? "none" : "flex",
             alignItems: "flex-end",
             gap: "12px",
             minHeight: "50px",
@@ -4139,7 +4139,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
             }}
           />
 
-          <button type="button" aria-label="Voice input" title="Voice input" aria-expanded={voiceOpen}
+          <button type="button" aria-label="Voice input" title="Dictate a message. Your browser's speech provider may process audio; this site does not store recordings." aria-expanded={voiceOpen}
             disabled={loading} onClick={() => setVoiceOpen(value => !value)}
             style={{ display: "grid", placeItems: "center", flex: "0 0 36px", width: 36, height: 40, padding: 0, border: "1px solid var(--cw-input-border)", borderRadius: 8, color: "var(--cw-input-text)", background: "var(--cw-input-bg)" }}>
             <Mic size={18} />
