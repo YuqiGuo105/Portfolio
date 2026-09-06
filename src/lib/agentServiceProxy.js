@@ -151,7 +151,7 @@ export async function requireAdminUser(req, res) {
  * Forward a JSON request to the agent service. Used for sync endpoints like
  * /api/intent and /api/intent/confirm.
  */
-export async function forwardJson(req, res, { path, method = "POST", auth }) {
+export async function forwardJson(req, res, { path, method = "POST", auth, timeoutMs }) {
   const base = getAgentBase();
   if (!base) {
     res.status(500).json({
@@ -191,7 +191,7 @@ export async function forwardJson(req, res, { path, method = "POST", auth }) {
 
   let upstream;
   try {
-    upstream = await fetch(`${base}${path}`, { method, headers, body });
+    upstream = await fetch(`${base}${path}`, { method, headers, body, signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined });
   } catch (err) {
     res.status(502).json({ error: "upstream_unreachable", message: err.message });
     return;

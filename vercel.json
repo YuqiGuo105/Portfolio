@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "pages/api/rag/transcribe.js": { "maxDuration": 60 }
+  },
   "rewrites": [
     {
       "source": "/.well-known/oauth-protected-resource",

@@ -4139,7 +4139,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
             }}
           />
 
-          <button type="button" aria-label="Voice input" title="Dictate a message. Your browser's speech provider may process audio; this site does not store recordings." aria-expanded={voiceOpen}
+          <button type="button" aria-label="Voice input" title="Dictate in any language. Audio is sent to Google Gemini for transcription; this site does not save recordings." aria-expanded={voiceOpen}
             disabled={loading} onClick={() => setVoiceOpen(value => !value)}
             style={{ display: "grid", placeItems: "center", flex: "0 0 36px", width: 36, height: 40, padding: 0, border: "1px solid var(--cw-input-border)", borderRadius: 8, color: "var(--cw-input-text)", background: "var(--cw-input-bg)" }}>
             <Mic size={18} />
