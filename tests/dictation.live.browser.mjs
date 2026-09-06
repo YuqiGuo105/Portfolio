@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 
 assert.equal(process.env.RUN_LIVE_DICTATION_TEST, '1', 'Explicit opt-in required: this test calls the real transcription provider.');
 const base = process.env.CHAT_TEST_URL || 'http://127.0.0.1:3062';
-for (const [name, pattern] of [['zh', /系统架构/], ['en', /duplicate messages/i]]) {
+// Accept either Chinese script while checking that the complete phrase survives.
+for (const [name, pattern] of [['zh', /系统架构|系統架構/], ['en', /duplicate messages/i]]) {
   const response = await fetch(`${base}/api/rag/transcribe`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept-Language': name === 'zh' ? 'en-US' : 'zh-CN' },
     body: JSON.stringify({audio: (await readFile(`/private/tmp/dictation-${name}.wav`)).toString('base64')}),
@@ -33,10 +34,10 @@ try {
   await page.getByRole('button', {name: 'Finish recording', exact: true}).click();
   await input.waitFor({state: 'visible'});
   const transcript = await input.inputValue();
+  await page.screenshot({path: '/private/tmp/multilingual-dictation-live.png'});
   assert.match(transcript, /^Draft:/);
-  assert.match(transcript, /你好|请解释/);
+  assert.match(transcript, /你好|请解释|請解釋/);
   assert.match(transcript, /Redis/i);
   assert.match(transcript, /Java/i);
-  await page.screenshot({path: '/private/tmp/multilingual-dictation-live.png'});
   console.log(JSON.stringify({language: 'mixed', transcript, realMediaRecorder: true, realProvider: true, syntheticMicrophone: true}));
 } finally { await browser.close(); }
