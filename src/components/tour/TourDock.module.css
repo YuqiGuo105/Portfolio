@@ -131,5 +131,5 @@
     .map ol { grid-template-columns: 1fr; }
 }
 @media (max-width: 380px) { .chapterNumber { display: none; } .dock { padding: 0 12px; } .footer { gap: 4px; } .playback { gap: 2px; } .navigation { gap: 2px; } .dock .narration { width: 40px; height: 40px; justify-content: center; } .narration span { display: none; } .dock .next { padding: 0 10px; gap: 7px; } }
-@media (max-height: 550px) { .main { padding: 8px 0; } .copy p, .storyActions, .discovery { display: none; } .chapterNumber { font-size: 32px; } .main { grid-template-columns: 1fr; } }
+@media (max-height: 550px) { .topline { min-height: 36px; } .main { padding: 6px 0; grid-template-columns: 1fr; } .copy p, .storyActions, .discovery, .chapterLabel { display: none; } .chapterNumber { font-size: 26px; } .dock .copy h2 { font-size: 22px; margin: 0; } .footer { min-height: 42px; } .dock .iconButton { width: 34px; height: 34px; } .dock .next { min-height: 34px; } }
 @media (prefers-reduced-motion: reduce) { .dock, .story, .map, .moving, .speaking svg, .selectedWork, .question, .rail button[aria-current] .timed { animation: none; } .rail span, .coverLink img { transition: none; } }
