@@ -8,6 +8,8 @@ import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path
 import { useRouter } from "next/router"
 import LogInDialog from "../components/LogInDialog"
 import AnswerSources from "./AnswerSources"
+import VoiceInput from "./VoiceInput"
+import { Mic, Plus } from "lucide-react"
 import { mergeEvidence } from "../lib/chatEvidence.mjs"
 import { applyWebGuidePlan, normalizeWebGuidePlan } from "../lib/webGuide"
 
@@ -2180,7 +2182,7 @@ function prettyStorageError(err) {
 }
 
 async function requestAttachmentUpload({ ragBase, sessionId, deviceId, file }) {
-  const response = await fetch(ragAttachmentUrl(ragBase, "upload-url"), {
+  const response = await fetchWithTimeout(ragAttachmentUrl(ragBase, "upload-url"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -2193,16 +2195,21 @@ async function requestAttachmentUpload({ ragBase, sessionId, deviceId, file }) {
       sizeBytes: file.size,
     }),
     mode: "cors",
-  })
+  }, 30000)
   const body = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(body.error || `Upload grant failed (${response.status})`)
-  return body
+  if (!body.attachmentId || !body.uploadUrl) throw new Error("Upload service returned an invalid permission.")
+  const uploadUrl = new URL(body.uploadUrl, window.location.origin)
+  if (!["https:", "http:"].includes(uploadUrl.protocol) || uploadUrl.username || uploadUrl.password) throw new Error("Invalid upload address.")
+  if (window.location.protocol === "https:" && uploadUrl.protocol === "http:") uploadUrl.protocol = "https:"
+  return { ...body, uploadUrl: uploadUrl.toString() }
 }
 
 function uploadToAgentWithProgress({ uploadUrl, file, onProgress }) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open("PUT", uploadUrl, true)
+    xhr.timeout = 60000
     xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream")
 
     xhr.upload.onprogress = (e) => {
@@ -2216,13 +2223,15 @@ function uploadToAgentWithProgress({ uploadUrl, file, onProgress }) {
       else reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText || ""}`))
     }
     xhr.onerror = () => reject(new Error("Upload failed (network error)"))
+    xhr.ontimeout = () => reject(new Error("Upload timed out. Please try again."))
+    xhr.onabort = () => reject(new Error("Upload cancelled."))
     xhr.send(file)
   })
 }
 
 async function endAttachmentConversation({ ragBase, sessionId, deviceId }) {
   if (!ragBase || !sessionId) return
-  await fetch(ragAttachmentUrl(ragBase, "conversation/end"), {
+  const response = await fetch(ragAttachmentUrl(ragBase, "conversation/end"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -2232,6 +2241,14 @@ async function endAttachmentConversation({ ragBase, sessionId, deviceId }) {
     mode: "cors",
     keepalive: true,
   })
+  if (!response.ok) throw new Error(`Attachment cleanup failed (${response.status})`)
+}
+
+async function deleteChatAttachment({ ragBase, sessionId, deviceId, attachmentId }) {
+  const url = new URL(ragAttachmentUrl(ragBase, encodeURIComponent(attachmentId)), window.location.origin)
+  url.searchParams.set("sessionId", sessionId)
+  const response = await fetch(url, { method: "DELETE", headers: { "X-CW-Device-Id": deviceId }, keepalive: true })
+  if (!response.ok) throw new Error(`Attachment deletion pending (${response.status})`)
 }
 
 /* ---------- Attachment UI (CSS only) ---------- */
@@ -2313,6 +2330,18 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   }, [guideQuestion])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(false)
+  const pendingUploadsRef = useRef(new Map())
+
+  useEffect(() => {
+    const pending = pendingUploadsRef.current
+    return () => {
+      for (const entry of pending.values()) {
+        entry.discarded = true
+        entry.done?.finally(() => entry.cleanup?.()).catch(() => {})
+      }
+    }
+  }, [])
   const [endpoint, setEndpoint] = useState("")
   const [errorToast, setErrorToast] = useState("")
   const MODE_KEY = "cw:mode"
@@ -2388,6 +2417,12 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
     }
 
     const endingSessionId = sessionId
+    setVoiceOpen(false)
+    for (const entry of pendingUploadsRef.current.values()) {
+      entry.discarded = true
+      entry.done?.finally(() => entry.cleanup?.()).catch(() => {})
+    }
+    pendingUploadsRef.current.clear()
     const ragBase = ragEndpointRef.current || endpoint || "/api/rag"
     endAttachmentConversation({
       ragBase,
@@ -2675,7 +2710,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
     setUploading(true)
 
     await Promise.all(
-      newItems.map(async (item) => {
+      newItems.map((item) => {
+        const entry = { discarded: false }
+        pendingUploadsRef.current.set(item.id, entry)
+        entry.done = (async () => {
         try {
           const ragBase = ragEndpointRef.current || (await resolveRagEndpoint())
           const grant = await requestAttachmentUpload({
@@ -2684,6 +2722,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
             deviceId: chatDeviceId,
             file: item.file,
           })
+          entry.cleanup = () => deleteChatAttachment({ ragBase, sessionId, deviceId: chatDeviceId, attachmentId: grant.attachmentId })
+          if (entry.discarded) { await entry.cleanup(); return }
           setComposerFiles((prev) =>
             prev.map((x) =>
               x.id === item.id
@@ -2702,10 +2742,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
             prev.map((x) => (x.id === item.id ? { ...x, status: "ready", progress: 100 } : x)),
           )
         } catch (e) {
+          await entry.cleanup?.().catch(() => {})
           logger.error("Upload failed", e)
           setComposerFiles((prev) => prev.map((x) => (x.id === item.id ? { ...x, status: "error" } : x)))
           setErrorToast(prettyStorageError(e))
         }
+        })()
+        return entry.done
       }),
     )
 
@@ -2715,6 +2758,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   const removeComposerFile = async (id) => {
     const item = composerFiles.find((file) => file.id === id)
     setComposerFiles((prev) => prev.filter((x) => x.id !== id))
+    const entry = pendingUploadsRef.current.get(id)
+    pendingUploadsRef.current.delete(id)
+    if (entry) {
+      entry.discarded = true
+      try { await entry.done; await entry.cleanup?.() } catch { setErrorToast("File cleanup is pending a server retry.") }
+      return
+    }
     if (!item?.attachmentId) return
     try {
       const ragBase = ragEndpointRef.current || (await resolveRagEndpoint())
@@ -2723,11 +2773,12 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         window.location.origin,
       )
       deleteUrl.searchParams.set("sessionId", sessionId)
-      await fetch(deleteUrl.toString(), {
+      const response = await fetch(deleteUrl.toString(), {
         method: "DELETE",
         headers: { "X-CW-Device-Id": chatDeviceId },
         mode: "cors",
       })
+      if (!response.ok) throw new Error(`Attachment cleanup failed (${response.status})`)
     } catch (err) {
       logger.warn("Attachment cleanup request failed", err)
     }
@@ -3566,6 +3617,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       setErrorToast("Wait for uploads to finish.")
       return
     }
+    if (composerFiles.some(file => file.status === "error")) {
+      setErrorToast("Remove the failed upload and add it again before sending.")
+      return
+    }
     const readyFiles = composerFiles
       .filter((f) => f.status === "ready" && f.attachmentId)
       .map((f) => ({
@@ -3580,6 +3635,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       const { data: { session } } = await supabase.auth.getSession()
       const authedEmail = session?.user?.email
       if (!authedEmail || authedEmail.toLowerCase() !== BLOG_OWNER_EMAIL) {
+        for (const file of composerFiles) void removeComposerFile(file.id)
         setMessages((prev) => [
           ...prev,
           { id: generateUUID(), role: "user", content: visibleText, attachments: [] },
@@ -3605,6 +3661,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
     }
 
     setLoading(true)
+    setVoiceOpen(false)
+    for (const file of composerFiles) pendingUploadsRef.current.delete(file.id)
 
     setMessages((prev) => [...prev, { id: generateUUID(), role: "user", content: visibleText, attachments: readyFiles }])
     setInput("")
@@ -3725,6 +3783,12 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         )
       }
       setLoading(false)
+    } finally {
+      const ragBase = ragEndpointRef.current || endpoint || "/api/rag"
+      for (const file of readyFiles) {
+        deleteChatAttachment({ ragBase, sessionId, deviceId: chatDeviceId, attachmentId: file.id })
+          .catch(() => logger.warn("Attachment deletion queued for server cleanup"))
+      }
     }
   }
 
@@ -3962,6 +4026,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           color: "var(--cw-input-text)",
         }}
       >
+        {voiceOpen && <VoiceInput onClose={() => setVoiceOpen(false)} onInsert={text => {
+          setInput(previous => previous.trimEnd() + (previous.trim() ? " " : "") + text)
+          touchSession()
+          textareaRef.current?.focus()
+        }} />}
         {composerFiles.length > 0 ? (
           <div className="cw-tray">
             {composerFiles.map((f) =>
@@ -4026,7 +4095,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
             {uploading ? (
               <Loader2 style={{ width: "18px", height: "18px", color: "white" }} className="animate-spin" />
             ) : (
-              <span style={{ fontSize: "22px", lineHeight: 1, color: "white", fontWeight: 300 }}>+</span>
+              <Plus size={22} />
             )}
           </button>
 
@@ -4070,6 +4139,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
             }}
           />
 
+          <button type="button" aria-label="Voice input" title="Voice input" aria-expanded={voiceOpen}
+            disabled={loading} onClick={() => setVoiceOpen(value => !value)}
+            style={{ display: "grid", placeItems: "center", flex: "0 0 36px", width: 36, height: 40, padding: 0, border: "1px solid var(--cw-input-border)", borderRadius: 8, color: "var(--cw-input-text)", background: "var(--cw-input-bg)" }}>
+            <Mic size={18} />
+          </button>
           {/* Stop / Send button */}
           {loading ? (
             <button
