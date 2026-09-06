@@ -11,12 +11,8 @@ import AnswerSources from "./AnswerSources"
 import { mergeEvidence } from "../lib/chatEvidence.mjs"
 import { applyWebGuidePlan, normalizeWebGuidePlan } from "../lib/webGuide"
 
-// Markdown + code highlight + LaTeX math rendering (ChatGPT-like)
-// Math rendering uses MathJax v3 (loaded from CDN) so you do NOT need KaTeX.
-// For syntax highlighting styles, import a highlight.js theme globally (optional).
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
-import rehypeHighlight from "rehype-highlight"
+import dynamic from "next/dynamic"
+const ChatMarkdown = dynamic(() => import("./ChatMarkdown.mjs"))
 /* ============================================================
    ChatWidget — POST SSE for /api/rag/answer/stream
    + Attachments (2 max, progress bar, chips in msg)
@@ -646,411 +642,8 @@ function safeShort(s, max) {
 
 
 
-// ---------- MathJax v3 loader (CDN) ----------
-// We load MathJax dynamically so LaTeX delimiters like \( ... \), \[ ... \], $$...$$ render like ChatGPT.
-// This avoids KaTeX auto-render bundling/CSS issues in some Next.js setups.
-let __mathjaxPromise = null
-
-function ensureMathJaxLoaded() {
-  if (typeof window === "undefined") return Promise.resolve(false)
-  if (window.MathJax && typeof window.MathJax.typesetPromise === "function") return Promise.resolve(true)
-  if (__mathjaxPromise) return __mathjaxPromise
-
-  __mathjaxPromise = new Promise((resolve) => {
-    try {
-      // Configure once BEFORE loading the script.
-      if (!window.MathJax) {
-        window.MathJax = {
-          // Load chemistry extension so \ce{...} works (mhchem)
-          loader: { load: ["[tex]/mhchem"] },
-          tex: {
-            // Support both $...$ and \(...\) for inline math
-            inlineMath: [["$", "$"], ["\\(", "\\)"]],
-            // Support both $$...$$ and \[...\] for display math
-            displayMath: [["$$", "$$"], ["\\[", "\\]"]],
-            processEscapes: true,
-            packages: { "[+]": ["mhchem"] },
-          },
-          chtml: {
-            linebreaks: { automatic: true, width: "container" },
-          },
-          options: {
-            // Don't typeset inside code blocks
-            skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"],
-          },
-        }}
-
-      const existing = document.querySelector('script[data-mathjax="v3"]')
-      if (existing) {
-        if (window.MathJax && typeof window.MathJax.typesetPromise === "function") return resolve(true)
-        existing.addEventListener("load", () => resolve(true))
-        existing.addEventListener("error", () => resolve(false))
-        return
-      }
-
-      const script = document.createElement("script")
-      script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
-      script.async = true
-      script.dataset.mathjax = "v3"
-      script.onload = () => resolve(true)
-      script.onerror = () => resolve(false)
-      document.head.appendChild(script)
-    } catch {
-      resolve(false)
-    }
-  })
-
-  return __mathjaxPromise
-}
-
-
-// --- Fix: keep LaTeX delimiters after react-markdown parsing ---
-// ReactMarkdown/CommonMark may treat \[ \] \( \) as escapes and drop the backslash.
-// We double-escape them (outside fenced code blocks and inline code) so the final DOM
-// still contains \[...\], \(...\) and MathJax can typeset them.
-function escapeMathDelimitersOutsideCode(md) {
-  const s = String(md || "")
-
-  // 1) Protect fenced code blocks ```...```
-  const fenceRe = /```[\s\S]*?```/g
-
-  // 2) Protect inline code `...`
-  const inlineCodeRe = /`[^`]*`/g
-
-  // Helper: count consecutive backslashes ending at position `pos` (exclusive)
-  const countTrailingBackslashes = (str, pos) => {
-    let count = 0
-    while (pos > 0 && str[pos - 1] === "\\") {
-      count++
-      pos--
-    }
-    return count
-  }
-
-  // Escape a delimiter only if preceded by an EVEN number of backslashes
-  // (even = not escaped, odd = already escaped by a preceding backslash)
-  const escapeDelimiter = (str, openDelim, closeDelim) => {
-    let result = ""
-    let i = 0
-    while (i < str.length) {
-      // Check for delimiter (either open or close)
-      let matched = null
-      if (str.startsWith(openDelim, i)) {
-        matched = openDelim
-      } else if (str.startsWith(closeDelim, i)) {
-        matched = closeDelim
-      }
-
-      if (matched) {
-        const backslashCount = countTrailingBackslashes(str, i)
-        if (backslashCount % 2 === 0) {
-          // Even backslashes: delimiter is NOT escaped, add extra backslash
-          result += "\\" + matched
-        } else {
-          // Odd backslashes: delimiter IS escaped, keep as-is
-          result += matched
-        }
-        i += matched.length
-      } else {
-        result += str[i]
-        i++
-      }
-    }
-    return result
-  }
-
-  const transformDelims = (chunk) => {
-    // Process \( \) then \[ \]
-    let out = escapeDelimiter(chunk, "\\(", "\\)")
-    out = escapeDelimiter(out, "\\[", "\\]")
-    return out
-  }
-
-  const transformText = (textChunk) => {
-    // Split by inline code spans; transform only non-code segments
-    let out = ""
-    let last = 0
-    let m
-    while ((m = inlineCodeRe.exec(textChunk)) !== null) {
-      out += transformDelims(textChunk.slice(last, m.index))
-      out += m[0]
-      last = m.index + m[0].length
-    }
-    out += transformDelims(textChunk.slice(last))
-    return out
-  }
-
-  let out = ""
-  let last = 0
-  let m
-  while ((m = fenceRe.exec(s)) !== null) {
-    out += transformText(s.slice(last, m.index))
-    out += m[0] // keep code fence untouched
-    last = m.index + m[0].length
-  }
-  out += transformText(s.slice(last))
-  return out
-}
-
-
-// --- Streaming optimization: only re-typeset when NEW math expressions become complete ---
-function stripCodeForMathScan(md) {
-  return String(md || "")
-    .replace(/```[\s\S]*?```/g, "")
-    .replace(/`[^`]*`/g, "")
-}
-
-function countOrderedPairs(s, openToken, closeToken) {
-  let i = 0
-  let open = 0
-  let pairs = 0
-  while (i < s.length) {
-    if (s.startsWith(openToken, i)) {
-      open++
-      i += openToken.length
-      continue
-    }
-    if (s.startsWith(closeToken, i)) {
-      if (open > 0) {
-        pairs++
-        open--
-      }
-      i += closeToken.length
-      continue
-    }
-    i++
-  }
-  return pairs
-}
-
-function countSingleDollarPairs(s) {
-  // Remove $$ first to avoid double counting.
-  const t = String(s || "").replace(/\$\$/g, "")
-  let open = false
-  let pairs = 0
-  for (let i = 0; i < t.length; i++) {
-    const ch = t[i]
-    if (ch === "$" && (i === 0 || t[i - 1] !== "\\") && t[i + 1] !== "$") {
-      open = !open
-      if (!open) pairs++
-    }
-  }
-  return pairs
-}
-
-function getMathPairStats(md) {
-  const s = stripCodeForMathScan(md)
-
-  // Block math: $$...$$ and \[...\]
-  const dbl = [...s.matchAll(/\$\$/g)].length
-  const blockDollars = Math.floor(dbl / 2)
-
-  // During rendering we may "double-escape" delimiters (\[ \] \( \)).
-  // Prefer counting the double-escaped form if present, otherwise count the normal form.
-  const hasDoubleBrackets = s.includes("\\[") || s.includes("\\]")
-  const blockBrackets = hasDoubleBrackets
-    ? countOrderedPairs(s, "\\[", "\\]")
-    : countOrderedPairs(s, "\[", "\]")
-
-  const hasDoubleParens = s.includes("\\(") || s.includes("\\)")
-  const inlineParens = hasDoubleParens
-    ? countOrderedPairs(s, "\\(", "\\)")
-    : countOrderedPairs(s, "\(", "\)")
-
-  // Inline dollars: $...$ (single)
-  const inlineDollars = countSingleDollarPairs(s)
-
-  return {
-    blockPairs: blockDollars + blockBrackets,
-    inlinePairs: inlineParens + inlineDollars,
-  }
-}
-
-// --- Streaming helper: avoid showing half-written math blocks (looks like gibberish during SSE) ---
-function maskIncompleteMathBlocks(md) {
-  let s = String(md || "")
-
-  // Incomplete $$...$$ blocks
-  const dbl = [...s.matchAll(/\$\$/g)]
-  if (dbl.length % 2 === 1) {
-    const idx = dbl[dbl.length - 1].index ?? 0
-    return s.slice(0, idx) + "\n\n(公式生成中…)\n\n"
-  }
-
-  // Incomplete \[...\] display math blocks (after escaping: \\[ and \\])
-  const openBracket = s.lastIndexOf("\\\\[")
-  const closeBracket = s.lastIndexOf("\\\\]")
-  if (openBracket !== -1 && openBracket > closeBracket) {
-    return s.slice(0, openBracket) + "\n\n(公式生成中…)\n\n"
-  }
-
-  // Incomplete \(...\) inline math blocks (after escaping: \\( and \\))
-  const openParen = s.lastIndexOf("\\\\(")
-  const closeParen = s.lastIndexOf("\\\\)")
-  if (openParen !== -1 && openParen > closeParen) {
-    return s.slice(0, openParen) + "\n\n(公式生成中…)\n\n"
-  }
-
-  // Incomplete $...$ inline math (single dollar)
-  // Count unescaped single $ (not part of $$)
-  const withoutDoubleDollar = s.replace(/\$\$/g, "\x00\x00") // placeholder
-  let dollarCount = 0
-  for (let i = 0; i < withoutDoubleDollar.length; i++) {
-    if (withoutDoubleDollar[i] === "$" && (i === 0 || withoutDoubleDollar[i - 1] !== "\\")) {
-      dollarCount++
-    }
-  }
-  if (dollarCount % 2 === 1) {
-    // Find the last unmatched $
-    for (let i = s.length - 1; i >= 0; i--) {
-      if (s[i] === "$" && (i === 0 || s[i - 1] !== "\\") && (i === s.length - 1 || s[i + 1] !== "$") && (i === 0 || s[i - 1] !== "$")) {
-        return s.slice(0, i) + "\n\n(公式生成中…)\n\n"
-      }
-    }
-  }
-
-  return s
-}
-
-// --- Post-process MathJax output: reduce whitespace and prevent overflow beyond bubble edge ---
-function tuneMathJaxLayout(root) {
-  if (!root) return
-  // Clear previous tags
-  root.querySelectorAll("p.cw-math-only").forEach((p) => p.classList.remove("cw-math-only"))
-
-  const containers = root.querySelectorAll("mjx-container")
-  containers.forEach((c) => {
-    // Prevent painting outside bubble; allow horizontal scroll if needed.
-    c.style.maxWidth = "100%"
-    c.style.overflowX = "auto"
-    c.style.overflowY = "hidden"
-    c.style.webkitOverflowScrolling = "touch"
-
-    // Display equations behave better as blocks inside narrow bubbles.
-    if (c.getAttribute("display") === "true") {
-      c.style.display = "block"
-      c.style.margin = "0.25em 0"
-    }
-
-    // Reduce extra margins created by Markdown wrapping the formula in a <p>.
-    const p = c.parentElement
-    if (p && p.tagName === "P") {
-      const elChildren = Array.from(p.children || [])
-      const onlyMath = elChildren.length === 1 && elChildren[0].tagName === "MJX-CONTAINER"
-      if (onlyMath) p.classList.add("cw-math-only")
-    }
-  })
-}
-
-// ---------- Markdown renderer (MathJax + copyable code blocks) ----------
+// Formula output is rendered as React nodes, never through imperative DOM typesetting.
 function MarkdownMessage({ content, streaming = false }) {
-  const rootRef = useRef(null)
-  const lastMathStatsRef = useRef({ blockPairs: 0, inlinePairs: 0 })
-  const lastTypesetTimeRef = useRef(0)
-  const pendingTypesetRef = useRef(null)
-
-  const raw = escapeMathDelimitersOutsideCode(content)
-
-  // In streaming mode, hide incomplete trailing block-math so the UI doesn't look garbled.
-  const md = streaming ? maskIncompleteMathBlocks(raw) : raw
-
-  // Cleanup MathJax modifications before React tries to update the DOM
-  // This prevents "removeChild" errors when React reconciles
-  useEffect(() => {
-    const el = rootRef.current
-    return () => {
-      if (el && window.MathJax?.typesetClear) {
-        try {
-          window.MathJax.typesetClear([el])
-        } catch {
-          // Ignore errors during cleanup
-        }
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!rootRef.current) return
-
-    // In streaming mode: only typeset when NEW math expressions become complete.
-    const stats = getMathPairStats(md)
-    const last = lastMathStatsRef.current
-    const hasNewMath = stats.blockPairs > last.blockPairs || stats.inlinePairs > last.inlinePairs
-    
-    // Skip if no new math and still streaming
-    if (streaming && !hasNewMath) return
-
-    const doTypeset = async () => {
-      const ok = await ensureMathJaxLoaded()
-      if (!rootRef.current || !ok) return
-
-      const mj = window.MathJax
-      if (!mj || typeof mj.typesetPromise !== "function") return
-
-      try {
-        // Add fade class before typesetting for smooth transition
-        rootRef.current.classList.add("cw-math-rendering")
-        
-        mj.typesetClear?.([rootRef.current])
-        await mj.typesetPromise([rootRef.current])
-        
-        // Update stats after successful typeset
-        lastMathStatsRef.current = {
-          blockPairs: Math.max(lastMathStatsRef.current.blockPairs, stats.blockPairs),
-          inlinePairs: Math.max(lastMathStatsRef.current.inlinePairs, stats.inlinePairs),
-        }
-        lastTypesetTimeRef.current = Date.now()
-        tuneMathJaxLayout(rootRef.current)
-        
-        // Remove rendering class after brief delay for fade-in effect
-        requestAnimationFrame(() => {
-          rootRef.current?.classList.remove("cw-math-rendering")
-        })
-      } catch {
-        // keep silent
-      }
-    }
-
-    // Clear any pending typeset
-    if (pendingTypesetRef.current) {
-      cancelAnimationFrame(pendingTypesetRef.current)
-      pendingTypesetRef.current = null
-    }
-
-    if (!streaming) {
-      // Not streaming: typeset immediately with short delay for DOM to settle
-      const t = setTimeout(doTypeset, 50)
-      return () => clearTimeout(t)
-    }
-
-    // Streaming mode: use throttle approach (typeset at most every 80ms)
-    const now = Date.now()
-    const elapsed = now - lastTypesetTimeRef.current
-    const THROTTLE_MS = 80
-
-    if (elapsed >= THROTTLE_MS) {
-      // Enough time passed, typeset on next animation frame
-      pendingTypesetRef.current = requestAnimationFrame(doTypeset)
-    } else {
-      // Schedule typeset after remaining throttle time
-      const delay = THROTTLE_MS - elapsed
-      const t = setTimeout(() => {
-        pendingTypesetRef.current = requestAnimationFrame(doTypeset)
-      }, delay)
-      return () => {
-        clearTimeout(t)
-        if (pendingTypesetRef.current) {
-          cancelAnimationFrame(pendingTypesetRef.current)
-        }
-      }
-    }
-
-    return () => {
-      if (pendingTypesetRef.current) {
-        cancelAnimationFrame(pendingTypesetRef.current)
-      }
-    }
-  }, [md, streaming])
 
   const Pre = ({ children }) => {
     const preRef = useRef(null)
@@ -1089,10 +682,8 @@ function MarkdownMessage({ content, streaming = false }) {
   }
 
   return (
-    <div ref={rootRef} className="cw-md">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ pre: Pre }}>
-        {String(md || "")}
-      </ReactMarkdown>
+    <div className="cw-md">
+      <ChatMarkdown content={content} streaming={streaming} components={{ pre: Pre }} />
     </div>
   )
 }
@@ -1113,6 +704,7 @@ function HighlightedMarkdown({ content, streaming, pageMatches, keywordsEN = {},
 
     let node
     while ((node = walker.nextNode())) {
+      if (node.parentElement?.closest("mjx-container, svg, pre, code")) continue
       for (const { phrase, context } of pageMatches) {
         const idx = node.textContent.toLowerCase().indexOf(phrase.toLowerCase())
         if (idx >= 0) {
@@ -4632,14 +4224,22 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         /* ===== MathJax / Markdown tuning ===== */
         #__chat_widget_root .cw-md {
           line-height: 1.55;
-        }
-        #__chat_widget_root .cw-md.cw-math-rendering mjx-container {
-          opacity: 0.7;
-          transition: opacity 150ms ease-out;
+          min-width: 0;
+          max-width: 100%;
         }
         #__chat_widget_root .cw-md mjx-container {
-          opacity: 1;
-          transition: opacity 150ms ease-out;
+          max-width: 100%;
+          overflow-x: auto;
+          overflow-y: hidden;
+          padding: 0.15em 0;
+        }
+        #__chat_widget_root .cw-md mjx-container[display="true"] {
+          display: block;
+          margin: 0.65em 0;
+          overscroll-behavior-x: contain;
+        }
+        #__chat_widget_root .cw-md mjx-container svg {
+          max-width: none;
         }
         #__chat_widget_root .cw-md p {
           margin: 0.55em 0;
