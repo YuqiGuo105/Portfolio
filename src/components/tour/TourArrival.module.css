@@ -1,0 +1,24 @@
+.arrival { position: fixed; inset: 0; z-index: 10008; background: #171b1b; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; font-family: inherit; animation: reveal 200ms ease both; }
+.arrival * { box-sizing: border-box; letter-spacing: 0; }
+.title { text-align: center; z-index: 1; }
+.title > span, .baseline > span { font: 10px/1.4 ui-monospace, monospace; color: #aabbb4; }
+.arrival .title h2 { color: #fff; font-family: inherit; font-weight: 500; font-size: 72px; line-height: 1.1; margin: 16px 0 10px; animation: titleIn 650ms ease both; }
+.title h2 span { color: #a4f3ce; }
+.title p { color: #d4ddd8; font-size: 15px; margin: 0; }
+.performer { width: 200px; height: 220px; margin: 25px 0 10px; animation: walkIn 1600ms cubic-bezier(.2,.7,.3,1) both; }
+.performer :global(.st-pet-leg-left) { animation: stride 250ms ease-in-out 6 alternate; }
+.performer :global(.st-pet-leg-right) { animation: stride 250ms ease-in-out 6 alternate-reverse; }
+.performer :global(.st-pet-arm-left) { animation: stride 250ms ease-in-out 6 alternate-reverse; }
+.baseline { border-top: 1px solid #ffffff30; display: flex; align-items: center; justify-content: space-between; width: min(480px, 100%); padding-top: 20px; }
+.arrival button { border: none; background: transparent; color: #a4f3ce; padding: 8px; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 12px; cursor: pointer; box-shadow: none; height: auto; }
+.arrival .baseline button { color: #a4f3ce; }
+.arrival button::before, .arrival button::after { display: none; }
+.arrival button:focus-visible { outline: 2px solid #a4f3ce; outline-offset: 3px; }
+.arrival .close { position: absolute; top: 28px; right: 28px; color: #fff; }
+@keyframes walkIn { from { transform: translateX(-180px) rotate(-8deg); opacity: 0; } 25% { opacity: 1; } to { transform: translateX(0) rotate(0); opacity: 1; } }
+@keyframes stride { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+@keyframes titleIn { from { transform: translateY(18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes reveal { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 600px) { .arrival .title h2 { font-size: 48px; } .title p { font-size: 13px; } .baseline > span { font-size: 8px; } }
+@media (max-height: 560px) { .performer { width: 110px; height: 120px; margin: 8px 0; } .arrival .title h2 { font-size: 40px; margin: 8px 0; } }
+@media (prefers-reduced-motion: reduce) { .arrival, .title h2, .performer, .performer :global(.st-pet-layer) { animation: none !important; } }

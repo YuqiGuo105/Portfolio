@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { ArrowLeft, ArrowRight, Bot, ChevronDown, ChevronUp, ExternalLink, ListTree, MessageCircle, Pause, Play, Volume2, X } from "lucide-react"
+import { X } from "lucide-react"
 import { consumePendingWebGuide } from "../lib/webGuide"
+import TourDock from "./tour/TourDock"
+import TourArrival from "./tour/TourArrival"
+import { tourNarrative } from "../lib/tourNarrative.mjs"
+import { collectTourDiscoveries, frameTourTarget, tourPetDimensions } from "../lib/tourScene.mjs"
 
 const DEFAULT_CONTROLS = { previous: "Prev", next: "Next", done: "Done", close: "Close" }
 const CHINESE_NAME_AUDIO = "/assets/audio/tour/v3/chinese-name.wav"
@@ -63,51 +67,51 @@ function MrPotRig() {
     const imageHref = "/assets/images/mr-pot-tour-guide.png"
 
     return (
-        <svg className="st-pet-rig" viewBox="0 0 1024 1280" aria-hidden="true">
+        <svg className="st-pet-rig" viewBox="0 0 1224 1285" aria-hidden="true">
             <defs>
                 <clipPath id="st-pet-steam-clip">
                     <rect x="500" y="20" width="205" height="205" />
                 </clipPath>
                 <clipPath id="st-pet-head-clip">
-                    <path d="M238 195h730v405H850v115h-60v55H300V600h-62z" />
+                    <path d="M238 195H1000V580H880L855 695 795 765H440L322 730 298 590H238Z" />
                 </clipPath>
                 <clipPath id="st-pet-core-clip">
-                    <path d="M458 742h292l45 122-30 150H438l-18-145z" />
+                    <path d="M438 742H750L780 864 764 1015H438L420 865Z" />
                 </clipPath>
                 <clipPath id="st-pet-left-arm-clip">
-                    <path d="M178 696h314v355H178z" />
+                    <path d="M320 760H465V1020H320Z" />
                 </clipPath>
                 <clipPath id="st-pet-right-arm-clip">
-                    <path d="M725 590h285v330H725z" />
+                    <path d="M750 780L845 722 890 590H1020V870L790 920 740 855Z" />
                 </clipPath>
                 <clipPath id="st-pet-left-leg-clip">
-                    <path d="M405 965h210v215H405z" />
+                    <path d="M405 995H595V1180H405Z" />
                 </clipPath>
                 <clipPath id="st-pet-right-leg-clip">
-                    <path d="M570 965h245v215H570z" />
+                    <path d="M600 995H815V1180H600Z" />
                 </clipPath>
             </defs>
 
-            <g className="st-pet-layer st-pet-steam" clipPath="url(#st-pet-steam-clip)">
-                <image href={imageHref} width="1024" height="1280" />
-            </g>
-            <g className="st-pet-layer st-pet-head" clipPath="url(#st-pet-head-clip)">
-                <image href={imageHref} width="1024" height="1280" />
-            </g>
-            <g className="st-pet-layer st-pet-core" clipPath="url(#st-pet-core-clip)">
-                <image href={imageHref} width="1024" height="1280" />
-            </g>
             <g className="st-pet-layer st-pet-arm st-pet-arm-left" clipPath="url(#st-pet-left-arm-clip)">
-                <image href={imageHref} width="1024" height="1280" />
+                <image href={imageHref} width="1224" height="1285" />
             </g>
             <g className="st-pet-layer st-pet-arm st-pet-arm-right" clipPath="url(#st-pet-right-arm-clip)">
-                <image href={imageHref} width="1024" height="1280" />
+                <image href={imageHref} width="1224" height="1285" />
             </g>
             <g className="st-pet-layer st-pet-leg st-pet-leg-left" clipPath="url(#st-pet-left-leg-clip)">
-                <image href={imageHref} width="1024" height="1280" />
+                <image href={imageHref} width="1224" height="1285" />
             </g>
             <g className="st-pet-layer st-pet-leg st-pet-leg-right" clipPath="url(#st-pet-right-leg-clip)">
-                <image href={imageHref} width="1024" height="1280" />
+                <image href={imageHref} width="1224" height="1285" />
+            </g>
+            <g className="st-pet-layer st-pet-core" clipPath="url(#st-pet-core-clip)">
+                <image href={imageHref} width="1224" height="1285" />
+            </g>
+            <g className="st-pet-layer st-pet-head" clipPath="url(#st-pet-head-clip)">
+                <image href={imageHref} width="1224" height="1285" />
+            </g>
+            <g className="st-pet-layer st-pet-steam" clipPath="url(#st-pet-steam-clip)">
+                <image href={imageHref} width="1224" height="1285" />
             </g>
         </svg>
     )
@@ -194,7 +198,7 @@ export default function SiteTour() {
                 meta: "Recruiting · Collaboration · Direct contact",
                 narration: "/assets/audio/tour/v1/contact.mp3",
             },
-        ],
+        ].map(step => ({ ...step, editorial: true })),
         []
     )
 
@@ -208,8 +212,16 @@ export default function SiteTour() {
     stepsRef.current = effectiveSteps
 
     const [open, setOpen] = useState(false)
+    const [arriving, setArriving] = useState(false)
+    const enterGuide = useCallback(() => setArriving(false), [])
     const [idx, setIdx] = useState(0)
     const [anchorRect, setAnchorRect] = useState(null)
+    const [discoveries, setDiscoveries] = useState([])
+    const [visited, setVisited] = useState([])
+    const [selectedDiscovery, setSelectedDiscovery] = useState(null)
+    const travelFrameRef = useRef(0)
+    const travelVersionRef = useRef(0)
+    const openerRef = useRef(null)
     const popRef = useRef(null)
     const activeElRef = useRef(null)
     const rafRef = useRef(0)
@@ -258,11 +270,18 @@ export default function SiteTour() {
     }, [open])
 
     const close = useCallback(() => {
+        travelVersionRef.current++
+        cancelAnimationFrame(travelFrameRef.current)
+        openerRef.current?.focus?.({ preventScroll: true })
         setOpen(false)
+        setArriving(false)
         setIdx(0)
         setSteps(null) // reset to static steps for next tour
         setControls(DEFAULT_CONTROLS)
         setMapOpen(false)
+        setDiscoveries([])
+        setVisited([])
+        setSelectedDiscovery(null)
         setAutoPlay(false)
         setCollapsed(false)
         setPetSpeaking(false)
@@ -286,31 +305,48 @@ export default function SiteTour() {
         }
     }, [])
     const go = useCallback(
-        (nextIdx) => {
+        (nextIdx, focusFirst = true) => {
             const step = stepsRef.current[nextIdx]
             if (!step) return
             const el = document.getElementById(step.targetId)
             if (!el) return
-            activeElRef.current = el
+            const version = ++travelVersionRef.current
+            cancelAnimationFrame(travelFrameRef.current)
+            // Switching chapters also activates their real tab, rather than
+            // describing life stories while the technical blog panel remains open.
+            if (el.getAttribute('role') === 'tab' && el.getAttribute('aria-selected') !== 'true') el.click()
+            activeElRef.current = el.closest('section') || el
+            setSelectedDiscovery(null)
+            setDiscoveries([])
             setUiReady(false)
             setAnchorRect(null)
-            el.scrollIntoView({ behavior: "smooth", block: "center" })
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            window.scrollTo({ top: Math.max(0, window.scrollY + el.getBoundingClientRect().top - 112), behavior: reduceMotion ? 'auto' : 'smooth' })
             const start = performance.now()
             let lastTop = null
             let stableCount = 0
             const watchStable = () => {
+                if (version !== travelVersionRef.current) return
                 const r = el.getBoundingClientRect()
                 if (lastTop != null && Math.abs(r.top - lastTop) < 0.5) stableCount++
                 else stableCount = 0
                 lastTop = r.top
-                if (stableCount >= 2 || performance.now() - start > 900) {
-                    setAnchorRect({ top: r.top, left: r.left, width: r.width, height: r.height })
+                if ((stableCount >= 3 && performance.now() - start > 150) || performance.now() - start > 1100) {
+                    const items = collectTourDiscoveries(el.closest('section') || el, window.location.origin)
+                    setDiscoveries(items)
+                    if (focusFirst && items.length) {
+                        setSelectedDiscovery(items[0])
+                        activeElRef.current = items[0].element
+                        window.scrollTo({ top: Math.max(0, window.scrollY + items[0].element.getBoundingClientRect().top - 112), behavior: reduceMotion ? 'auto' : 'smooth' })
+                    }
+                    setAnchorRect(getRect(activeElRef.current))
+                    setVisited(previous => previous.includes(nextIdx) ? previous : [...previous, nextIdx])
                     setUiReady(true)
                     return
                 }
-                requestAnimationFrame(watchStable)
+                travelFrameRef.current = requestAnimationFrame(watchStable)
             }
-            requestAnimationFrame(watchStable)
+            travelFrameRef.current = requestAnimationFrame(watchStable)
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [], // intentionally empty — reads from stepsRef to avoid stale closure
@@ -338,6 +374,7 @@ export default function SiteTour() {
 
     useEffect(() => {
         const onStart = (e) => {
+            openerRef.current = document.activeElement
             const requestedLanguage = e?.detail?.language
                 || document.documentElement.lang
                 || navigator.language
@@ -357,13 +394,14 @@ export default function SiteTour() {
                 },
             }))
             setOpen(true)
+            setArriving(true)
             setIdx(0)
             setCollapsed(false)
             setPetHidden(false)
-            requestAnimationFrame(() => go(0))
         }
         const onDynamic = (e) => {
             if (e?.detail?.steps?.length > 0) {
+                openerRef.current = document.activeElement
                 setGuideLanguage(String(e?.detail?.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en")
                 const dynamic = e.detail.steps
                 setSteps(dynamic)
@@ -371,10 +409,10 @@ export default function SiteTour() {
                 if (e?.detail?.controls) setControls(e.detail.controls)
                 // Start tour automatically with the new steps
                 setOpen(true)
+                setArriving(false)
                 setIdx(0)
                 setCollapsed(false)
                 setPetHidden(false)
-                requestAnimationFrame(() => go(0))
             }
         }
         window.addEventListener("cw:site-tour:start", onStart)
@@ -415,13 +453,18 @@ export default function SiteTour() {
     }, [open])
 
     useEffect(() => {
-        if (!open) return
+        if (!open || arriving) return
         go(idx)
         narrationAudioRef.current?.pause()
         narrationAudioRef.current = null
         window.speechSynthesis?.cancel()
         setPetSpeaking(false)
-    }, [open, idx, go])
+        const travelVersion = travelVersionRef
+        return () => {
+            travelVersion.current++
+            cancelAnimationFrame(travelFrameRef.current)
+        }
+    }, [open, arriving, idx, go, effectiveSteps])
 
     useEffect(() => {
         if (!open || typeof window === "undefined") return undefined
@@ -460,25 +503,38 @@ export default function SiteTour() {
     useEffect(() => {
         if (!open) return
         const onKeyDown = (event) => {
-            if (event.key === "Escape") close()
-            if (event.key === "ArrowLeft" && idx > 0) setIdx((value) => value - 1)
+            if (event.target?.closest?.("input, textarea, select, [contenteditable=true]")) return
+            if (event.key === "Escape") { if (mapOpen) setMapOpen(false); else close(); return }
+            if (event.target?.closest?.("button, a") || mapOpen || arriving) return
+            if (event.key === "ArrowLeft" && idx > 0) { event.preventDefault(); setIdx((value) => value - 1) }
             if (event.key === "ArrowRight") {
+                event.preventDefault()
                 if (idx >= effectiveSteps.length - 1) close()
                 else setIdx((value) => value + 1)
             }
         }
         window.addEventListener("keydown", onKeyDown)
         return () => window.removeEventListener("keydown", onKeyDown)
-    }, [close, effectiveSteps.length, idx, open])
+    }, [close, effectiveSteps.length, idx, open, mapOpen, arriving])
 
     useEffect(() => {
-        if (!open || !autoPlay) return
+        if (!open || arriving || !autoPlay || !uiReady || petSpeaking || petDragging || mapOpen) return
         const timer = window.setTimeout(() => {
             if (idx >= effectiveSteps.length - 1) setAutoPlay(false)
             else setIdx((value) => value + 1)
-        }, 5200)
+        }, 8000)
         return () => window.clearTimeout(timer)
-    }, [autoPlay, effectiveSteps.length, idx, open])
+    }, [autoPlay, effectiveSteps.length, idx, open, arriving, uiReady, petSpeaking, petDragging, mapOpen])
+
+    useEffect(() => {
+        const pauseWhenHidden = () => { if (document.hidden) setAutoPlay(false) }
+        document.addEventListener('visibilitychange', pauseWhenHidden)
+        return () => {
+            document.removeEventListener('visibilitychange', pauseWhenHidden)
+            narrationAudioRef.current?.pause()
+            window.speechSynthesis?.cancel()
+        }
+    }, [])
 
     useEffect(() => {
         if (!open) return
@@ -521,23 +577,29 @@ export default function SiteTour() {
     }, [mapOpen, open])
 
     useEffect(() => {
+        if (!open || arriving || !popRef.current || typeof ResizeObserver === "undefined") return undefined
+        const observer = new ResizeObserver(scheduleUpdateRect)
+        observer.observe(popRef.current)
+        return () => observer.disconnect()
+    }, [open, arriving, scheduleUpdateRect])
+
+    useEffect(() => {
         if (!open || !uiReady || petHidden || typeof window === "undefined") return
 
         const viewportWidth = window.innerWidth
         const viewportHeight = window.innerHeight
         const mobile = viewportWidth < 640
-        const petWidth = mobile ? 64 : 88
-        const petHeight = mobile ? 82 : 112
-        const margin = mobile ? 20 : 28
+        const { width: petWidth, height: petHeight, margin } = tourPetDimensions(viewportWidth, viewportHeight)
         const dialogRect = popRef.current?.getBoundingClientRect()
-        const target = anchorRect
+        const framedRect = frameTourTarget(anchorRect, viewportWidth, viewportHeight, dialogRect?.top || viewportHeight)
+        const target = framedRect
             ? {
-                left: anchorRect.left,
-                top: anchorRect.top,
-                width: anchorRect.width,
-                height: anchorRect.height,
-                right: anchorRect.left + anchorRect.width,
-                bottom: anchorRect.top + anchorRect.height,
+                left: framedRect.left,
+                top: framedRect.top,
+                width: framedRect.width,
+                height: framedRect.height,
+                right: framedRect.left + framedRect.width,
+                bottom: framedRect.top + framedRect.height,
               }
             : null
 
@@ -575,7 +637,7 @@ export default function SiteTour() {
                 return !rectsOverlap(petRect, dialogRect, 14)
             })
 
-        const destination = safeCandidates[idx % Math.max(1, safeCandidates.length)]
+        const destination = safeCandidates[0]
             || { x: margin, y: viewportHeight - petHeight - margin }
         const previous = petPositionRef.current
 
@@ -591,7 +653,7 @@ export default function SiteTour() {
         petMoveTimerRef.current = window.setTimeout(() => setPetWalking(false), 820)
 
         window.clearInterval(petPatrolTimerRef.current)
-        petPatrolTimerRef.current = window.setInterval(() => {
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) petPatrolTimerRef.current = window.setInterval(() => {
             if (petDraggingRef.current) return
             const base = petBaseRef.current
             const current = petPositionRef.current
@@ -600,6 +662,7 @@ export default function SiteTour() {
                 x: clamp(base.x + direction * (mobile ? 26 : 52), margin, viewportWidth - petWidth - margin),
                 y: clamp(base.y + (Math.random() > 0.5 ? 8 : -8), mobile ? 82 : 96, viewportHeight - petHeight - margin),
             }
+            if (dialogRect && rectsOverlap({ left: next.x, top: next.y, right: next.x + petWidth, bottom: next.y + petHeight }, dialogRect, 14)) return
             setPetFacing(next.x >= current.x ? 1 : -1)
             setPetWalking(true)
             petPositionRef.current = next
@@ -612,7 +675,7 @@ export default function SiteTour() {
             window.clearTimeout(petMoveTimerRef.current)
             window.clearInterval(petPatrolTimerRef.current)
         }
-    }, [anchorRect, idx, movePetTo, open, petHidden, uiReady])
+    }, [anchorRect, idx, movePetTo, open, petHidden, uiReady, collapsed])
 
     useEffect(() => {
         if (!petDragging || typeof window === "undefined") return
@@ -636,18 +699,23 @@ export default function SiteTour() {
     if (!open) return null
 
     const current = effectiveSteps[idx]
+    const narrative = tourNarrative(current, guideLanguage)
     const currentAction = current?.action || (current?.card?.href
         ? { href: current.card.href, label: current.card.action || "Open section" }
         : current?.href
             ? { href: current.href, label: "Open section" }
             : null)
-    const popStyle = {
-        top: collapsed ? 18 : "50%",
-        left: "50%",
-        width: collapsed ? "min(420px, calc(100vw - 24px))" : "min(540px, calc(100vw - 24px))",
-        transform: collapsed ? "translateX(-50%)" : "translate(-50%, -50%)",
-        opacity: uiReady ? 1 : 0,
-        pointerEvents: uiReady ? "auto" : "none",
+    const frame = frameTourTarget(anchorRect, window.innerWidth, window.innerHeight,
+        popRef.current?.getBoundingClientRect().top || window.innerHeight - 280)
+
+    const selectDiscovery = (item) => {
+        setAutoPlay(false)
+        setSelectedDiscovery(item)
+        if (!item) { go(idx, false); return }
+        activeElRef.current = item.element
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        window.scrollTo({ top: Math.max(0, window.scrollY + item.element.getBoundingClientRect().top - 112), behavior: reduced ? 'auto' : 'smooth' })
+        scheduleUpdateRect()
     }
 
     const speakWithBrowserFallback = (text, locale, rate = 0.94) => {
@@ -732,21 +800,20 @@ export default function SiteTour() {
         speakWithBrowserFallback(`${current.title}. ${current.content}`, locale)
     }
 
-    const askMrPot = () => {
+    const askMrPot = (suggestion) => {
+        const question = typeof suggestion === "string" && suggestion.trim()
+            ? `${suggestion}\n${guideLanguage === "zh" ? "当前内容" : "Current context"}: ${selectedDiscovery?.title || current?.title}${selectedDiscovery?.href ? ` (${selectedDiscovery.href})` : ""}`
+            : guideLanguage === "zh"
+            ? `请解释「${selectedDiscovery?.title || current?.title}」这一部分的重点，并引用相关的文章或项目作为依据。`
+            : `Explain the key ideas in "${selectedDiscovery?.title || current?.title}" and cite the relevant articles or projects.`
         close()
         window.setTimeout(() => {
-            window.dispatchEvent(new CustomEvent("cw:chat:open"))
+            window.dispatchEvent(new CustomEvent("cw:chat:open", { detail: { question } }))
         }, 0)
     }
 
     const petDimensions = () => {
-        const mobile = window.innerWidth < 640
-        return {
-            width: mobile ? 64 : 88,
-            height: mobile ? 82 : 112,
-            margin: mobile ? 20 : 28,
-            minY: mobile ? 82 : 96,
-        }
+        return tourPetDimensions(window.innerWidth, window.innerHeight)
     }
 
     const startPetDrag = (event) => {
@@ -812,25 +879,25 @@ export default function SiteTour() {
 
     return createPortal(
         <>
-            <div className="st-mask" onClick={close} />
-
-            {uiReady && anchorRect && (
+            {arriving && <TourArrival language={guideLanguage} onEnter={enterGuide} onClose={close}><MrPotRig /></TourArrival>}
+            {!arriving && uiReady && frame && !mapOpen && (
                 <div
-                    className="st-highlight"
+                    className="st-scene-frame"
                     style={{
-                        top: anchorRect.top - 6,
-                        left: anchorRect.left - 10,
-                        width: anchorRect.width + 20,
-                        height: anchorRect.height + 12,
+                        ...frame,
                     }}
-                />
+                    aria-hidden="true"
+                ><i /><i /><i /><i /><span className="st-scene-caption" key={idx}>{String(idx + 1).padStart(2, "0")} / {current?.title}</span></div>
             )}
 
-            {!petHidden ? <div
+            {!petHidden && !arriving ? <div
                 className={`st-roaming-pet${petReady ? " is-ready" : ""}${petWalking ? " is-walking" : ""}${petSpeaking ? " is-speaking" : ""}${petDragging ? " is-dragging" : ""}`}
+                data-chapter={current?.id}
                 style={{
                     transform: petTransform,
                     "--st-pet-facing": petFacing,
+                    "--st-pet-width": `${petDimensions().width}px`,
+                    "--st-pet-height": `${petDimensions().height}px`,
                 }}
                 role="group"
                 draggable={false}
@@ -862,8 +929,8 @@ export default function SiteTour() {
                     <X size={13} aria-hidden="true" />
                 </button>
                 <div className="st-roaming-bubble">
-                    <strong>{guideLanguage === "zh" ? "跟我来" : "Follow me"}</strong>
-                    <span>{current?.title}</span>
+                    <strong>{petWalking ? guideLanguage === "zh" ? "跟我来" : "Follow me" : petSpeaking ? guideLanguage === "zh" ? "正在讲解" : "Speaking" : guideLanguage === "zh" ? "我们到了" : "Here we are"}</strong>
+                    <span>{petWalking ? guideLanguage === "zh" ? "这边，有东西想给你看。" : "Something to show you." : narrative.title}</span>
                 </div>
                 <div
                     className="st-roaming-pet-body"
@@ -883,176 +950,64 @@ export default function SiteTour() {
                 <span className="st-roaming-shadow" />
             </div> : null}
 
-            <div
-                ref={popRef}
-                className={`st-pop st-center${collapsed ? " is-collapsed" : ""}`}
-                style={popStyle}
-                role="dialog"
-                aria-modal="true"
-            >
-                <div className="st-hd">
-                    <div className="st-guide-heading">
-                        <div className="st-heading-copy">
-                            <span className="st-kicker">
-                                {guideLanguage === "zh" ? "Mr.Pot 正在导览" : "Guided by Mr.Pot"}
-                            </span>
-                            <div className="st-title">{current?.title}</div>
-                            {!collapsed ? (
-                                <div className="st-pet-actions">
-                                    {petHidden ? (
-                                        <button type="button" onClick={() => setPetHidden(false)}>
-                                            <Bot size={13} aria-hidden="true" />
-                                            {guideLanguage === "zh" ? "显示 Mr.Pot" : "Show Mr.Pot"}
-                                        </button>
-                                    ) : null}
-                                    <button type="button" onClick={speakCurrentStep} aria-pressed={petSpeaking}>
-                                        <Volume2 size={13} aria-hidden="true" />
-                                        {guideLanguage === "zh"
-                                            ? petSpeaking ? "停止讲解" : "听 Mr.Pot 讲解"
-                                            : petSpeaking ? "Stop narration" : "Hear Mr.Pot"}
-                                    </button>
-                                    <button type="button" onClick={askMrPot}>
-                                        <MessageCircle size={13} aria-hidden="true" />
-                                        {guideLanguage === "zh" ? "问 Mr.Pot" : "Ask Mr.Pot"}
-                                    </button>
-                                    <span className="st-ai-voice">
-                                        {guideLanguage === "zh" ? "AI 合成语音" : "AI voice"}
-                                    </span>
-                                </div>
-                            ) : null}
-                        </div>
-                    </div>
-                    <div className="st-window-actions">
-                        <button
-                            type="button"
-                            className="st-collapse"
-                            onClick={() => setCollapsed((value) => !value)}
-                            aria-label={collapsed ? "Expand tour" : "Collapse tour"}
-                            title={collapsed ? "Expand" : "Collapse"}
-                        >
-                            {collapsed ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronUp size={18} aria-hidden="true" />}
-                        </button>
-                        <button className="st-x" onClick={close} aria-label={controls.close}>×</button>
-                    </div>
-                </div>
-
-                {!collapsed ? <div className="st-bd">{current?.content}</div> : null}
-                {!collapsed && current?.meta ? <div className="st-meta">{current.meta}</div> : null}
-
-                {!collapsed && current?.pronunciation ? (
-                    <button type="button" className="st-pronounce" onClick={pronounceName}>
-                        <Volume2 size={17} aria-hidden="true" />
-                        <span>
-                            <strong>Hear my Chinese name</strong>
-                            Play pronunciation
-                        </span>
-                    </button>
-                ) : null}
-
-                {!collapsed ? <div className="st-rail" aria-label={`Step ${idx + 1} of ${effectiveSteps.length}`}>
-                    {effectiveSteps.map((step, stepIndex) => (
-                        <button
-                            key={step.id || stepIndex}
-                            type="button"
-                            className={stepIndex === idx ? "is-current" : stepIndex < idx ? "is-complete" : ""}
-                            onClick={() => setIdx(stepIndex)}
-                            aria-label={`Go to ${step.title || `step ${stepIndex + 1}`}`}
-                            aria-current={stepIndex === idx ? "step" : undefined}
-                            title={step.title}
-                        >
-                            <span />
-                        </button>
-                    ))}
-                </div> : null}
-
-                {!collapsed ? <button
-                    type="button"
-                    className="st-map-toggle"
-                    onClick={() => setMapOpen((value) => !value)}
-                    aria-expanded={mapOpen}
-                >
-                    <ListTree size={14} aria-hidden="true" />
-                    Tour map
-                    <span>{String(idx + 1).padStart(2, "0")} / {String(effectiveSteps.length).padStart(2, "0")}</span>
-                </button> : null}
-
-                {!collapsed && mapOpen ? (
-                    <ol className="st-map">
-                        {effectiveSteps.map((step, stepIndex) => (
-                            <li key={step.id || stepIndex}>
-                                <button
-                                    type="button"
-                                    className={stepIndex === idx ? "is-current" : ""}
-                                    onClick={() => {
-                                        setIdx(stepIndex)
-                                        setMapOpen(false)
-                                    }}
-                                >
-                                    <span>{String(stepIndex + 1).padStart(2, "0")}</span>
-                                    {step.title || `Step ${stepIndex + 1}`}
-                                </button>
-                            </li>
-                        ))}
-                    </ol>
-                ) : null}
-
-                {!collapsed && currentAction ? (
-                    <a className="st-context-link" href={currentAction.href}>
-                        {currentAction.label}
-                        <ExternalLink size={14} aria-hidden="true" />
-                    </a>
-                ) : null}
-
-                {!collapsed ? <div className="st-ft">
-                    <button
-                        type="button"
-                        className="st-autoplay"
-                        onClick={() => setAutoPlay((value) => !value)}
-                        aria-pressed={autoPlay}
-                    >
-                        {autoPlay ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
-                        {autoPlay ? "Pause" : "Auto play"}
-                    </button>
-                    <div className="st-actions">
-                        <button className="st-btn st-plain" onClick={prev} disabled={idx === 0} aria-label={controls.previous}>
-                            <ArrowLeft size={14} aria-hidden="true" />
-                            {controls.previous}
-                        </button>
-                        <button className="st-btn st-primary" onClick={next}>
-                            {idx === effectiveSteps.length - 1 ? controls.done : controls.next}
-                            {idx === effectiveSteps.length - 1 ? null : <ArrowRight size={14} aria-hidden="true" />}
-                        </button>
-                    </div>
-                </div> : <div className="st-collapsed-status">Step {idx + 1} of {effectiveSteps.length} · click expand to continue</div>}
-            </div>
+            {!arriving && <TourDock ref={popRef} steps={effectiveSteps} index={idx} current={current} visited={visited}
+                action={currentAction} language={guideLanguage} ready={uiReady}
+                collapsed={collapsed} mapOpen={mapOpen} autoPlay={autoPlay}
+                speaking={petSpeaking} petHidden={petHidden} discoveries={discoveries}
+                selected={selectedDiscovery} onSelect={selectDiscovery}
+                onJump={(position) => { setIdx(position); setMapOpen(false); setAutoPlay(false); if (position === idx) go(position) }}
+                onClose={close} onCollapse={() => setCollapsed(value => !value)}
+                onMap={() => { setMapOpen(value => !value); setAutoPlay(false) }}
+                onAutoPlay={() => setAutoPlay(value => !value)} onSpeak={speakCurrentStep}
+                onAsk={askMrPot} onPronounce={pronounceName} onShowPet={() => setPetHidden(false)}
+                onPrev={prev} onNext={next} />}
 
             <style jsx global>{`
-                .st-mask {
-                    position: fixed;
-                    inset: 0;
-                    background: rgba(0, 0, 0, 0.28);
-                    z-index: 9998;
-                }
-
+                .st-scene-frame { position: fixed; z-index: 9999; pointer-events: none; border: 1px solid rgba(22, 127, 108, .22); border-radius: 5px; box-shadow: 0 0 0 100vmax rgba(21, 35, 30, .12); transition: top 200ms ease, left 200ms ease, width 200ms ease, height 200ms ease; }
+                .st-scene-caption { position: absolute; top: -26px; left: 0; padding: 4px 9px; background: #171b1b; border-radius: 3px; color: #c2f6db; font: 10px/1.4 ui-monospace, monospace; letter-spacing: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: st-caption-enter 400ms ease both; }
+                @keyframes st-caption-enter { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+                .st-scene-frame i { position: absolute; width: 20px; height: 20px; border: solid #219c7d; }
+                .st-scene-frame i:nth-child(1) { top: -2px; left: -2px; border-width: 2px 0 0 2px; border-radius: 5px 0 0 0; }
+                .st-scene-frame i:nth-child(2) { top: -2px; right: -2px; border-width: 2px 2px 0 0; border-radius: 0 5px 0 0; }
+                .st-scene-frame i:nth-child(3) { bottom: -2px; left: -2px; border-width: 0 0 2px 2px; border-radius: 0 0 0 5px; }
+                .st-scene-frame i:nth-child(4) { bottom: -2px; right: -2px; border-width: 0 2px 2px 0; border-radius: 0 0 5px 0; }
+                .st-roaming-pet:not(.is-walking):not(.is-dragging)[data-chapter="projects"] .st-pet-arm-right { animation: st-point-out 3.8s ease-in-out infinite; }
+                .st-roaming-pet:not(.is-walking):not(.is-dragging)[data-chapter="techblogs"] .st-pet-head { animation: st-reading-nod 4s ease-in-out infinite; }
+                .st-roaming-pet:not(.is-walking):not(.is-dragging)[data-chapter="contact"] .st-pet-core { animation: st-friendly-bow 3.6s ease-in-out infinite; }
+                .st-roaming-pet:hover:not(.is-dragging) .st-pet-arm-left { animation: st-hello-wave 600ms ease-in-out 3; }
+                @keyframes st-point-out { 0%, 100% { transform: rotate(0); } 25%, 70% { transform: rotate(22deg) translateX(18px); } }
+                @keyframes st-reading-nod { 0%, 100% { transform: rotate(0); } 30%, 65% { transform: rotate(-5deg) translateY(10px); } }
+                @keyframes st-friendly-bow { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(7deg) translateY(8px); } }
+                @keyframes st-hello-wave { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(24deg); } }
+                @media (prefers-reduced-motion: reduce) { .st-scene-frame { transition: none; } .st-scene-caption, .st-roaming-pet .st-pet-layer { animation: none !important; } }
                 .st-highlight {
                     position: fixed;
                     z-index: 9999;
                     border-radius: 10px;
-                    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.22);
+                    border: 2px solid rgba(20, 130, 116, 0.55);
+                    box-shadow: 0 0 0 5px rgba(20, 130, 116, 0.08);
                     pointer-events: none;
                 }
 
                 .st-pop {
                     position: fixed;
+                    bottom: max(20px, env(safe-area-inset-bottom));
+                    left: 20px;
+                    width: min(390px, calc(100vw - 40px));
                     z-index: 10000;
                     background: #fff;
                     border: 1px solid #ebeef5;
                     border-radius: 8px;
                     box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
-                    padding: 22px;
+                    padding: 18px;
                     transition: opacity 160ms ease;
-                    max-height: calc(100vh - 32px);
+                    max-height: min(600px, calc(100dvh - 100px));
                     overflow-y: auto;
+                }
+                .st-explore-question { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 11px 0; margin-top: 10px; border: 0; border-top: 1px solid #e2e8e7; background: transparent; color: #137a70; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
+                .st-explore-question svg { flex-shrink: 0; }
+                @media (max-width: 639px) {
+                    .st-pop { left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: calc(100vw - 24px); max-height: 48dvh; padding: 14px; }
                 }
 
                 .st-pop.is-collapsed {
@@ -1083,8 +1038,8 @@ export default function SiteTour() {
                     top: 0;
                     left: 0;
                     z-index: 10002;
-                    width: 88px;
-                    height: 112px;
+                    width: var(--st-pet-width, 144px);
+                    height: var(--st-pet-height, 168px);
                     opacity: 0;
                     transform: translate3d(-120px, 120px, 0);
                     cursor: grab;
@@ -1115,8 +1070,8 @@ export default function SiteTour() {
                 .st-roaming-pet-body {
                     position: relative;
                     z-index: 2;
-                    width: 88px;
-                    height: 112px;
+                    width: 100%;
+                    height: 100%;
                     filter: drop-shadow(0 8px 9px rgba(15, 23, 42, 0.2));
                     overflow: visible;
                 }
@@ -1183,34 +1138,35 @@ export default function SiteTour() {
                 }
 
                 .st-pet-layer {
-                    transform-box: fill-box;
+                    transform-box: view-box;
                 }
 
                 .st-pet-head,
                 .st-pet-core {
-                    transform-origin: 50% 88%;
+                    transform-origin: 600px 760px;
                     animation: st-pet-breathe 2.6s ease-in-out infinite;
                 }
 
                 .st-pet-steam {
-                    transform-origin: 50% 100%;
+                    transform-origin: 600px 200px;
                     animation: st-pet-steam-drift 2.1s ease-in-out infinite alternate;
                 }
 
                 .st-pet-arm-left {
-                    transform-origin: 78% 13%;
+                    transform-origin: 445px 795px;
                     animation: st-pet-arm-rest-left 3.2s ease-in-out infinite;
                 }
 
                 .st-pet-arm-right {
-                    transform-origin: 16% 54%;
+                    transform-origin: 760px 815px;
                     animation: st-pet-wave 3.8s ease-in-out infinite;
                 }
 
                 .st-pet-leg-left,
                 .st-pet-leg-right {
-                    transform-origin: 50% 12%;
+                    transform-origin: 515px 1000px;
                 }
+                .st-pet-leg-right { transform-origin: 700px 1000px; }
 
                 .st-roaming-pet.is-walking .st-pet-head,
                 .st-roaming-pet.is-walking .st-pet-core {
@@ -1331,8 +1287,8 @@ export default function SiteTour() {
                     overflow: hidden;
                     font-size: 11px;
                     font-weight: 800;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
+                    white-space: normal;
+                    line-height: 1.35;
                 }
 
                 .st-roaming-pet.is-walking .st-roaming-bubble {
@@ -1529,7 +1485,8 @@ export default function SiteTour() {
 
                 .st-title {
                     margin-top: 7px;
-                    font-size: 27px;
+                    font-size: 24px;
+                    overflow-wrap: anywhere;
                     font-weight: 800;
                     line-height: 1.25;
                     color: #303133;
@@ -1540,7 +1497,7 @@ export default function SiteTour() {
                     color: #0f766e;
                     font-size: 10px;
                     font-weight: 800;
-                    letter-spacing: 0.1em;
+                    letter-spacing: 0;
                     line-height: 1;
                     text-transform: uppercase;
                 }
@@ -1627,8 +1584,8 @@ export default function SiteTour() {
                 }
 
                 .st-rail button {
-                    height: 12px;
-                    padding: 4px 0;
+                    height: 24px;
+                    padding: 10px 0;
                     border: 0;
                     background: transparent;
                     cursor: pointer;
@@ -1957,13 +1914,13 @@ export default function SiteTour() {
                     }
 
                     .st-roaming-pet {
-                        width: 64px;
-                        height: 82px;
+                        width: var(--st-pet-width, 104px);
+                        height: var(--st-pet-height, 122px);
                     }
 
                     .st-roaming-pet-body {
-                        width: 64px;
-                        height: 82px;
+                        width: 100%;
+                        height: 100%;
                     }
 
                     .st-pet-close {

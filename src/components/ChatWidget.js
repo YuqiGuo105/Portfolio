@@ -7,7 +7,8 @@ import Image from "next/image"
 import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
 import LogInDialog from "../components/LogInDialog"
-import RelatedLinks from "../components/RelatedLinks"
+import AnswerSources from "./AnswerSources"
+import { mergeEvidence } from "../lib/chatEvidence.mjs"
 import { applyWebGuidePlan, normalizeWebGuidePlan } from "../lib/webGuide"
 
 // Markdown + code highlight + LaTeX math rendering (ChatGPT-like)
@@ -2692,7 +2693,7 @@ function AttachmentProgressRow({ name, progress }) {
 
 /* ---------- Chat window ---------- */
 
-function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef }) {
+function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef, guideQuestion }) {
   const [messages, setMessages] = useState(() => {
     // If the widget has been inactive for a while, start fresh (no old history).
     if (!isSessionFresh()) {
@@ -2715,6 +2716,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
   const [chatDeviceId] = useState(() => getOrCreateChatDeviceId())
 
   const [input, setInput] = useState("")
+  useEffect(() => {
+    if (guideQuestion?.question) setInput(guideQuestion.question)
+  }, [guideQuestion])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [endpoint, setEndpoint] = useState("")
@@ -3470,7 +3474,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
           const sources = obj.payload?.sources
           if (Array.isArray(sources) && sources.length > 0) {
             setMessages((prev) =>
-              prev.map((m) => (m.id !== assistantId ? m : { ...m, sourceCards: sources }))
+              prev.map((m) => (m.id !== assistantId ? m : { ...m, sourceCards: mergeEvidence(m.sourceCards || [], sources) }))
             )
           }
           return
@@ -4325,14 +4329,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef 
               ) : null}
 
               {/* Source cards — shown below answer when KB hits have linkable content */}
-              {m.role === "assistant" && !m.streaming && m.sourceCards?.length > 0 ? (
-                <SourceCardsRow cards={m.sourceCards} />
+              {m.role === "assistant" && (m.sourceCards?.length > 0 || m.relatedLinks?.length > 0) ? (
+                <AnswerSources cards={m.sourceCards} related={m.relatedLinks} answer={m.content} />
               ) : null}
 
               {/* Related links — dynamic content suggestions from semantic search */}
-              {m.role === "assistant" && !m.streaming && m.relatedLinks?.length > 0 ? (
-                <RelatedLinks links={m.relatedLinks} />
-              ) : null}
             </div>
           </div>
         ))}
@@ -6109,6 +6110,7 @@ function LauncherButton({ onOpen, onDragStart }) {
 export default function ChatWidget() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [guideQuestion, setGuideQuestion] = useState(null)
   const [tourActive, setTourActive] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [offset, setOffset] = useState(() => {
@@ -6178,7 +6180,8 @@ export default function ChatWidget() {
   }, [])
 
   useEffect(() => {
-    const openFromGuide = () => {
+    const openFromGuide = (event) => {
+      setGuideQuestion(event?.detail?.question ? { question: String(event.detail.question).slice(0, 1000) } : null)
       setTourActive(false)
       setOpen(true)
     }
@@ -6249,7 +6252,7 @@ export default function ChatWidget() {
     tourActive ? null : open ? (
       <Fragment>
         <Overlay onClick={handleClose} />
-        <ChatWindow onMinimize={handleClose} onDragStart={startDrag} routerPathname={router.pathname} pageHighlightRef={pageHighlightRef} />
+        <ChatWindow onMinimize={handleClose} onDragStart={startDrag} routerPathname={router.pathname} pageHighlightRef={pageHighlightRef} guideQuestion={guideQuestion} />
       </Fragment>
     ) : (
       <LauncherButton onOpen={handleOpen} onDragStart={startDrag} />
