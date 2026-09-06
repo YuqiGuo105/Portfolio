@@ -17,12 +17,12 @@ async function erase() {
   assert.equal(response.status, 204, 'Cleanup API failed');
 }
 async function stored() {
-  return fetch(`${storageBase}/storage/v1/object/authenticated/${bucket}/attachments/${attachmentId}/content`, { headers: storageHeaders, signal: AbortSignal.timeout(30000) });
+  return fetch(`${storageBase}/storage/v1/object/authenticated/${bucket}/attachments/${attachmentId}/content?cacheNonce=${randomUUID()}`, { headers: storageHeaders, signal: AbortSignal.timeout(30000) });
 }
 async function absent() {
   const response = await stored();
   const error = await response.json().catch(() => ({}));
-  assert.ok(response.status === 404 || response.status === 400 && String(error.statusCode) === '404', 'Temporary file still exists or Storage verification failed');
+  assert.ok(response.status === 404 || response.status === 400 && String(error.statusCode) === '404', `Temporary file still exists or Storage verification failed (HTTP ${response.status}, Storage ${error.statusCode || error.code || 'unknown'})`);
 }
 async function upload(content) {
   const permission = await fetch(`${base}/api/rag/attachments/upload-url`, { method: 'POST', headers, body: JSON.stringify({ sessionId, name: 'synthetic-verification.txt', mimeType: 'text/plain', sizeBytes: content.length }), signal: AbortSignal.timeout(30000) });
