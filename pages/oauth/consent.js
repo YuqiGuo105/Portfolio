@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Check, LockKeyhole, ShieldCheck, X } from 'lucide-react';
 import { supabase } from '../../src/supabase/supabaseClient';
 import { verifyAdminSession } from '../../src/lib/writerApi';
+import { canDecideConsent, consentError } from '../../src/lib/oauthConsent.mjs';
 
 const LOGIN_PATH = '/admin/login';
 
@@ -23,6 +25,18 @@ export default function OAuthConsentPage() {
   const [status, setStatus] = useState('Checking administrator access...');
   const [error, setError] = useState('');
   const [decision, setDecision] = useState('');
+  const [restartRequired, setRestartRequired] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const decidingRef = useRef(false);
+
+  function failAuthorization(cause) {
+    const failure = consentError(cause);
+    setDetails(null);
+    setError(failure.message);
+    setRestartRequired(failure.restartRequired);
+    setStatus('');
+    setDecision('');
+  }
 
   const authorizationId = useMemo(
     () => typeof router.query.authorization_id === 'string'
@@ -36,13 +50,17 @@ export default function OAuthConsentPage() {
     let active = true;
 
     async function loadAuthorization() {
+      setDetails(null);
+      setError('');
+      setRestartRequired(false);
+      setStatus('Checking administrator access...');
       if (!authorizationId) {
-        setError('This authorization request is missing its authorization ID.');
-        setStatus('');
+        failAuthorization({ code: 'invalid_authorization_id' });
         return;
       }
 
       const { data: sessionData } = await supabase.auth.getSession();
+      if (!active) return;
       if (!sessionData?.session) {
         await redirectToLogin(router);
         return;
@@ -65,12 +83,15 @@ export default function OAuthConsentPage() {
         .getAuthorizationDetails(authorizationId);
       if (!active) return;
       if (detailsError) {
-        setError(detailsError.message || 'Could not load the authorization request.');
-        setStatus('');
+        failAuthorization(detailsError);
         return;
       }
       if (data?.redirect_url) {
         navigateToClient(data);
+        return;
+      }
+      if (data?.authorization_id !== authorizationId) {
+        failAuthorization({ code: 'invalid_authorization_id' });
         return;
       }
       setDetails(data);
@@ -79,13 +100,14 @@ export default function OAuthConsentPage() {
 
     loadAuthorization().catch((loadError) => {
       if (!active) return;
-      setError(loadError?.message || 'Could not load the authorization request.');
-      setStatus('');
+      failAuthorization(loadError);
     });
     return () => { active = false; };
-  }, [authorizationId, router, router.isReady]);
+  }, [authorizationId, router, router.isReady, attempt]);
 
   async function decide(action) {
+    if (decidingRef.current || !canDecideConsent({ details, authorizationId, status, error, decision })) return;
+    decidingRef.current = true;
     setDecision(action);
     setError('');
     try {
@@ -100,8 +122,9 @@ export default function OAuthConsentPage() {
       if (decisionError) throw decisionError;
       navigateToClient(data);
     } catch (decisionError) {
-      setError(decisionError?.message || 'Could not complete the authorization request.');
-      setDecision('');
+      failAuthorization(decisionError);
+    } finally {
+      decidingRef.current = false;
     }
   }
 
@@ -121,9 +144,20 @@ export default function OAuthConsentPage() {
         </div>
 
         {status && <p className="status">{status}</p>}
-        {error && <div className="error" role="alert">{error}</div>}
+        {error && <div className="error" role="alert">
+          <strong>{restartRequired ? 'Connection request expired' : 'Connection unavailable'}</strong>
+          <p>{error}</p>
+          {restartRequired
+            ? <Link href="/mcp-guide">Connection setup guide</Link>
+            : <button type="button" className="deny" onClick={() => setAttempt(value => value + 1)}>Try again</button>}
+        </div>}
+        {error && admin && <div className="identity">
+          <span>You are still signed in</span>
+          <strong>{admin.email}</strong>
+          <small>{admin.role || 'ADMIN'} · administrator login is separate from client authorization</small>
+        </div>}
 
-        {details && (
+        {details?.authorization_id === authorizationId && !error && !status && (
           <>
             <div className="client">
               {details.client?.logo_uri ? (
@@ -163,7 +197,7 @@ export default function OAuthConsentPage() {
                 type="button"
                 className="deny"
                 onClick={() => decide('deny')}
-                disabled={Boolean(decision)}
+                disabled={!canDecideConsent({ details, authorizationId, status, error, decision })}
               >
                 <X size={18} /> Deny
               </button>
@@ -171,7 +205,7 @@ export default function OAuthConsentPage() {
                 type="button"
                 className="approve"
                 onClick={() => decide('approve')}
-                disabled={Boolean(decision)}
+                disabled={!canDecideConsent({ details, authorizationId, status, error, decision })}
               >
                 <Check size={18} /> {decision === 'approve' ? 'Connecting...' : 'Allow access'}
               </button>
