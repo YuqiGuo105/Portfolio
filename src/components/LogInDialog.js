@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
+import { signInWithGoogle } from '../lib/googleLogin';
 
 export default function LogInDialog({
                                       open,
@@ -12,14 +13,14 @@ export default function LogInDialog({
                                       onRegister,
                                       registerHref = '#contact-section',
                                       children,
-                                      showSignup = true,
+                                      showSignup = false,
                                       signupHiddenMessage = 'Sign-up is disabled. Please contact the site owner for access.',
                                       identifierLabel = 'Username',
                                       identifierType = 'text',
                                       identifierAutoComplete = 'username',
                                       identifierPlaceholder = 'Enter your username',
                                       submitLabel = 'LOG IN',
-                                      onGoogleSignIn,
+                                      onGoogleSignIn = signInWithGoogle,
                                       googleButtonLabel = 'Continue with Google',
                                     }) {
   const ref = useRef(null);

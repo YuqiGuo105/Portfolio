@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../../src/supabase/supabaseClient';
 import { verifyAdminSession } from '../../src/lib/writerApi';
+import { completeGoogleLogin, googleAuthError, safeLoginRedirect } from '../../src/lib/googleAuth.mjs';
 
 function sanitizeRedirect(target) {
-  if (typeof target !== 'string') return '/admin';
-  if (!target.startsWith('/') || target.startsWith('//')) return '/admin';
-  return target;
+  return safeLoginRedirect(target, '/admin');
 }
 
 function buildLoginRedirect(target, message) {
@@ -20,7 +19,7 @@ function buildLoginRedirect(target, message) {
 
 export default function AdminOauthCallback() {
   const router = useRouter();
-  const [message, setMessage] = useState('Completing Google sign-in...');
+  const message = 'Completing Google sign-in...';
 
   useEffect(() => {
     if (!router.isReady) return undefined;
@@ -29,14 +28,10 @@ export default function AdminOauthCallback() {
     async function completeOauth() {
       const redirect = sanitizeRedirect(router.query.redirect);
       const code = typeof router.query.code === 'string' ? router.query.code : '';
-      const authError = typeof router.query.error_description === 'string'
-        ? decodeURIComponent(router.query.error_description.replace(/\+/g, ' '))
-        : typeof router.query.error === 'string'
-          ? router.query.error
-          : '';
+      const authError = router.query.error || router.query.error_description;
 
       if (authError) {
-        await router.replace(buildLoginRedirect(redirect, authError));
+        await router.replace(buildLoginRedirect(redirect, googleAuthError(router.query.error_code || router.query.error)));
         return;
       }
 
@@ -46,20 +41,18 @@ export default function AdminOauthCallback() {
       }
 
       try {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          await router.replace(buildLoginRedirect(redirect, error.message || 'Google sign-in could not be completed.'));
-          return;
-        }
+        await completeGoogleLogin(supabase, code);
+        if (!active) return;
 
         const result = await verifyAdminSession();
+        if (!active) return;
         if (result.authorized) {
           await router.replace(redirect);
           return;
         }
 
         if (result.status === 401 || result.status === 403) {
-          await supabase.auth.signOut().catch(() => {});
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
           await router.replace(`/admin/login?redirect=${encodeURIComponent(redirect)}&reason=unauthorized`);
           return;
         }

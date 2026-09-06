@@ -9,6 +9,8 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { supabase } from '../../src/supabase/supabaseClient';
 import { verifyAdminSession } from '../../src/lib/writerApi';
+import { signInWithGoogle } from '../../src/lib/googleLogin';
+import { safeLoginRedirect } from '../../src/lib/googleAuth.mjs';
 
 const NOT_ALLOWED_MESSAGE = 'Not allowed. This account is not an authorized administrator.';
 
@@ -17,16 +19,7 @@ function showNotAllowed() {
 }
 
 function sanitizeRedirect(target) {
-  if (typeof target !== 'string') return '/admin';
-  // Only accept internal paths so we don't open an open-redirect.
-  if (!target.startsWith('/') || target.startsWith('//')) return '/admin';
-  return target;
-}
-
-function buildOauthRedirect(target) {
-  if (typeof window === 'undefined') return undefined;
-  const safe = sanitizeRedirect(target);
-  return `${window.location.origin}/admin/callback?redirect=${encodeURIComponent(safe)}`;
+  return safeLoginRedirect(target, '/admin');
 }
 
 export default function AdminLogin() {
@@ -119,17 +112,7 @@ export default function AdminLogin() {
     setError('');
     setGoogleLoading(true);
     try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: buildOauthRedirect(router.query.redirect),
-        },
-      });
-      if (oauthError) {
-        setError(oauthError.message || 'Could not start Google sign-in.');
-      }
-      // On success Supabase navigates away; the bounce-back lands in the
-      // useEffect above which detects the session and routes to /admin.
+      await signInWithGoogle({ redirect: sanitizeRedirect(router.query.redirect), admin: true });
     } catch (err) {
       setError(err?.message || 'Could not start Google sign-in.');
     } finally {
