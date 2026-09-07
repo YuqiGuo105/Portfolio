@@ -16,17 +16,21 @@ A modern Next.js portfolio application for showcasing projects, blogs, CV, visit
 
 ---
 
-## Admin / MCP Operations
+## MCP Integrations
 
-Sign in to the protected admin console, enter a platform command, review the
-proposed action, and confirm it. Read operations run immediately; write
-operations require explicit approval.
+Connect Claude, Codex, or any Streamable HTTP MCP client to the public endpoint
+at `https://www.yuqi.site/mcp`. The connector exposes seven read-only tools for
+searching portfolio content and retrieving articles, projects, architecture,
+and professional profile evidence.
 
 <p align="center">
-  <img src="docs/readme-assets/admin-mcp-operate-console.png" alt="Admin MCP operate console" width="760" />
+  <img src="docs/readme-assets/claude-yuqi-portfolio-connector.png" alt="Yuqi Portfolio MCP connector and read-only tools in Claude" width="820" />
 </p>
 
-### Connect from Codex
+### Connect from Claude or Codex
+
+In Claude, open **Settings → Customize → Connectors**, add a custom connector,
+and use `https://www.yuqi.site/mcp` as the remote MCP server URL.
 
 Open **+ → Plugins**, select **Yuqi Portfolio**, and ask Codex to use its tools.
 For direct MCP setup:
@@ -36,8 +40,8 @@ codex mcp add yuqi-portfolio --url https://www.yuqi.site/mcp
 codex mcp add yuqi-portfolio-admin --url https://www.yuqi.site/mcp/admin
 ```
 
-Complete sign-in when prompted for admin tools. Write operations still require
-explicit confirmation.
+The admin endpoint remains separately protected by sign-in, server-managed
+roles, audited execution, and explicit confirmation for write operations.
 
 <p align="center">
   <img src="docs/readme-assets/codex-yuqi-portfolio-plugin.png" alt="Yuqi Portfolio plugin available in Codex" width="680" />
