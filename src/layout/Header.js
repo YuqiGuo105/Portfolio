@@ -6,8 +6,7 @@ import dynamic from "next/dynamic";
 const NotificationBell = dynamic(() => import("../components/NotificationBell"), { ssr: false });
 const SubscribeDialog = dynamic(() => import("../components/SubscribeDialog"), { ssr: false });
 
-const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL;
-const INSTAGRAM_URL = process.env.NEXT_PUBLIC_INSTAGRAM_URL;
+import SocialLinks from '../components/SocialLinks';
 
 const Header = ({ onOpenSearch }) => {
   const openMenu = (event) => {
@@ -298,6 +297,7 @@ const Header = ({ onOpenSearch }) => {
             </div>
           </div>
         </div>
+        <SocialLinks className="menu-social-links" />
       </div>
     </header>
   );

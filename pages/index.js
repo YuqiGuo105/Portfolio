@@ -17,9 +17,7 @@ import GuideHighlights from "../src/components/GuideHighlights";
 import { isBrowserAnalyticsDisabled } from "../src/lib/analyticsHostFilter";
 import { GitPullRequest } from "lucide-react";
 
-const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL;
-const LEETCODE_URL = process.env.NEXT_PUBLIC_LEETCODE_URL;
-const INSTAGRAM_URL = process.env.NEXT_PUBLIC_INSTAGRAM_URL;
+import SocialLinks from "../src/components/SocialLinks";
 
 Modal.setAppElement('#__next');
 const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
@@ -861,35 +859,7 @@ const Index = () => {
                     <strong>Microservices</strong> and <strong>Distributed Systems</strong>.
                   </p>
 
-                  <div className="social-links">
-                    <a
-                      target="_blank"
-                      rel="noreferrer"
-                      href={GITHUB_URL}
-                      onClick={() => recordClick("social-link", GITHUB_URL)}
-                    >
-                      <i aria-hidden="true" className="fab fa-github" />
-                    </a>
-                    <a
-                      target="_blank"
-                      rel="noreferrer"
-                      href={LEETCODE_URL}
-                      onClick={() => recordClick("social-link", LEETCODE_URL)}
-                    >
-                      <i
-                        aria-hidden="true"
-                        className="leetcode-icon-bottom custom-leetcode-icon"
-                      />
-                    </a>
-                    <a
-                      target="_blank"
-                      rel="noreferrer"
-                      href={INSTAGRAM_URL}
-                      onClick={() => recordClick("social-link", INSTAGRAM_URL)}
-                    >
-                      <i aria-hidden="true" className="fab fa-instagram" />
-                    </a>
-                  </div>
+                  <SocialLinks className="social-links" onVisit={(url) => recordClick("social-link", url)} />
                 </div>
               </div>
               <div className="info-list">

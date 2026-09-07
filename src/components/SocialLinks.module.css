@@ -1,0 +1,23 @@
+.links.links { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.links.links a {
+  display: inline-flex; align-items: center; justify-content: center; position: relative;
+  width: 44px; height: 44px; flex: 0 0 44px; margin: 0; padding: 0;
+  color: inherit; text-decoration: none; border-radius: 8px;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+.links.links a i { font-size: 26px; line-height: 1; margin: 0; }
+.leetcode {
+  width: 25px; height: 25px; display: block; background-color: currentColor;
+  -webkit-mask: url('/assets/icons/leetcode.svg') center / contain no-repeat;
+  mask: url('/assets/icons/leetcode.svg') center / contain no-repeat;
+}
+.links.links a:hover { color: #f5a623; background: rgba(148, 163, 184, 0.12); }
+.links.links a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.tooltip {
+  position: absolute; top: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+  padding: 5px 8px; border-radius: 4px; background: #20282d; color: white;
+  font: 500 12px/1.4 sans-serif; letter-spacing: 0; white-space: nowrap;
+  opacity: 0; pointer-events: none; z-index: 3;
+}
+.links a:hover .tooltip, .links a:focus-visible .tooltip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .links.links a { transition: none; } }
