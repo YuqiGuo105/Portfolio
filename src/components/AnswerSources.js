@@ -1,11 +1,15 @@
-import { BookOpen, ExternalLink } from "lucide-react"
+import { BookOpen, ChevronDown, ExternalLink } from "lucide-react"
 import { isSourceLinked, mergeEvidence } from "../lib/chatEvidence.mjs"
 
 export default function AnswerSources({ cards = [], related = [], answer = "" }) {
   const sources = mergeEvidence(cards, related)
   if (!sources.length) return null
-  return <section className="answer-sources" aria-label="Answer sources">
-    <h4><BookOpen size={15} aria-hidden="true" /> Sources <span>{sources.length}</span></h4>
+  return <details className="answer-sources" aria-label="Answer sources">
+    <summary className="sources-toggle" title="Show or hide answer sources">
+      <BookOpen size={15} aria-hidden="true" />
+      <span>Sources</span><span className="sources-count">{sources.length}</span>
+      <ChevronDown className="sources-chevron" size={14} aria-hidden="true" />
+    </summary>
     <ol>
       {sources.map((source, index) => <li key={source.url}>
         <span className="source-number">{index + 1}</span>
@@ -24,9 +28,16 @@ export default function AnswerSources({ cards = [], related = [], answer = "" })
       </li>)}
     </ol>
     <style jsx>{`
-      .answer-sources { margin: 14px 0 4px; padding-top: 12px; border-top: 1px solid #94a3b844; color: inherit; }
-      h4 { display: flex; align-items: center; gap: 7px; margin: 0 0 8px; font-size: 13px; line-height: 1.5; letter-spacing: 0; }
-      h4 span { font-weight: 400; opacity: .7; }
+      .answer-sources { margin: 10px 0 0; color: inherit; }
+      .sources-toggle { display: flex; align-items: center; gap: 7px; width: fit-content; max-width: 100%; min-height: 44px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; list-style: none; letter-spacing: 0; }
+      .sources-toggle::-webkit-details-marker { display: none; }
+      .sources-toggle:hover { background: #94a3b81a; }
+      .sources-count { opacity: .65; font-variant-numeric: tabular-nums; }
+      .sources-toggle :global(svg) { flex-shrink: 0; }
+      .sources-toggle :global(.sources-chevron) { transition: transform 160ms ease; opacity: .65; }
+      .answer-sources[open] > .sources-toggle :global(.sources-chevron) { transform: rotate(180deg); }
+      .answer-sources[open] > ol { margin-top: 4px; border-top: 1px solid #94a3b833; }
+      @media (prefers-reduced-motion: reduce) { .sources-toggle :global(.sources-chevron) { transition: none; } }
       ol { list-style: none; padding: 0; margin: 0; }
       li { display: flex; align-items: flex-start; gap: 9px; padding: 9px 0; border-bottom: 1px solid #94a3b822; }
       .source-number { flex: 0 0 22px; text-align: center; font-size: 12px; line-height: 22px; color: #137a70; background: #2ab5a41a; border-radius: 4px; }
@@ -39,5 +50,5 @@ export default function AnswerSources({ cards = [], related = [], answer = "" })
       blockquote { margin: 6px 0 2px; padding: 4px 10px; border-left: 2px solid #268d82; font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
       a:focus-visible, summary:focus-visible { outline: 2px solid #268d82; outline-offset: 3px; }
     `}</style>
-  </section>
+  </details>
 }

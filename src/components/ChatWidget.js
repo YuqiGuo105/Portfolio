@@ -4036,10 +4036,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
               {m.role === "assistant" && (m.sourceCards?.length > 0 || m.relatedLinks?.length > 0) ? (
                 <AnswerSources cards={m.sourceCards} related={m.relatedLinks} answer={m.content} />
               ) : null}
-              {m.role === "assistant" && m.runId ? <details style={{ marginTop: 10, fontSize: 12, overflowWrap: "anywhere" }}>
-                <summary style={{ cursor: "pointer" }}>Run details</summary>
-                <code style={{ userSelect: "text" }}>{m.runId}</code>
-              </details> : null}
 
               {/* Related links — dynamic content suggestions from semantic search */}
             </div>
