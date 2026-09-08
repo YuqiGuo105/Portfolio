@@ -95,7 +95,7 @@ export default function VisitorsPage() {
   const [error, setError] = useState("");
   const [exportingFormat, setExportingFormat] = useState("");
   const [exportStatus, setExportStatus] = useState({ tone: "", message: "" });
-  const [queryExpanded, setQueryExpanded] = useState(false);
+  const [queryExpanded, setQueryExpanded] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -458,6 +458,7 @@ function VisitorPagination({
 }
 
 function VisitorIntelligence({ data, loading, error, hours, onRetry, onInspectSession }) {
+  const [expanded, setExpanded] = useState(false);
   const [journeyExpanded, setJourneyExpanded] = useState(false);
   const funnel = data.funnel || [];
   const attribution = data.attribution || [];
@@ -481,18 +482,27 @@ function VisitorIntelligence({ data, loading, error, hours, onRetry, onInspectSe
             {data.policy?.version ? ` v${data.policy.version}` : ""}
           </div>
         </div>
-        <button className={ui.buttonSecondary} type="button" onClick={onRetry} disabled={loading}>
-          <RefreshCw size={14} /> Refresh insights
-        </button>
+        <div className={visitorStyles.insightHeaderActions}>
+          <button className={ui.buttonSecondary} type="button" onClick={onRetry} disabled={loading}>
+            <RefreshCw size={14} /> Refresh insights
+          </button>
+          <DisclosureButton
+            controls="visitor-intelligence-content"
+            expanded={expanded}
+            label="visitor intelligence"
+            onClick={() => setExpanded((current) => !current)}
+          />
+        </div>
       </div>
 
-      {error && <div className={ui.errorBanner}>{error}</div>}
-      {loading && !hasData ? (
-        <div className={visitorStyles.insightEmpty}>Loading visitor intelligence...</div>
-      ) : !hasData ? (
-        <div className={visitorStyles.insightEmpty}>No behavioral signal in this window yet.</div>
-      ) : (
-        <div className={visitorStyles.insightGrid}>
+      <div hidden={!expanded} id="visitor-intelligence-content">
+        {error && <div className={ui.errorBanner}>{error}</div>}
+        {loading && !hasData ? (
+          <div className={visitorStyles.insightEmpty}>Loading visitor intelligence...</div>
+        ) : !hasData ? (
+          <div className={visitorStyles.insightEmpty}>No behavioral signal in this window yet.</div>
+        ) : (
+          <div className={visitorStyles.insightGrid}>
           <div className={`${visitorStyles.insightCard} ${visitorStyles.insightCardWide}`}>
             <div className={visitorStyles.insightCardHeader}>
               <GitBranch size={15} />
@@ -600,8 +610,9 @@ function VisitorIntelligence({ data, loading, error, hours, onRetry, onInspectSe
               />
             </div>
           </div>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </section>
   );
 }

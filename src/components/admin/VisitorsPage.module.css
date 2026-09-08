@@ -29,6 +29,7 @@
 .exportNoticeError { background: #fff5f4; color: #a43c34; }
 .insightPanel { overflow: hidden; }
 .insightHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 17px; border-bottom: 1px solid #e3e8eb; }
+.insightHeaderActions { display: flex; align-items: center; gap: 8px; }
 .insightTitle { display: flex; align-items: center; gap: 8px; color: #25313b; font-size: 14px; font-weight: 800; }
 .insightTitle svg { color: #0f766e; }
 .insightSubtitle { margin-top: 3px; color: #7a858e; font-size: 11px; }
@@ -316,6 +317,8 @@
   .alertGrid { grid-template-columns: 1fr; }
   .alertSection + .alertSection { border-top: 1px solid #e3e8eb; border-left: 0; }
   .insightHeader { align-items: flex-start; flex-direction: column; }
+  .insightHeaderActions { width: 100%; }
+  .insightHeaderActions button { flex: 1; }
   .insightGrid { grid-template-columns: 1fr; }
   .insightCard { border-right: 0; border-bottom: 1px solid #e8ecef; }
   .insightCard:last-child { border-bottom: 0; }
