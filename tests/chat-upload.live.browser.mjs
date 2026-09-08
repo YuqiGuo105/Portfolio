@@ -23,7 +23,19 @@ try {
   const grantResponse = page.waitForResponse(r => r.url().includes('/attachments/upload-url') && r.request().method() === 'POST');
   const uploadResponse = page.waitForResponse(r => r.url().includes('/content?') && r.request().method() === 'PUT');
   uploadResponse.catch(() => {});
-  await page.locator('#__chat_widget_root input[type=file]').setInputFiles({ name: 'synthetic-verification.pdf', mimeType: 'application/pdf', buffer: pdf });
+  if (process.env.CHAT_UPLOAD_INPUT === 'drop') {
+    const data = await page.evaluateHandle(bytes => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([new Uint8Array(bytes)], 'synthetic-verification.pdf', { type: 'application/pdf' }));
+      return transfer;
+    }, Array.from(pdf));
+    const panel = page.locator('#__chat_widget_root .bot-container');
+    await panel.dispatchEvent('dragenter', { dataTransfer: data });
+    await panel.dispatchEvent('drop', { dataTransfer: data });
+    await data.dispose();
+  } else {
+    await page.locator('#__chat_widget_root input[type=file]').setInputFiles({ name: 'synthetic-verification.pdf', mimeType: 'application/pdf', buffer: pdf });
+  }
   const permission = await grantResponse;
   assert.equal(permission.status(), 201, 'Upload grant failed');
   grant = await permission.json();
@@ -31,19 +43,27 @@ try {
   deviceId = permission.request().headers()['x-cw-device-id'];
   assert.equal(new URL(grant.uploadUrl).protocol, 'https:');
   assert.equal((await uploadResponse).status(), 200, 'Real browser upload failed');
+  const storedUrl = `${storageBase}/storage/v1/object/authenticated/${process.env.AGENT_ATTACHMENT_BUCKET || 'chat-agent-private'}/attachments/${grant.attachmentId}/content`;
+  const storageHeaders = { apikey: key, Authorization: `Bearer ${key}` };
+  const before = await fetch(`${storedUrl}?cacheNonce=${randomUUID()}`, { headers: storageHeaders, signal: AbortSignal.timeout(30000) });
+  assert.equal(before.status, 200, 'Uploaded PDF is missing from private Storage');
+  assert.equal((await before.arrayBuffer()).byteLength, pdf.length, 'Stored PDF size differs');
+  await page.getByRole('button', { name: 'Remove file', exact: true }).waitFor();
   const answerResponse = page.waitForResponse(r => r.url().includes('/answer/stream') && r.request().method() === 'POST', { timeout: 180000 });
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  const answer = await answerResponse;
-  const stream = await answer.text();
-  assert.ok(stream.includes(label), 'AI did not read the PDF label');
+  assert.equal((await answerResponse).status(), 200);
   await page.getByText(label, { exact: false }).first().waitFor({ timeout: 30000 });
-  const stored = await fetch(`${storageBase}/storage/v1/object/authenticated/${process.env.AGENT_ATTACHMENT_BUCKET || 'chat-agent-private'}/attachments/${grant.attachmentId}/content?cacheNonce=${randomUUID()}`, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(30000),
-  });
-  const result = await stored.json().catch(() => ({}));
-  assert.ok(stored.status === 404 || stored.status === 400 && String(result.statusCode) === '404', 'Original PDF was not deleted');
+  let deleted = false;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const stored = await fetch(`${storedUrl}?cacheNonce=${randomUUID()}`, { headers: storageHeaders, signal: AbortSignal.timeout(30000) });
+    const result = await stored.json().catch(() => ({}));
+    deleted = stored.status === 404 || stored.status === 400 && String(result.statusCode) === '404';
+    if (deleted) break;
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  assert.ok(deleted, 'Original PDF was not deleted');
   await page.screenshot({ path: '/private/tmp/chat-upload-live.png' });
-  console.log('PASS real Chrome PDF selection, HTTPS upload, AI answer, rendered response, and private Storage deletion');
+  console.log(`PASS real Chrome PDF ${process.env.CHAT_UPLOAD_INPUT === 'drop' ? 'drop' : 'selection'}, HTTPS upload, private Storage presence, AI answer, rendered response, and Storage deletion`);
 } finally {
   try {
     if (grant?.attachmentId && sessionId && deviceId) {

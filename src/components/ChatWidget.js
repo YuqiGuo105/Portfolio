@@ -9,7 +9,7 @@ import { useRouter } from "next/router"
 import LogInDialog from "../components/LogInDialog"
 import AnswerSources from "./AnswerSources"
 import VoiceInput from "./VoiceInput"
-import { Mic, Plus } from "lucide-react"
+import { Mic, Plus, Upload } from "lucide-react"
 import { mergeEvidence } from "../lib/chatEvidence.mjs"
 import { postSSE } from "../lib/chatStream.mjs"
 import { applyWebGuidePlan, normalizeWebGuidePlan } from "../lib/webGuide"
@@ -510,6 +510,9 @@ const isAcceptedUpload = (file) => {
   return ACCEPTED_UPLOAD_TYPES.has(mimeType)
     || ((!mimeType || mimeType === "application/octet-stream") && ACCEPTED_UPLOAD_SUFFIXES.has(extension))
 }
+
+const isFileTransfer = (transfer) => Array.from(transfer?.types || []).includes("Files")
+const attachmentFingerprint = (file) => JSON.stringify([file.name, file.size, file.lastModified])
 
 const storageSafeGet = (key) => {
   if (typeof window === "undefined") return null
@@ -2275,8 +2278,37 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   }, [guideQuestion])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const uploadBusyRef = useRef(false)
+  const [fileDragActive, setFileDragActive] = useState(false)
+  const fileDragDepthRef = useRef(0)
   const [voiceOpen, setVoiceOpen] = useState(false)
   const pendingUploadsRef = useRef(new Map())
+
+  useEffect(() => {
+    const reset = () => {
+      fileDragDepthRef.current = 0
+      setFileDragActive(false)
+    }
+    const preventFileNavigation = (event) => {
+      if (!isFileTransfer(event.dataTransfer)) return
+      event.preventDefault()
+      if (event.type === "drop") reset()
+      else event.dataTransfer.dropEffect = "none"
+    }
+    const leaveWindow = (event) => { if (!event.relatedTarget) reset() }
+    window.addEventListener("dragover", preventFileNavigation)
+    window.addEventListener("drop", preventFileNavigation)
+    window.addEventListener("dragleave", leaveWindow)
+    window.addEventListener("dragend", reset)
+    window.addEventListener("blur", reset)
+    return () => {
+      window.removeEventListener("dragover", preventFileNavigation)
+      window.removeEventListener("drop", preventFileNavigation)
+      window.removeEventListener("dragleave", leaveWindow)
+      window.removeEventListener("dragend", reset)
+      window.removeEventListener("blur", reset)
+    }
+  }, [])
 
   useEffect(() => {
     const pending = pendingUploadsRef.current
@@ -2615,8 +2647,20 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   }
 
   const pickFiles = async (fileList) => {
-    const incoming = Array.from(fileList || [])
-    if (!incoming.length) return
+    const supplied = Array.from(fileList || [])
+    if (!supplied.length) return
+    if (uploadBusyRef.current || loading) {
+      setErrorToast(loading ? "Wait for the current response to finish." : "Wait for uploads to finish.")
+      return
+    }
+    const fingerprints = new Set(composerFiles.map((item) => attachmentFingerprint(item.file)))
+    const incoming = supplied.filter(file => {
+      const key = attachmentFingerprint(file)
+      if (fingerprints.has(key)) return false
+      fingerprints.add(key)
+      return true
+    })
+    if (!incoming.length) { setErrorToast("This file is already attached."); return }
 
     const room = MAX_FILES_PER_MESSAGE - composerFiles.length
     if (room <= 0) {
@@ -2651,10 +2695,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       progress: 0,
     }))
 
+    uploadBusyRef.current = true
     setComposerFiles((prev) => [...prev, ...newItems])
     setUploading(true)
 
-    await Promise.all(
+    try { await Promise.all(
       newItems.map((item) => {
         const entry = { discarded: false }
         pendingUploadsRef.current.set(item.id, entry)
@@ -2695,9 +2740,25 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         })()
         return entry.done
       }),
-    )
+    ) } finally {
+      uploadBusyRef.current = false
+      setUploading(false)
+    }
+  }
 
-    setUploading(false)
+  const handleFileDrop = (event) => {
+    if (!isFileTransfer(event.dataTransfer)) return
+    event.preventDefault()
+    event.stopPropagation()
+    fileDragDepthRef.current = 0
+    setFileDragActive(false)
+    const items = Array.from(event.dataTransfer.items || [])
+    if (items.some(item => item.webkitGetAsEntry?.()?.isDirectory)) {
+      setErrorToast("Add individual files, not folders.")
+      return
+    }
+    touchSession()
+    void pickFiles(event.dataTransfer.files)
   }
 
   const removeComposerFile = async (id) => {
@@ -3758,6 +3819,26 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   return (
     <div
       className="bot-container relative mb-6 flex flex-col w-screen md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700"
+      onDragEnter={(event) => {
+        if (!isFileTransfer(event.dataTransfer)) return
+        event.preventDefault()
+        event.stopPropagation()
+        fileDragDepthRef.current += 1
+        setFileDragActive(true)
+      }}
+      onDragOver={(event) => {
+        if (!isFileTransfer(event.dataTransfer)) return
+        event.preventDefault()
+        event.stopPropagation()
+        event.dataTransfer.dropEffect = uploading || loading || composerFiles.length >= MAX_FILES_PER_MESSAGE ? "none" : "copy"
+      }}
+      onDragLeave={(event) => {
+        if (!isFileTransfer(event.dataTransfer)) return
+        event.stopPropagation()
+        fileDragDepthRef.current = Math.max(0, fileDragDepthRef.current - 1)
+        if (!fileDragDepthRef.current) setFileDragActive(false)
+      }}
+      onDrop={handleFileDrop}
       style={
         desktopResizable
           ? {
@@ -3769,6 +3850,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           : undefined
       }
     >
+      {fileDragActive && <div className="cw-file-drop" role="status" aria-live="polite">
+        <Upload size={32} aria-hidden="true" />
+        <strong>{loading ? "Response in progress" : uploading ? "Upload in progress" : composerFiles.length >= MAX_FILES_PER_MESSAGE ? "Attachment limit reached" : "Drop files"}</strong>
+      </div>}
       {desktopResizable ? (
         <>
           <div className="cw-resize-handle cw-resize-left" onMouseDown={(e) => startResize(e, "w")} />
@@ -4034,7 +4119,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || composerFiles.length >= MAX_FILES_PER_MESSAGE}
+            disabled={loading || uploading || composerFiles.length >= MAX_FILES_PER_MESSAGE}
             aria-label="Upload file"
             style={{
               width: "40px",
@@ -4053,7 +4138,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
               color: "white",
               border: "none",
               cursor: "pointer",
-              opacity: uploading || composerFiles.length >= MAX_FILES_PER_MESSAGE ? 0.6 : 1,
+              opacity: loading || uploading || composerFiles.length >= MAX_FILES_PER_MESSAGE ? 0.6 : 1,
               padding: 0,
               boxSizing: "border-box",
             }}
@@ -4224,6 +4309,22 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       </form>
 
       <style jsx global>{`
+        #__chat_widget_root .cw-file-drop {
+          position: absolute;
+          inset: 8px;
+          z-index: 50;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          border: 2px dashed var(--cw-input-text, #475569);
+          border-radius: 8px;
+          background: var(--cw-input-bg, #fff);
+          color: var(--cw-input-text, #202b32);
+          pointer-events: none;
+          font-size: 18px;
+        }
         /* ===== AG-UI Chat Agent Styles ===== */
         #__chat_widget_root .bot-container {
           height: min(68vh, 576px);
