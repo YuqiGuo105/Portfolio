@@ -1,0 +1,89 @@
+.performer:global(.st-roaming-pet) :global(.st-roaming-pet-body) { transform-origin: 50% 87%; }
+.performer:where([data-gesture]:not([data-gesture="rest"])) :global(.st-pet-layer) { animation: none; }
+.performer[data-gesture="rest"]:not(:global(.is-walking)):not(:global(.is-dragging)):not(:global(.is-speaking)) :is(:global(.st-pet-head), :global(.st-pet-arm), :global(.st-pet-leg)) { animation: none; }
+
+.performer[data-gesture="curious"] :global(.st-pet-head) { animation: curiousHead 3s ease-in-out both; }
+.performer[data-gesture="curious"] :global(.st-pet-arm-right) { animation: curiousPoint 3s ease-in-out both; }
+.performer[data-gesture="curious"] :global(.st-pet-steam) { animation: steamQuestion 3s ease-in-out both; }
+.performer[data-gesture="stretch"] :global(.st-roaming-pet-body) { animation: stretchBody 3s ease-in-out both; }
+.performer[data-gesture="stretch"] :global(.st-pet-arm-left) { animation: stretchArm 3s ease-in-out both; }
+.performer[data-gesture="stretch"] :global(.st-pet-arm-right) { animation: stretchPoint 3s ease-in-out both; }
+.performer[data-gesture="stretch"] :global(.st-pet-steam) { animation: steamExhale 3s ease-in-out both; }
+.performer[data-gesture="happy"] :global(.st-roaming-pet-body) { animation: happyHop 3s ease-in-out both; }
+.performer[data-gesture="happy"] :global(.st-pet-arm-left) { animation: happyArm 3s ease-in-out both; }
+.performer[data-gesture="happy"] :global(.st-pet-arm-right) { animation: greetArm 3s ease-in-out both; }
+.performer[data-gesture="happy"] :global(.st-roaming-shadow) { animation: hopShadow 3s ease-in-out both; }
+.performer[data-gesture="balance"] :global(.st-roaming-pet-body) { animation: balanceBody 3s ease-in-out both; }
+.performer[data-gesture="balance"] :global(.st-pet-leg-left) { animation: balanceFoot 3s ease-in-out both; }
+.performer[data-gesture="balance"] :global(.st-pet-arm-left) { animation: balanceArm 3s ease-in-out both; }
+.performer[data-gesture="sleepy"] :global(.st-pet-head) { animation: sleepyHead 3s ease-in-out both; }
+.performer[data-gesture="sleepy"] :global(.st-pet-steam) { animation: sleepySteam 3s ease-in-out both; }
+.performer[data-gesture="greet"] :global(.st-pet-arm-right) { animation: greetArm 3s ease-in-out both; }
+.performer[data-gesture="greet"] :global(.st-pet-head) { animation: greetNod 3s ease-in-out both; }
+
+.performer[data-gesture]:where(:not([data-gesture="rest"])) :is(:global(.st-pet-layer), :global(.st-roaming-pet-body), :global(.st-roaming-shadow)) {
+    animation-duration: var(--pet-gesture-duration, 3000ms);
+    animation-timing-function: cubic-bezier(.37, 0, .24, 1);
+}
+.performer:not(:global(.is-walking)):not(:global(.is-dragging)):not(:global(.is-speaking)) :global(.st-pet-core) { animation: none; }
+.performer :global(.st-pet-rig) {
+    animation: quietBreath 4800ms ease-in-out infinite;
+    transform-origin: 50% 88%;
+}
+
+@keyframes quietBreath {
+    0%, 100% { scale: 1; }
+    42% { scale: 1.003 1.009; }
+    72% { scale: 1.001 1.002; }
+}
+
+.performer :global(.st-pet-play) {
+    position: absolute; top: 0; left: 0; width: 36px; height: 36px; padding: 0; z-index: 6;
+    display: grid; place-items: center; border: 1px solid #81918c60; border-radius: 50%;
+    background: #f4faf7; color: #227763; cursor: pointer;
+    opacity: 0; transition: opacity 160ms ease;
+}
+.performer:hover :global(.st-pet-play), .performer:focus-within :global(.st-pet-play) { opacity: 1; }
+.performer :global(.st-pet-play:focus-visible) { outline: 2px solid #2aaf8d; outline-offset: 3px; }
+.performer :global(.st-pet-play::before), .performer :global(.st-pet-play::after) { display: none; }
+:global(body.dark-skin) .performer :global(.st-pet-play) { background: #263531; color: #a4efd3; }
+@media (hover: none) { .performer :global(.st-pet-play) { opacity: 1; } }
+
+@keyframes curiousHead {
+    0%, 100% { transform: rotate(0) translateY(0); }
+    13% { transform: rotate(1.2deg) translateY(1px); }
+    32% { transform: rotate(-4.8deg) translateY(-4px); }
+    53% { transform: rotate(-4.2deg) translateY(-3px); }
+    75% { transform: rotate(1.6deg) translateY(0); }
+    89% { transform: rotate(-.5deg) translateY(0); }
+}
+@keyframes curiousPoint { 0%, 21%, 100% { transform: rotate(0); } 45% { transform: rotate(-5deg); } 62% { transform: rotate(-4deg); } 85% { transform: rotate(1deg); } }
+@keyframes steamQuestion { 0%, 12%, 100% { transform: rotate(0) translateX(0); } 45% { transform: rotate(-5deg) translateX(-8px); } 74% { transform: rotate(2deg) translateX(3px); } }
+@keyframes stretchBody { 0%, 100% { transform: scale(1); } 16% { transform: scale(1.008,.98); } 42% { transform: scale(.988,1.03); } 61% { transform: scale(.992,1.025); } 83% { transform: scale(1.005,.993); } }
+@keyframes stretchArm { 0%, 11%, 100% { transform: rotate(0); } 44% { transform: rotate(10deg); } 65% { transform: rotate(9deg); } 85% { transform: rotate(-1.5deg); } }
+@keyframes stretchPoint { 0%, 18%, 100% { transform: rotate(0); } 49% { transform: rotate(-9deg); } 68% { transform: rotate(-8deg); } 90% { transform: rotate(1deg); } }
+@keyframes steamExhale { 0%, 100% { transform: translateY(0) scaleY(1); opacity: 1; } 64% { transform: translateY(-14px) scaleY(1.1); opacity: .65; } 87% { transform: translateY(-3px) scaleY(1.02); opacity: .9; } }
+@keyframes happyHop {
+    0%, 100% { transform: translateY(0) scale(1) rotate(0); }
+    18% { transform: translateY(1px) scale(1.02,.96) rotate(-.8deg); animation-timing-function: cubic-bezier(.15,.65,.35,1); }
+    34% { transform: translateY(-11px) scale(.99,1.02) rotate(-1.4deg); animation-timing-function: cubic-bezier(.55,0,.85,.4); }
+    51% { transform: translateY(0) scale(1.025,.95) rotate(.8deg); }
+    66% { transform: translateY(-2px) scale(.995,1.008) rotate(-.4deg); }
+    83% { transform: translateY(0) scale(1.002,.998) rotate(.15deg); }
+}
+@keyframes happyArm { 0%, 100% { transform: rotate(0); } 18% { transform: rotate(-2deg); } 39% { transform: rotate(9deg); } 57% { transform: rotate(3deg); } 73% { transform: rotate(-1.5deg); } 89% { transform: rotate(.4deg); } }
+@keyframes hopShadow { 0%, 100% { opacity: .2; scale: 1; } 34% { opacity: .12; scale: .8; } 51% { opacity: .23; scale: 1.04; } 66% { opacity: .18; scale: .95; } }
+@keyframes balanceBody { 0%, 100% { transform: rotate(0); } 22% { transform: rotate(2.8deg); } 43% { transform: rotate(3.5deg); } 59% { transform: rotate(2.8deg); } 80% { transform: rotate(-.8deg); } 93% { transform: rotate(.2deg); } }
+@keyframes balanceFoot { 0%, 18%, 100% { transform: rotate(0) translateY(0); } 39% { transform: rotate(7deg) translateY(-10px); } 60% { transform: rotate(6deg) translateY(-9px); } 79% { transform: rotate(-1deg) translateY(0); } }
+@keyframes balanceArm { 0%, 12%, 100% { transform: rotate(0); } 35% { transform: rotate(8deg); } 51% { transform: rotate(6deg); } 67% { transform: rotate(7deg); } 87% { transform: rotate(-.8deg); } }
+@keyframes sleepyHead { 0%, 100% { transform: rotate(0) translateY(0); } 36% { transform: rotate(2deg) translateY(6px); } 63% { transform: rotate(3.5deg) translateY(10px); animation-timing-function: cubic-bezier(.2,.8,.3,1); } 71% { transform: rotate(-1deg) translateY(-2px); } 82% { transform: rotate(.6deg) translateY(2px); } }
+@keyframes sleepySteam { 0%, 100% { opacity: 1; transform: scaleY(1); } 64% { opacity: .55; transform: scaleY(.87); } 77% { opacity: .95; transform: scaleY(1.04); } }
+@keyframes greetArm { 0%, 100% { transform: rotate(0); } 12% { transform: rotate(2deg); } 28% { transform: rotate(-9deg); } 42% { transform: rotate(4deg); } 55% { transform: rotate(-6deg); } 67% { transform: rotate(2deg); } 79% { transform: rotate(-2.5deg); } 91% { transform: rotate(.5deg); } }
+@keyframes greetNod { 0%, 9%, 100% { transform: rotate(0) translateY(0); } 32% { transform: rotate(-2.5deg) translateY(2px); } 52% { transform: rotate(.8deg) translateY(0); } 76% { transform: rotate(-.6deg) translateY(1px); } }
+@media (prefers-reduced-motion: reduce) {
+    .performer[data-gesture] :global(.st-pet-layer),
+    .performer[data-gesture] :global(.st-roaming-pet-body),
+    .performer[data-gesture] :global(.st-roaming-shadow) { animation: none !important; }
+    .performer :global(.st-pet-rig) { animation: none !important; }
+    .performer :global(.st-pet-play) { transition: none; }
+}

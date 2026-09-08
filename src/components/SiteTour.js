@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { X } from "lucide-react"
+import { Sparkles, X } from "lucide-react"
 import { consumePendingWebGuide } from "../lib/webGuide"
 import TourDock from "./tour/TourDock"
 import TourArrival from "./tour/TourArrival"
+import usePetPerformance from "./tour/usePetPerformance"
+import petPerformanceStyles from "./tour/PetPerformance.module.css"
 import { tourNarrative } from "../lib/tourNarrative.mjs"
 import { collectTourDiscoveries, frameTourTarget, tourPetDimensions } from "../lib/tourScene.mjs"
 
@@ -76,10 +78,11 @@ function MrPotRig() {
                     <path d="M238 195H1000V580H880L855 695 795 765H440L322 730 298 590H238Z" />
                 </clipPath>
                 <clipPath id="st-pet-core-clip">
-                    <path d="M438 742H750L780 864 764 1015H438L420 865Z" />
+                    {/* Shared curved seam excludes the hanging arm from the torso layer. */}
+                    <path d="M438 742H750L780 864 764 1015H452L450 985Q475 969 467 944C452 898 462 850 478 795L485 780Z" />
                 </clipPath>
                 <clipPath id="st-pet-left-arm-clip">
-                    <path d="M320 760H465V1020H320Z" />
+                    <path d="M320 750H485V780L478 795C462 850 452 898 467 944Q475 969 450 985L442 1010H320Z" />
                 </clipPath>
                 <clipPath id="st-pet-right-arm-clip">
                     <path d="M750 780L845 722 890 590H1020V870L790 920 740 855Z" />
@@ -236,6 +239,12 @@ export default function SiteTour() {
     const [petDragging, setPetDragging] = useState(false)
     const [petReady, setPetReady] = useState(false)
     const [petHidden, setPetHidden] = useState(false)
+    const { gesture: petGesture, duration: petGestureDuration, interact: playWithPet } = usePetPerformance({
+        enabled: open && !arriving && uiReady && !petHidden,
+        busy: petWalking || petDragging || petSpeaking || mapOpen,
+    })
+    const petPerformingRef = useRef(false)
+    petPerformingRef.current = petGesture !== "rest" || petSpeaking
     const [availableVoices, setAvailableVoices] = useState([])
     const [petTransform, setPetTransform] = useState("translate3d(-120px, 120px, 0)")
     const petPositionRef = useRef({ x: -120, y: 120 })
@@ -654,7 +663,7 @@ export default function SiteTour() {
 
         window.clearInterval(petPatrolTimerRef.current)
         if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) petPatrolTimerRef.current = window.setInterval(() => {
-            if (petDraggingRef.current) return
+            if (petDraggingRef.current || petPerformingRef.current || document.hidden) return
             const base = petBaseRef.current
             const current = petPositionRef.current
             const direction = Math.random() > 0.5 ? 1 : -1
@@ -669,7 +678,7 @@ export default function SiteTour() {
             movePetTo(next)
             window.clearTimeout(petMoveTimerRef.current)
             petMoveTimerRef.current = window.setTimeout(() => setPetWalking(false), 760)
-        }, 3600)
+        }, 8000)
 
         return () => {
             window.clearTimeout(petMoveTimerRef.current)
@@ -891,11 +900,13 @@ export default function SiteTour() {
             )}
 
             {!petHidden && !arriving ? <div
-                className={`st-roaming-pet${petReady ? " is-ready" : ""}${petWalking ? " is-walking" : ""}${petSpeaking ? " is-speaking" : ""}${petDragging ? " is-dragging" : ""}`}
+                className={`st-roaming-pet ${petPerformanceStyles.performer}${petReady ? " is-ready" : ""}${petWalking ? " is-walking" : ""}${petSpeaking ? " is-speaking" : ""}${petDragging ? " is-dragging" : ""}`}
                 data-chapter={current?.id}
+                data-gesture={petGesture}
                 style={{
                     transform: petTransform,
                     "--st-pet-facing": petFacing,
+                    "--pet-gesture-duration": `${petGestureDuration}ms`,
                     "--st-pet-width": `${petDimensions().width}px`,
                     "--st-pet-height": `${petDimensions().height}px`,
                 }}
@@ -909,6 +920,13 @@ export default function SiteTour() {
                 onPointerCancel={stopPetDrag}
                 onLostPointerCapture={stopPetDrag}
             >
+                <button type="button" className="st-pet-play"
+                    aria-label={guideLanguage === "zh" ? "和 Mr.Pot 互动" : "Play with Mr.Pot"}
+                    title={guideLanguage === "zh" ? "和 Mr.Pot 互动" : "Play with Mr.Pot"}
+                    onPointerDown={event => event.stopPropagation()}
+                    onClick={event => { event.stopPropagation(); playWithPet() }}>
+                    <Sparkles size={17} aria-hidden="true" />
+                </button>
                 <button
                     type="button"
                     className="st-pet-close"
@@ -971,14 +989,10 @@ export default function SiteTour() {
                 .st-scene-frame i:nth-child(2) { top: -2px; right: -2px; border-width: 2px 2px 0 0; border-radius: 0 5px 0 0; }
                 .st-scene-frame i:nth-child(3) { bottom: -2px; left: -2px; border-width: 0 0 2px 2px; border-radius: 0 0 0 5px; }
                 .st-scene-frame i:nth-child(4) { bottom: -2px; right: -2px; border-width: 0 2px 2px 0; border-radius: 0 0 5px 0; }
-                .st-roaming-pet:not(.is-walking):not(.is-dragging)[data-chapter="projects"] .st-pet-arm-right { animation: st-point-out 3.8s ease-in-out infinite; }
-                .st-roaming-pet:not(.is-walking):not(.is-dragging)[data-chapter="techblogs"] .st-pet-head { animation: st-reading-nod 4s ease-in-out infinite; }
-                .st-roaming-pet:not(.is-walking):not(.is-dragging)[data-chapter="contact"] .st-pet-core { animation: st-friendly-bow 3.6s ease-in-out infinite; }
-                .st-roaming-pet:hover:not(.is-dragging) .st-pet-arm-left { animation: st-hello-wave 600ms ease-in-out 3; }
                 @keyframes st-point-out { 0%, 100% { transform: rotate(0); } 25%, 70% { transform: rotate(22deg) translateX(18px); } }
                 @keyframes st-reading-nod { 0%, 100% { transform: rotate(0); } 30%, 65% { transform: rotate(-5deg) translateY(10px); } }
                 @keyframes st-friendly-bow { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(7deg) translateY(8px); } }
-                @keyframes st-hello-wave { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(24deg); } }
+                @keyframes st-hello-wave { 0%, 100% { transform: rotate(0); } 35% { transform: rotate(-9deg); } 70% { transform: rotate(7deg); } }
                 @media (prefers-reduced-motion: reduce) { .st-scene-frame { transition: none; } .st-scene-caption, .st-roaming-pet .st-pet-layer { animation: none !important; } }
                 .st-highlight {
                     position: fixed;
@@ -1147,19 +1161,23 @@ export default function SiteTour() {
                     animation: st-pet-breathe 2.6s ease-in-out infinite;
                 }
 
+                .st-pet-head {
+                    animation: st-pet-look-around 14s ease-in-out infinite;
+                }
+
                 .st-pet-steam {
                     transform-origin: 600px 200px;
                     animation: st-pet-steam-drift 2.1s ease-in-out infinite alternate;
                 }
 
                 .st-pet-arm-left {
-                    transform-origin: 445px 795px;
-                    animation: st-pet-arm-rest-left 3.2s ease-in-out infinite;
+                    transform-origin: 465px 785px;
+                    animation: st-pet-arm-rest-left 11s ease-in-out infinite;
                 }
 
                 .st-pet-arm-right {
                     transform-origin: 760px 815px;
-                    animation: st-pet-wave 3.8s ease-in-out infinite;
+                    animation: st-pet-wave 8s ease-in-out infinite;
                 }
 
                 .st-pet-leg-left,
@@ -1167,6 +1185,8 @@ export default function SiteTour() {
                     transform-origin: 515px 1000px;
                 }
                 .st-pet-leg-right { transform-origin: 700px 1000px; }
+                .st-pet-leg-left { animation: st-pet-toe-tap 12s ease-in-out infinite; }
+                .st-pet-leg-right { animation: st-pet-weight-shift 12s ease-in-out infinite; }
 
                 .st-roaming-pet.is-walking .st-pet-head,
                 .st-roaming-pet.is-walking .st-pet-core {
@@ -1194,32 +1214,36 @@ export default function SiteTour() {
                 }
 
                 .st-roaming-pet.is-speaking .st-pet-arm-right {
-                    animation: st-pet-talk-wave 520ms ease-in-out infinite alternate;
+                    animation: st-pet-talk-wave 4.3s ease-in-out infinite;
+                }
+
+                .st-roaming-pet.is-speaking:not(.is-walking):not(.is-dragging) .st-pet-head {
+                    animation: st-reading-nod 2.6s ease-in-out infinite;
                 }
 
                 .st-roaming-pet.is-speaking .st-pet-steam {
-                    animation: st-pet-steam-speak 700ms ease-in-out infinite;
+                    animation: st-pet-steam-speak 2.9s ease-in-out infinite;
                 }
 
                 .st-roaming-pet.is-dragging .st-pet-head,
                 .st-roaming-pet.is-dragging .st-pet-core {
-                    animation: st-pet-drag-body 620ms ease-in-out infinite alternate;
+                    animation: st-pet-drag-body 1100ms ease-out both;
                 }
 
                 .st-roaming-pet.is-dragging .st-pet-arm-left {
-                    animation: st-pet-drag-arm-left 620ms ease-in-out infinite alternate;
+                    animation: st-pet-drag-arm-left 1200ms ease-out both;
                 }
 
                 .st-roaming-pet.is-dragging .st-pet-arm-right {
-                    animation: st-pet-drag-arm-right 620ms ease-in-out infinite alternate;
+                    animation: st-pet-drag-arm-right 1300ms ease-out both;
                 }
 
                 .st-roaming-pet.is-dragging .st-pet-leg-left {
-                    transform: rotate(1.5deg) translateY(3px);
+                    animation: st-pet-dangle-left 1400ms ease-out both;
                 }
 
                 .st-roaming-pet.is-dragging .st-pet-leg-right {
-                    transform: rotate(-1.5deg) translateY(3px);
+                    animation: st-pet-dangle-right 1500ms ease-out both;
                 }
 
                 .st-roaming-shadow {
@@ -1384,17 +1408,36 @@ export default function SiteTour() {
                 }
 
                 @keyframes st-pet-arm-rest-left {
-                    0%, 72%, 100% { transform: rotate(0); }
-                    82% { transform: rotate(1.8deg) translateY(1px); }
-                    91% { transform: rotate(-1deg); }
+                    0%, 48%, 76%, 100% { transform: rotate(0); }
+                    57% { transform: rotate(8deg); }
+                    66% { transform: rotate(4deg); }
                 }
 
                 @keyframes st-pet-wave {
-                    0%, 64%, 100% { transform: rotate(0); }
-                    72% { transform: rotate(-2.5deg); }
-                    80% { transform: rotate(2.5deg); }
-                    88% { transform: rotate(-2deg); }
-                    95% { transform: rotate(1.5deg); }
+                    0%, 58%, 100% { transform: rotate(0); }
+                    67% { transform: rotate(-9deg); }
+                    74% { transform: rotate(6deg); }
+                    81% { transform: rotate(-7deg); }
+                    89% { transform: rotate(4deg); }
+                }
+
+                @keyframes st-pet-look-around {
+                    0%, 18%, 52%, 100% { transform: rotate(0) translateY(0); }
+                    26%, 32% { transform: rotate(-3deg) translateY(-3px); }
+                    42% { transform: rotate(3deg) translateY(-2px); }
+                    72%, 78% { transform: rotate(-2deg) translateY(3px); }
+                    86% { transform: rotate(1deg); }
+                }
+
+                @keyframes st-pet-toe-tap {
+                    0%, 62%, 89%, 100% { transform: rotate(0) translateY(0); }
+                    68%, 79% { transform: rotate(7deg) translateY(-9px); }
+                    73%, 85% { transform: rotate(0) translateY(0); }
+                }
+
+                @keyframes st-pet-weight-shift {
+                    0%, 59%, 92%, 100% { transform: rotate(0); }
+                    66%, 84% { transform: rotate(-2deg); }
                 }
 
                 @keyframes st-pet-step-body {
@@ -1403,23 +1446,23 @@ export default function SiteTour() {
                 }
 
                 @keyframes st-pet-arm-swing-left {
-                    0% { transform: rotate(-2.5deg) translateY(1px); }
-                    100% { transform: rotate(3deg) translateY(-1px); }
+                    0% { transform: rotate(-5deg); }
+                    100% { transform: rotate(8deg); }
                 }
 
                 @keyframes st-pet-arm-swing-right {
-                    0% { transform: rotate(2.5deg) translateY(-1px); }
-                    100% { transform: rotate(-3deg) translateY(1px); }
+                    0% { transform: rotate(6deg); }
+                    100% { transform: rotate(-6deg); }
                 }
 
                 @keyframes st-pet-leg-step-left {
-                    0% { transform: rotate(-2deg) translateY(1px); }
-                    100% { transform: rotate(2deg) translateY(-2px); }
+                    0% { transform: rotate(-4deg) translateY(2px); }
+                    100% { transform: rotate(5deg) translateY(-9px); }
                 }
 
                 @keyframes st-pet-leg-step-right {
-                    0% { transform: rotate(2deg) translateY(-2px); }
-                    100% { transform: rotate(-2deg) translateY(1px); }
+                    0% { transform: rotate(5deg) translateY(-9px); }
+                    100% { transform: rotate(-4deg) translateY(2px); }
                 }
 
                 @keyframes st-pet-steam-walk {
@@ -1428,8 +1471,11 @@ export default function SiteTour() {
                 }
 
                 @keyframes st-pet-talk-wave {
-                    0% { transform: rotate(-3deg); }
-                    100% { transform: rotate(3deg); }
+                    0%, 12%, 100% { transform: rotate(0); }
+                    28% { transform: rotate(-5deg); }
+                    40% { transform: rotate(1.5deg); }
+                    57% { transform: rotate(-2.5deg); }
+                    72%, 88% { transform: rotate(-.5deg); }
                 }
 
                 @keyframes st-pet-steam-speak {
@@ -1438,18 +1484,38 @@ export default function SiteTour() {
                 }
 
                 @keyframes st-pet-drag-body {
-                    0% { transform: rotate(-1.5deg) translateY(0); }
-                    100% { transform: rotate(1.5deg) translateY(2px); }
+                    0%, 100% { transform: rotate(0); }
+                    25% { transform: rotate(-1.8deg); }
+                    52% { transform: rotate(.9deg); }
+                    78% { transform: rotate(-.3deg); }
                 }
 
                 @keyframes st-pet-drag-arm-left {
-                    0% { transform: rotate(1deg) translateY(1px); }
-                    100% { transform: rotate(3deg) translateY(3px); }
+                    0%, 100% { transform: rotate(0); }
+                    28% { transform: rotate(9deg); }
+                    54% { transform: rotate(-3deg); }
+                    78% { transform: rotate(1deg); }
                 }
 
                 @keyframes st-pet-drag-arm-right {
-                    0% { transform: rotate(-1deg) translateY(1px); }
-                    100% { transform: rotate(2deg) translateY(3px); }
+                    0%, 100% { transform: rotate(0); }
+                    32% { transform: rotate(-6deg); }
+                    58% { transform: rotate(2deg); }
+                    80% { transform: rotate(-.6deg); }
+                }
+
+                @keyframes st-pet-dangle-left {
+                    0%, 100% { transform: rotate(0); }
+                    25% { transform: rotate(-6deg); }
+                    50% { transform: rotate(3deg); }
+                    73% { transform: rotate(-1deg); }
+                }
+
+                @keyframes st-pet-dangle-right {
+                    0%, 100% { transform: rotate(0); }
+                    29% { transform: rotate(5deg); }
+                    54% { transform: rotate(-2.5deg); }
+                    77% { transform: rotate(.8deg); }
                 }
 
                 @keyframes st-pet-sound {
