@@ -10,7 +10,7 @@
  *   AGENT_SERVICE_URL                   e.g. https://portfolio-agent-service-xxxx-uc.a.run.app
  *   NEXT_PUBLIC_SUPABASE_URL            (already used elsewhere)
  *   SUPABASE_SERVICE_ROLE_KEY           (already used by /api/admin/publish-event)
- *   ADMIN_ALLOWED_EMAILS                (already used) — admins → role ADMIN
+ *   WRITER_API_URL                      authoritative managed admin roles
  *
  * Optional:
  *   AGENT_SERVICE_INTERNAL_TOKEN        if set, forwarded as Authorization: Bearer
@@ -18,6 +18,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { resolveManagedAdminRoles } from "./managedAdminRoles.mjs";
 
 // Initialize lazily to avoid throwing at import time during build.
 let _supabaseAdmin = null;
@@ -36,49 +37,9 @@ function getAgentBase() {
   return base.replace(/\/+$/, "");
 }
 
-function getAllowedAdminEmails() {
-  const raw =
-    process.env.ADMIN_ALLOWED_EMAILS || "";
-  return raw
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-}
-
 function getWriterApiBase() {
   const base = process.env.WRITER_API_URL || process.env.NEXT_PUBLIC_WRITER_API_URL || "";
   return base ? base.replace(/\/+$/, "") : "";
-}
-
-function rolesForAdminRole(role) {
-  const normalized = String(role || "").trim().toUpperCase();
-  if (normalized === "ADMIN") return "EDITOR,PUBLISHER,ADMIN";
-  if (normalized === "PUBLISHER") return "EDITOR,PUBLISHER";
-  if (normalized === "EDITOR") return "EDITOR";
-  return "";
-}
-
-async function resolveAdminRolesFromAdminService(token) {
-  const base = getWriterApiBase();
-  if (!base || !token) return null;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3500);
-  try {
-    const response = await fetch(`${base}/api/admin/users/me`, {
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      signal: controller.signal,
-    });
-    if (!response.ok) return null;
-    const body = await response.json().catch(() => ({}));
-    return rolesForAdminRole(body.role);
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 /**
@@ -94,6 +55,7 @@ async function resolveAdminRolesFromAdminService(token) {
  * synthetic anonymous identity with VIEWER role. Use this for read-only chat.
  */
 export async function requireSupabaseUser(req, res, { allowAnonymous = false } = {}) {
+  res.setHeader("Cache-Control", "private, no-store, max-age=0");
   const authHeader = req.headers["authorization"] || "";
   const token = authHeader.startsWith("Bearer ")
     ? authHeader.slice(7).trim()
@@ -120,7 +82,9 @@ export async function requireSupabaseUser(req, res, { allowAnonymous = false } =
   let user;
   try {
     const { data, error } = await admin.auth.getUser(token);
-    if (error || !data?.user) throw error || new Error("No user returned");
+    if (error || !data?.user?.email || data.user.is_anonymous) {
+      throw error || new Error("No verified user returned");
+    }
     user = data.user;
   } catch (err) {
     res.status(401).json({ error: "invalid_session", message: "Supabase session invalid." });
@@ -128,8 +92,16 @@ export async function requireSupabaseUser(req, res, { allowAnonymous = false } =
   }
 
   const email = (user.email || "").toLowerCase();
-  const roles = await resolveAdminRolesFromAdminService(token)
-    || (getAllowedAdminEmails().includes(email) ? "EDITOR,PUBLISHER,ADMIN" : "VIEWER");
+  let roles;
+  try {
+    roles = await resolveManagedAdminRoles(token, { baseUrl: getWriterApiBase() });
+  } catch {
+    res.status(503).json({
+      error: "authorization_unavailable",
+      message: "Unable to verify account permissions. Please try again later.",
+    });
+    return null;
+  }
   return { email, roles, anonymous: false };
 }
 
@@ -336,7 +308,7 @@ async function pipeSse(req, res, upstream) {
   // Stream the upstream SSE bytes straight through.
   res.status(200);
   res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Cache-Control", "private, no-store, no-transform");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no"); // disables Nginx buffering on Vercel
 

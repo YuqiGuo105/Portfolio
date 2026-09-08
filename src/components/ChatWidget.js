@@ -3699,13 +3699,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
     // Capture page context at send time
     const pageCtx = extractPageContext(routerPathname || "/")
 
-    const finalizeAndPersist = async (finalAnswer) => {
-      try {
-        const dbMode = requestMode === "thinking" ? "deepthinking" : "regular"
-        await supabase.from("Chat").insert([{ question: baseQuestion, answer: finalAnswer, mode: dbMode }])
-      } catch (dbErr) {
-        logger.warn("Supabase insert failed", dbErr)
-      }
+    const finalizeAndPersist = async () => {
+      // Conversation persistence belongs to the authenticated agent backend.
       setLoading(false)
     }
 

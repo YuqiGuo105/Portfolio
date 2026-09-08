@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  poweredByHeader: false,
   i18n: {
     locales: ["en"],
     defaultLocale: "en",
@@ -25,11 +26,19 @@ const nextConfig = {
     const securityHeaders = [
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "X-Frame-Options", value: "DENY" },
+      { key: "Content-Security-Policy", value: "base-uri 'self'; object-src 'none'; frame-ancestors 'none'" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=()" },
     ];
     return [
       { source: "/:path*", headers: securityHeaders },
+      ...["/api/admin/:path*", "/api/rag/:path*", "/oauth/:path*", "/mcp/admin"].map((source) => ({
+        source,
+        headers: [
+          { key: "Cache-Control", value: "private, no-store, max-age=0" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+        ],
+      })),
       {
         source: "/assets/audio/tour/v1/:path*",
         headers: [
