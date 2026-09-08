@@ -1,0 +1,63 @@
+{
+  "layout": "overview",
+  "eyebrow": "YUQI.SITE / SYSTEM ARCHITECTURE",
+  "title": "Portfolio Platform",
+  "subtitle": "Four connected workflows. Explicit ownership. Recoverable operations.",
+  "description": "Logical overview of portfolio AI serving, public and protected MCP operations, event-driven content publishing, and visitor analytics. Detailed service topology is available separately.",
+  "workflows": [
+    {
+      "id": "ai",
+      "title": "Ask & discover",
+      "caption": "Grounded answers from portfolio knowledge",
+      "accent": "green",
+      "nodes": [
+        {"id": "web", "brand": "nextdotjs", "brandColor": "#18242d", "title": "Portfolio Web", "meta": "NEXT.JS / VERCEL", "details": ["Projects, articles & chat", "Server-side API / streaming"]},
+        {"id": "agent", "brand": "springboot", "brandColor": "#14805e", "title": "AI Agent Runtime", "meta": "SPRING BOOT / CLOUD RUN", "details": ["Safety, intent & orchestration", "Retrieval, generation & run events"]},
+        {"id": "knowledge", "brand": "opensearch", "brandColor": "#1769aa", "title": "Knowledge + Models", "meta": "HYBRID SEARCH / MODEL APIS", "details": ["OpenSearch + pgvector retrieval", "Gemini / OpenAI inference"]}
+      ],
+      "connections": [{"label": "SSE", "kind": "request"}, {"label": "query", "kind": "request"}]
+    },
+    {
+      "id": "mcp",
+      "title": "Act & assist",
+      "caption": "Public reads; protected admin and career operations",
+      "accent": "blue",
+      "nodes": [
+        {"id": "clients", "brand": "anthropic", "brandColor": "#18242d", "title": "AI Clients + Copilot", "meta": "CLAUDE / CODEX / CHROME", "details": ["Remote MCP tool discovery", "Chrome application assistance"]},
+        {"id": "gateway", "brand": "modelcontextprotocol", "brandColor": "#1769aa", "title": "MCP Edge + Gateway", "meta": "STREAMABLE HTTP / TYPED TOOLS", "details": ["Public reads / admin OAuth + RBAC", "Stable keys + durable outcomes"]},
+        {"id": "domains", "brand": "springboot", "brandColor": "#14805e", "title": "Domain Services", "meta": "ADMIN / CAREER", "details": ["Content, private memory & resume", "Confirmation-gated write actions"]}
+      ],
+      "connections": [{"label": "MCP", "kind": "request"}, {"label": "tools", "kind": "request"}]
+    },
+    {
+      "id": "content",
+      "title": "Publish & project",
+      "caption": "One content transaction; independent downstream work",
+      "accent": "orange",
+      "nodes": [
+        {"id": "content", "brand": "postgresql", "brandColor": "#336791", "title": "Content Transaction", "meta": "ADMIN SERVICE / POSTGRESQL", "details": ["Versioned content + indexing jobs", "Transactional outbox"]},
+        {"id": "events", "brand": "apachekafka", "brandColor": "#18242d", "title": "Kafka Event Streams", "meta": "OUTBOX DISPATCH / CONSUMER GROUPS", "details": ["Search, RAG & notification events", "Independent consumer processing"]},
+        {"id": "workers", "brand": "springboot", "brandColor": "#14805e", "title": "Projection + Delivery", "meta": "INDEXERS / NOTIFICATION SERVICE", "details": ["Search indexes + RAG embeddings", "Email dispatch + delivery states"]}
+      ],
+      "connections": [{"label": "event", "kind": "event"}, {"label": "event", "kind": "event"}]
+    },
+    {
+      "id": "analytics",
+      "title": "Observe & respond",
+      "caption": "First-party behavior becomes queryable insights",
+      "accent": "cyan",
+      "nodes": [
+        {"id": "tracking", "icon": "web", "title": "Visitor Events", "meta": "TRACKING API / KAFKA", "details": ["Page views + interaction events", "Validated event ingestion"]},
+        {"id": "analytics", "brand": "springboot", "brandColor": "#14805e", "title": "Analytics Pipeline", "meta": "AGGREGATOR / POSTGRESQL + VALKEY", "details": ["Deduplication + geo enrichment", "Sessions + time-windowed rollups"]},
+        {"id": "insights", "icon": "chart", "title": "Insights + Alert Rules", "meta": "VISITS API / ALERTS SERVICE", "details": ["Visitor journeys + rule evaluation", "Incident tracking + notification intent"]}
+      ],
+      "connections": [{"label": "event", "kind": "event"}, {"label": "read", "kind": "request"}]
+    }
+  ],
+  "foundations": [
+    {"title": "Identity & boundaries", "details": ["Supabase Auth / managed roles", "Public and admin access stay separate"]},
+    {"title": "Durable state & recovery", "details": ["PostgreSQL / Redis / private Storage", "Idempotency, bounded retries & quarantine"]},
+    {"title": "Operational visibility", "details": ["Run records / OpenSearch timelines", "Prometheus + Grafana / cost guardrails"]}
+  ],
+  "note": "Logical workflow view. Arrows show the primary direction; service internals are collapsed."
+}

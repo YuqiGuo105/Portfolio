@@ -11,10 +11,25 @@ A modern Next.js portfolio application for showcasing projects, blogs, CV, visit
 ## Architecture
 
 <p align="center">
-  <img src="docs/architecture/platform-system-flow.svg" alt="Portfolio microservice platform architecture" width="100%" />
+  <a href="docs/architecture/platform-overview.svg">
+    <img src="docs/architecture/platform-overview.svg" alt="Portfolio architecture: AI serving, MCP operations, content publishing and visitor analytics" width="100%" />
+  </a>
 </p>
 
-> **Maintain this diagram:** edit [`docs/architecture/platform-system-flow.json`](docs/architecture/platform-system-flow.json), then run `node scripts/render-architecture-diagram.mjs docs/architecture/platform-system-flow.json`.
+[Open full-size overview](docs/architecture/platform-overview.svg)
+
+<details>
+<summary>Detailed service topology</summary>
+
+<p align="center">
+  <a href="docs/architecture/platform-system-flow.svg">
+    <img src="docs/architecture/platform-system-flow.svg" alt="Detailed service topology, event streams and state stores" width="100%" />
+  </a>
+</p>
+
+</details>
+
+> **Maintain these diagrams:** edit the [overview](docs/architecture/platform-overview.json) or [detailed topology](docs/architecture/platform-system-flow.json), then run `node scripts/render-architecture-diagram.mjs <diagram.json>`.
 
 ---
 

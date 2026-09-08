@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowUpRight, Check, Copy, LockKeyhole, PlugZap } from 'lucide-react';
 import SeoHead from '../src/components/SeoHead';
 import styles from '../styles/McpGuide.module.css';
 
 const PUBLIC_URL = 'https://www.yuqi.site/mcp';
 const ADMIN_URL = `${PUBLIC_URL}/admin`;
-const IMAGE_SIZES = { 'claude-public-tools.png': [2056, 1374], 'codex-plugin.png': [1326, 1186], 'admin-sign-in.png': [960, 900], 'claude-admin-tools.png': [827, 629] };
+const IMAGE_SIZES = { 'claude-public-tools.png': [2056, 1374], 'codex-plugin.png': [1326, 1186], 'admin-sign-in.png': [960, 900], 'claude-admin-write-permissions.png': [810, 520] };
 const SOURCE = 'https://github.com/YuqiGuo105/portfolio-mcp-server';
-const sections = [['connect', 'Connect a client'], ['first-question', 'Ask your first question'], ['tools', 'Public tool reference'], ['authorization', 'Administrator access'], ['troubleshooting', 'Troubleshooting']];
+const sections = [['authorization', 'Administrator access'], ['architecture', 'Architecture'], ['connect', 'Connect a client'], ['first-question', 'Ask your first question'], ['tools', 'Public tool reference'], ['troubleshooting', 'Troubleshooting']];
 const tools = [
   ['search_portfolio', 'Start with a topic', 'Search across projects, articles, life writing, and professional experience.'],
   ['search_projects', 'Find a relevant system', 'Narrow the project search by technology or engineering problem.'],
@@ -36,6 +37,7 @@ function CopyBlock({ children, label = 'Copy' }) {
 function Figure({ file, alt, number, children }) {
   const src = `/assets/images/mcp-guide/${file}`;
   return <figure className={styles.figure}>
+    {file === 'claude-admin-write-permissions.png' && <div className={styles.permissionHeading}><div><span>ADMINISTRATOR TOOLS</span><strong>Write actions with explicit approval</strong></div><span className={styles.approvalBadge}><LockKeyhole size={15} /> Needs approval</span></div>}
     <a href={src} target="_blank" rel="noreferrer" aria-label={`Open full-size image: ${alt}`}><img src={src} alt={alt} width={IMAGE_SIZES[file][0]} height={IMAGE_SIZES[file][1]} loading="lazy" /></a>
     <figcaption><span>FIG. {number}</span> {children} <a href={src} target="_blank" rel="noreferrer">View full size <ArrowUpRight size={13} /></a></figcaption>
   </figure>;
@@ -43,6 +45,28 @@ function Figure({ file, alt, number, children }) {
 
 function SectionTitle({ number, title, children }) {
   return <header className={styles.sectionTitle}><span>{number}</span><div><h2>{title}</h2>{children && <p>{children}</p>}</div></header>;
+}
+
+function ArchitecturePanel() {
+  const [view, setView] = useState('overview');
+  const overview = view === 'overview';
+  const file = overview ? 'platform-overview.svg' : 'platform-system-flow.svg';
+  const src = `/assets/images/mcp-guide/${file}`;
+  return <div className={styles.architecturePanel}>
+    <div className={styles.architectureBar}>
+      <div className={styles.architectureSwitch} role="group" aria-label="Architecture diagram view">
+        <button type="button" aria-pressed={overview} onClick={() => setView('overview')}>Platform overview</button>
+        <button type="button" aria-pressed={!overview} onClick={() => setView('topology')}>Service topology</button>
+      </div>
+      <a href={src} target="_blank" rel="noreferrer">Open full size <ArrowUpRight size={14} /></a>
+    </div>
+    <figure className={styles.architectureFigure}>
+      <a href={src} target="_blank" rel="noreferrer" aria-label={`Open full-size ${overview ? 'platform overview' : 'service topology'}`}>
+        <Image src={src} width={overview ? 1200 : 2800} height={overview ? 1204 : 1790} layout="responsive" unoptimized alt={overview ? 'Four portfolio workflows: AI serving, MCP operations, content publishing, and visitor analytics, with identity, durable state, and observability foundations.' : 'Detailed portfolio service topology showing online AI serving, content delivery, visitor analytics, and platform controls.'} />
+      </a>
+      <figcaption aria-live="polite">{overview ? 'Start with the four workflows. Each row follows a request or event from its entry point to the service that owns the result.' : 'Inspect runtime boundaries, state ownership, event streams, and recovery paths. Open the full-size diagram to read individual services.'}</figcaption>
+    </figure>
+  </div>;
 }
 
 export default function McpGuidePage() {
@@ -58,14 +82,43 @@ export default function McpGuidePage() {
             <h1>Connect your AI<br />to my portfolio.</h1>
             <p>Explore my projects, architecture, and technical writing through structured tools. Follow the setup below, then ask your AI client for answers backed by portfolio sources.</p>
             <div className={styles.badges}><span>Claude & Codex</span><span>Streamable HTTP</span><span>No API key for public access</span></div>
+            <a className={styles.architectureEntry} href="#architecture">Explore the architecture <ArrowUpRight size={16} /></a>
           </header>
           <div className={styles.endpointGrid}>
-            <div><span className={styles.endpointLabel}>START HERE · PUBLIC</span><CopyBlock label="Public endpoint">{PUBLIC_URL}</CopyBlock><p>For anyone exploring the portfolio. Read-only; no sign-in required.</p></div>
             <div><span className={styles.endpointLabel}><LockKeyhole size={13} /> ADMINISTRATORS ONLY</span><CopyBlock label="Admin endpoint">{ADMIN_URL}</CopyBlock><p>For authorized operators. Requires sign-in, consent, and a managed role.</p></div>
+            <div><span className={styles.endpointLabel}>PUBLIC · NO SIGN-IN</span><CopyBlock label="Public endpoint">{PUBLIC_URL}</CopyBlock><p>For anyone exploring the portfolio. Read-only; no sign-in required.</p></div>
           </div>
 
+          <section id="authorization" className={styles.section}>
+            <SectionTitle number="01" title="Administrator access">A separate connection for authorized platform operators.</SectionTitle>
+            <div className={styles.callout}><LockKeyhole size={20} /><p><strong>Browsing the portfolio does not require this step.</strong> Use <code>/mcp/admin</code> only if the site owner has assigned your account an administrator role. Signing in alone does not grant that role.</p></div>
+            <ol className={styles.steps}>
+              <li><strong>Add the protected endpoint.</strong> Create a separate connector named <b>Yuqi Portfolio Admin</b> with <code>{ADMIN_URL}</code>. Start its Connect or authentication action.</li>
+              <li><strong>Sign in on yuqi.site.</strong> The client opens the authorization flow. Use your authorized administrator account or its Google sign-in. If you already have a valid session, the login step may be skipped.</li>
+              <li><strong>Review the consent request.</strong> The “Connect an AI client” page identifies the client, requested permissions, and signed-in account. Choose <b>Allow access</b> only for the client you intended to connect, or <b>Deny</b> to cancel. Return to the client to review its available tools.</li>
+            </ol>
+            <div className={styles.authFigures}>
+              <Figure number="01" file="admin-sign-in.png" alt="Yuqi site administrator sign-in page with email, password, and Google sign-in">The sign-in step in the authorization flow. It establishes your identity before client consent.</Figure>
+              <Figure number="02" file="claude-admin-write-permissions.png" alt="Claude Portfolio Admin connector with Write/delete tools expanded, showing draft creation, content publishing, recovery workers, and RAG and search reindexing; all visible actions require approval">The expanded Write/delete tools list shows available administrative operations, including publishing and reindexing. Each visible action is set to Needs approval. Available tools depend on the server-managed role.</Figure>
+            </div>
+            <details className={styles.details}><summary>Authorize the administrator endpoint in Codex CLI</summary><CopyBlock label="Admin connection">{'codex mcp add yuqi-portfolio-admin --url https://www.yuqi.site/mcp/admin\ncodex mcp login yuqi-portfolio-admin'}</CopyBlock><p>Complete the browser sign-in and consent flow, then return to Codex. Do not copy access tokens into prompts or shared configuration files.</p></details>
+            <p>OAuth establishes the connection; the server still checks your managed role on each request. Administrative operations are audited, and protected write workflows retain their confirmation requirements.</p>
+          </section>
+
+          <section id="architecture" className={styles.section}>
+            <SectionTitle number="02" title="Architecture">From portfolio questions to protected operations and event-driven projections.</SectionTitle>
+            <p>The platform has four connected workflows. The MCP connection is one entry point into this system: public tools retrieve portfolio evidence, while protected tools route authorized operations to domain services.</p>
+            <ArchitecturePanel />
+            <div className={styles.architectureNotes}>
+              <div><span>01 / ACCESS</span><h3>Separate trust boundaries</h3><p>The public endpoint exposes curated read-only tools. Administrator requests require identity and a managed role; the internal gateway applies tool policy and confirmation requirements.</p></div>
+              <div><span>02 / STATE</span><h3>Content owns the truth</h3><p>The admin service writes content and its outbox in a transaction. Kafka consumers update search, RAG, and notification projections independently.</p></div>
+              <div><span>03 / OPERATIONS</span><h3>Recovery is part of the flow</h3><p>Idempotency, bounded retries, and audit records support protected operations. Analytics turns visitor events into sessions, rollups, and alert inputs.</p></div>
+            </div>
+            <p className={styles.resourceLink}>Based on the Portfolio README and its authored diagrams. <a href="https://github.com/YuqiGuo105/Portfolio#architecture" target="_blank" rel="noreferrer">Read the architecture sources <ArrowUpRight size={14} /></a></p>
+          </section>
+
           <section id="connect" className={styles.section}>
-            <SectionTitle number="01" title="Connect a client">Choose the setup that matches how you use AI.</SectionTitle>
+            <SectionTitle number="03" title="Connect a client">Choose the setup that matches how you use AI.</SectionTitle>
             <h3>Claude · Add a custom connector</h3>
             <ol className={styles.steps}>
               <li><strong>Open Connectors.</strong> In Claude, open Settings → Customize → Connectors. If Settings points you to Customize, follow that link.</li>
@@ -73,11 +126,11 @@ export default function McpGuidePage() {
               <li><strong>Connect and review the tools.</strong> The public endpoint needs no API key or administrator account. Open the connector details to check that the seven read-only tools are available.</li>
             </ol>
             <p className={styles.note}>Custom connector availability depends on your Claude plan. If Add custom connector is unavailable, use the Codex setup below or another compatible MCP client.</p>
-            <Figure number="01" file="claude-public-tools.png" alt="Claude showing Yuqi Portfolio connected to the public MCP endpoint with seven read-only tools">The public connector after setup. “Needs approval” is the client’s tool-use preference; it does not mean the public server requires a login.</Figure>
+            <Figure number="03" file="claude-public-tools.png" alt="Claude showing Yuqi Portfolio connected to the public MCP endpoint with seven read-only tools">The public connector after setup. “Needs approval” is the client’s tool-use preference; it does not mean the public server requires a login.</Figure>
 
             <h3>Codex · Use the plugin or the MCP server</h3>
             <p>If the Yuqi Portfolio plugin is already installed, open <b>+ → Plugins → Yuqi Portfolio</b> in a task and ask Codex to use it. The plugin includes the MCP connection and portfolio-specific instructions.</p>
-            <Figure number="02" file="codex-plugin.png" alt="Yuqi Portfolio in the Codex Plugins menu">Select the installed plugin from the composer to make its purpose explicit in your task.</Figure>
+            <Figure number="04" file="codex-plugin.png" alt="Yuqi Portfolio in the Codex Plugins menu">Select the installed plugin from the composer to make its purpose explicit in your task.</Figure>
             <p>For a direct server connection, run these commands in your terminal:</p>
             <CopyBlock label="Codex CLI">{'codex mcp add yuqi-portfolio --url https://www.yuqi.site/mcp\ncodex mcp list'}</CopyBlock>
             <p>Confirm that <code>yuqi-portfolio</code> appears in the list, then start a new task so Codex loads the tools.</p>
@@ -86,7 +139,7 @@ export default function McpGuidePage() {
           </section>
 
           <section id="first-question" className={styles.section}>
-            <SectionTitle number="02" title="Ask your first question">Make the connector, question, and evidence you want explicit.</SectionTitle>
+            <SectionTitle number="04" title="Ask your first question">Make the connector, question, and evidence you want explicit.</SectionTitle>
             <CopyBlock label="Try this prompt">{'Use Yuqi Portfolio MCP to find projects that use Kafka.\nExplain one project’s architecture and link to the original source.'}</CopyBlock>
             <div className={styles.flow} aria-label="Example retrieval sequence"><div><span>SEARCH</span><code>search_projects</code><p>Find relevant projects.</p></div><span aria-hidden="true">→</span><div><span>RETRIEVE</span><code>get_project_architecture</code><p>Inspect a selected system.</p></div><span aria-hidden="true">→</span><div><span>ANSWER</span><strong>Evidence + source links</strong><p>Verify the explanation.</p></div></div>
             <p>Your client chooses the exact sequence. Review any tool-use approval prompt, then look for a tool result and portfolio source links in the answer. A response from general model knowledge alone does not confirm the connection.</p>
@@ -94,29 +147,13 @@ export default function McpGuidePage() {
           </section>
 
           <section id="tools" className={styles.section}>
-            <SectionTitle number="03" title="Seven public tools">Search first, then retrieve the evidence you need.</SectionTitle>
+            <SectionTitle number="05" title="Seven public tools">Search first, then retrieve the evidence you need.</SectionTitle>
             <div className={styles.tableWrap}><table><thead><tr><th>Tool</th><th>When to use it</th></tr></thead><tbody>{tools.map(([name, purpose, detail]) => <tr key={name}><td><code>{name}</code></td><td><strong>{purpose}</strong><p>{detail}</p></td></tr>)}</tbody></table></div>
             <p className={styles.note}>Public responses exclude private operations, visitor identifiers, analytics, and audit records. The client discovers each tool’s input schema from the server; use returned project and article identifiers for follow-up calls.</p>
           </section>
 
-          <section id="authorization" className={styles.section}>
-            <SectionTitle number="04" title="Administrator access">A separate connection for authorized platform operators.</SectionTitle>
-            <div className={styles.callout}><LockKeyhole size={20} /><p><strong>Browsing the portfolio does not require this step.</strong> Use <code>/mcp/admin</code> only if the site owner has assigned your account an administrator role. Signing in alone does not grant that role.</p></div>
-            <ol className={styles.steps}>
-              <li><strong>Add the protected endpoint.</strong> Create a separate connector named <b>Yuqi Portfolio Admin</b> with <code>{ADMIN_URL}</code>. Start its Connect or authentication action.</li>
-              <li><strong>Sign in on yuqi.site.</strong> The client opens the authorization flow. Use your authorized administrator account or its Google sign-in. If you already have a valid session, the login step may be skipped.</li>
-              <li><strong>Review the consent request.</strong> The “Connect an AI client” page identifies the client, requested permissions, and signed-in account. Choose <b>Allow access</b> only for the client you intended to connect, or <b>Deny</b> to cancel. Return to the client to review its available tools.</li>
-            </ol>
-            <div className={styles.authFigures}>
-              <Figure number="03" file="admin-sign-in.png" alt="Yuqi site administrator sign-in page with email, password, and Google sign-in">The sign-in step in the authorization flow. It establishes your identity before client consent.</Figure>
-              <Figure number="04" file="claude-admin-tools.png" alt="Claude connected to Portfolio Admin MCP with tools set to Needs approval">The protected connector after authorization. Available tools depend on the server-managed role; keep write actions subject to approval.</Figure>
-            </div>
-            <details className={styles.details}><summary>Authorize the administrator endpoint in Codex CLI</summary><CopyBlock label="Admin connection">{'codex mcp add yuqi-portfolio-admin --url https://www.yuqi.site/mcp/admin\ncodex mcp login yuqi-portfolio-admin'}</CopyBlock><p>Complete the browser sign-in and consent flow, then return to Codex. Do not copy access tokens into prompts or shared configuration files.</p></details>
-            <p>OAuth establishes the connection; the server still checks your managed role on each request. Administrative operations are audited, and protected write workflows retain their confirmation requirements.</p>
-          </section>
-
           <section id="troubleshooting" className={styles.section}>
-            <SectionTitle number="05" title="Troubleshooting" />
+            <SectionTitle number="06" title="Troubleshooting" />
             <div className={styles.faq}>
               <details><summary>The MCP URL does not look like a webpage</summary><p><code>/mcp</code> is a protocol endpoint. Paste it into your client’s remote MCP server field. This guide at <code>/mcp-guide</code> is the page intended for people.</p></details>
               <details><summary>The connector is missing or no tools appear</summary><p>Check the exact URL and confirm that your client supports Streamable HTTP. Reopen the connector or start a new Codex task after setup. In the CLI, run <code>codex mcp list</code> to confirm the server is registered.</p></details>

@@ -513,7 +513,100 @@ function drawCallout(callout, configDir) {
   </g>`;
 }
 
+function renderOverview(config, configDir) {
+  const width = 1200;
+  const rowHeight = 210;
+  const start = 180;
+  const footer = start + config.workflows.length * rowHeight;
+  const height = footer + 184;
+  const columns = [48, 432, 816];
+  const nodeWidth = 336;
+  const text = (x, y, value, className) => `<text x="${x}" y="${y}" class="${className}">${escapeXml(value)}</text>`;
+  const rows = config.workflows.map((flow, index) => {
+    if (flow.nodes.length !== 3 || flow.connections.length !== 2) {
+      throw new Error(`Overview workflow ${flow.title} requires three nodes and two connections`);
+    }
+    const y = start + index * rowHeight;
+    const accent = LIGHT_ACCENTS[flow.accent];
+    if (!accent) throw new Error(`Unknown overview accent: ${flow.accent}`);
+    return `<g data-workflow="${escapeXml(flow.id)}">
+      <rect x="0" y="${y}" width="${width}" height="${rowHeight}" fill="${index % 2 ? '#f6f8fa' : '#ffffff'}"/>
+      <line x1="48" x2="1152" y1="${y}" y2="${y}" stroke="#e0e5e9"/>
+      ${text(48, y + 36, String(index + 1).padStart(2, '0'), 'step')}
+      ${text(88, y + 36, flow.title, 'flow-title')}
+      ${text(432, y + 35, flow.caption, 'caption')}
+      ${flow.nodes.map((node, column) => {
+        const x = columns[column];
+        const top = y + 58;
+        return `<g data-node="${escapeXml(node.id)}">
+          <rect x="${x}" y="${top}" width="${nodeWidth}" height="130" rx="6" fill="#ffffff" stroke="#d5dde3"/>
+          <path d="M ${x + 7} ${top} H ${x + nodeWidth - 7}" stroke="${accent.strong}" stroke-width="3"/>
+          ${brandIcon(node, x + 18, top + 19, 29, accent, configDir)}
+          ${text(x + 60, top + 30, node.title, 'service-title')}
+          ${text(x + 60, top + 51, node.meta, 'service-meta')}
+          ${node.details.map((line, lineIndex) => text(x + 18, top + 83 + lineIndex * 23, line, 'detail')).join('')}
+        </g>`;
+      }).join('')}
+      ${flow.connections.map((connection, column) => {
+        const x = columns[column] + nodeWidth;
+        const next = columns[column + 1];
+        const cy = y + 121;
+        const event = connection.kind === 'event';
+        return `<g>
+          <path d="M ${x + 5} ${cy} H ${next - 9}" stroke="${accent.strong}" stroke-width="2" fill="none" ${event ? 'stroke-dasharray="4 4"' : ''}/>
+          <path d="M ${next - 14} ${cy - 4} L ${next - 8} ${cy} L ${next - 14} ${cy + 4}" stroke="${accent.strong}" stroke-width="2" fill="none" stroke-linejoin="round"/>
+          <text x="${(x + next) / 2}" y="${cy - 13}" class="connection" text-anchor="middle">${escapeXml(connection.label)}</text>
+        </g>`;
+      }).join('')}
+    </g>`;
+  }).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc">
+    <title id="title">${escapeXml(config.title)}</title>
+    <desc id="desc">${escapeXml(config.description)}</desc>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; letter-spacing: 0; fill: #18242d; }
+      .eyebrow { font-size: 13px; font-weight: 700; fill: #45616b; }
+      .title { font-size: 38px; font-weight: 750; }
+      .subtitle { font-size: 17px; fill: #586b76; }
+      .step { font-size: 19px; font-weight: 700; fill: #81919c; }
+      .flow-title { font-size: 22px; font-weight: 700; }
+      .caption { font-size: 14px; fill: #61737e; }
+      .service-title { font-size: 20px; font-weight: 700; }
+      .service-meta { font-size: 12px; fill: #687a86; }
+      .detail { font-size: 16px; fill: #465c69; }
+      .connection { font-size: 10px; font-weight: 600; fill: #526772; }
+      .foundation-title { font-size: 17px; font-weight: 700; }
+      .foundation-detail { font-size: 14px; fill: #5c707a; }
+      .note { font-size: 12px; fill: #61737e; }
+    </style>
+    <rect width="${width}" height="${height}" fill="#ffffff"/>
+    <path d="M 48 30 H 90" stroke="#14805e" stroke-width="4"/>
+    ${text(48, 60, config.eyebrow, 'eyebrow')}
+    ${text(48, 109, config.title, 'title')}
+    ${text(48, 145, config.subtitle, 'subtitle')}
+    <g transform="translate(973 42)">
+      ${brandIcon({brand:'nextdotjs', brandColor:'#18242d'}, 0, 0, 29, LIGHT_ACCENTS.slate, configDir)}
+      ${brandIcon({brand:'springboot', brandColor:'#14805e'}, 46, 0, 29, LIGHT_ACCENTS.green, configDir)}
+      ${brandIcon({brand:'apachekafka', brandColor:'#18242d'}, 92, 0, 29, LIGHT_ACCENTS.slate, configDir)}
+      ${brandIcon({brand:'modelcontextprotocol', brandColor:'#1769aa'}, 138, 0, 29, LIGHT_ACCENTS.blue, configDir)}
+    </g>
+    ${rows}
+    <line x1="48" x2="1152" y1="${footer}" y2="${footer}" stroke="#d5dde3"/>
+    ${config.foundations.map((item, i) => `<g>
+      ${text(columns[i], footer + 36, item.title, 'foundation-title')}
+      ${item.details.map((line, j) => text(columns[i], footer + 61 + j * 22, line, 'foundation-detail')).join('')}
+    </g>`).join('')}
+    <line x1="48" x2="1152" y1="${footer + 111}" y2="${footer + 111}" stroke="#e0e5e9"/>
+    ${text(48, footer + 143, config.note, 'note')}
+    <path d="M 841 ${footer + 139} h 28" stroke="#526772" stroke-width="2"/>
+    ${text(877, footer + 143, 'Request / read', 'note')}
+    <path d="M 1016 ${footer + 139} h 28" stroke="#526772" stroke-width="2" stroke-dasharray="4 4"/>
+    ${text(1052, footer + 143, 'Async event', 'note')}
+  </svg>`;
+}
+
 function render(config, configDir) {
+  if (config.layout === 'overview') return renderOverview(config, configDir);
   const themeName = config.theme === "dark" ? "dark" : "light";
   ACTIVE_ACCENTS = themeName === "dark" ? DARK_ACCENTS : LIGHT_ACCENTS;
   ACTIVE_EDGE_STYLES = themeName === "dark" ? DARK_EDGE_STYLES : LIGHT_EDGE_STYLES;
