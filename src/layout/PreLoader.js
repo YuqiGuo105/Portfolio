@@ -1,26 +1,36 @@
-import { Fragment, useEffect } from "react";
-const PreLoader = () => {
+import { useEffect, useState } from 'react';
+import styles from './PreLoader.module.css';
+
+let entranceComplete = false;
+
+export default function PreLoader() {
+  const [phase, setPhase] = useState('loading');
+
   useEffect(() => {
-    setTimeout(() => {
-      document.querySelector(".preloader").classList.add("loaded");
-      document.querySelector(".centrize").style.display = "none";
-    }, 1000);
+    if (entranceComplete) { setPhase('done'); return undefined; }
+    let exitTimer;
+    let removalTimer;
+    const finish = () => {
+      exitTimer = window.setTimeout(() => {
+        entranceComplete = true;
+        setPhase('leaving');
+        removalTimer = window.setTimeout(() => setPhase('done'), 240);
+      }, 100);
+    };
+    // Reveal the shell after hydration; remote content loads within its section.
+    const frame = window.requestAnimationFrame(finish);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(exitTimer);
+      window.clearTimeout(removalTimer);
+    };
   }, []);
 
+  if (phase === 'done') return null;
   return (
-    <Fragment>
-      <div className="preloader">
-        <div className="centrize full-width">
-          <div className="vertical-center">
-            <div className="spinner-logo">
-              <img src="assets/images/YuqiLogo.png" alt="" />
-              <div className="spinner-dot" />
-              <div className="spinner spinner-line" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </Fragment>
+    <div className={`${styles.entrance} ${phase === 'leaving' ? styles.leaving : ''}`} role="status" aria-label="Loading portfolio">
+      <img src="/assets/images/YuqiLogo.png" width="64" height="64" alt="" />
+      <span className={styles.progress} aria-hidden="true" />
+    </div>
   );
-};
-export default PreLoader;
+}

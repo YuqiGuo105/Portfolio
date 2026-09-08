@@ -20,7 +20,8 @@ import { produceRawEvent } from '../../src/lib/kafkaProducer';
 import { uuidv7 } from '../../src/lib/uuidv7';
 import { isRateLimited } from '../../src/lib/rateLimiter';
 import crypto from 'crypto';
-import { isLocalAnalyticsRequest } from '../../src/lib/analyticsHostFilter';
+import { isLocalAnalyticsRequest, isLocalAnalyticsEvent } from '../../src/lib/analyticsHostFilter';
+import { isPrivateAnalyticsEvent } from '../../src/lib/analyticsPagePolicy.mjs';
 
 // 允许的来源域名
 const ALLOWED_ORIGINS = ['https://www.yuqi.site', 'https://yuqi.site'];
@@ -135,6 +136,13 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
+  let body;
+  try { body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {}; }
+  catch { return res.status(400).json({ error: 'Invalid JSON' }); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return res.status(400).json({ error: 'Invalid event' });
+  if (isLocalAnalyticsEvent(body)) return res.status(204).end();
+  if (isPrivateAnalyticsEvent(body, req.headers.referer)) return res.status(204).end();
+
   // 1. Origin / Referer 检查
   const origin = req.headers['origin'] || '';
   const referer = req.headers['referer'] || '';
@@ -157,7 +165,6 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests' });
   }
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
   const eventTime = normalizeEventTime(body.localTime);
 
   // Validate event against allowlist to prevent arbitrary string injection.

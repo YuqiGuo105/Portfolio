@@ -15,6 +15,7 @@
 // fancy formatting — pure JSON envelopes so you can verify the pipeline.
 
 import { useEffect, useRef, useState } from "react";
+import { Bot, RotateCcw, Send, Loader2 } from "lucide-react";
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { supabase } from "../../src/supabase/supabaseClient";
 
@@ -115,22 +116,19 @@ export default function AdminAgentPage() {
   return (
     <AdminLayout>
       <div className="op-header">
-        <h1>Operate Console</h1>
-        <div className="op-meta">
-          <span>session: <code>{sessionRef.current}</code></span>
-          <span className="op-admin-mode">Admin mode</span>
-          {email ? <span>signed in as <strong>{email}</strong></span> : <span style={{ color: "#fca5a5" }}>admin session unavailable</span>}
-          <button onClick={reset} className="op-btn op-btn-ghost">Reset</button>
+        <div className="op-heading">
+          <h1>Operate console</h1>
+          <button onClick={reset} className="op-btn op-btn-ghost op-icon" aria-label="Reset conversation" title="Reset conversation"><RotateCcw size={17} /></button>
         </div>
-        <p className="op-hint">
-          Type any natural-language request in any language. Read-only intents execute immediately.
-          Write intents (publish, reindex, retry, alert policy changes, send-test…) return
-          <code>CONFIRMATION_REQUIRED</code> with the staged tool — click Confirm to fire.
-        </p>
+        <div className="op-meta">
+          <span className="op-admin-mode">Admin mode</span>
+          <span>Write actions require confirmation.</span>
+          <details className="op-session"><summary>Session details</summary><div><code>{sessionRef.current}</code><br />{email || "Admin session unavailable"}</div></details>
+        </div>
       </div>
 
       <div className="op-log">
-        {history.length === 0 && <div className="op-empty">No messages yet — try the examples below.</div>}
+        {history.length === 0 && <div className="op-empty"><Bot size={32} strokeWidth={1.4} aria-hidden="true" /><strong>Portfolio operations</strong><span>No messages yet</span></div>}
         {history.map((m, i) => {
           if (m.role === "user") {
             return (
@@ -211,35 +209,36 @@ export default function AdminAgentPage() {
         <input
           ref={inputRef}
           className="op-input"
-          placeholder='e.g. "list failed email deliveries today" or "帮我搜索 Kafka 相关的文章"'
+          placeholder="Ask about your portfolio..."
+          aria-label="Platform command"
           value={utterance}
           onChange={(e) => setUtterance(e.target.value)}
           disabled={sending}
           autoFocus
         />
-        <button className="op-btn op-btn-primary" type="submit" disabled={sending || !utterance.trim()}>
-          {sending ? "Sending…" : "Send"}
+        <button className="op-btn op-btn-primary op-icon" type="submit" disabled={sending || !utterance.trim()} aria-label={sending ? "Sending" : "Send command"} title="Send command">
+          {sending ? <Loader2 size={18} /> : <Send size={18} />}
         </button>
       </form>
 
       <div className="op-examples">
-        <span>Try:</span>
         {[
           "list failed email deliveries today",
           "check delivery stats",
-          "帮我搜索 Kafka 相关的文章",
-          "republish the latest Kafka blog",
           "list visitor alert rules",
-          "create a visitor alert rule and show me the diff",
-          "what is the weather today",
         ].map((s, i) => (
           <button key={i} className="op-chip" onClick={() => setUtterance(s)}>{s}</button>
         ))}
       </div>
 
       <style jsx>{`
-        .op-header h1 { color: #17212b; margin: 0 0 8px; font-size: 2rem; font-weight: 720; }
-        .op-meta { display: flex; gap: 16px; flex-wrap: wrap; color: #66717d; font-size: 0.82rem; align-items: center; }
+        .op-header { margin-bottom: 24px; }
+        .op-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px; }
+        .op-header h1 { color: #20262d; margin: 0; font-size: 28px; font-weight: 650; }
+        .op-session { position: relative; font-size: 12px; }
+        .op-session summary { cursor: pointer; }
+        .op-session div { margin-top: 8px; padding: 10px; background: #f7f8fa; border: 1px solid #e8eaed; border-radius: 6px; overflow-wrap: anywhere; }
+        .op-meta { display: flex; gap: 16px; flex-wrap: wrap; color: #66717d; font-size: 13px; align-items: center; }
         .op-meta code { color: #0f766e; background: #e6f5f2; padding: 2px 6px; border-radius: 4px; font-size: 0.76rem; }
         .op-meta strong { color: #17212b; }
         .op-admin-mode { color: #0f5f58; background: #dff3ef; border: 1px solid #a8d8d0; border-radius: 4px; padding: 3px 7px; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; }
@@ -248,17 +247,18 @@ export default function AdminAgentPage() {
 
         .op-log {
           background: #ffffff;
-          border: 1px solid #dfe4e8;
-          border-radius: 8px;
+          border-block: 1px solid #e8eaed;
           padding: 16px;
-          min-height: 320px;
+          min-height: 360px;
           max-height: 60vh;
           overflow-y: auto;
           display: flex;
           flex-direction: column;
           gap: 12px;
         }
-        .op-empty { color: #7a858e; text-align: center; padding: 60px 12px; }
+        .op-empty { color: #7a858e; text-align: center; padding: 100px 12px; display: grid; justify-items: center; gap: 12px; }
+        .op-empty strong { color: #34404a; font-size: 17px; font-weight: 600; }
+        .op-empty span { font-size: 13px; }
         .op-row { display: flex; }
         .op-row-user { justify-content: flex-end; }
         .op-row-agent { justify-content: flex-start; }
@@ -283,17 +283,18 @@ export default function AdminAgentPage() {
         .op-pre { background: #eef1f3; color: #35414b; padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 0.78rem; margin: 6px 0; }
         .op-details summary { cursor: pointer; color: #66717d; font-size: 0.78rem; margin-top: 6px; }
 
-        .op-composer { display: flex; gap: 8px; margin-top: 16px; }
-        .op-input { flex: 1; padding: 10px 14px; border-radius: 6px; border: 1px solid #cfd6db; background: #ffffff; color: #17212b; font-size: 0.95rem; }
+        .op-composer { display: flex; align-items: center; gap: 8px; margin-top: 20px; padding: 8px; border: 1px solid #cfd6db; border-radius: 8px; box-shadow: 0 2px 6px #17212b08; }
+        .op-input { flex: 1; min-width: 0; padding: 10px 8px; border: 0; background: #ffffff; color: #17212b; font-size: 14px; }
         .op-input:focus { outline: 2px solid rgba(15,118,110,0.12); border-color: #0f766e; }
         .op-btn { padding: 9px 16px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; border: 1px solid transparent; transition: opacity 120ms; font-weight: 600; }
         .op-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .op-btn-primary { background: #0f766e; color: #ffffff; border: 1px solid #0f766e; }
+        .op-btn-primary { background: #232a30; color: #ffffff; border: 1px solid #232a30; }
+        .op-icon { display: inline-grid; place-items: center; width: 38px; height: 38px; padding: 0; flex-shrink: 0; }
         .op-btn-confirm { background: #16734f; color: #ffffff; border: 1px solid #16734f; }
         .op-btn-ghost { background: #ffffff; color: #46525c; border: 1px solid #cfd6db; }
 
         .op-examples { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; color: #6b7680; font-size: 0.8rem; align-items: center; }
-        .op-chip { background: #ffffff; color: #52606b; border: 1px solid #d5dbe0; border-radius: 999px; padding: 4px 10px; font-size: 0.78rem; cursor: pointer; }
+        .op-chip { background: #f8f9fa; color: #52606b; border: 1px solid #e8eaed; border-radius: 5px; padding: 8px 12px; height: auto; min-height: 34px; line-height: 1.4; font-size: 12px; font-weight: 500; cursor: pointer; text-align: left; }
         .op-chip:hover { background: #f0f4f4; }
       `}</style>
     </AdminLayout>

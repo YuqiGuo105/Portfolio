@@ -14,7 +14,7 @@ import { useRouter } from 'next/router';
 import LogInDialog from "../src/components/LogInDialog";
 import SiteTour from "../src/components/SiteTour";
 import GuideHighlights from "../src/components/GuideHighlights";
-import { isLoopbackHostname } from "../src/lib/analyticsHostFilter";
+import { isBrowserAnalyticsDisabled } from "../src/lib/analyticsHostFilter";
 import { GitPullRequest } from "lucide-react";
 
 const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL;
@@ -238,7 +238,7 @@ const Index = () => {
 
   // Helper to record a click event
   const recordClick = async (clickEvent, targetUrl) => {
-    if (isLoopbackHostname(window.location.hostname)) return;
+    if (isBrowserAnalyticsDisabled(window.location.hostname)) return;
     const localTime = new Date().toISOString();
     try {
       await fetch("/api/click", {
@@ -269,8 +269,6 @@ const Index = () => {
 
   const settings = blogSliderSettingsRef.current;
 
-  if (error) return <div>Error loading blogs: {error}</div>;
-  if (!blogs.length) return <div>Loading...</div>;
   const openStoryModal = () => {
     if (!stories.length) {
       setGithubModalOpen(true);
@@ -632,10 +630,12 @@ const Index = () => {
           isOpen={githubModalOpen}
           onRequestClose={() => setGithubModalOpen(false)}
           contentLabel="GitHub Activity"
+          bodyOpenClassName="github-activity-open"
+          aria={{ modal: true }}
           style={{
             overlay: {
               backgroundColor: "rgba(0,0,0,0.75)",
-              zIndex: 1000,
+              zIndex: 2147483647,
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
@@ -646,7 +646,9 @@ const Index = () => {
               inset: "auto",
               width: "96%",
               maxWidth: "900px",
-              maxHeight: "88vh",
+              maxHeight: "88dvh",
+              display: "flex",
+              flexDirection: "column",
               padding: 0,
               border: "none",
               background: "none",
@@ -656,6 +658,8 @@ const Index = () => {
           }}
         >
           <div style={{
+            minHeight: 0,
+            maxHeight: "88dvh",
             background: isLightSkin ? "#ffffff" : "#0d1117",
             borderRadius: "18px",
             overflow: "hidden",
@@ -665,6 +669,7 @@ const Index = () => {
           }}>
             {/* Header */}
             <div style={{
+              flexShrink: 0,
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -683,6 +688,8 @@ const Index = () => {
                 </div>
               </div>
               <button
+                type="button"
+                aria-label="Close GitHub activity"
                 onClick={() => setGithubModalOpen(false)}
                 style={{
                   background: "none",
@@ -698,7 +705,7 @@ const Index = () => {
             </div>
 
             {/* Contribution graph */}
-            <div style={{ padding: "20px 24px", overflowY: "auto", background: isLightSkin ? "#f7f5f2" : "transparent" }}>
+            <div data-github-scroll tabIndex={0} aria-label="GitHub contributions and pull requests" style={{ minHeight: 0, flex: "1 1 auto", padding: "20px 24px", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", background: isLightSkin ? "#f7f5f2" : "transparent" }}>
               <div style={{ color: isLightSkin ? "#6b7280" : "#7d8590", fontSize: "13px", marginBottom: "12px" }}>
                 {githubCommits} total commits across all repositories
               </div>
@@ -1119,6 +1126,7 @@ const Index = () => {
 
             {blogTab === "tech" ? (
               <div className="blog-panel" key="tech-panel">
+                {error && <p role="status">Articles are temporarily unavailable. Please try again shortly.</p>}
                 <div className="blog-items">
                   <div className="blog-slider-shell">
                     <Slider ref={blogSliderRef} {...settings}>

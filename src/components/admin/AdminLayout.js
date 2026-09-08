@@ -7,6 +7,7 @@ import {
   Bot,
   BriefcaseBusiness,
   ChevronLeft,
+  ChevronRight,
   CircleUserRound,
   FileText,
   Gauge,
@@ -95,10 +96,30 @@ function AdminShell({ children }) {
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
   const adminSession = useAdminSession();
+  const activeGroup = NAV_GROUPS.find(group => group.items.some(item =>
+    !item.external && (item.exact ? router.pathname === item.href : router.pathname.startsWith(item.href))));
+  const activeItem = activeGroup?.items.find(item =>
+    !item.external && (item.exact ? router.pathname === item.href : router.pathname.startsWith(item.href)));
 
   useEffect(() => {
     setNavOpen(false);
   }, [router.asPath]);
+
+  useEffect(() => {
+    if (!navOpen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const close = event => { if (event.key === 'Escape') setNavOpen(false); };
+    const desktop = window.matchMedia('(min-width: 881px)');
+    const resize = () => { if (desktop.matches) setNavOpen(false); };
+    document.addEventListener('keydown', close);
+    desktop.addEventListener('change', resize);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener('keydown', close);
+      desktop.removeEventListener('change', resize);
+    };
+  }, [navOpen]);
 
   async function handleLogout() {
     await supabase.auth.signOut().catch(() => {});
@@ -130,7 +151,7 @@ function AdminShell({ children }) {
     }
     return (
       <Link key={item.href} href={item.href}>
-        <a className={className}>{content}</a>
+        <a className={className} aria-current={isActive(item) ? 'page' : undefined}>{content}</a>
       </Link>
     );
   }
@@ -143,6 +164,8 @@ function AdminShell({ children }) {
             className={styles.iconButton}
             onClick={() => setNavOpen(true)}
             aria-label="Open admin navigation"
+            aria-expanded={navOpen}
+            aria-controls="admin-navigation"
             title="Open navigation"
           >
             <Menu size={20} />
@@ -152,9 +175,9 @@ function AdminShell({ children }) {
         </header>
 
         {navOpen && <button className={styles.backdrop} aria-label="Close navigation" onClick={() => setNavOpen(false)} />}
-        <aside className={`${styles.sidebar} ${navOpen ? styles.sidebarOpen : ""}`}>
+        <aside id="admin-navigation" className={`${styles.sidebar} ${navOpen ? styles.sidebarOpen : ""}`}>
           <div className={styles.brandRow}>
-            <Link href="/admin"><a className={styles.brand}>Yuqi <span>Admin</span></a></Link>
+            <Link href="/admin"><a className={styles.brand}><img src="/assets/images/admin-brand.png" width="28" height="28" alt="" />Yuqi <span>Admin</span></a></Link>
             <button
               className={`${styles.iconButton} ${styles.mobileClose}`}
               type="button"
@@ -188,6 +211,17 @@ function AdminShell({ children }) {
         </aside>
 
         <main className={styles.main}>
+          <div className={styles.topbar}>
+            <nav aria-label="Breadcrumb" className={styles.breadcrumb}>
+              <span>{activeGroup?.label || 'Workspace'}</span>
+              <ChevronRight size={14} aria-hidden="true" />
+              <strong>{activeItem?.label || 'Admin'}</strong>
+            </nav>
+            <div className={styles.identity}>
+              <ShieldCheck size={16} aria-hidden="true" />
+              <span>{adminSession?.email || 'Admin workspace'}</span>
+            </div>
+          </div>
           <div className={styles.content}>{children}</div>
         </main>
       </div>

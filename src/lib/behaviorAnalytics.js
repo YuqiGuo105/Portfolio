@@ -1,4 +1,5 @@
-import { isLoopbackHostname } from "./analyticsHostFilter";
+import { isBrowserAnalyticsDisabled } from "./analyticsHostFilter";
+import { isPrivateAnalyticsPage } from "./analyticsPagePolicy.mjs";
 
 const CONSENT_KEY = "yuqi_analytics_consent";
 const ANON_COOKIE = "yuqi_analytics_id";
@@ -100,7 +101,8 @@ function currentPath(value) {
 
 export function trackBehavior(eventName, context = {}) {
   if (typeof window === "undefined" || !ALLOWED_EVENTS.has(eventName)) return false;
-  if (isLoopbackHostname(window.location.hostname)) return false;
+  if (isPrivateAnalyticsPage(context.page) || isPrivateAnalyticsPage(window.location.href)) return false;
+  if (isBrowserAnalyticsDisabled(window.location.hostname)) return false;
   const consentState = getAnalyticsConsent();
   if (consentState === "denied") return false;
 
@@ -128,7 +130,8 @@ export function trackBehavior(eventName, context = {}) {
 }
 
 export function startPageBehaviorTracking(page) {
-  if (typeof window === "undefined" || isLoopbackHostname(window.location.hostname)) {
+  if (typeof window === "undefined" || isBrowserAnalyticsDisabled(window.location.hostname)
+      || isPrivateAnalyticsPage(page) || isPrivateAnalyticsPage(window.location.href)) {
     return () => {};
   }
   const startedAt = Date.now();

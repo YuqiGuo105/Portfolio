@@ -1,0 +1,81 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+require('@next/env').loadEnvConfig(process.cwd(), true, { info() {}, error() {} });
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
+const origin = process.env.TEST_ORIGIN || 'http://127.0.0.1:3064';
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const prs = Array.from({ length: 18 }, (_, i) => ({ repository: 'example/contribution', number: i + 1, title: `Merged contribution ${i + 1}`, mergedAt: '2026-08-01', url: `https://github.com/example/contribution/pull/${i + 1}` }));
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const errors = [];
+try {
+  await context.route('**/*', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname.includes('/rest/v1/Blogs')) {
+      await new Promise(resolve => setTimeout(resolve, 6000));
+      return route.fulfill({ status: 503, json: { message: 'Test article outage' } });
+    }
+    if (url.pathname.includes('/rest/v1/')) return route.fulfill({ json: [] });
+    if (url.pathname.endsWith('/api/admin/users/me')) return route.fulfill({ json: { email: 'operator@example.com', role: 'ADMIN', permissions: ['admin.read'], owner: true } });
+    if (url.pathname === '/api/github-contributions') return route.fulfill({ json: { totalContributions: 1700, openSourcePullRequests: prs } });
+    if (url.pathname.startsWith('/api/') || url.pathname.includes('/api/admin/')) return route.fulfill({ json: { items: [], stories: [], total: 0 } });
+    if (url.pathname.includes('/auth/v1/')) return route.fulfill({ json: { user: { id: 'ui-test', email: 'operator@example.com' } } });
+    return route.continue();
+  });
+  const page = await context.newPage();
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(origin, { waitUntil: 'domcontentloaded' });
+  await page.locator('#tour-hero').waitFor({ state: 'visible', timeout: 4000 });
+  await page.getByRole('status', { name: 'Loading portfolio' }).waitFor({ state: 'detached', timeout: 4000 });
+  assert.equal(await page.getByText('Loading...', { exact: true }).count(), 0);
+  await page.screenshot({ path: '/private/tmp/portfolio-entry.png' });
+  await page.getByRole('button', { name: 'Open GitHub profile', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'GitHub Activity' });
+  await dialog.waitFor();
+  const scroll = page.locator('[data-github-scroll]');
+  await scroll.hover();
+  await page.mouse.wheel(0, 1100);
+  await page.waitForTimeout(300);
+  assert.ok(await scroll.evaluate(el => el.scrollTop > 0), 'wheel scrolls contribution list');
+  await scroll.focus();
+  await page.keyboard.press('End');
+  await page.waitForTimeout(300);
+  assert.ok(await scroll.evaluate(el => el.scrollHeight - el.scrollTop - el.clientHeight < 5), 'keyboard can reach list end');
+  await page.screenshot({ path: '/private/tmp/portfolio-github-scroll.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(350);
+  const bounds = await dialog.boundingBox();
+  assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= 844, 'mobile dialog stays inside viewport');
+  await scroll.evaluate(el => { el.scrollTop = el.scrollHeight; });
+  await dialog.getByRole('link', { name: 'View Full GitHub Profile' }).click({ trial: true });
+  await page.screenshot({ path: '/private/tmp/portfolio-github-mobile.png' });
+  await page.keyboard.press('Escape');
+  assert.equal(await dialog.count(), 0);
+  assert.notEqual(await page.evaluate(() => getComputedStyle(document.body).overflow), 'hidden');
+  await page.getByText('Articles are temporarily unavailable.', { exact: false }).waitFor({ timeout: 10000 });
+  assert.ok(await page.locator('#tour-hero').isVisible(), 'article failure does not remove homepage');
+
+  // Only the test browser receives synthetic auth/API responses; no production permissions change.
+  const storageKey = `sb-${new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname.split('.')[0]}-auth-token`;
+  const jwt = [ { alg: 'HS256', typ: 'JWT' }, { sub: 'ui-test', exp: Math.floor(Date.now() / 1000) + 3600 } ].map(v => Buffer.from(JSON.stringify(v)).toString('base64url')).join('.') + '.test-signature';
+  await context.addInitScript(({ storageKey, jwt }) => localStorage.setItem(storageKey, JSON.stringify({ access_token: jwt, refresh_token: 'test-only', expires_at: Math.floor(Date.now() / 1000) + 3600, token_type: 'bearer', user: { id: 'ui-test', email: 'operator@example.com' } })), { storageKey, jwt });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${origin}/admin`);
+  await page.getByRole('heading', { name: 'Dashboard', exact: true }).waitFor({ timeout: 15000 });
+  await page.locator('#admin-navigation img').evaluate(img => img.decode());
+  assert.equal(await page.getByRole('button', { name: 'Close admin navigation', exact: true }).isVisible(), false);
+  await page.screenshot({ path: '/private/tmp/portfolio-admin-desktop.png', fullPage: true });
+  assert.ok(await page.getByRole('link', { name: 'Dashboard', exact: true }).getAttribute('aria-current'));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'admin has no horizontal page overflow');
+  await page.screenshot({ path: '/private/tmp/portfolio-admin-mobile.png', fullPage: true });
+  await page.getByRole('button', { name: 'Open admin navigation' }).click();
+  await page.getByRole('navigation', { name: 'Admin navigation' }).waitFor({ state: 'visible' });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(250);
+  assert.equal(await page.getByRole('button', { name: 'Open admin navigation' }).getAttribute('aria-expanded'), 'false');
+  assert.notEqual(await page.evaluate(() => getComputedStyle(document.body).overflow), 'hidden');
+  assert.deepEqual(errors, []);
+  console.log(JSON.stringify({ passed: true, checks: ['slow/failed articles preserve homepage', 'wheel and keyboard modal scrolling', 'mobile modal and body unlock', 'admin desktop/mobile layout (mock session)', 'mobile navigation escape'], errors }));
+} finally { await browser.close(); }

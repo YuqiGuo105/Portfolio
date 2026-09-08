@@ -1,0 +1,24 @@
+.entrance {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  background: #191f26;
+  transition: opacity 240ms ease;
+  pointer-events: none;
+}
+.entrance img { width: 64px; height: 64px; object-fit: contain; }
+.leaving { opacity: 0; }
+.progress { width: 64px; height: 2px; overflow: hidden; background: #ffffff24; border-radius: 2px; }
+.progress::after { content: ''; display: block; width: 40%; height: 100%; background: #70d8b0; animation: progress 900ms ease-in-out infinite alternate; }
+:global(body.light-skin) .entrance { background: #ffffff; }
+:global(body.light-skin) .progress { background: #e0e6e3; }
+@keyframes progress { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) {
+  .entrance { transition: none; }
+  .progress::after { animation: none; width: 100%; }
+}

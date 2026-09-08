@@ -209,6 +209,8 @@ body.dark-skin .leetcode-icon-bottom.custom-leetcode-icon {
 }
 
 /* 模态框动画 */
+body.github-activity-open { overflow: hidden; }
+
 .ReactModal__Overlay {
   opacity: 0;
   transition: opacity 300ms ease-in-out;

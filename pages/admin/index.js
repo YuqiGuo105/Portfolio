@@ -10,12 +10,13 @@ import {
   History,
   Eye,
   Users,
+  ArrowUpRight,
+  Plus,
 } from "lucide-react";
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { PageHeader, adminStyles as ui } from "../../src/components/admin/AdminUI";
 import { writerApi } from "../../src/lib/writerApi";
 import { adminApi } from "../../src/lib/adminApi";
-import { supabase } from "../../src/supabase/supabaseClient";
 
 const CONTENT = [
   { key: "blogs", type: "BLOG", label: "Tech blogs", href: "/admin/blogs", icon: FileText },
@@ -32,15 +33,10 @@ const ACTIONS = [
 ];
 
 export default function AdminDashboard() {
-  const [email, setEmail] = useState("");
   const [metrics, setMetrics] = useState({ content: "…", active: "…", notifications: "…", conversations: "…" });
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (active) setEmail(data?.session?.user?.email || "");
-    });
-
     Promise.allSettled(CONTENT.map((section) => writerApi.content.list(section.type, { limit: 200 })))
       .then((results) => {
         if (!active) return;
@@ -71,11 +67,14 @@ export default function AdminDashboard() {
       <div className={ui.page}>
         <PageHeader
           title="Dashboard"
-          subtitle={email ? `Operational overview for ${email}` : "Portfolio operations overview"}
+          subtitle="Portfolio workspace"
           actions={(
+            <>
+            <Link href="/admin/agent"><a className={ui.buttonPrimary}><Bot size={16} /> Operate console</a></Link>
             <a href="https://www.yuqi.site" target="_blank" rel="noreferrer" className={ui.buttonSecondary}>
               View site <ExternalLink size={15} />
             </a>
+            </>
           )}
         />
 
@@ -90,8 +89,18 @@ export default function AdminDashboard() {
           <div className={ui.sectionHeader}>
             <h2 className={ui.sectionTitle}>Content workspace</h2>
           </div>
-          <div className={ui.actionGrid}>
-            {CONTENT.map((item) => <ActionCard key={item.key} {...item} text="Create, edit and publish content." />)}
+          <div className={ui.contentList}>
+            {CONTENT.map(({ key, label, href, icon: Icon, type }) => (
+              <div key={key} className={ui.contentRow}>
+                <span className={ui.actionIcon}><Icon size={19} aria-hidden="true" /></span>
+                <span className={ui.contentName}>{label}</span>
+                <span className={ui.contentCount}>{type === "PROJECT" ? "Case studies" : type === "LIFE_BLOG" ? "Journal" : "Articles"}</span>
+                <div className={ui.contentActions}>
+                  <Link href={href}><a className={ui.buttonSecondary} aria-label={`View all ${label.toLowerCase()}`}>View all</a></Link>
+                  <Link href={`${href}/new`}><a className={ui.iconButton} aria-label={`Create ${label.toLowerCase()}`} title={`Create ${label.toLowerCase()}`}><Plus size={16} /></a></Link>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -118,14 +127,13 @@ function Metric({ label, value, hint }) {
   );
 }
 
-function ActionCard({ label, text, href, icon: Icon }) {
+function ActionCard({ label, href, icon: Icon }) {
   return (
     <Link href={href}>
       <a className={ui.actionCard}>
         <span className={ui.actionIcon}><Icon size={18} /></span>
         <span className={ui.actionTitle}>{label}</span>
-        <span className={ui.actionText}>{text}</span>
-        <span className={ui.actionLink}>Open workspace →</span>
+        <ArrowUpRight className={ui.actionLink} size={16} aria-hidden="true" />
       </a>
     </Link>
   );

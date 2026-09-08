@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, RefreshCw, Search } from "lucide-react";
+import { Check, Copy, ExternalLink, RefreshCw, Search } from "lucide-react";
+import dynamic from "next/dynamic";
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { DataState, PageHeader, StatusPill, adminStyles as ui } from "../../src/components/admin/AdminUI";
 import { adminApi } from "../../src/lib/adminApi";
+
+const ChatMarkdown = dynamic(() => import("../../src/components/ChatMarkdown.mjs"));
+const answerComponents = {
+  a: ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
+  img: ({ alt }) => <span>{alt || "[Image]"}</span>,
+};
 
 const WINDOWS = [
   { label: "24h", value: 24 },
@@ -51,7 +58,7 @@ export default function ConversationsPage() {
       <div className={ui.page}>
         <PageHeader
           title="Agent conversations"
-          subtitle="Review PostgreSQL-backed agent runs, nested pipeline events, route outcomes and latency."
+          subtitle="Questions, final responses and execution records."
           actions={(
             <>
               <button className={ui.buttonSecondary} type="button" onClick={load} disabled={loading}>
@@ -113,11 +120,8 @@ export default function ConversationsPage() {
                   <div className={ui.messagePair}>
                     <div className={ui.messageRole}>User</div>
                     <p className={ui.messageText}>{item.question || "Question not captured for this run."}</p>
-                    <div className={ui.messageRole}>Assistant</div>
-                    <p className={`${ui.messageText} ${!item.answer ? ui.answerMissing : ""}`}>
-                      {item.answer || "Final answer was not captured by the event schema used for this older run."}
-                    </p>
                   </div>
+                  <FinalResponse item={item} />
                   {item.steps && item.steps.length > 0 && (
                     <details style={{ marginTop: "8px", fontSize: "13px" }}>
                       <summary style={{ cursor: "pointer", color: "#6b7280", fontWeight: 500 }}>
@@ -150,6 +154,40 @@ export default function ConversationsPage() {
         </section>
       </div>
     </AdminLayout>
+  );
+}
+
+function FinalResponse({ item }) {
+  const [copyState, setCopyState] = useState("");
+  const answer = typeof item.answer === "string" && item.answer.trim() ? item.answer : null;
+  const running = !item.completedAt && ["running", "pending", "streaming"].includes(item.status || "running");
+  useEffect(() => {
+    if (!copyState) return;
+    const timer = setTimeout(() => setCopyState(""), 2500);
+    return () => clearTimeout(timer);
+  }, [copyState]);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(answer);
+      setCopyState("Copied");
+    } catch {
+      setCopyState("Copy failed. Select the response to copy it.");
+    }
+  }
+  return (
+    <section className={ui.finalResponse} aria-label="Final response">
+      <div className={ui.responseHeader}>
+        <h2>Final response</h2>
+        {answer && <button className={ui.responseCopy} type="button" onClick={copy} aria-label="Copy final response" title="Copy final response">
+          {copyState === "Copied" ? <Check size={16} /> : <Copy size={16} />}
+        </button>}
+      </div>
+      {copyState && <span className={ui.conversationMeta} role="status">{copyState}</span>}
+      {answer ? <div className={ui.responseBody}><ChatMarkdown content={answer} components={answerComponents} /></div>
+        : <p className={ui.answerMissing}>{running
+          ? "The agent has not recorded a final response yet. Refresh to check this run."
+          : "No final response was saved for this run. Execution steps are available below when recorded."}</p>}
+    </section>
   );
 }
 
