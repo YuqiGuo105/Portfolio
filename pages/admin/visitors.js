@@ -4,6 +4,7 @@ import {
   BellRing,
   BarChart3,
   Check,
+  ChevronDown,
   ChevronRight,
   Clock3,
   Download,
@@ -429,6 +430,7 @@ function VisitorPagination({
 }
 
 function VisitorIntelligence({ data, loading, error, hours, onRetry, onInspectSession }) {
+  const [journeyExpanded, setJourneyExpanded] = useState(true);
   const funnel = data.funnel || [];
   const attribution = data.attribution || [];
   const topContent = data.topContent || [];
@@ -542,16 +544,38 @@ function VisitorIntelligence({ data, loading, error, hours, onRetry, onInspectSe
           </div>
 
           <div className={`${visitorStyles.insightCard} ${visitorStyles.journeyCardWide}`}>
-            <div className={visitorStyles.insightCardHeader}>
-              <Target size={15} />
-              <span>Visitor journey explorer</span>
+            <div className={`${visitorStyles.insightCardHeader} ${visitorStyles.journeyCardHeader}`}>
+              <div className={visitorStyles.journeyCardTitle}>
+                <Target size={15} />
+                <span>Visitor journey explorer</span>
+                <span className={visitorStyles.journeyCardSummary}>
+                  {highIntent.length} high intent · {recentJourneys.length} recent
+                </span>
+              </div>
+              <button
+                aria-controls="visitor-journey-explorer"
+                aria-expanded={journeyExpanded}
+                className={visitorStyles.journeyCollapseButton}
+                onClick={() => setJourneyExpanded((expanded) => !expanded)}
+                title={journeyExpanded ? "Collapse visitor journeys" : "Expand visitor journeys"}
+                type="button"
+              >
+                <ChevronDown aria-hidden="true" size={16} />
+                <span>{journeyExpanded ? "Collapse" : "Expand"}</span>
+              </button>
             </div>
-            <JourneyExplorer
-              highIntent={highIntent}
-              recentJourneys={recentJourneys}
-              policy={data.policy}
-              onInspectSession={onInspectSession}
-            />
+            <div
+              className={visitorStyles.journeyCollapsible}
+              hidden={!journeyExpanded}
+              id="visitor-journey-explorer"
+            >
+              <JourneyExplorer
+                highIntent={highIntent}
+                recentJourneys={recentJourneys}
+                policy={data.policy}
+                onInspectSession={onInspectSession}
+              />
+            </div>
           </div>
         </div>
       )}

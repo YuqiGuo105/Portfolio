@@ -63,6 +63,15 @@
 .insightNumber strong { color: #25313b; font-size: 20px; line-height: 1; }
 .insightNumber small { color: #0f766e; font-size: 10px; font-weight: 750; }
 .journeyCardWide { grid-column: 1 / -1; border-top: 1px solid #e8ecef; border-right: 0; }
+.journeyCardHeader { justify-content: space-between; gap: 14px; }
+.journeyCardTitle { display: flex; min-width: 0; align-items: center; gap: 7px; }
+.journeyCardSummary { overflow: hidden; color: #8a959c; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8px; font-weight: 650; letter-spacing: 0; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
+.journeyCollapseButton { display: inline-flex; min-height: 30px; flex: 0 0 auto; align-items: center; gap: 5px; padding: 5px 8px; border: 1px solid #d7e0e3; border-radius: 5px; background: #fff; color: #65727b; font: inherit; font-size: 9px; font-weight: 800; letter-spacing: 0; text-transform: none; cursor: pointer; }
+.journeyCollapseButton:hover { border-color: #a9cdc7; background: #f2f8f7; color: #0f766e; }
+.journeyCollapseButton:focus-visible { outline: 2px solid rgba(15, 118, 110, 0.26); outline-offset: 2px; }
+.journeyCollapseButton[aria-expanded="true"] svg { transform: rotate(180deg); }
+.journeyCollapseButton svg { transition: transform 160ms ease; }
+.journeyCollapsible[hidden] { display: none; }
 .journeyExplorer { display: grid; min-width: 0; border: 1px solid #e1e7ea; border-radius: 7px; background: #fff; }
 .journeyToolbar { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 9px; border-bottom: 1px solid #e5eaed; background: #f8fafb; }
 .journeyTabs { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid #dbe2e6; border-radius: 6px; background: #fff; }
@@ -304,6 +313,7 @@
   .insightGrid { grid-template-columns: 1fr; }
   .insightCard { border-right: 0; border-bottom: 1px solid #e8ecef; }
   .insightCard:last-child { border-bottom: 0; }
+  .journeyCardSummary { display: none; }
   .journeyExplorer { width: 100%; overflow: hidden; }
   .journeyToolbar { min-width: 0; align-items: flex-start; flex-direction: column; }
   .journeyPolicy { max-width: 100%; overflow-wrap: anywhere; }
