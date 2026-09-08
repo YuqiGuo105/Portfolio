@@ -55,6 +55,82 @@ test("role lookup does not cache or follow redirects with the bearer token", asy
   });
 });
 
+test("active registry roles resolve without a cross-service request", async () => {
+  let remoteCalled = false;
+  const registryClient = {
+    from(table) {
+      assert.equal(table, "admin_users");
+      return {
+        select(columns) {
+          assert.equal(columns, "role,status");
+          return {
+            ilike(column, value) {
+              assert.equal(column, "email");
+              assert.equal(value, "admin@example.test");
+              return { maybeSingle: async () => ({ data: { role: "ADMIN", status: "ACTIVE" }, error: null }) };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  assert.equal(await resolveManagedAdminRoles("fixture-token", {
+    baseUrl,
+    email: "admin@example.test",
+    registryClient,
+    fetchImpl: async () => { remoteCalled = true; return response(500); },
+  }), "EDITOR,PUBLISHER,ADMIN");
+  assert.equal(remoteCalled, false);
+});
+
+test("suspended registry users are denied without consulting fallback policy", async () => {
+  let remoteCalled = false;
+  const registryClient = {
+    from: () => ({
+      select: () => ({
+        ilike: () => ({
+          maybeSingle: async () => ({ data: { role: "ADMIN", status: "SUSPENDED" }, error: null }),
+        }),
+      }),
+    }),
+  };
+
+  assert.equal(await resolveManagedAdminRoles("fixture-token", {
+    baseUrl,
+    email: "admin@example.test",
+    registryClient,
+    fetchImpl: async () => { remoteCalled = true; return response(200, { role: "ADMIN" }); },
+  }), "VIEWER");
+  assert.equal(remoteCalled, false);
+});
+
+test("missing or unavailable registry falls back to managed role service", async () => {
+  const missingRegistryClient = {
+    from: () => ({
+      select: () => ({
+        ilike: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+      }),
+    }),
+  };
+  assert.equal(await resolveManagedAdminRoles("fixture-token", {
+    baseUrl,
+    email: "admin@example.test",
+    registryClient: missingRegistryClient,
+    fetchImpl: async () => response(200, { role: "PUBLISHER" }),
+  }), "EDITOR,PUBLISHER");
+
+  const failedRegistryClient = {
+    from: () => ({ select: () => ({ ilike: () => ({ maybeSingle: async () => ({ data: null, error: new Error("offline") }) }) }) }),
+  };
+  assert.equal(await resolveManagedAdminRoles("fixture-token", {
+    baseUrl,
+    email: "admin@example.test",
+    registryClient: failedRegistryClient,
+    fetchImpl: async () => response(200, { role: "EDITOR" }),
+  }), "EDITOR");
+});
+
 test("private route headers disable caching and embedding", async () => {
   const require = createRequire(import.meta.url);
   const config = require("../next.config.js");

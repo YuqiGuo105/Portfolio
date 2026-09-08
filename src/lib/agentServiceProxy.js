@@ -94,7 +94,11 @@ export async function requireSupabaseUser(req, res, { allowAnonymous = false } =
   const email = (user.email || "").toLowerCase();
   let roles;
   try {
-    roles = await resolveManagedAdminRoles(token, { baseUrl: getWriterApiBase() });
+    roles = await resolveManagedAdminRoles(token, {
+      baseUrl: getWriterApiBase(),
+      email,
+      registryClient: admin,
+    });
   } catch {
     res.status(503).json({
       error: "authorization_unavailable",
