@@ -25,9 +25,29 @@ at `https://www.yuqi.site/mcp`. The connector exposes seven read-only tools for
 searching portfolio content and retrieving articles, projects, architecture,
 and professional profile evidence.
 
-<p align="center">
-  <img src="docs/readme-assets/claude-yuqi-portfolio-connector.png" alt="Yuqi Portfolio MCP connector and read-only tools in Claude" width="820" />
-</p>
+**Admin MCP requires sign-in with an authorized administrator account.** Connect
+to `https://www.yuqi.site/mcp/admin` and complete the sign-in and consent flow.
+Authentication alone does not grant admin access: permissions are enforced by
+server-managed roles. The public endpoint above remains available without sign-in.
+
+<table align="center">
+  <tr>
+    <th align="center">Public MCP · Read-only</th>
+    <th align="center">Admin MCP · Sign-in required</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top" width="50%">
+      <a href="docs/readme-assets/claude-yuqi-portfolio-connector.png">
+        <img src="docs/readme-assets/claude-yuqi-portfolio-connector.png" alt="Public Yuqi Portfolio connector in Claude with seven read-only tools" width="410" />
+      </a>
+    </td>
+    <td align="center" valign="top" width="50%">
+      <a href="docs/readme-assets/claude-yuqi-portfolio-admin-connector.png">
+        <img src="docs/readme-assets/claude-yuqi-portfolio-admin-connector.png" alt="Authenticated Portfolio Admin connector in Claude with read and write tools set to require approval" width="410" />
+      </a>
+    </td>
+  </tr>
+</table>
 
 ### Connect from Claude or Codex
 
@@ -64,7 +84,7 @@ remains manual.
   </a>
 </p>
 
-**[Install Application Copilot from the Chrome Web Store →](https://chromewebstore.google.com/detail/yuqi-application-copilot/kgebalpnomjfemfeeiaphpaomkkccebd)**
+**[Install Application Copilot from the Chrome Web Store →](https://chromewebstore.google.com/detail/yuqi-application-copilot/kgebalpnomjfemfeeiaphpaomkkccebd)**<br>
 [View source code](https://github.com/YuqiGuo105/portfolio-application-copilot)
 
 ---
