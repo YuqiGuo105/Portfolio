@@ -1034,7 +1034,7 @@ const DashboardPanels = () => {
                   </div>
                 ) : (
                   <div className="monitor-service-metrics dim">
-                    <span className="msm-idle">{svc.noMetrics ? "No metrics (Cloud Run idle)" : "Scaled to zero"}</span>
+                    <span className="msm-idle">{svc.noMetrics ? "No samples · may be idle" : "No successful scrape · investigate"}</span>
                   </div>
                 )}
               </div>
