@@ -33,19 +33,23 @@ export async function postSSE(url, body, { onEvent, signal, deviceId, timeoutMs 
     reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ""
-    while (true) {
+    let finished = false
+    while (!finished) {
       const { value, done } = await reader.read()
       buffer += decoder.decode(value, { stream: !done })
       let boundary
       while ((boundary = /\r?\n\r?\n/.exec(buffer))) {
         const block = buffer.slice(0, boundary.index)
         buffer = buffer.slice(boundary.index + boundary[0].length)
-        if (!emit(block)) return
+        if (!emit(block)) {
+          finished = true
+          break
+        }
       }
       if (buffer.length > 1048576) throw new Error("SSE event exceeded the size limit")
-      if (done) {
+      if (done && !finished) {
         if (buffer.trim()) emit(buffer)
-        return
+        finished = true
       }
     }
   } finally {

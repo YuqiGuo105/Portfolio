@@ -21,7 +21,7 @@ try {
         const body = scenario === 'eof'
           ? 'data: {"stage":"routing","payload":{"route":"WEB_GUIDE"}}\n\n'
           : scenario === 'error' ? 'data: {"stage":"error","message":"fixture failure"}\n\n'
-          : 'data: {"stage":"answer_final","payload":{"answer":"Fixture completed."}}'
+          : 'data: {"stage":"answer_final","payload":{"answer":"Fixture completed."}}\n\ndata: {"stage":"done"}\n\n'
         return route.fulfill({ contentType: 'text/event-stream', body })
       }
       // No live model requests or persistent test conversations.
@@ -39,6 +39,10 @@ try {
         releasePending?.()
       }
       await send.waitFor({ state: 'visible' })
+      if (scenario === 'final') {
+        assert.match(await page.locator('#__chat_widget_root').innerText(), /Fixture completed\./)
+        assert.doesNotMatch(await page.locator('#__chat_widget_root').innerText(), /Cannot read properties/)
+      }
       assert.equal(await page.getByRole('button', { name: 'Stop generating', exact: true }).count(), 0)
       await input.fill('Next question')
       assert.equal(await send.isEnabled(), true)
