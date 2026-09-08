@@ -1,0 +1,39 @@
+.legalCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  line-height: 1.45;
+}
+
+.licenseNote {
+  color: inherit;
+  font-size: 13px;
+  opacity: 0.78;
+}
+
+.legalLinks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 16px;
+  margin-bottom: 52px;
+  line-height: 1.45;
+}
+
+.legalLinks a {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .legalCopy {
+    align-items: center;
+    text-align: center;
+  }
+
+  .legalLinks {
+    justify-content: center;
+    margin-top: 6px;
+    margin-bottom: 92px;
+  }
+}

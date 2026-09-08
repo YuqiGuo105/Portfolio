@@ -95,6 +95,7 @@ export default function VisitorsPage() {
   const [error, setError] = useState("");
   const [exportingFormat, setExportingFormat] = useState("");
   const [exportStatus, setExportStatus] = useState({ tone: "", message: "" });
+  const [queryExpanded, setQueryExpanded] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -207,6 +208,7 @@ export default function VisitorsPage() {
     setDraft(nextFilters);
     setFilters(nextFilters);
     setPage(0);
+    setQueryExpanded(true);
     window.requestAnimationFrame(() => {
       document.getElementById("visitor-event-query")?.scrollIntoView({
         behavior: "smooth",
@@ -227,6 +229,9 @@ export default function VisitorsPage() {
     loading,
     onPageChange: setPage,
   };
+  const activeFilterCount = Object.entries(filters)
+    .filter(([name, value]) => name !== "includeAdmin" && Boolean(value))
+    .length;
 
   return (
     <AdminLayout>
@@ -277,8 +282,30 @@ export default function VisitorsPage() {
 
         {error && !loading && items.length > 0 && <div className={ui.errorBanner}>{error}</div>}
 
-        <section className={ui.panel} id="visitor-event-query">
-          <form className={visitorStyles.queryForm} onSubmit={submitQuery}>
+        <section className={`${ui.panel} ${visitorStyles.disclosurePanel}`} id="visitor-event-query">
+          <div className={visitorStyles.disclosureHeader}>
+            <div>
+              <div className={visitorStyles.disclosureTitle}>
+                <Search size={17} /> Visitor event records
+              </div>
+              <div className={visitorStyles.disclosureSubtitle}>
+                {error
+                  ? "Unavailable · Expand to retry"
+                  : `${windowLabel(hours)} · ${activeFilterCount
+                    ? `${activeFilterCount} active ${activeFilterCount === 1 ? "filter" : "filters"}`
+                    : "All public events"}${filters.includeAdmin ? " · Admin included" : ""}`}
+              </div>
+            </div>
+            <DisclosureButton
+              controls="visitor-event-query-content"
+              expanded={queryExpanded}
+              label="visitor event records"
+              onClick={() => setQueryExpanded((expanded) => !expanded)}
+            />
+          </div>
+
+          <div hidden={!queryExpanded} id="visitor-event-query-content">
+            <form className={visitorStyles.queryForm} onSubmit={submitQuery}>
             <div className={visitorStyles.queryTop}>
               <div className={`${ui.searchWrap} ${visitorStyles.search}`}>
                 <Search className={ui.searchIcon} size={15} />
@@ -334,29 +361,30 @@ export default function VisitorsPage() {
               <Filter label="Referrer" name="referrer" value={draft.referrer} onChange={updateDraft} placeholder="google.com" />
               <Filter label="Session ID" name="sessionId" value={draft.sessionId} onChange={updateDraft} placeholder="Session identifier" />
             </div>
-          </form>
+            </form>
 
-          <VisitorPagination
-            {...paginationProps}
-            top
-            exportingFormat={exportingFormat}
-            onExport={exportVisitorLogs}
-          />
-          {exportStatus.message && (
-            <div className={`${visitorStyles.exportNotice} ${visitorStyles[`exportNotice${capitalize(exportStatus.tone)}`] || ""}`}>
-              {exportStatus.message}
-            </div>
-          )}
+            <VisitorPagination
+              {...paginationProps}
+              top
+              exportingFormat={exportingFormat}
+              onExport={exportVisitorLogs}
+            />
+            {exportStatus.message && (
+              <div className={`${visitorStyles.exportNotice} ${visitorStyles[`exportNotice${capitalize(exportStatus.tone)}`] || ""}`}>
+                {exportStatus.message}
+              </div>
+            )}
 
-          <DataState loading={loading} error={error && !items.length ? error : ""} empty={!loading && !error && items.length === 0} onRetry={load}>
-            <div className={visitorStyles.eventList}>
-              {items.map((item) => (
-                <VisitorEventCard item={item} key={item.eventId || `${item.eventTime}-${item.pageUrl}`} />
-              ))}
-            </div>
-          </DataState>
+            <DataState loading={loading} error={error && !items.length ? error : ""} empty={!loading && !error && items.length === 0} onRetry={load}>
+              <div className={visitorStyles.eventList}>
+                {items.map((item) => (
+                  <VisitorEventCard item={item} key={item.eventId || `${item.eventTime}-${item.pageUrl}`} />
+                ))}
+              </div>
+            </DataState>
 
-          <VisitorPagination {...paginationProps} />
+            <VisitorPagination {...paginationProps} />
+          </div>
         </section>
       </div>
     </AdminLayout>
@@ -430,7 +458,7 @@ function VisitorPagination({
 }
 
 function VisitorIntelligence({ data, loading, error, hours, onRetry, onInspectSession }) {
-  const [journeyExpanded, setJourneyExpanded] = useState(true);
+  const [journeyExpanded, setJourneyExpanded] = useState(false);
   const funnel = data.funnel || [];
   const attribution = data.attribution || [];
   const topContent = data.topContent || [];
@@ -552,17 +580,12 @@ function VisitorIntelligence({ data, loading, error, hours, onRetry, onInspectSe
                   {highIntent.length} high intent · {recentJourneys.length} recent
                 </span>
               </div>
-              <button
-                aria-controls="visitor-journey-explorer"
-                aria-expanded={journeyExpanded}
-                className={visitorStyles.journeyCollapseButton}
+              <DisclosureButton
+                controls="visitor-journey-explorer"
+                expanded={journeyExpanded}
+                label="visitor journeys"
                 onClick={() => setJourneyExpanded((expanded) => !expanded)}
-                title={journeyExpanded ? "Collapse visitor journeys" : "Expand visitor journeys"}
-                type="button"
-              >
-                <ChevronDown aria-hidden="true" size={16} />
-                <span>{journeyExpanded ? "Collapse" : "Expand"}</span>
-              </button>
+              />
             </div>
             <div
               className={visitorStyles.journeyCollapsible}
@@ -945,6 +968,7 @@ function VisitorAlerts({ data, loading, error, hours, onRetry, onChanged }) {
   const [preparedChange, setPreparedChange] = useState(null);
   const [mutationError, setMutationError] = useState("");
   const [mutationBusy, setMutationBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   async function prepareRuleChange({ patch, reason }) {
     setMutationBusy(true);
@@ -1012,9 +1036,22 @@ function VisitorAlerts({ data, loading, error, hours, onRetry, onChanged }) {
         <div className={visitorStyles.alertHeader}>
           <div>
             <div className={visitorStyles.alertTitle}><BellRing size={17} /> Behavior alerts</div>
-            <div className={visitorStyles.alertSubtitle}>{windowLabel(hours)} evaluation window</div>
+            <div className={visitorStyles.alertSubtitle}>
+              {error
+                ? "Unavailable · Expand to retry"
+                : `${windowLabel(hours)} evaluation window · ${activeRules} / ${rules.length} active · ${summary.total || 0} triggered`}
+            </div>
           </div>
-          <div className={visitorStyles.alertHeaderActions}>
+          <DisclosureButton
+            controls="visitor-behavior-alerts-content"
+            expanded={expanded}
+            label="behavior alerts"
+            onClick={() => setExpanded((current) => !current)}
+          />
+        </div>
+
+        <div hidden={!expanded} id="visitor-behavior-alerts-content">
+          <div className={visitorStyles.alertToolbar}>
             <button className={ui.buttonPrimary} type="button" onClick={openRuleCreator} disabled={loading}>
               <Plus size={14} /> New rule
             </button>
@@ -1022,13 +1059,12 @@ function VisitorAlerts({ data, loading, error, hours, onRetry, onChanged }) {
               <RefreshCw size={14} /> Refresh
             </button>
           </div>
-        </div>
 
-        {error && <div className={ui.errorBanner}>{error}</div>}
-        {loading && !rules.length && !incidents.length ? (
-          <div className={visitorStyles.alertEmpty}>Loading alert state...</div>
-        ) : (
-          <>
+          {error && <div className={ui.errorBanner}>{error}</div>}
+          {loading && !rules.length && !incidents.length ? (
+            <div className={visitorStyles.alertEmpty}>Loading alert state...</div>
+          ) : (
+            <>
             <div className={visitorStyles.alertStats}>
               <AlertStat label="Active rules" value={`${activeRules} / ${rules.length}`} />
               <AlertStat label="Triggered" value={summary.total || 0} />
@@ -1085,8 +1121,9 @@ function VisitorAlerts({ data, loading, error, hours, onRetry, onChanged }) {
                 )) : <div className={visitorStyles.alertEmpty}>No incidents in this window.</div>}
               </div>
             </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </section>
 
       {editingRule && (
@@ -1120,6 +1157,22 @@ function VisitorAlerts({ data, loading, error, hours, onRetry, onChanged }) {
         />
       )}
     </>
+  );
+}
+
+function DisclosureButton({ controls, expanded, label, onClick }) {
+  return (
+    <button
+      aria-controls={controls}
+      aria-expanded={expanded}
+      className={visitorStyles.journeyCollapseButton}
+      onClick={onClick}
+      title={`${expanded ? "Collapse" : "Expand"} ${label}`}
+      type="button"
+    >
+      <ChevronDown aria-hidden="true" size={16} />
+      <span>{expanded ? "Collapse" : "Expand"}</span>
+    </button>
   );
 }
 

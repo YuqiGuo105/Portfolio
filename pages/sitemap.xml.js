@@ -22,6 +22,8 @@ const STATIC_ROUTES = [
   { path: '/works-list',  priority: '0.6', changefreq: 'weekly'  },
   { path: '/cv',          priority: '0.5', changefreq: 'monthly' },
   { path: '/mcp-guide',   priority: '0.6', changefreq: 'monthly' },
+  { path: '/content-usage', priority: '0.3', changefreq: 'yearly' },
+  { path: '/privacy',      priority: '0.3', changefreq: 'yearly' },
 ];
 
 function xmlEscape(str) {
