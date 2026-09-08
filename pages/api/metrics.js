@@ -23,6 +23,7 @@ const SERVICE_LABELS = {
   "portfolio-rag-indexer": "RAG Indexer",
   "analytics-aggregator-service": "Analytics Aggregator",
   "analytics-alerts-service": "Analytics Alerts",
+  "portfolio-application-copilot": "Career Workflow Service",
 };
 
 // Event-driven consumers that scale to zero between Kafka messages.
