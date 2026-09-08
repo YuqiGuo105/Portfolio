@@ -64,7 +64,7 @@ test("active registry roles resolve without a cross-service request", async () =
         select(columns) {
           assert.equal(columns, "role,status");
           return {
-            ilike(column, value) {
+            eq(column, value) {
               assert.equal(column, "email");
               assert.equal(value, "admin@example.test");
               return { maybeSingle: async () => ({ data: { role: "ADMIN", status: "ACTIVE" }, error: null }) };
@@ -89,7 +89,7 @@ test("suspended registry users are denied without consulting fallback policy", a
   const registryClient = {
     from: () => ({
       select: () => ({
-        ilike: () => ({
+        eq: () => ({
           maybeSingle: async () => ({ data: { role: "ADMIN", status: "SUSPENDED" }, error: null }),
         }),
       }),
@@ -109,7 +109,7 @@ test("missing or unavailable registry falls back to managed role service", async
   const missingRegistryClient = {
     from: () => ({
       select: () => ({
-        ilike: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+        eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
       }),
     }),
   };
@@ -121,7 +121,7 @@ test("missing or unavailable registry falls back to managed role service", async
   }), "EDITOR,PUBLISHER");
 
   const failedRegistryClient = {
-    from: () => ({ select: () => ({ ilike: () => ({ maybeSingle: async () => ({ data: null, error: new Error("offline") }) }) }) }),
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: new Error("offline") }) }) }) }),
   };
   assert.equal(await resolveManagedAdminRoles("fixture-token", {
     baseUrl,

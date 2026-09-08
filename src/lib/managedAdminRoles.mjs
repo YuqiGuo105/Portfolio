@@ -15,7 +15,7 @@ async function resolveRegistryRoles(registryClient, email) {
   const { data, error } = await registryClient
     .from("admin_users")
     .select("role,status")
-    .ilike("email", email)
+    .eq("email", email)
     .maybeSingle();
 
   if (error) throw error;
