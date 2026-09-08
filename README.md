@@ -49,6 +49,11 @@ server-managed roles. The public endpoint above remains available without sign-i
   </tr>
 </table>
 
+**[Read the illustrated MCP connection guide →](https://www.yuqi.site/mcp-guide)**
+
+The guide covers client setup, the seven public tools, example questions, and
+the administrator sign-in and consent flow, with screenshots of the interfaces.
+
 ### Connect from Claude or Codex
 
 In Claude, open **Settings → Customize → Connectors**, add a custom connector,
