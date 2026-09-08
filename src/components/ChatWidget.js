@@ -11,6 +11,7 @@ import AnswerSources from "./AnswerSources"
 import VoiceInput from "./VoiceInput"
 import { Mic, Plus } from "lucide-react"
 import { mergeEvidence } from "../lib/chatEvidence.mjs"
+import { postSSE } from "../lib/chatStream.mjs"
 import { applyWebGuidePlan, normalizeWebGuidePlan } from "../lib/webGuide"
 
 import dynamic from "next/dynamic"
@@ -907,62 +908,6 @@ async function resolveRagEndpoint() {
   return candidates[0]
 }
 
-/* ---------- SSE parsing (POST fetch stream) ---------- */
-
-function parseSSEBlock(block) {
-  const lines = block.split(/\r?\n/)
-  let event = "message"
-  const dataLines = []
-  for (const line of lines) {
-    if (!line) continue
-    if (line.startsWith("event:")) event = line.slice(6).trim()
-    else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart())
-  }
-  return { event, data: dataLines.join("\n") }
-}
-
-async function postSSE(url, body, { onEvent, signal, deviceId }) {
-  let res
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-        ...(deviceId ? { "X-CW-Device-Id": deviceId } : {}),
-      },
-      body: JSON.stringify(body),
-      mode: "cors",
-      signal,
-    })
-  } catch (fetchErr) {
-    throw fetchErr
-  }
-
-  if (!res.ok) {
-    const t = await res.text().catch(() => "")
-    throw new Error(`SSE HTTP ${res.status} ${res.statusText}${t ? " — " + t.slice(0, 160) : ""}`)
-  }
-  if (!res.body) throw new Error("ReadableStream not supported")
-
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder("utf-8")
-  let buf = ""
-
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buf += decoder.decode(value, { stream: true })
-
-    let idx
-    while ((idx = buf.search(/\r?\n\r?\n/)) !== -1) {
-      const raw = buf.slice(0, idx)
-      buf = buf.slice(idx).replace(/^\r?\n\r?\n/, "")
-      const evt = parseSSEBlock(raw)
-      if (evt?.data != null) onEvent?.(evt)
-    }
-  }
-}
 
 /* ============================================================
    ✅ No hard-coded stage list: use backend stream fields directly
@@ -2971,12 +2916,21 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       ...(pendingActionId ? { pendingActionId } : {}),
     }
 
+    try {
     await postSSE(streamUrl, body, {
       signal: controller.signal,
+      timeoutMs: requestMode === "thinking" ? 180000 : 90000,
       deviceId: chatDeviceId,
       onEvent: (evt) => {
+        if (stoppedAssistantIdsRef.current.has(assistantId) || finalized) return false
         const obj = safeJsonParse(evt.data) || {}
         const stage = obj.stage || evt.event || "message"
+        if (stage === "done") return false
+        if (stage === "error") throw new Error("The assistant could not complete this response.")
+        if (stage === "run_metadata" && /^[0-9a-f-]{36}$/i.test(obj.payload?.runId || "")) {
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, runId: obj.payload.runId } : m))
+          return
+        }
 
         if (stage === "answer_delta") {
           // Backend sends { payload: { delta: "..." } }
@@ -3053,7 +3007,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           
           finalizeAssistant(assistantId, finalAnswer, onFinal)
 
-          return
+          return false
         }
 
         // Handle reasoning_step (DeepThinking plan/verify steps)
@@ -3096,7 +3050,12 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
                 guideButtonLabel: guidePlan.controls.start,
               }))
             )
-            applyWebGuidePlan(guidePlan, { start: guidePlan.autoStart })
+            try {
+              applyWebGuidePlan(guidePlan, { start: guidePlan.autoStart })
+            } catch (error) {
+              logger.warn("Web guide could not open", error?.message)
+              setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, showGuideCta: true } : m))
+            }
           }
           return
         }
@@ -3224,9 +3183,18 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       },
     })
 
-    if (!finalized && answerBuf) {
+    if (!finalized) {
       clearStage(assistantId)
-      finalizeAssistant(assistantId, answerBuf, onFinal)
+      const fallback = answerBuf || "The response ended before an answer was received. Please try again."
+      finalizeAssistant(assistantId, fallback, answerBuf ? onFinal : undefined)
+    }
+    } finally {
+      clearStage(assistantId)
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, streaming: false, thinkingNow: null } : m))
+      if (abortRef.current === controller) {
+        abortRef.current = null
+        setLoading(false)
+      }
     }
   }
 
@@ -3983,6 +3951,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
               {m.role === "assistant" && (m.sourceCards?.length > 0 || m.relatedLinks?.length > 0) ? (
                 <AnswerSources cards={m.sourceCards} related={m.relatedLinks} answer={m.content} />
               ) : null}
+              {m.role === "assistant" && m.runId ? <details style={{ marginTop: 10, fontSize: 12, overflowWrap: "anywhere" }}>
+                <summary style={{ cursor: "pointer" }}>Run details</summary>
+                <code style={{ userSelect: "text" }}>{m.runId}</code>
+              </details> : null}
 
               {/* Related links — dynamic content suggestions from semantic search */}
             </div>
