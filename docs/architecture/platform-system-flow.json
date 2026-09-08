@@ -1,17 +1,17 @@
 {
   "title": "Portfolio Microservice Platform",
-  "subtitle": "Production topology · synchronous APIs · event-driven projections · explicit state ownership",
-  "summary": "16 RUNTIMES · 7 EVENT STREAMS · 13 OWNED STATE STORES",
-  "description": "Staff-level container view of the portfolio edge, AI runtime, content control, notification delivery, visitor intelligence, observability, and recovery paths.",
+  "subtitle": "Production topology \u00b7 synchronous APIs \u00b7 event-driven projections \u00b7 explicit state ownership",
+  "summary": "PUBLIC READS \u00b7 PROTECTED ACTIONS \u00b7 REPLAYABLE EVENTS",
+  "description": "Portfolio service flows with online AI, content publishing, visitor intelligence, and owner-reviewed Application Copilot operations.",
   "theme": "light",
   "validateNoOverlap": true,
   "width": 2800,
-  "height": 1790,
+  "height": 2260,
   "lanes": [
     {
       "id": "online",
-      "title": "01 · EDGE + ONLINE AI SERVING",
-      "subtitle": "HTTPS / SSE · policy-aware orchestration · hybrid retrieval · MCP · immutable run telemetry",
+      "title": "01 \u00b7 EDGE + ONLINE AI SERVING",
+      "subtitle": "HTTPS / SSE \u00b7 policy-aware orchestration \u00b7 hybrid retrieval \u00b7 MCP \u00b7 immutable run telemetry",
       "x": 140,
       "y": 115,
       "w": 2510,
@@ -22,8 +22,8 @@
     },
     {
       "id": "content",
-      "title": "02 · CONTENT CONTROL + DELIVERY",
-      "subtitle": "Single source transaction · transactional outbox · independent projections · leased notification delivery",
+      "title": "02 \u00b7 CONTENT CONTROL + DELIVERY",
+      "subtitle": "Single source transaction \u00b7 transactional outbox \u00b7 independent projections \u00b7 leased notification delivery",
       "x": 140,
       "y": 785,
       "w": 2510,
@@ -34,8 +34,8 @@
     },
     {
       "id": "analytics",
-      "title": "03 · VISITOR INTELLIGENCE + ALERTING",
-      "subtitle": "First-party events · city-level enrichment · idempotent ingestion · sessions · rollups · replay",
+      "title": "03 \u00b7 VISITOR INTELLIGENCE + ALERTING",
+      "subtitle": "First-party events \u00b7 city-level enrichment \u00b7 idempotent ingestion \u00b7 sessions \u00b7 rollups \u00b7 replay",
       "x": 140,
       "y": 1225,
       "w": 2510,
@@ -45,11 +45,23 @@
       "strokeOpacity": 0.28
     },
     {
-      "id": "control-plane",
-      "title": "04 · PLATFORM CONTROL PLANE",
-      "subtitle": "Cross-cutting governance · independent failure domains · bounded cost · operational recovery",
+      "id": "career",
+      "title": "04 \u00b7 APPLICATION COPILOT + OWNER REVIEW",
+      "subtitle": "Authenticated MCP \u00b7 private application memory \u00b7 explicit review \u00b7 final submission remains manual",
       "x": 140,
       "y": 1635,
+      "w": 2510,
+      "h": 450,
+      "accent": "purple",
+      "fillOpacity": 0.035,
+      "strokeOpacity": 0.28
+    },
+    {
+      "id": "control-plane",
+      "title": "05 \u00b7 PLATFORM CONTROL PLANE",
+      "subtitle": "Cross-cutting governance \u00b7 independent failure domains \u00b7 bounded cost \u00b7 operational recovery",
+      "x": 140,
+      "y": 2110,
       "w": 2510,
       "h": 130,
       "accent": "slate",
@@ -87,24 +99,24 @@
       "shape": "actor",
       "brands": [
         {
-          "brand": "openai",
+          "brand": "anthropic",
           "brandColor": "#111827",
           "accent": "slate"
         },
         {
-          "brand": "googlegemini",
-          "brandColor": "#4285f4",
-          "accent": "blue"
+          "brand": "openai",
+          "brandColor": "#111827",
+          "accent": "slate"
         }
       ],
       "icon": "model",
       "title": "MCP Clients",
-      "meta": "OPENAI · GEMINI",
+      "meta": "CLAUDE \u00b7 CODEX \u00b7 GEMINI",
       "accent": "purple",
       "framed": true,
-      "x": 2660,
+      "x": 2580,
       "y": 360,
-      "w": 120,
+      "w": 200,
       "h": 112
     },
     {
@@ -114,12 +126,12 @@
       "brandColor": "#111827",
       "icon": "web",
       "title": "Portfolio Edge",
-      "meta": "NEXT.JS · VERCEL",
+      "meta": "NEXT.JS \u00b7 VERCEL",
       "members": [
-        "Portfolio UI",
-        "Admin Console",
+        "Portfolio + Admin UI",
         "Serverless API / BFF",
-        "Chat + Tracking"
+        "Chat + Voice + Files",
+        "Tracking + Insights"
       ],
       "resources": [
         {
@@ -136,7 +148,7 @@
           "brandColor": "#d82c20",
           "icon": "cache",
           "title": "Edge Limits",
-          "meta": "VALKEY · TTL",
+          "meta": "VALKEY \u00b7 TTL",
           "accent": "red",
           "weight": 0.75
         }
@@ -154,7 +166,7 @@
       "brandColor": "#6db33f",
       "icon": "bot",
       "title": "Agent Runtime",
-      "meta": "CLOUD RUN · HTTP / SSE",
+      "meta": "CLOUD RUN \u00b7 HTTP / SSE",
       "members": [
         "Safety + Intent Planner",
         "Generation + Streaming",
@@ -167,7 +179,7 @@
           "brandColor": "#d82c20",
           "icon": "memory",
           "title": "Conversation Memory",
-          "meta": "REDIS · 30M SLIDING TTL",
+          "meta": "REDIS \u00b7 30M SLIDING TTL",
           "accent": "red",
           "weight": 1
         }
@@ -185,7 +197,7 @@
       "brandColor": "#6db33f",
       "icon": "search",
       "title": "Knowledge Service",
-      "meta": "HYBRID BM25 + KNN · RRF",
+      "meta": "HYBRID BM25 + KNN \u00b7 RRF",
       "members": [
         "Query + Permission Filter",
         "BM25 + Vector Search",
@@ -225,10 +237,10 @@
       "brandColor": "#4285f4",
       "icon": "model",
       "title": "Model Gateway",
-      "meta": "GEMINI · OPENAI",
+      "meta": "GEMINI \u00b7 OPENAI",
       "details": [
-        "safety · generation · embeddings",
-        "timeouts · retry · fallback"
+        "safety \u00b7 generation \u00b7 embeddings",
+        "timeouts \u00b7 retry \u00b7 fallback"
       ],
       "accent": "blue",
       "x": 1630,
@@ -242,10 +254,10 @@
       "brandColor": "#7255a5",
       "icon": "tool",
       "title": "MCP Tool Gateway",
-      "meta": "TYPED TOOLS · RBAC",
+      "meta": "TYPED TOOLS \u00b7 RBAC",
       "details": [
-        "risk policy · confirmation",
-        "idempotency · audit · sanitize"
+        "risk policy \u00b7 confirmation",
+        "idempotency \u00b7 audit \u00b7 sanitize"
       ],
       "accent": "purple",
       "x": 1630,
@@ -259,13 +271,13 @@
       "brandColor": "#7255a5",
       "icon": "api",
       "title": "Public MCP Edge",
-      "meta": "STREAMABLE HTTP · STATELESS",
+      "meta": "STREAMABLE HTTP \u00b7 STATELESS",
       "details": [
-        "read-only registry · rate limit",
-        "response sanitization"
+        "read-only registry \u00b7 rate limit",
+        "public evidence \u00b7 sanitization"
       ],
       "accent": "purple",
-      "x": 2210,
+      "x": 2150,
       "y": 330,
       "w": 340,
       "h": 140
@@ -293,7 +305,7 @@
       "brandColor": "#6db33f",
       "icon": "workflow",
       "title": "Agent Event Projectors",
-      "meta": "2 KAFKA CONSUMERS · MANUAL ACK",
+      "meta": "2 KAFKA CONSUMERS \u00b7 MANUAL ACK",
       "members": [
         "Audit Record Consumer",
         "OpenSearch Consumer",
@@ -306,7 +318,7 @@
           "brandColor": "#336791",
           "icon": "database",
           "title": "Run Audit",
-          "meta": "POSTGRES · JSONB",
+          "meta": "POSTGRES \u00b7 JSONB",
           "accent": "blue",
           "weight": 1
         },
@@ -334,9 +346,9 @@
       "brandColorMode": "source",
       "icon": "chart",
       "title": "Kibana Dashboard",
-      "meta": "OPENSEARCH · RUN TRACE · SAFETY",
+      "meta": "OPENSEARCH \u00b7 RUN TRACE \u00b7 SAFETY",
       "details": [
-        "filter by runId · zero-hit analysis"
+        "filter by runId \u00b7 zero-hit analysis"
       ],
       "accent": "cyan",
       "x": 1580,
@@ -344,7 +356,6 @@
       "w": 330,
       "h": 125
     },
-
     {
       "id": "content-control",
       "shape": "cluster",
@@ -352,7 +363,7 @@
       "brandColor": "#6db33f",
       "icon": "workflow",
       "title": "Content Control Service",
-      "meta": "CLOUD RUN · HTTP",
+      "meta": "CLOUD RUN \u00b7 HTTP",
       "members": [
         "CRUD + Versioning",
         "Publish + Audit",
@@ -365,7 +376,7 @@
           "brandColor": "#336791",
           "icon": "database",
           "title": "Content System of Record",
-          "meta": "CONTENT · JOBS · OUTBOX",
+          "meta": "CONTENT \u00b7 JOBS \u00b7 OUTBOX",
           "accent": "blue",
           "weight": 1
         }
@@ -472,7 +483,7 @@
       "brandColor": "#6db33f",
       "icon": "mail",
       "title": "Notification Service",
-      "meta": "CLOUD RUN · KAFKA CONSUMER",
+      "meta": "CLOUD RUN \u00b7 KAFKA CONSUMER",
       "members": [
         "Subscribe + Preferences",
         "OTP Verification",
@@ -485,7 +496,7 @@
           "brandColor": "#336791",
           "icon": "database",
           "title": "Delivery Ledger",
-          "meta": "RECIPIENTS · RETRY · STATUS",
+          "meta": "RECIPIENTS \u00b7 RETRY \u00b7 STATUS",
           "accent": "blue",
           "weight": 1.35
         },
@@ -494,7 +505,7 @@
           "brandColor": "#d82c20",
           "icon": "lock",
           "title": "OTP State",
-          "meta": "REDIS · TTL",
+          "meta": "REDIS \u00b7 TTL",
           "accent": "red",
           "weight": 0.65
         }
@@ -511,27 +522,26 @@
       "brandColor": "#ea4335",
       "icon": "mail",
       "title": "Email Provider",
-      "meta": "SMTP · GMAIL RELAY",
+      "meta": "SMTP \u00b7 GMAIL RELAY",
       "details": [
-        "HTML + text · verified delivery"
+        "HTML + text \u00b7 verified delivery"
       ],
       "accent": "red",
-      "x": 2440,
+      "x": 2390,
       "y": 915,
-      "w": 190,
+      "w": 240,
       "h": 125
     },
-
     {
       "id": "tracking-api",
       "brand": "springboot",
       "brandColor": "#6db33f",
       "icon": "api",
       "title": "Tracking API",
-      "meta": "CLOUD RUN · HTTP",
+      "meta": "CLOUD RUN \u00b7 HTTP",
       "details": [
-        "validate envelope · geo-snap city",
-        "request ID · bounded payload"
+        "validate envelope \u00b7 geo-snap city",
+        "request ID \u00b7 bounded payload"
       ],
       "accent": "cyan",
       "x": 200,
@@ -562,7 +572,7 @@
       "brandColor": "#6db33f",
       "icon": "chart",
       "title": "Visitor Intelligence",
-      "meta": "KAFKA CONSUMER · MANUAL ACK",
+      "meta": "KAFKA CONSUMER \u00b7 MANUAL ACK",
       "members": [
         "Ingest + Geo Enrichment",
         "Session Aggregator",
@@ -575,7 +585,7 @@
           "brandColor": "#336791",
           "icon": "database",
           "title": "Analytics Store",
-          "meta": "EVENTS · SESSIONS · ROLLUPS",
+          "meta": "EVENTS \u00b7 SESSIONS \u00b7 ROLLUPS",
           "accent": "blue",
           "weight": 1.3
         },
@@ -584,7 +594,7 @@
           "brandColor": "#d82c20",
           "icon": "cache",
           "title": "Dedup + Limits",
-          "meta": "VALKEY · SETNX",
+          "meta": "VALKEY \u00b7 SETNX",
           "accent": "red",
           "weight": 0.7
         }
@@ -601,9 +611,9 @@
       "brandColor": "#6db33f",
       "icon": "compass",
       "title": "Public Visits API",
-      "meta": "READ MODEL · ETAG / 304",
+      "meta": "READ MODEL \u00b7 ETAG / 304",
       "details": [
-        "summary · markers · sessions",
+        "summary \u00b7 markers \u00b7 sessions",
         "30s response cache"
       ],
       "accent": "green",
@@ -620,7 +630,7 @@
       "title": "Visitor Alert Evaluator",
       "meta": "VERSIONED RULE ENGINE",
       "details": [
-        "poll rollups · incident ledger",
+        "poll rollups \u00b7 incident ledger",
         "deduped notification intent"
       ],
       "accent": "orange",
@@ -652,7 +662,7 @@
       "brandColor": "#111827",
       "icon": "retry",
       "title": "Analytics DLQ",
-      "meta": "14D RETENTION · REPLAY",
+      "meta": "14D RETENTION \u00b7 REPLAY",
       "metaBelow": true,
       "tubeHeight": 46,
       "accent": "red",
@@ -661,7 +671,6 @@
       "w": 230,
       "h": 68
     },
-
     {
       "id": "platform-security",
       "shape": "fabric",
@@ -669,10 +678,10 @@
       "brandColor": "#3ecf8e",
       "icon": "shield",
       "title": "Identity + Policy",
-      "meta": "AUTH · RBAC · POLICY · CONFIRM",
+      "meta": "AUTH \u00b7 RBAC \u00b7 POLICY \u00b7 CONFIRM",
       "accent": "green",
       "x": 180,
-      "y": 1682,
+      "y": 2157,
       "w": 540,
       "h": 62
     },
@@ -683,10 +692,10 @@
       "brandColor": "#f46800",
       "icon": "chart",
       "title": "Observability",
-      "meta": "SLO · METRICS · TRACES · ALERTS",
+      "meta": "SLO \u00b7 METRICS \u00b7 TRACES \u00b7 ALERTS",
       "accent": "orange",
       "x": 760,
-      "y": 1682,
+      "y": 2157,
       "w": 540,
       "h": 62
     },
@@ -697,10 +706,10 @@
       "brandColor": "#111827",
       "icon": "retry",
       "title": "Reliability + Replay",
-      "meta": "OUTBOX · IDEMPOTENCY · DLQ · REBUILD",
+      "meta": "OUTBOX \u00b7 IDEMPOTENCY \u00b7 DLQ \u00b7 REBUILD",
       "accent": "purple",
       "x": 1340,
-      "y": 1682,
+      "y": 2157,
       "w": 570,
       "h": 62
     },
@@ -711,12 +720,148 @@
       "brandColor": "#4285f4",
       "icon": "cloud",
       "title": "Cost + Capacity",
-      "meta": "SCALE-TO-ZERO · BUDGET · QUOTAS",
+      "meta": "SCALE-TO-ZERO \u00b7 BUDGET \u00b7 QUOTAS",
       "accent": "blue",
       "x": 1950,
-      "y": 1682,
+      "y": 2157,
       "w": 640,
       "h": 62
+    },
+    {
+      "id": "app-owner",
+      "shape": "actor",
+      "icon": "user",
+      "title": "Applicant",
+      "meta": "OWNER",
+      "accent": "purple",
+      "x": 20,
+      "y": 1750,
+      "w": 105,
+      "h": 112
+    },
+    {
+      "id": "application-copilot",
+      "shape": "cluster",
+      "icon": "web",
+      "title": "Application Copilot",
+      "meta": "CHROME MV3 \u00b7 ACTIVE TAB",
+      "members": [
+        "Visible Form Scanner",
+        "Owner Review",
+        "Approved Field Fill",
+        "Resume Attachment"
+      ],
+      "accent": "green",
+      "x": 180,
+      "y": 1730,
+      "w": 390,
+      "h": 210
+    },
+    {
+      "id": "admin-mcp-path",
+      "brand": "modelcontextprotocol",
+      "brandColor": "#7255a5",
+      "icon": "lock",
+      "title": "Admin MCP Connection",
+      "meta": "/MCP/ADMIN \u2192 TOOL GATEWAY",
+      "details": [
+        "existing MCP edge + gateway",
+        "identity \u00b7 role \u00b7 confirm \u00b7 audit"
+      ],
+      "accent": "purple",
+      "x": 650,
+      "y": 1730,
+      "w": 350,
+      "h": 145
+    },
+    {
+      "id": "career-service",
+      "shape": "cluster",
+      "brand": "springboot",
+      "brandColor": "#6db33f",
+      "icon": "workflow",
+      "title": "Career Workflow Service",
+      "meta": "JAVA 21 \u00b7 CLOUD RUN",
+      "members": [
+        "Candidate Snapshot",
+        "Field Resolution",
+        "Application Lifecycle",
+        "Private Resume Versions"
+      ],
+      "resources": [
+        {
+          "brand": "postgresql",
+          "brandColor": "#336791",
+          "icon": "database",
+          "title": "Career Vault",
+          "meta": "POSTGRES \u00b7 AES-GCM",
+          "accent": "blue",
+          "weight": 1.2
+        },
+        {
+          "brand": "redis",
+          "brandColor": "#d82c20",
+          "icon": "cache",
+          "title": "Bounded Cache",
+          "meta": "VALKEY \u00b7 TTL",
+          "accent": "red",
+          "weight": 1
+        }
+      ],
+      "accent": "green",
+      "x": 1080,
+      "y": 1710,
+      "w": 450,
+      "h": 275
+    },
+    {
+      "id": "resume-storage",
+      "brand": "supabase",
+      "brandColor": "#3ecf8e",
+      "icon": "lock",
+      "title": "Private Resume Storage",
+      "meta": "VERSIONED PDF ASSETS",
+      "details": [
+        "signed upload / download URLs",
+        "validate bytes \u00b7 size \u00b7 SHA-256"
+      ],
+      "accent": "green",
+      "x": 1640,
+      "y": 1730,
+      "w": 360,
+      "h": 145
+    },
+    {
+      "id": "ats-page",
+      "icon": "file",
+      "title": "ATS Application Page",
+      "meta": "OWNER-CONTROLLED SUBMISSION",
+      "details": [
+        "reviewed fields + selected PDF",
+        "manual submit \u2192 observed receipt"
+      ],
+      "accent": "orange",
+      "x": 2150,
+      "y": 1730,
+      "w": 430,
+      "h": 145
+    },
+    {
+      "id": "local-codex",
+      "brand": "openai",
+      "brandColor": "#111827",
+      "icon": "model",
+      "title": "Local Codex Advisor",
+      "meta": "OPTIONAL \u00b7 NATIVE MESSAGING",
+      "details": [
+        "non-sensitive unresolved fields",
+        "sanitized suggestions for review"
+      ],
+      "accent": "slate",
+      "x": 650,
+      "y": 1925,
+      "w": 350,
+      "h": 140
     }
   ],
   "edges": [
@@ -748,11 +893,20 @@
       "toSide": "top",
       "kind": "primary",
       "via": [
-        { "x": 1090, "y": 105 },
-        { "x": 1510, "y": 105 }
+        {
+          "x": 1090,
+          "y": 105
+        },
+        {
+          "x": 1510,
+          "y": 105
+        }
       ],
       "label": "generate",
-      "labelAt": { "x": 1310, "y": 105 },
+      "labelAt": {
+        "x": 1310,
+        "y": 105
+      },
       "routing": "smooth"
     },
     {
@@ -769,11 +923,20 @@
       "toSide": "left",
       "kind": "sync",
       "via": [
-        { "x": 1090, "y": 485 },
-        { "x": 1510, "y": 485 }
+        {
+          "x": 1090,
+          "y": 485
+        },
+        {
+          "x": 1510,
+          "y": 485
+        }
       ],
       "label": "tool call",
-      "labelAt": { "x": 1300, "y": 485 },
+      "labelAt": {
+        "x": 1300,
+        "y": 485
+      },
       "routing": "smooth"
     },
     {
@@ -783,7 +946,10 @@
       "toSide": "right",
       "kind": "primary",
       "via": [
-        { "x": 2605, "y": 380 }
+        {
+          "x": 2535,
+          "y": 380
+        }
       ],
       "label": "/mcp",
       "routing": "smooth"
@@ -791,8 +957,14 @@
     {
       "from": "public-mcp",
       "to": "mcp-gateway",
-      "fromAt": { "x": 2210, "y": 365 },
-      "toAt": { "x": 1940, "y": 365 },
+      "fromAt": {
+        "x": 2150,
+        "y": 365
+      },
+      "toAt": {
+        "x": 1940,
+        "y": 365
+      },
       "kind": "sync",
       "label": "read-only tools",
       "routing": "smooth"
@@ -820,7 +992,6 @@
       "label": "query traces",
       "routing": "smooth"
     },
-
     {
       "from": "operator",
       "to": "content-control",
@@ -862,12 +1033,24 @@
       "toSide": "bottom",
       "kind": "data",
       "via": [
-        { "x": 1420, "y": 800 },
-        { "x": 1490, "y": 750 },
-        { "x": 1490, "y": 455 }
+        {
+          "x": 1420,
+          "y": 800
+        },
+        {
+          "x": 1490,
+          "y": 750
+        },
+        {
+          "x": 1490,
+          "y": 455
+        }
       ],
       "label": "projection refresh",
-      "labelAt": { "x": 1490, "y": 735 },
+      "labelAt": {
+        "x": 1490,
+        "y": 735
+      },
       "routing": "smooth"
     },
     {
@@ -877,12 +1060,24 @@
       "toSide": "left",
       "kind": "event",
       "via": [
-        { "x": 610, "y": 1170 },
-        { "x": 1150, "y": 1170 },
-        { "x": 1400, "y": 1100 }
+        {
+          "x": 610,
+          "y": 1170
+        },
+        {
+          "x": 1150,
+          "y": 1170
+        },
+        {
+          "x": 1400,
+          "y": 1100
+        }
       ],
       "label": "article published",
-      "labelAt": { "x": 1120, "y": 1170 },
+      "labelAt": {
+        "x": 1120,
+        "y": 1170
+      },
       "routing": "smooth"
     },
     {
@@ -902,34 +1097,63 @@
     {
       "from": "mcp-gateway",
       "to": "content-control",
-      "fromAt": { "x": 1630, "y": 440 },
+      "fromAt": {
+        "x": 1630,
+        "y": 440
+      },
       "toSide": "top",
       "kind": "sync",
       "via": [
-        { "x": 1540, "y": 520 },
-        { "x": 1540, "y": 700 },
-        { "x": 900, "y": 735 },
-        { "x": 500, "y": 785 }
+        {
+          "x": 1540,
+          "y": 520
+        },
+        {
+          "x": 1540,
+          "y": 700
+        },
+        {
+          "x": 900,
+          "y": 735
+        },
+        {
+          "x": 500,
+          "y": 785
+        }
       ],
       "label": "admin.* tools",
-      "labelAt": { "x": 760, "y": 760 },
+      "labelAt": {
+        "x": 760,
+        "y": 760
+      },
       "routing": "smooth"
     },
     {
       "from": "mcp-gateway",
       "to": "notification-service",
-      "fromAt": { "x": 1940, "y": 440 },
+      "fromAt": {
+        "x": 1940,
+        "y": 440
+      },
       "toSide": "top",
       "kind": "sync",
       "via": [
-        { "x": 2130, "y": 520 },
-        { "x": 2110, "y": 700 }
+        {
+          "x": 2130,
+          "y": 520
+        },
+        {
+          "x": 2110,
+          "y": 700
+        }
       ],
       "label": "subscription.* tools",
-      "labelAt": { "x": 2015, "y": 700 },
+      "labelAt": {
+        "x": 2015,
+        "y": 700
+      },
       "routing": "smooth"
     },
-
     {
       "from": "portfolio-edge",
       "to": "tracking-api",
@@ -937,11 +1161,20 @@
       "toSide": "left",
       "kind": "sync",
       "via": [
-        { "x": 150, "y": 540 },
-        { "x": 150, "y": 1300 }
+        {
+          "x": 150,
+          "y": 540
+        },
+        {
+          "x": 150,
+          "y": 1300
+        }
       ],
-      "label": "/api/track · /api/click",
-      "labelAt": { "x": 150, "y": 1200 },
+      "label": "/api/track \u00b7 /api/click",
+      "labelAt": {
+        "x": 150,
+        "y": 1200
+      },
       "routing": "smooth"
     },
     {
@@ -971,12 +1204,24 @@
       "toSide": "top",
       "kind": "sync",
       "via": [
-        { "x": 620, "y": 560 },
-        { "x": 760, "y": 1080 },
-        { "x": 1450, "y": 1200 }
+        {
+          "x": 620,
+          "y": 560
+        },
+        {
+          "x": 760,
+          "y": 1080
+        },
+        {
+          "x": 1450,
+          "y": 1200
+        }
       ],
       "label": "/api/analytics",
-      "labelAt": { "x": 1430, "y": 1210 },
+      "labelAt": {
+        "x": 1430,
+        "y": 1210
+      },
       "routing": "smooth"
     },
     {
@@ -999,11 +1244,20 @@
       "toSide": "left",
       "kind": "recovery",
       "via": [
-        { "x": 1390, "y": 1590 },
-        { "x": 2180, "y": 1590 }
+        {
+          "x": 1390,
+          "y": 1590
+        },
+        {
+          "x": 2180,
+          "y": 1590
+        }
       ],
       "label": "parse / retry exhausted",
-      "labelAt": { "x": 1880, "y": 1590 },
+      "labelAt": {
+        "x": 1880,
+        "y": 1590
+      },
       "routing": "smooth"
     },
     {
@@ -1013,12 +1267,133 @@
       "toSide": "bottom",
       "kind": "event",
       "via": [
-        { "x": 2140, "y": 1400 },
-        { "x": 2200, "y": 1250 },
-        { "x": 2160, "y": 1160 }
+        {
+          "x": 2140,
+          "y": 1400
+        },
+        {
+          "x": 2200,
+          "y": 1250
+        },
+        {
+          "x": 2160,
+          "y": 1160
+        }
       ],
       "label": "alert intent",
-      "labelAt": { "x": 2180, "y": 1280 },
+      "labelAt": {
+        "x": 2180,
+        "y": 1280
+      },
+      "routing": "smooth"
+    },
+    {
+      "from": "app-owner",
+      "to": "application-copilot",
+      "kind": "primary",
+      "label": "review",
+      "routing": "smooth"
+    },
+    {
+      "from": "application-copilot",
+      "to": "admin-mcp-path",
+      "fromAt": {
+        "x": 570,
+        "y": 1795
+      },
+      "toAt": {
+        "x": 650,
+        "y": 1795
+      },
+      "kind": "sync",
+      "label": "MCP",
+      "routing": "smooth"
+    },
+    {
+      "from": "admin-mcp-path",
+      "to": "career-service",
+      "fromAt": {
+        "x": 1000,
+        "y": 1795
+      },
+      "toAt": {
+        "x": 1080,
+        "y": 1795
+      },
+      "kind": "sync",
+      "label": "career.*",
+      "routing": "smooth"
+    },
+    {
+      "from": "career-service",
+      "to": "resume-storage",
+      "kind": "data",
+      "label": "PDF assets",
+      "routing": "smooth"
+    },
+    {
+      "from": "application-copilot",
+      "to": "local-codex",
+      "fromAt": {
+        "x": 570,
+        "y": 1910
+      },
+      "toAt": {
+        "x": 650,
+        "y": 1980
+      },
+      "kind": "sync",
+      "label": "optional advice",
+      "labelAt": {
+        "x": 590,
+        "y": 1960
+      },
+      "routing": "smooth"
+    },
+    {
+      "from": "application-copilot",
+      "to": "ats-page",
+      "fromSide": "top",
+      "toSide": "top",
+      "kind": "primary",
+      "via": [
+        {
+          "x": 375,
+          "y": 1695
+        },
+        {
+          "x": 2365,
+          "y": 1695
+        }
+      ],
+      "label": "approved fill + attachment \u00b7 final submit stays manual",
+      "labelAt": {
+        "x": 1840,
+        "y": 1695
+      },
+      "routing": "smooth"
+    },
+    {
+      "from": "ats-page",
+      "to": "career-service",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "kind": "sync",
+      "via": [
+        {
+          "x": 2365,
+          "y": 2035
+        },
+        {
+          "x": 1305,
+          "y": 2035
+        }
+      ],
+      "label": "record observed submission receipt",
+      "labelAt": {
+        "x": 1870,
+        "y": 2035
+      },
       "routing": "smooth"
     }
   ]
