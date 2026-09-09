@@ -6,7 +6,7 @@ import styles from '../styles/McpGuide.module.css';
 
 const PUBLIC_URL = 'https://www.yuqi.site/mcp';
 const ADMIN_URL = `${PUBLIC_URL}/admin`;
-const IMAGE_SIZES = { 'claude-public-tools.png': [2056, 1374], 'codex-plugin.png': [1326, 1186], 'admin-sign-in.png': [960, 900], 'claude-admin-write-permissions.png': [810, 520] };
+const IMAGE_SIZES = { 'claude-public-tools.png': [2056, 1374], 'codex-yuqi-portfolio-plugin-v2.png': [1616, 973], 'admin-sign-in.png': [960, 900], 'claude-admin-write-permissions.png': [810, 520] };
 const SOURCE = 'https://github.com/YuqiGuo105/portfolio-mcp-server';
 const sections = [['authorization', 'Administrator access'], ['connect', 'Connect a client'], ['first-question', 'Ask your first question'], ['tools', 'Public tool reference'], ['troubleshooting', 'Troubleshooting']];
 const tools = [
@@ -34,7 +34,9 @@ function CopyBlock({ children, label = 'Copy' }) {
 }
 
 function Figure({ file, alt, number, children }) {
-  const src = `/assets/images/mcp-guide/${file}`;
+  const src = file === 'codex-yuqi-portfolio-plugin-v2.png'
+    ? `/assets/images/${file}`
+    : `/assets/images/mcp-guide/${file}`;
   return <figure className={styles.figure}>
     {file === 'claude-admin-write-permissions.png' && <div className={styles.permissionHeading}><div><span>ADMINISTRATOR TOOLS</span><strong>Write actions with explicit approval</strong></div><span className={styles.approvalBadge}><LockKeyhole size={15} /> Needs approval</span></div>}
     <a href={src} target="_blank" rel="noreferrer" aria-label={`Open full-size image: ${alt}`}><img src={src} alt={alt} width={IMAGE_SIZES[file][0]} height={IMAGE_SIZES[file][1]} loading="lazy" /></a>
@@ -94,7 +96,7 @@ export default function McpGuidePage() {
 
             <h3>Codex · Use the plugin or the MCP server</h3>
             <p>If the Yuqi Portfolio plugin is already installed, open <b>+ → Plugins → Yuqi Portfolio</b> in a task and ask Codex to use it. The plugin includes the MCP connection and portfolio-specific instructions.</p>
-            <Figure number="04" file="codex-plugin.png" alt="Yuqi Portfolio in the Codex Plugins menu">Select the installed plugin from the composer to make its purpose explicit in your task.</Figure>
+            <Figure number="04" file="codex-yuqi-portfolio-plugin-v2.png" alt="Yuqi Portfolio highlighted in the Codex Plugins menu">Select the installed plugin from the composer to make its purpose explicit in your task.</Figure>
             <p>For a direct server connection, run these commands in your terminal:</p>
             <CopyBlock label="Codex CLI">{'codex mcp add yuqi-portfolio --url https://www.yuqi.site/mcp\ncodex mcp list'}</CopyBlock>
             <p>Confirm that <code>yuqi-portfolio</code> appears in the list, then start a new task so Codex loads the tools.</p>

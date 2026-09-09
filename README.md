@@ -71,7 +71,9 @@ The admin endpoint remains separately protected by sign-in, server-managed
 roles, audited execution, and explicit confirmation for write operations.
 
 <p align="center">
-  <img src="docs/readme-assets/codex-yuqi-portfolio-plugin.png" alt="Yuqi Portfolio plugin available in Codex" width="680" />
+  <a href="public/assets/images/codex-yuqi-portfolio-plugin-v2.png">
+    <img src="public/assets/images/codex-yuqi-portfolio-plugin-v2.png" alt="Yuqi Portfolio plugin highlighted in the Codex plugin picker" width="820" />
+  </a>
 </p>
 
 ---
