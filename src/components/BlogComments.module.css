@@ -1,0 +1,200 @@
+.comments {
+  --comments-surface: #ffffff;
+  --comments-card: #f8fafc;
+  --comments-input: #ffffff;
+  --comments-border: #d7dee8;
+  --comments-text: #1f2937;
+  --comments-heading: #111827;
+  --comments-muted: #64748b;
+  --comments-placeholder: #94a3b8;
+  --comments-focus: #2563eb;
+  --comments-focus-ring: rgba(37, 99, 235, 0.2);
+  --comments-button: #2563eb;
+  --comments-button-hover: #1d4ed8;
+  --comments-button-disabled: #93c5fd;
+  margin-top: 32px;
+  color: var(--comments-text);
+}
+
+.title {
+  margin-bottom: 12px;
+  color: var(--comments-heading);
+}
+
+.muted {
+  color: var(--comments-muted);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.comment {
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  color: var(--comments-text);
+  background: var(--comments-card);
+  border: 1px solid var(--comments-border);
+  border-radius: 8px;
+}
+
+.commentMeta {
+  margin-bottom: 4px;
+  color: var(--comments-heading);
+  font-size: 0.9rem;
+}
+
+.commentDate {
+  color: var(--comments-muted);
+  font-size: 0.78rem;
+}
+
+.commentBody {
+  color: var(--comments-text);
+  font-size: 0.92rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.form {
+  margin-top: 20px;
+  padding: 16px;
+  color: var(--comments-text);
+  background: var(--comments-surface);
+  border: 1px solid var(--comments-border);
+  border-radius: 8px;
+}
+
+.formTitle {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: var(--comments-heading);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.comments .input,
+.comments .textarea {
+  width: 100%;
+  height: auto;
+  padding: 8px 10px;
+  color: var(--comments-text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: var(--comments-input);
+  border: 1px solid var(--comments-border);
+  border-radius: 6px;
+  transition: border-color 160ms ease, box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+.comments .input::placeholder,
+.comments .textarea::placeholder {
+  color: var(--comments-placeholder);
+  opacity: 1;
+}
+
+.comments .input:focus,
+.comments .textarea:focus {
+  border-color: var(--comments-focus);
+  box-shadow: 0 0 0 3px var(--comments-focus-ring);
+  outline: none;
+}
+
+.comments .textarea {
+  height: auto;
+  min-height: 112px;
+  margin-bottom: 10px;
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.status {
+  margin-right: auto;
+  color: var(--comments-muted);
+  font-size: 0.85rem;
+}
+
+.submit {
+  padding: 8px 18px;
+  color: #ffffff;
+  font-weight: 600;
+  background: var(--comments-button);
+  border: 1px solid var(--comments-button);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--comments-button-hover);
+  border-color: var(--comments-button-hover);
+}
+
+.submit:focus-visible {
+  box-shadow: 0 0 0 3px var(--comments-focus-ring);
+  outline: none;
+}
+
+.submit:disabled {
+  background: var(--comments-button-disabled);
+  border-color: var(--comments-button-disabled);
+  cursor: not-allowed;
+}
+
+:global(body.dark-skin) .comments {
+  --comments-surface: #111827;
+  --comments-card: #182231;
+  --comments-input: #0f172a;
+  --comments-border: #344256;
+  --comments-text: #e5e7eb;
+  --comments-heading: #f8fafc;
+  --comments-muted: #a8b3c4;
+  --comments-placeholder: #7f8da3;
+  --comments-focus: #60a5fa;
+  --comments-focus-ring: rgba(96, 165, 250, 0.24);
+  --comments-button: #2563eb;
+  --comments-button-hover: #3b82f6;
+  --comments-button-disabled: #334e7d;
+}
+
+@media (max-width: 640px) {
+  .fields {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .status {
+    margin-right: 0;
+  }
+
+  .submit {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input,
+  .textarea,
+  .submit {
+    transition: none;
+  }
+}

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../supabase/supabaseClient";
+import styles from "./BlogComments.module.css";
 
 export default function BlogComments({ blogId, blogType = "technical" }) {
   const [comments, setComments] = useState([]);
@@ -66,143 +67,73 @@ export default function BlogComments({ blogId, blogType = "technical" }) {
   };
 
   return (
-    <div className="blog-comments" style={{ marginTop: 32 }}>
-      <h3 style={{ marginBottom: 12 }}>
+    <div className={`blog-comments ${styles.comments}`}>
+      <h3 className={styles.title}>
         Comments {comments.length ? `(${comments.length})` : ""}
       </h3>
 
       {loading ? (
-        <p style={{ color: "#6b7280" }}>Loading comments…</p>
+        <p className={styles.muted}>Loading comments…</p>
       ) : comments.length === 0 ? (
-        <p style={{ color: "#6b7280" }}>No comments yet. Be the first.</p>
+        <p className={styles.muted}>No comments yet. Be the first.</p>
       ) : (
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        <ul className={styles.list}>
           {comments.map((c) => (
-            <li
-              key={c.id}
-              style={{
-                padding: "12px 14px",
-                marginBottom: 10,
-                background: "#f8fafc",
-                border: "1px solid #e5e7eb",
-                borderRadius: 8,
-              }}
-            >
-              <div style={{ fontSize: "0.9rem", marginBottom: 4 }}>
+            <li key={c.id} className={styles.comment}>
+              <div className={styles.commentMeta}>
                 <strong>{c.author_name}</strong>{" "}
-                <span style={{ color: "#6b7280", fontSize: "0.78rem" }}>
+                <span className={styles.commentDate}>
                   · {new Date(c.created_at).toLocaleString()}
                 </span>
               </div>
-              <div
-                style={{
-                  whiteSpace: "pre-wrap",
-                  color: "#1f2937",
-                  fontSize: "0.92rem",
-                  lineHeight: 1.55,
-                }}
-              >
-                {c.content}
-              </div>
+              <div className={styles.commentBody}>{c.content}</div>
             </li>
           ))}
         </ul>
       )}
 
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          marginTop: 20,
-          padding: 16,
-          border: "1px solid #e5e7eb",
-          borderRadius: 8,
-          background: "#fff",
-        }}
-      >
-        <h4 style={{ marginTop: 0, marginBottom: 12 }}>Leave a comment</h4>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 10,
-            marginBottom: 10,
-          }}
-        >
+      <form onSubmit={handleSubmit} className={styles.form}>
+        <h4 className={styles.formTitle}>Leave a comment</h4>
+        <div className={styles.fields}>
           <input
+            className={styles.input}
             type="text"
             placeholder="Your name"
             value={draft.author_name}
             onChange={(e) =>
               setDraft((d) => ({ ...d, author_name: e.target.value }))
             }
-            style={{
-              padding: "8px 10px",
-              border: "1px solid #d1d5db",
-              borderRadius: 6,
-              fontSize: "0.9rem",
-            }}
             required
           />
           <input
+            className={styles.input}
             type="email"
             placeholder="Your email"
             value={draft.author_email}
             onChange={(e) =>
               setDraft((d) => ({ ...d, author_email: e.target.value }))
             }
-            style={{
-              padding: "8px 10px",
-              border: "1px solid #d1d5db",
-              borderRadius: 6,
-              fontSize: "0.9rem",
-            }}
             required
           />
         </div>
         <textarea
+          className={styles.textarea}
           placeholder="Your comment"
           value={draft.content}
           onChange={(e) =>
             setDraft((d) => ({ ...d, content: e.target.value }))
           }
           rows={4}
-          style={{
-            width: "100%",
-            padding: "8px 10px",
-            border: "1px solid #d1d5db",
-            borderRadius: 6,
-            fontSize: "0.9rem",
-            fontFamily: "inherit",
-            resize: "vertical",
-            marginBottom: 10,
-          }}
           required
         />
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            gap: 12,
-          }}
-        >
+        <div className={styles.actions}>
           {statusMsg && (
-            <span style={{ marginRight: "auto", color: "#6b7280", fontSize: "0.85rem" }}>
-              {statusMsg}
-            </span>
+            <span className={styles.status} role="status">{statusMsg}</span>
           )}
           <button
+            className={styles.submit}
             type="submit"
             disabled={submitting}
-            style={{
-              padding: "8px 18px",
-              borderRadius: 6,
-              border: "1px solid #2563eb",
-              background: submitting ? "#93c5fd" : "#2563eb",
-              color: "#fff",
-              fontWeight: 500,
-              cursor: submitting ? "not-allowed" : "pointer",
-            }}
           >
             {submitting ? "Posting…" : "Post Comment"}
           </button>
