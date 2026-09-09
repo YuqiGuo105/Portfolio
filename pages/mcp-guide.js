@@ -6,7 +6,7 @@ import styles from '../styles/McpGuide.module.css';
 
 const PUBLIC_URL = 'https://www.yuqi.site/mcp';
 const ADMIN_URL = `${PUBLIC_URL}/admin`;
-const IMAGE_SIZES = { 'claude-public-tools.png': [2056, 1374], 'codex-yuqi-portfolio-plugin-v2.png': [1616, 973], 'admin-sign-in.png': [960, 900], 'claude-admin-write-permissions.png': [810, 520] };
+const IMAGE_SIZES = { 'claude-public-tools.png': [2056, 1374], 'codex-yuqi-portfolio-plugin-v2.png': [1429, 1100], 'admin-sign-in.png': [960, 900], 'claude-admin-write-permissions.png': [810, 520] };
 const SOURCE = 'https://github.com/YuqiGuo105/portfolio-mcp-server';
 const sections = [['authorization', 'Administrator access'], ['connect', 'Connect a client'], ['first-question', 'Ask your first question'], ['tools', 'Public tool reference'], ['troubleshooting', 'Troubleshooting']];
 const tools = [
