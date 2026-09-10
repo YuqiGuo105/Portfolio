@@ -11,6 +11,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { searchItems } from "../../../../src/lib/searchItems";
+import { RESPONSE_LANGUAGE_POLICY } from "../../../../src/lib/responseLanguagePolicy.mjs";
 import {
   forwardRagSse,
   requireSupabaseUser,
@@ -107,7 +108,7 @@ function buildOwnerPrompt(rows, pageCtx) {
     "- If the knowledge base does not contain the answer, say so politely (in the user's language) and suggest what the user could ask instead.",
     "",
     "STYLE:",
-    "- Reply in the SAME LANGUAGE the user used. If the user mixes languages, prefer English.",
+    RESPONSE_LANGUAGE_POLICY,
     "- Be CONCISE: answer directly in 1-3 short sentences or a few bullet points. No filler, no repetition, no restating the question.",
     "- Lead with the key fact first. Only add detail if it is clearly useful.",
     "- Use Markdown only when it improves clarity.",
@@ -131,7 +132,7 @@ function buildGeneralPrompt(pageCtx) {
     "RULES:",
     "- Use your general knowledge and web search results to answer the question.",
     "- When you use web search results, naturally cite the source in your answer.",
-    "- Reply in the SAME LANGUAGE the user used. If the user mixes languages, prefer English.",
+    RESPONSE_LANGUAGE_POLICY,
     "- Be CONCISE: answer directly in 1-3 short sentences or a few bullet points. No filler, no repetition, no restating the question.",
     "- Lead with the key fact first. Only add detail if it is clearly useful.",
     "- Use Markdown only when it improves clarity.",
