@@ -1,9 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { previewEnabled, searchOptions, searchKnowledge, getKnowledgeBatch } from '../src/lib/server/knowledgePreview.mjs';
 
 const ID = '00000000-0000-4000-8000-000000000001';
 const MISSING_ID = '00000000-0000-4000-8000-000000000002';
+
+test('knowledge records and textareas override fixed public-site heights', () => {
+  const css = readFileSync(new URL('../src/components/admin/KnowledgeManager.module.css', import.meta.url), 'utf8');
+  assert.match(css, /\.record\s*\{[^}]*height:\s*auto;[^}]*overflow:\s*visible;/);
+  assert.match(css, /\.fields textarea\s*\{[^}]*height:\s*auto;/);
+});
 
 function reader(result) {
   const calls = [];

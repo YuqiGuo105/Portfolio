@@ -7,7 +7,7 @@
 .library { min-width: 0; border-right: 1px solid #dde3e6; }
 .listHeading { display: flex; align-items: center; justify-content: space-between; min-height: 52px; padding: 0 18px; background: #f7f9fa; border-bottom: 1px solid #e3e8eb; font-size: 12px; color: #6a7580; }
 .records { max-height: 720px; overflow-y: auto; }
-.record { display: grid; gap: 10px; width: 100%; padding: 20px 18px; border: 0; border-bottom: 1px solid #e7ecee; border-left: 3px solid transparent; background: white; text-align: left; font: inherit; color: #29353d; cursor: pointer; }
+.record { display: grid; gap: 10px; width: 100%; height: auto; overflow: visible; padding: 20px 18px; border: 0; border-bottom: 1px solid #e7ecee; border-left: 3px solid transparent; background: white; text-align: left; font: inherit; line-height: 1.5; color: #29353d; cursor: pointer; }
 .record:hover { background: #f8fafb; }
 .selected { background: #f0f8f5; border-left-color: #16816d; }
 .recordHeading { display: flex; align-items: flex-start; gap: 9px; }
@@ -23,7 +23,7 @@
 .fields { border: 0; padding: 0; margin: 0; min-width: 0; }
 .fields label { display: block; font-size: 12px; font-weight: 600; color: #47545e; }
 .fields input, .fields textarea, .fields select { display: block; width: 100%; min-width: 0; margin-top: 8px; border: 1px solid #ccd6da; border-radius: 6px; padding: 11px 12px; background: #fff; color: #25313b; -webkit-text-fill-color: #25313b; font: inherit; font-size: 14px; font-weight: 400; line-height: 1.6; letter-spacing: 0; box-sizing: border-box; }
-.fields textarea { resize: vertical; }
+.fields textarea { height: auto; resize: vertical; }
 .fields :disabled { background: #f7f9fa; }
 .fields input:focus, .fields textarea:focus, .fields select:focus { outline: 2px solid #16816d33; outline-offset: 1px; border-color: #16816d; }
 .answer { min-height: 260px; }
