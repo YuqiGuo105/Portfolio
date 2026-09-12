@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
+  Database,
   FileText,
   Gauge,
   History,
@@ -66,6 +67,7 @@ const NAV_GROUPS = [
   {
     label: "AI Operations",
     items: [
+      { href: "/admin/knowledge", label: "Knowledge base", icon: Database, adminOnly: true },
       { href: "/admin/conversations", label: "Conversations", icon: History },
       { href: "/admin/operations", label: "Operations timeline", icon: Route },
       { href: "/admin/cost-guardrails", label: "Cost guardrails", icon: ShieldCheck },
@@ -193,7 +195,8 @@ function AdminShell({ children }) {
             {NAV_GROUPS.map((group) => (
               <div key={group.label} className={styles.navGroup}>
                 <div className={styles.navGroupTitle}>{group.label}</div>
-                {group.items.filter((item) => !item.ownerOnly || adminSession?.owner).map(navItem)}
+                {group.items.filter((item) => (!item.ownerOnly || adminSession?.owner)
+                  && (!item.adminOnly || adminSession?.role === 'ADMIN')).map(navItem)}
               </div>
             ))}
           </nav>

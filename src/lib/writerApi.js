@@ -12,9 +12,34 @@
 // in the admin-service for internal scripts / CI only.
 
 import { supabase } from '../supabase/supabaseClient';
+import { createKnowledgeApi } from './knowledgeApi.mjs';
 
 const BASE =
   process.env.NEXT_PUBLIC_WRITER_API_URL || 'http://localhost:8081';
+export const knowledgeReadOnlyPreview = process.env.NODE_ENV === 'development'
+  && process.env.NEXT_PUBLIC_KNOWLEDGE_READ_ONLY_PREVIEW === 'true';
+
+async function knowledgePreviewRequest(action, body = {}) {
+  const token = await getAuthToken();
+  const response = await fetch('/api/admin/knowledge-preview', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ ...body, action }), signal: AbortSignal.timeout(20000),
+  });
+  const result = await response.json();
+  if (!response.ok) { const error = new Error(result.message || 'Knowledge request failed'); error.status = response.status; throw error; }
+  return result;
+}
+
+const previewKnowledgeApi = {
+  list: ({ query = '', scope = 'OWNED', status = 'ALL', limit = 25, offset = 0 } = {}) =>
+    knowledgePreviewRequest('search', { filter: { query, scope, status }, page: { size: limit, offset } }),
+  getBatch: ids => knowledgePreviewRequest('batch-get', { ids }),
+  get: async id => {
+    const result = await knowledgePreviewRequest('batch-get', { ids: [id] });
+    if (!result.items[0]?.found) throw new Error('Knowledge record not found');
+    return result.items[0].record;
+  },
+};
 
 /**
  * Returns the live Supabase access token, or '' if no session.
@@ -139,6 +164,7 @@ function makeContentResource(type) {
 }
 
 export const writerApi = {
+  knowledge: knowledgeReadOnlyPreview ? previewKnowledgeApi : createKnowledgeApi(request),
   blogs: makeContentResource('BLOG'),
   lifeBlogs: makeContentResource('LIFE_BLOG'),
   projects: makeContentResource('PROJECT'),
@@ -197,7 +223,8 @@ export const writerApi = {
 /** Probe the admin API; authorization remains owned by the admin service. */
 export async function verifyAdminSession() {
   try {
-    const profile = await request('GET', '/api/admin/users/me');
+    const profile = knowledgeReadOnlyPreview ? await knowledgePreviewRequest('session')
+      : await request('GET', '/api/admin/users/me');
     return {
       authorized: true,
       status: 200,
