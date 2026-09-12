@@ -31,6 +31,7 @@ test('track and click skip local events before rate limiting, Kafka or Supabase'
         import { isPrivateAnalyticsEvent } from '${policyUrl}';
         export const calls = { rate: 0, kafka: 0, storage: 0 };
         const isRateLimited = async () => { calls.rate++; return false; };
+        const allowAnalyticsRequest = async () => true;
         const produceRawEvent = async () => { calls.kafka++; return true; };
         const supabaseServer = { from() { calls.storage++; throw new Error('Storage must not run'); } };
         const uuidv7 = () => 'fixture-event';
@@ -70,7 +71,8 @@ test('track and click skip local events before rate limiting, Kafka or Supabase'
 
 test('browser development tracking creates no identifiers, listeners or network requests', async () => {
   const source = await readFile(new URL('../src/lib/behaviorAnalytics.js', import.meta.url), 'utf8');
-  const module = await import(dataModule(source.replace('"./analyticsHostFilter"', JSON.stringify(hostUrl)).replace('"./analyticsPagePolicy.mjs"', JSON.stringify(policyUrl))));
+  const module = await import(dataModule(source.replace('"./analyticsHostFilter"', JSON.stringify(hostUrl)).replace('"./analyticsPagePolicy.mjs"', JSON.stringify(policyUrl))
+    .replace(/^import .*analyticsSession.*;$/m, 'const getAnalyticsIdentity = () => { throw new Error("Auth must not run"); };')));
   const oldEnv = process.env.NODE_ENV;
   const oldWindow = globalThis.window;
   try {

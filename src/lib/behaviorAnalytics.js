@@ -1,5 +1,6 @@
 import { isBrowserAnalyticsDisabled } from "./analyticsHostFilter";
 import { isPrivateAnalyticsPage } from "./analyticsPagePolicy.mjs";
+import { getAnalyticsIdentity } from "./analyticsSession";
 
 const CONSENT_KEY = "yuqi_analytics_consent";
 const ANON_COOKIE = "yuqi_analytics_id";
@@ -106,37 +107,65 @@ export function trackBehavior(eventName, context = {}) {
   const consentState = getAnalyticsConsent();
   if (consentState === "denied") return false;
 
-  const identified = consentState === "granted";
-  const payload = {
-    schemaVersion: 2,
-    event: eventName,
-    localTime: new Date().toISOString(),
-    consentState,
-    page: currentPath(context.page || window.location.href),
-    target: currentPath(context.target),
-    referrer: context.referrer ?? document.referrer ?? null,
-    sessionId: identified ? getSessionId() : null,
-    anonymousId: identified ? getAnonymousId() : null,
-    properties: context.properties || {},
-  };
+  const page = currentPath(context.page || window.location.href);
+  const localTime = new Date().toISOString();
+  void getAnalyticsIdentity().then(({ collect, token }) => {
+    if (!collect || context.isActive?.() === false || getAnalyticsConsent() === 'denied'
+        || isPrivateAnalyticsPage(window.location.href)) return;
+    const identified = getAnalyticsConsent() === "granted";
+    const payload = {
+      schemaVersion: 2,
+      event: eventName,
+      localTime,
+      consentState: getAnalyticsConsent(),
+      page,
+      target: currentPath(context.target),
+      referrer: context.referrer ?? document.referrer ?? null,
+      sessionId: identified ? getSessionId() : null,
+      anonymousId: identified ? getAnonymousId() : null,
+      properties: context.properties || {},
+    };
 
-  fetch("/api/track", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    keepalive: true,
+    return fetch("/api/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
   }).catch(() => {});
   return true;
 }
 
-export function startPageBehaviorTracking(page) {
+export async function trackClick(clickEvent, targetUrl) {
+  if (typeof window === 'undefined' || isBrowserAnalyticsDisabled(window.location.hostname)
+      || isPrivateAnalyticsPage(window.location.href) || isPrivateAnalyticsPage(targetUrl)
+      || getAnalyticsConsent() === 'denied') return false;
+  const page = currentPath(window.location.href);
+  const localTime = new Date().toISOString();
+  try {
+    const { collect, token } = await getAnalyticsIdentity();
+    if (!collect || getAnalyticsConsent() === 'denied'
+        || isPrivateAnalyticsPage(window.location.href)) return false;
+    await fetch('/api/click', {
+      method: 'POST', keepalive: true,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ clickEvent, targetUrl, localTime, page }),
+    });
+    return true;
+  } catch { return false; }
+}
+
+export function startPageBehaviorTracking(page, { recordPageView = true } = {}) {
   if (typeof window === "undefined" || isBrowserAnalyticsDisabled(window.location.hostname)
       || isPrivateAnalyticsPage(page) || isPrivateAnalyticsPage(window.location.href)) {
     return () => {};
   }
   const startedAt = Date.now();
   const milestones = new Set();
-  trackBehavior("page_view", { page });
+  let discarded = false;
+  let flushed = false;
+  const isActive = () => !discarded;
+  if (recordPageView) trackBehavior("page_view", { page, isActive });
 
   const onScroll = () => {
     if (getAnalyticsConsent() !== "granted") return;
@@ -146,21 +175,24 @@ export function startPageBehaviorTracking(page) {
     for (const milestone of [25, 50, 75, 100]) {
       if (percentage >= milestone && !milestones.has(milestone)) {
         milestones.add(milestone);
-        trackBehavior("read_progress", { page, properties: { progressPercent: milestone } });
+        trackBehavior("read_progress", { page, isActive, properties: { progressPercent: milestone } });
       }
     }
   };
 
   const flushEngagement = () => {
+    if (flushed || discarded) return;
+    flushed = true;
     const seconds = Math.min(3600, Math.round((Date.now() - startedAt) / 1000));
     if (seconds >= 5) {
-      trackBehavior("engaged_time", { page, properties: { engagedSeconds: seconds } });
+      trackBehavior("engaged_time", { page, isActive, properties: { engagedSeconds: seconds } });
     }
   };
 
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("pagehide", flushEngagement, { once: true });
-  return () => {
+  return ({ discard = false } = {}) => {
+    discarded ||= discard;
     window.removeEventListener("scroll", onScroll);
     window.removeEventListener("pagehide", flushEngagement);
     flushEngagement();

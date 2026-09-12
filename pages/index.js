@@ -14,7 +14,7 @@ import { useRouter } from 'next/router';
 import LogInDialog from "../src/components/LogInDialog";
 import SiteTour from "../src/components/SiteTour";
 import GuideHighlights from "../src/components/GuideHighlights";
-import { isBrowserAnalyticsDisabled } from "../src/lib/analyticsHostFilter";
+import { trackClick } from "../src/lib/behaviorAnalytics";
 import { GitPullRequest } from "lucide-react";
 
 import SocialLinks from "../src/components/SocialLinks";
@@ -235,20 +235,7 @@ const Index = () => {
   }, []);
 
   // Helper to record a click event
-  const recordClick = async (clickEvent, targetUrl) => {
-    if (isBrowserAnalyticsDisabled(window.location.hostname)) return;
-    const localTime = new Date().toISOString();
-    try {
-      await fetch("/api/click", {
-        // Ensure this URL is correct
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clickEvent, targetUrl, localTime }),
-      });
-    } catch (err) {
-      console.error("Error logging click event:", err);
-    }
-  };
+  const recordClick = trackClick;
 
   if (!blogSliderSettingsRef.current) {
     blogSliderSettingsRef.current = {

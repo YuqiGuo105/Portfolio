@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import SeoHead from "../src/components/SeoHead";
 import MobilePullToRefresh from "../src/components/MobilePullToRefresh";
 import { startPageBehaviorTracking } from "../src/lib/behaviorAnalytics";
+import { isPrivateAnalyticsPage } from "../src/lib/analyticsPagePolicy.mjs";
 import "../styles/globals.css";
 import "../styles/carousel.css";
 import "../styles/chatWidget.css";
@@ -109,8 +110,22 @@ function MyApp({ Component, pageProps }) {
 
     // Subsequent client-side navigations
     const handleRouteChange = (url) => track(url);
+    const handleRouteStart = (url) => {
+      if (!isPrivateAnalyticsPage(url)) return;
+      cleanupTracking.current?.({ discard: true });
+      cleanupTracking.current = null;
+    };
+    const handleRouteError = (_error, url) => {
+      if (isPrivateAnalyticsPage(url) && !cleanupTracking.current) {
+        cleanupTracking.current = startPageBehaviorTracking(window.location.pathname, { recordPageView: false });
+      }
+    };
+    router.events.on("routeChangeStart", handleRouteStart);
+    router.events.on("routeChangeError", handleRouteError);
     router.events.on("routeChangeComplete", handleRouteChange);
     return () => {
+      router.events.off("routeChangeStart", handleRouteStart);
+      router.events.off("routeChangeError", handleRouteError);
       router.events.off("routeChangeComplete", handleRouteChange);
       cleanupTracking.current?.();
       cleanupTracking.current = null;

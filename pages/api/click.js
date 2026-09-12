@@ -10,6 +10,7 @@ import { uuidv7 } from '../../src/lib/uuidv7';
 import { isRateLimited } from '../../src/lib/rateLimiter';
 import { isLocalAnalyticsRequest, isLocalAnalyticsEvent } from '../../src/lib/analyticsHostFilter';
 import { isPrivateAnalyticsEvent } from '../../src/lib/analyticsPagePolicy.mjs';
+import { allowAnalyticsRequest } from '../../src/lib/analyticsRequestPolicy';
 
 // 允许的来源域名
 const ALLOWED_ORIGINS = ['https://www.yuqi.site', 'https://yuqi.site'];
@@ -94,6 +95,7 @@ export default async function handler(req, res) {
   }
 
   // 3. Rate limiting
+  if (!await allowAnalyticsRequest(req, res)) return;
   const forwarded = req.headers['x-forwarded-for'] || '';
   const ip = (forwarded.split(',')[0] || req.socket?.remoteAddress || '').trim();
   if (await isRateLimited(ip, 'click')) {
