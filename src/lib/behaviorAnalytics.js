@@ -1,6 +1,5 @@
 import { isBrowserAnalyticsDisabled } from "./analyticsHostFilter";
 import { isPrivateAnalyticsPage } from "./analyticsPagePolicy.mjs";
-import { getAnalyticsIdentity } from "./analyticsSession";
 
 const CONSENT_KEY = "yuqi_analytics_consent";
 const ANON_COOKIE = "yuqi_analytics_id";
@@ -109,9 +108,9 @@ export function trackBehavior(eventName, context = {}) {
 
   const page = currentPath(context.page || window.location.href);
   const localTime = new Date().toISOString();
-  void getAnalyticsIdentity().then(({ collect, token }) => {
-    if (!collect || context.isActive?.() === false || getAnalyticsConsent() === 'denied'
-        || isPrivateAnalyticsPage(window.location.href)) return;
+  // Queue public-page events immediately; a later admin login must not cancel them.
+  // Analytics is anonymous and does not need the account's authentication token.
+  try {
     const identified = getAnalyticsConsent() === "granted";
     const payload = {
       schemaVersion: 2,
@@ -126,13 +125,13 @@ export function trackBehavior(eventName, context = {}) {
       properties: context.properties || {},
     };
 
-    return fetch("/api/track", {
+    void fetch("/api/track", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       keepalive: true,
-    });
-  }).catch(() => {});
+    }).catch(() => {});
+  } catch { return false; }
   return true;
 }
 
@@ -143,12 +142,9 @@ export async function trackClick(clickEvent, targetUrl) {
   const page = currentPath(window.location.href);
   const localTime = new Date().toISOString();
   try {
-    const { collect, token } = await getAnalyticsIdentity();
-    if (!collect || getAnalyticsConsent() === 'denied'
-        || isPrivateAnalyticsPage(window.location.href)) return false;
     await fetch('/api/click', {
       method: 'POST', keepalive: true,
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ clickEvent, targetUrl, localTime, page }),
     });
     return true;
@@ -164,8 +160,7 @@ export function startPageBehaviorTracking(page, { recordPageView = true } = {}) 
   const milestones = new Set();
   let discarded = false;
   let flushed = false;
-  const isActive = () => !discarded;
-  if (recordPageView) trackBehavior("page_view", { page, isActive });
+  if (recordPageView) trackBehavior("page_view", { page });
 
   const onScroll = () => {
     if (getAnalyticsConsent() !== "granted") return;
@@ -175,7 +170,7 @@ export function startPageBehaviorTracking(page, { recordPageView = true } = {}) 
     for (const milestone of [25, 50, 75, 100]) {
       if (percentage >= milestone && !milestones.has(milestone)) {
         milestones.add(milestone);
-        trackBehavior("read_progress", { page, isActive, properties: { progressPercent: milestone } });
+        trackBehavior("read_progress", { page, properties: { progressPercent: milestone } });
       }
     }
   };
@@ -185,7 +180,7 @@ export function startPageBehaviorTracking(page, { recordPageView = true } = {}) 
     flushed = true;
     const seconds = Math.min(3600, Math.round((Date.now() - startedAt) / 1000));
     if (seconds >= 5) {
-      trackBehavior("engaged_time", { page, isActive, properties: { engagedSeconds: seconds } });
+      trackBehavior("engaged_time", { page, properties: { engagedSeconds: seconds } });
     }
   };
 

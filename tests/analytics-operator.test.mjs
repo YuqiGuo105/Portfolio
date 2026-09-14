@@ -11,23 +11,20 @@ const behavior = await readFile(new URL('../src/lib/behaviorAnalytics.js', impor
 const browserModule = await import(asModule(`
   import { isPrivateAnalyticsPage } from '${policy}';
   const isBrowserAnalyticsDisabled = () => false;
-  let identity = async () => ({ collect: false, token: 'admin-test' });
-  export const setIdentity = value => { identity = value; };
-  const getAnalyticsIdentity = () => identity();
+  const getAnalyticsIdentity = () => { throw new Error('Public telemetry must not wait for auth'); };
 ` + withoutImports(behavior)));
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
-test('browser: admin refresh, homepage entry, progress, engagement and clicks emit no events or IDs', async () => {
-  const dom = new JSDOM('', { url: 'https://www.yuqi.site/' });
+test('browser: private routes emit no events or identifiers, regardless of account', async () => {
+  const dom = new JSDOM('', { url: 'https://www.yuqi.site/admin' });
   const original = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
   const requests = [];
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   globalThis.fetch = async (...args) => { requests.push(args); return { ok: true }; };
   try {
-    browserModule.setIdentity(async () => ({ collect: false, token: 'admin-test' }));
-    for (const path of ['/', '/admin', '/admin/visitors', '/admin/login', '/admin/callback', '/oauth/consent', '/']) {
+    for (const path of ['/admin', '/admin/visitors', '/admin/login', '/admin/callback', '/oauth/consent', '/zh/admin']) {
       dom.reconfigure({ url: `https://www.yuqi.site${path}` });
       const cleanup = browserModule.startPageBehaviorTracking(path);
       browserModule.trackBehavior('read_progress', { page: path, properties: { progressPercent: 100 } });
@@ -42,7 +39,7 @@ test('browser: admin refresh, homepage entry, progress, engagement and clicks em
   } finally { Object.assign(globalThis, original); dom.window.close(); }
 });
 
-test('browser: anonymous/viewer traffic is preserved and pending homepage events are discarded on admin entry', async () => {
+test('browser: homepage request is queued before admin entry and its in-flight delivery survives cleanup', async () => {
   const dom = new JSDOM('', { url: 'https://www.yuqi.site/' });
   const original = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
   const requests = [];
@@ -50,32 +47,41 @@ test('browser: anonymous/viewer traffic is preserved and pending homepage events
   globalThis.document = dom.window.document;
   globalThis.fetch = async (url, options) => { requests.push({ url, ...options, body: JSON.parse(options.body) }); return { ok: true }; };
   try {
-    browserModule.setIdentity(async () => ({ collect: true, token: '' }));
     const cleanup = browserModule.startPageBehaviorTracking('/');
-    await settle();
+    // No auth/session promise or microtask is needed to queue the real page view.
     assert.equal(requests.length, 1);
     assert.equal(requests[0].body.event, 'page_view');
     assert.equal(requests[0].body.page, '/');
     assert.ok(requests[0].body.sessionId);
     cleanup({ discard: true });
-    browserModule.setIdentity(async () => ({ collect: true, token: 'ordinary-viewer' }));
     await browserModule.trackClick('social-link', 'https://github.com/example');
-    assert.equal(requests[1].headers.Authorization, 'Bearer ordinary-viewer');
+    assert.equal(requests[1].headers.Authorization, undefined);
     assert.equal(requests[1].body.page, '/');
     assert.equal(await browserModule.trackClick('nav-link', '/admin'), false);
 
     let resolve;
-    browserModule.setIdentity(() => new Promise(done => { resolve = done; }));
+    globalThis.fetch = (url, options) => {
+      requests.push({ url, ...options, body: JSON.parse(options.body) });
+      return new Promise(done => { resolve = done; });
+    };
     const discard = browserModule.startPageBehaviorTracking('/');
+    assert.equal(requests.length, 3);
     discard({ discard: true });
-    // The router has not changed window.location yet: cancellation still wins.
-    resolve({ collect: true, token: '' });
-    await settle();
-    assert.equal(requests.length, 2);
     dom.reconfigure({ url: 'https://www.yuqi.site/admin/visitors' });
     browserModule.startPageBehaviorTracking('/admin/visitors')();
+    resolve({ ok: true });
     await settle();
-    assert.equal(requests.length, 2);
+    assert.equal(requests.length, 3);
+    assert.equal(requests[2].body.page, '/');
+    assert.equal(requests[2].keepalive, true);
+    assert.equal(requests[2].headers.Authorization, undefined);
+    dom.reconfigure({ url: 'https://www.yuqi.site/' });
+    globalThis.fetch = async (url, options) => { requests.push({ url, body: JSON.parse(options.body) }); };
+    // Restoring a canceled admin navigation does not duplicate the original page view.
+    browserModule.startPageBehaviorTracking('/', { recordPageView: false })();
+    assert.equal(requests.length, 3);
+    browserModule.startPageBehaviorTracking('/')();
+    assert.equal(requests.length, 4);
   } finally { Object.assign(globalThis, original); dom.window.close(); }
 });
 
@@ -88,7 +94,7 @@ const serverPolicy = asModule(`
 ` + withoutImports(requestPolicySource));
 const response = () => ({ statusCode: null, headers: {}, setHeader(key, value) { this.headers[key] = value; }, status(code) { this.statusCode = code; return this; }, end() {}, json(value) { this.body = value; } });
 
-test('ingestion: admin mislabeled as homepage is rejected before Kafka, storage or rate limit; viewers still count', async () => {
+test('ingestion: verified admin public visits count; private pages and auth failures are still rejected', async () => {
   for (const endpoint of ['track', 'click']) {
     const source = await readFile(new URL(`../pages/api/${endpoint}.js`, import.meta.url), 'utf8');
     const module = await import(asModule(`
@@ -108,28 +114,33 @@ test('ingestion: admin mislabeled as homepage is rejected before Kafka, storage 
     for (const testRoles of ['ADMIN', 'EDITOR,PUBLISHER,ADMIN', 'EDITOR', 'PUBLISHER']) {
       const res = response();
       await module.default({ ...request, testRoles }, res);
-      assert.equal(res.statusCode, 204, `${endpoint} ${testRoles}`);
+      assert.equal(res.statusCode, 200, `${endpoint} ${testRoles}`);
     }
+    assert.deepEqual(module.calls, { rate: 4, kafka: 4 });
     for (const testAuthError of [401, 503]) {
       const res = response();
       await module.default({ ...request, testAuthError }, res);
       assert.equal(res.statusCode, testAuthError);
     }
-    assert.deepEqual(module.calls, { rate: 0, kafka: 0 });
+    for (const referer of ['https://www.yuqi.site/admin', 'https://www.yuqi.site/admin/visitors']) {
+      const res = response();
+      await module.default({ ...request, headers: { ...request.headers, referer }, testRoles: 'ADMIN' }, res);
+      assert.equal(res.statusCode, 204);
+    }
+    assert.deepEqual(module.calls, { rate: 4, kafka: 4 });
     const res = response();
     await module.default({ ...request, testRoles: 'VIEWER' }, res);
     assert.equal(res.statusCode, 200);
-    assert.equal(module.calls.kafka, 1);
+    assert.equal(module.calls.kafka, 5);
   }
 });
 
 test('participation endpoint returns no PII or persisted role and never caches per-user decisions', async () => {
   const source = await readFile(new URL('../pages/api/analytics/participation.js', import.meta.url), 'utf8');
   const module = await import(asModule(`
-    import { isAnalyticsOperator } from '${serverPolicy}';
     const requireSupabaseUser = async req => ({ roles: req.testRoles });
   ` + withoutImports(source)));
-  for (const [authorization, testRoles, expected] of [['Bearer test', 'ADMIN', false], ['Bearer test', 'VIEWER', true], ['', '', true]]) {
+  for (const [authorization, testRoles, expected] of [['Bearer test', 'ADMIN', true], ['Bearer test', 'VIEWER', true], ['', '', true]]) {
     const res = response();
     await module.default({ method: 'GET', headers: { authorization }, testRoles }, res);
     assert.deepEqual(res.body, { collect: expected });
@@ -137,7 +148,7 @@ test('participation endpoint returns no PII or persisted role and never caches p
   }
 });
 
-test('app cancels tracking before private routes complete, including canceled navigations', async () => {
+test('app stops further tracking on private navigation without duplicating the public page on cancel', async () => {
   const source = await readFile(new URL('../pages/_app.js', import.meta.url), 'utf8');
   assert.match(source, /router\.events\.on\("routeChangeStart", handleRouteStart\)/);
   assert.match(source, /cleanupTracking\.current\?\.\(\{ discard: true \}\)/);
