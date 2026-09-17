@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url);
 const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost/' });
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
+Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const React = require('react');
 const { createRoot } = require('react-dom/client');
