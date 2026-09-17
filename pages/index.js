@@ -836,7 +836,7 @@ const Index = () => {
               </div>
               <div className="content">
                 <div className="titles">
-                  <div className="subtitle">Full-Stack, Backend, Mobile Application Developer</div>
+                  <div className="subtitle">Software Engineer · Backend &amp; AI Systems</div>
                   <h2 className="title">Yuqi Guo</h2>
                 </div>
                 <div className="description">
