@@ -76,7 +76,7 @@ export default function McpGuidePage() {
             <div className={styles.accessNote}><LockKeyhole size={20} /><p><strong>Authorized administrator login required.</strong> Signing in alone does not grant an admin role. Protected writes retain their approval requirements.</p></div>
             <Endpoint label="Admin endpoint" value={ADMIN_URL} />
             <ol className={styles.steps}><li>Add the admin endpoint.</li><li>Sign in with an authorized account.</li><li>Approve the connection in the consent screen.</li></ol>
-            <Figure file="admin-sign-in.png" width={960} height={900} compact alt="Administrator sign-in with email and Google" caption="Sign in first. Public registration is disabled." />
+            <Figure file="admin-sign-in.png" width={390} height={640} compact alt="Administrator sign-in with email and Google" caption="Sign in first. Public registration is disabled." />
             <Figure file="claude-admin-connector-full.png" width={1650} height={1364} alt="Claude administrator connector showing read and write permissions after authorization" caption="After authorization: available tools follow the account's managed role." />
           </section>
 

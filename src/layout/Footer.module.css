@@ -37,3 +37,14 @@
     margin-bottom: 92px;
   }
 }
+
+.footer.footer { padding: 48px 20px 112px; }
+.content { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.social { display: flex; justify-content: center; width: 100%; margin-bottom: 8px; }
+.social :global(.social-links) { justify-content: center; }
+.footer :global(.copyright-text) { padding: 0; font-size: 15px; line-height: 1.6; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .footer.footer { padding: 32px 16px 104px; }
+  .content { gap: 10px; }
+  .footer :global(.copyright-text) { font-size: 13px; }
+}

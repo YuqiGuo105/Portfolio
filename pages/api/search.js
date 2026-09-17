@@ -1,6 +1,8 @@
-import { searchItems } from '../../src/lib/searchItems';
+import { rankedSearch } from '../../src/lib/rankedSearch.mjs';
 
 export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -13,7 +15,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const results = await searchItems({
+    const results = await rankedSearch({
       q,
       source: source ? String(source) : undefined,
       limit: typeof limit !== 'undefined' ? Number(limit) : undefined,
@@ -22,7 +24,8 @@ export default async function handler(req, res) {
 
     res.status(200).json(results);
   } catch (error) {
-    console.error('[search] writer-service error', error);
-    res.status(500).json({ error: 'Internal server error' });
+    const invalid = error instanceof RangeError;
+    console.error('[search] request failed', error.name);
+    res.status(invalid ? 400 : 503).json({ error: invalid ? error.message : 'Search temporarily unavailable. Please try again.' });
   }
 }

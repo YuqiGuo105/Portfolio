@@ -124,7 +124,7 @@ export default function AdminLogin() {
     <div className="login-page">
       <ToastContainer position="top-center" autoClose={5000} newestOnTop />
       <div className="login-card">
-        <h1 className="login-title">Admin Panel</h1>
+        <h1 className="login-title">Admin sign in</h1>
         <p className="login-subtitle">
           Sign in with an authorized administrator account.
         </p>
@@ -146,14 +146,14 @@ export default function AdminLogin() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Supabase password"
+              placeholder="Your password"
               autoComplete="current-password"
               required
             />
           </label>
-          {error && <p className="error-text">{error}</p>}
+          {error && <p className="error-text" role="alert">{error}</p>}
           <button type="submit" className="login-button" disabled={checkingSession || loading || googleLoading}>
-            {checkingSession ? 'Checking session…' : loading ? 'Signing in…' : 'Sign In'}
+            {checkingSession ? 'Checking session…' : loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
 
@@ -182,84 +182,124 @@ export default function AdminLogin() {
       <style jsx>{`
         .login-page {
           min-height: 100vh;
-          background: #0f172a;
+          min-height: 100dvh;
+          background: #131919;
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 20px;
+          padding: 32px 20px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          letter-spacing: 0;
         }
         .login-card {
-          background: #1e293b;
-          border-radius: 20px;
-          padding: 48px 40px;
-          width: min(100%, 420px);
+          background: #1c2423;
+          border: 1px solid #35403d;
+          border-radius: 8px;
+          padding: 36px 32px;
+          width: min(100%, 440px);
+          box-sizing: border-box;
           box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
         }
         .login-title {
-          font-size: 1.6rem;
-          font-weight: 700;
+          font-family: inherit;
+          font-size: 26px;
+          font-weight: 600;
+          line-height: 1.3;
+          letter-spacing: 0;
           color: #f1f5f9;
           margin: 0 0 8px;
         }
         .login-subtitle {
-          color: #94a3b8;
-          font-size: 0.9rem;
-          margin: 0 0 32px;
+          color: #aab8b3;
+          font-size: 14px;
+          margin: 0 0 28px;
           line-height: 1.5;
         }
         .login-form {
           display: flex;
           flex-direction: column;
           gap: 20px;
+          margin: 0;
         }
         .field {
           display: flex;
           flex-direction: column;
           gap: 8px;
-          font-size: 0.85rem;
-          font-weight: 600;
-          color: #94a3b8;
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
+          margin: 0;
+          padding: 0;
+          font-size: 13px;
+          font-weight: 500;
+          color: #c7d1cd;
+          text-transform: none;
+          letter-spacing: 0;
         }
         .field input {
           padding: 12px 16px;
-          background: #0f172a;
+          box-sizing: border-box;
+          width: 100%;
+          height: 48px;
+          margin: 0;
+          line-height: 1.5;
+          background: #131919;
           border: 1px solid rgba(148, 163, 184, 0.25);
-          border-radius: 10px;
+          border-radius: 6px;
           color: #e2e8f0;
-          font-size: 0.95rem;
+          font-family: inherit;
+          font-size: 16px;
+          font-weight: 400;
           outline: none;
           transition: border-color 150ms;
         }
-        .field input:focus { border-color: #38bdf8; }
+        .field input:focus { border-color: #83d8ba; }
+        .field input::placeholder { color: #899c94; opacity: 1; }
         .error-text {
           color: #f87171;
           font-size: 0.85rem;
           margin: 0;
         }
+        .login-button, .google-button {
+          box-sizing: border-box;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          height: 48px;
+          min-height: 48px;
+          padding: 0 16px;
+          margin: 0;
+          line-height: 1.2;
+          font-family: inherit;
+          letter-spacing: 0;
+          text-transform: none;
+          border-radius: 6px;
+        }
+        .login-button::before, .google-button::before,
+        .login-button::after, .google-button::after { content: none; }
+        .login-button:focus-visible, .google-button:focus-visible {
+          outline: 2px solid #83d8ba !important;
+          outline-offset: 3px;
+        }
         .login-button {
-          padding: 13px;
-          background: #38bdf8;
+          background: #8bdcbb;
           border: none;
-          border-radius: 10px;
-          color: #0f172a;
-          font-weight: 700;
-          font-size: 0.95rem;
+          color: #10281e;
+          font-weight: 600;
+          font-size: 15px;
           cursor: pointer;
           transition: background 150ms;
         }
-        .login-button:hover:not(:disabled) { background: #0ea5e9; }
+        .login-button:hover:not(:disabled) { background: #a6e9cd; }
         .login-button:disabled { opacity: 0.6; cursor: not-allowed; }
         .divider {
           display: flex;
           align-items: center;
           gap: 12px;
-          margin: 24px 0 0;
-          color: #475569;
+          margin: 24px 0;
+          color: #9eafa6;
           font-size: 0.75rem;
           text-transform: uppercase;
-          letter-spacing: 0.1em;
+          letter-spacing: 0;
+          line-height: 1;
         }
         .divider::before,
         .divider::after {
@@ -269,34 +309,32 @@ export default function AdminLogin() {
           background: rgba(148, 163, 184, 0.2);
         }
         .google-button {
-          margin-top: 16px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
           gap: 10px;
-          width: 100%;
-          padding: 12px;
           background: #f8fafc;
           border: 1px solid rgba(148, 163, 184, 0.4);
-          border-radius: 10px;
           color: #0f172a;
           font-weight: 600;
-          font-size: 0.95rem;
+          font-size: 15px;
           cursor: pointer;
           transition: background 150ms, border-color 150ms;
         }
         .google-button:hover:not(:disabled) {
           background: #ffffff;
-          border-color: #38bdf8;
+          border-color: #83d8ba;
         }
         .google-button:disabled { opacity: 0.6; cursor: not-allowed; }
-        .google-icon { width: 18px; height: 18px; }
+        .google-icon { width: 18px; height: 18px; flex: 0 0 18px; }
         .login-footer {
-          margin: 32px 0 0;
-          color: #64748b;
+          margin: 24px 0 0;
+          color: #a3b2ab;
           font-size: 0.8rem;
           text-align: center;
           line-height: 1.5;
+        }
+        @media (max-width: 480px) {
+          .login-page { padding: 24px 16px; }
+          .login-card { padding: 28px 22px; }
+          .login-title { font-size: 24px; }
         }
       `}</style>
     </div>
