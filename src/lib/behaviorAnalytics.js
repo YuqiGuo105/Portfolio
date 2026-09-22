@@ -99,7 +99,7 @@ function currentPath(value) {
   }
 }
 
-function recaptchaToken(action, timeoutMs = 1200) {
+function recaptchaToken(action, timeoutMs = 2500) {
   const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
   if (!siteKey) return null;
 

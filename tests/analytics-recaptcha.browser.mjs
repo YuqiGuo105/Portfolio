@@ -37,7 +37,7 @@ try {
                 return Promise.resolve('single-use-browser-token-123456789');
               }
             }};
-          }, 75);
+          }, 1400);
         </script>
         <script type="module">
           import { startPageBehaviorTracking } from '/behaviorAnalytics.js';
