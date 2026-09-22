@@ -23,6 +23,7 @@ import crypto from 'crypto';
 import { isLocalAnalyticsRequest, isLocalAnalyticsEvent } from '../../src/lib/analyticsHostFilter';
 import { isPrivateAnalyticsEvent } from '../../src/lib/analyticsPagePolicy.mjs';
 import { allowAnalyticsRequest } from '../../src/lib/analyticsRequestPolicy';
+import { assessmentProperties, createRecaptchaAssessment } from '../../src/lib/recaptchaAssessment.mjs';
 
 // 允许的来源域名
 const ALLOWED_ORIGINS = ['https://www.yuqi.site', 'https://yuqi.site'];
@@ -153,9 +154,10 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  // 2. User-Agent 过滤（拒绝明显的 bot/curl）
+  // 2. A user agent is required. Bot-looking agents are retained so the
+  // downstream classifier can surface them instead of silently losing data.
   const ua = (req.headers['user-agent'] || '').slice(0, 255);
-  if (!ua || /^(curl|wget|python|go-http|java|scrapy)/i.test(ua) || /\b(bot|spider|crawl|scraper)\b/i.test(ua)) {
+  if (!ua) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
@@ -185,6 +187,16 @@ export default async function handler(req, res) {
   const identified = consentState === 'granted';
   const ipHash = hmac(ip, 'ip');
 
+  // The browser provides only a single-use token. The score is fetched and
+  // validated here so clients can never submit their own bot classification.
+  const assessment = await createRecaptchaAssessment({
+    token: body.recaptchaToken,
+    expectedAction: event,
+    userAgent: ua,
+    userIpAddress: ip,
+  });
+  const trustedBotProperties = assessmentProperties(assessment);
+
   const nowIso = new Date().toISOString();
 
   // RawEvent wire format expected by analytics-aggregator-service. The
@@ -207,7 +219,10 @@ export default async function handler(req, res) {
     uaRaw:      ua,
     ipRaw:      ip,
     ipHash,
-    properties: sanitizeProperties(body.properties),
+    properties: {
+      ...sanitizeProperties(body.properties),
+      ...trustedBotProperties,
+    },
     geoHint: {
       country: country ?? null,
       region:  region  ?? null,

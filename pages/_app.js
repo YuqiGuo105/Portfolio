@@ -1,4 +1,5 @@
 import Head from "next/head";
+import Script from "next/script";
 import { Fragment, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import SeoHead from "../src/components/SeoHead";
@@ -98,6 +99,8 @@ function MyApp({ Component, pageProps }) {
   const router = useRouter();
   const cleanupTracking = useRef(null);
   const isHomePage = router.pathname === "/";
+  const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+  const loadRecaptcha = recaptchaSiteKey && !isPrivateAnalyticsPage(router.asPath);
 
   // One tracker owns page views, engagement time and reading milestones.
   useEffect(() => {
@@ -134,6 +137,13 @@ function MyApp({ Component, pageProps }) {
 
   return (
     <Fragment>
+      {loadRecaptcha && (
+        <Script
+          id="recaptcha-enterprise"
+          strategy="afterInteractive"
+          src={`https://www.google.com/recaptcha/enterprise.js?render=${encodeURIComponent(recaptchaSiteKey)}`}
+        />
+      )}
       <Head>
         {isHomePage && (
           <>

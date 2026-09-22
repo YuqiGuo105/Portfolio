@@ -32,6 +32,8 @@ test('track and click skip local events before rate limiting, Kafka or Supabase'
         export const calls = { rate: 0, kafka: 0, storage: 0 };
         const isRateLimited = async () => { calls.rate++; return false; };
         const allowAnalyticsRequest = async () => true;
+        const createRecaptchaAssessment = async () => ({ status: 'SKIPPED' });
+        const assessmentProperties = () => ({});
         const produceRawEvent = async () => { calls.kafka++; return true; };
         const supabaseServer = { from() { calls.storage++; throw new Error('Storage must not run'); } };
         const uuidv7 = () => 'fixture-event';

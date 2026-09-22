@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const { chromium } = await import(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
+const playwright = await import(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
+const { chromium } = playwright.default || playwright;
 const read = path => readFile(new URL(path, import.meta.url), 'utf8');
 const dataModule = source => `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
 const stripImports = source => source.replace(/^import .+;\r?$/gm, '');
 const policy = await read('../src/lib/analyticsPagePolicy.mjs');
 const hostFilter = (await read('../src/lib/analyticsHostFilter.js')).replaceAll('process.env.NODE_ENV', '"production"');
-const behavior = await read('../src/lib/behaviorAnalytics.js');
+const behavior = (await read('../src/lib/behaviorAnalytics.js'))
+  .replace('process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY', 'undefined');
 const requestPolicy = stripImports(await read('../src/lib/analyticsRequestPolicy.js'));
 const ingestion = await import(dataModule(`
   import crypto from 'node:crypto';
@@ -18,6 +20,8 @@ const ingestion = await import(dataModule(`
   export const events = [];
   const produceRawEvent = async event => { events.push(event); return true; };
   const isRateLimited = async () => false;
+  const createRecaptchaAssessment = async () => ({ status: 'SKIPPED' });
+  const assessmentProperties = () => ({});
   const supabaseServer = { from() { throw new Error('No live database calls in browser regression'); } };
   const uuidv7 = () => crypto.randomUUID();
   ${stripImports(await read('../pages/api/track.js'))}

@@ -21,6 +21,8 @@ test('both ingestion endpoints ignore admin events before rate limiting or stora
       const supabaseServer = { from() { throw new Error('Storage must not run'); } };
       const produceRawEvent = () => { throw new Error('Kafka must not run'); };
       const isRateLimited = () => { throw new Error('Rate limiter must not run'); };
+      const createRecaptchaAssessment = () => { throw new Error('Assessment must not run'); };
+      const assessmentProperties = () => ({});
       const uuidv7 = () => 'test';
       const isLocalAnalyticsRequest = () => false;
       const isLocalAnalyticsEvent = () => false;

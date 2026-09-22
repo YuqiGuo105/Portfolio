@@ -105,6 +105,8 @@ test('ingestion: verified admin public visits count; private pages and auth fail
       const isLocalAnalyticsEvent = () => false;
       export const calls = { rate: 0, kafka: 0 };
       const isRateLimited = async () => { calls.rate++; return false; };
+      const createRecaptchaAssessment = async () => ({ status: 'SKIPPED' });
+      const assessmentProperties = () => ({});
       const produceRawEvent = async () => { calls.kafka++; return true; };
       const supabaseServer = { from() { throw new Error('Storage must not run'); } };
       const uuidv7 = () => 'synthetic-event';

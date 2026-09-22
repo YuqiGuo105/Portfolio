@@ -99,6 +99,60 @@ function currentPath(value) {
   }
 }
 
+function recaptchaToken(action, timeoutMs = 1200) {
+  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+  if (!siteKey) return null;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let poll = null;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      if (poll) window.clearInterval(poll);
+      resolve(typeof value === "string" && value.length <= 8192 ? value : null);
+    };
+    const timer = window.setTimeout(() => finish(null), timeoutMs);
+
+    const executeWhenReady = () => {
+      const enterprise = window.grecaptcha?.enterprise;
+      if (!enterprise?.ready || !enterprise?.execute) return false;
+      try {
+        enterprise.ready(() => {
+          if (settled) return;
+          Promise.resolve(enterprise.execute(siteKey, { action }))
+            .then(finish)
+            .catch(() => finish(null));
+        });
+        return true;
+      } catch {
+        finish(null);
+        return true;
+      }
+    };
+
+    if (!executeWhenReady()) {
+      poll = window.setInterval(() => {
+        if (executeWhenReady() && poll) {
+          window.clearInterval(poll);
+          poll = null;
+        }
+      }, 50);
+    }
+  });
+}
+
+function deliverBehavior(payload, token) {
+  if (token) payload.recaptchaToken = token;
+  return fetch("/api/track", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 export function trackBehavior(eventName, context = {}) {
   if (typeof window === "undefined" || !ALLOWED_EVENTS.has(eventName)) return false;
   if (isPrivateAnalyticsPage(context.page) || isPrivateAnalyticsPage(window.location.href)) return false;
@@ -125,12 +179,12 @@ export function trackBehavior(eventName, context = {}) {
       properties: context.properties || {},
     };
 
-    void fetch("/api/track", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      keepalive: true,
-    }).catch(() => {});
+    const token = recaptchaToken(eventName);
+    if (token) {
+      void token.then((value) => deliverBehavior(payload, value));
+    } else {
+      void deliverBehavior(payload, null);
+    }
   } catch { return false; }
   return true;
 }

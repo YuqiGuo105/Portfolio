@@ -21,6 +21,7 @@ export default function PrivacyPage() {
 
       <h2>Service providers</h2>
       <p>Limited information may be processed by infrastructure, authentication, database, analytics, email, search, and AI providers that support the requested feature. Access is limited to the purpose of operating the service and subject to provider safeguards.</p>
+      <p>This site uses Google reCAPTCHA Enterprise on public pages to detect automated abuse without presenting a visual challenge. Google may process browser, device, network, IP address, and interaction signals for this security purpose. Use of reCAPTCHA is subject to the <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noreferrer">Terms of Service</a>.</p>
 
       <h2>Retention and security</h2>
       <p>Records are retained only as long as reasonably needed for their stated purpose, security, audit, and legal obligations. The platform uses access controls, encrypted transport, protected administrative routes, and least-privilege service authorization. No internet service can guarantee absolute security.</p>

@@ -187,6 +187,21 @@ cp .env.example .env.local
 
 See [`.env.example`](.env.example) for all variables with descriptions. For production, configure the same variables in **Vercel → Project Settings → Environment Variables**.
 
+Score-based bot detection uses Google reCAPTCHA Enterprise and degrades to the
+existing server-side heuristic when it is not configured or temporarily
+unavailable:
+
+```txt
+NEXT_PUBLIC_RECAPTCHA_SITE_KEY=<score-based site key>
+RECAPTCHA_PROJECT_ID=<Google Cloud project id>
+RECAPTCHA_API_KEY=<server-only restricted API key>
+RECAPTCHA_ALLOWED_HOSTS=yuqi.site,www.yuqi.site
+RECAPTCHA_TIMEOUT_MS=1500
+```
+
+Restrict the API key to the reCAPTCHA Enterprise API. Never expose
+`RECAPTCHA_API_KEY` through a `NEXT_PUBLIC_` variable.
+
 ---
 
 ## Supabase Setup
