@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
-const { chromium } = await import(process.env.PLAYWRIGHT_MODULE_PATH || "playwright");
+const playwrightModule = await import(process.env.PLAYWRIGHT_MODULE_PATH || "playwright");
+const { chromium } = playwrightModule.default || playwrightModule;
 const origin = process.env.TEST_ORIGIN || "http://127.0.0.1:3082";
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 
@@ -69,6 +70,15 @@ try {
     assert.equal(await page.locator("#visitor-intelligence-content").isVisible(), false);
     assert.equal(await page.locator("#visitor-behavior-alerts-content").isVisible(), false);
     assert.equal(await page.locator("#visitor-event-query-content").isVisible(), true);
+
+    const filteredRequest = page.waitForRequest((request) => {
+      const url = new URL(request.url());
+      return url.pathname.endsWith("/api/admin/visitors") && url.searchParams.get("bot") === "EXCLUDE";
+    });
+    await page.getByLabel("Traffic type").selectOption("EXCLUDE");
+    await page.getByRole("button", { name: "Query", exact: true }).click();
+    const request = await filteredRequest;
+    assert.equal(new URL(request.url()).searchParams.get("bot"), "EXCLUDE");
 
     await intelligenceToggle.click();
     await page.getByText("Funnel", { exact: true }).waitFor();

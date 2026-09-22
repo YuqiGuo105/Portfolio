@@ -8,6 +8,7 @@
 .field { display: grid; min-width: 0; gap: 5px; }
 .fieldLabel { color: #747f88; font-size: 10px; font-weight: 750; letter-spacing: 0.05em; text-transform: uppercase; }
 .fieldInput { width: 100%; min-height: 35px; padding: 7px 9px; border: 1px solid #cfd6db; border-radius: 6px; background: #fff; color: #25313b; font: inherit; font-size: 12px; }
+.field select.fieldInput { cursor: pointer; }
 .fieldInput:focus { border-color: #0f766e; outline: 2px solid rgba(15, 118, 110, 0.12); }
 .trafficToggle { display: inline-flex; align-items: center; gap: 8px; color: #53616b; font-size: 12px; font-weight: 650; white-space: nowrap; cursor: pointer; }
 .toggleInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

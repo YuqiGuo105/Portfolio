@@ -40,6 +40,7 @@ const WINDOWS = [
 ];
 const EMPTY_FILTERS = {
   query: "",
+  bot: "ALL",
   event: "",
   path: "",
   country: "",
@@ -202,6 +203,7 @@ export default function VisitorsPage() {
     if (!sessionId) return;
     const nextFilters = {
       ...EMPTY_FILTERS,
+      bot: filters.bot,
       includeAdmin: filters.includeAdmin,
       sessionId,
     };
@@ -215,7 +217,7 @@ export default function VisitorsPage() {
         block: "start",
       });
     });
-  }, [filters.includeAdmin]);
+  }, [filters.bot, filters.includeAdmin]);
 
   const total = Number(pageInfo.totalElements || 0);
   const start = total === 0 ? 0 : page * PAGE_SIZE + 1;
@@ -230,8 +232,8 @@ export default function VisitorsPage() {
     onPageChange: setPage,
   };
   const activeFilterCount = Object.entries(filters)
-    .filter(([name, value]) => name !== "includeAdmin" && Boolean(value))
-    .length;
+    .filter(([name, value]) => name !== "includeAdmin" && name !== "bot" && Boolean(value))
+    .length + (filters.bot === "ALL" ? 0 : 1);
 
   return (
     <AdminLayout>
@@ -255,7 +257,7 @@ export default function VisitorsPage() {
           <Metric
             label="Events"
             value={summary.totalEvents}
-            hint={`${windowLabel(hours)} · ${filters.includeAdmin ? "All traffic" : "Public traffic"}`}
+            hint={`${windowLabel(hours)} · ${botFilterLabel(filters.bot)} · ${filters.includeAdmin ? "Admin included" : "Public pages"}`}
           />
           <Metric label="Unique visitors" value={summary.uniqueVisitors} hint="Session, anonymous ID or IP" />
           <Metric label="Countries" value={summary.countries} hint="Matching events" />
@@ -352,6 +354,17 @@ export default function VisitorsPage() {
             </div>
 
             <div className={visitorStyles.filterGrid}>
+              <SelectFilter
+                label="Traffic type"
+                name="bot"
+                value={draft.bot}
+                onChange={updateDraft}
+                options={[
+                  { value: "ALL", label: "All traffic" },
+                  { value: "EXCLUDE", label: "Likely people" },
+                  { value: "ONLY", label: "Detected bots" },
+                ]}
+              />
               <Filter label="Event" name="event" value={draft.event} onChange={updateDraft} placeholder="page_view" />
               <Filter label="Page / target" name="path" value={draft.path} onChange={updateDraft} placeholder="/blog" />
               <Filter label="Country" name="country" value={draft.country} onChange={updateDraft} placeholder="US" />
@@ -1392,6 +1405,23 @@ function Filter({ label, name, value, onChange, placeholder }) {
   );
 }
 
+function SelectFilter({ label, name, value, onChange, options }) {
+  return (
+    <label className={visitorStyles.field}>
+      <span className={visitorStyles.fieldLabel}>{label}</span>
+      <select
+        className={visitorStyles.fieldInput}
+        value={value}
+        onChange={(event) => onChange(name, event.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function Metric({ label, value, hint }) {
   return <div className={ui.metric}><div className={ui.metricLabel}>{label}</div><div className={ui.metricValue}>{value ?? 0}</div><div className={ui.metricHint}>{hint}</div></div>;
 }
@@ -1554,4 +1584,10 @@ function windowLabel(hours) {
   if (hours === 24) return "24 hours";
   if (hours === 168) return "7 days";
   return "30 days";
+}
+
+function botFilterLabel(value) {
+  if (value === "EXCLUDE") return "Likely people";
+  if (value === "ONLY") return "Detected bots";
+  return "All traffic";
 }

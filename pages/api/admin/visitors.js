@@ -9,7 +9,7 @@ const EXPORT_MAX_ROWS = boundedInteger(process.env.ADMIN_VISITOR_EXPORT_MAX_ROWS
 const EXPORT_CONCURRENCY = 5;
 const ALLOWED_QUERY = new Set([
   "from", "to", "hours", "q", "event", "path", "country", "city",
-  "device", "browser", "referrer", "sessionId", "includeAdmin", "page", "size",
+  "device", "browser", "referrer", "sessionId", "bot", "includeAdmin", "page", "size",
 ]);
 const CONTENT_ROUTES = [
   { prefix: "/work-single/", table: "Projects", type: "project" },
