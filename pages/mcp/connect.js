@@ -167,12 +167,21 @@ export default function McpConnectPage() {
               </div>
 
               {isAdmin ? (
-                <div className="actions">
-                  <Link href="/admin/login?redirect=%2Fmcp%2Fconnect%3Faccess%3Dadmin">
-                    <a className="primary-action">Sign in to verify access <ArrowRight size={17} /></a>
-                  </Link>
-                  <span>Authorization begins inside your AI client.</span>
-                </div>
+                <>
+                  <div className="login-note">
+                    <KeyRound size={19} />
+                    <span>
+                      <strong>Browser sign-in only</strong>
+                      Never create, copy, or paste an API token into an AI chat.
+                    </span>
+                  </div>
+                  <div className="actions">
+                    <Link href="/admin/login?redirect=%2Fmcp%2Fconnect%3Faccess%3Dadmin">
+                      <a className="primary-action">Open secure sign-in <ArrowRight size={17} /></a>
+                    </Link>
+                    <span>After sign-in, reconnect from your AI client to review and approve access.</span>
+                  </div>
+                </>
               ) : (
                 <div className="ready-message">
                   <CheckCircle2 size={20} />
@@ -268,6 +277,10 @@ export default function McpConnectPage() {
         .endpoint-box code { min-width: 0; display: flex; align-items: center; padding: 0 14px; overflow-wrap: anywhere; border: 1px solid #cbd8d4; background: #f5f8f7; color: #273b36; font: 650 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
         .copy-button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 15px; border: 1px solid #087f68; background: #087f68 !important; color: #fff; font-weight: 800; cursor: pointer; }
         .authorize-heading { margin-top: 2px; }
+        .login-note { display: flex; align-items: flex-start; gap: 11px; margin: 19px 0 0 42px; padding: 13px 15px; border: 1px solid #b9dcd3; background: #eef9f6; color: #315c52; font-size: 12px; line-height: 1.5; }
+        .login-note > :global(svg) { flex: 0 0 auto; margin-top: 1px; color: #087f68; }
+        .login-note span { display: flex; flex-direction: column; gap: 2px; }
+        .login-note strong { color: #075f51; font-size: 13px; }
         .actions { display: flex; align-items: center; gap: 15px; margin: 20px 0 0 42px; }
         .primary-action { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 0 17px; color: #fff; background: #17201e; font-size: 13px; font-weight: 800; text-decoration: none; }
         .actions span { color: #7b8985; font-size: 11px; }
@@ -295,7 +308,7 @@ export default function McpConnectPage() {
           .access-picker button:first-child { border-right: 0; border-bottom: 1px solid #ccd9d5; }
           .setup-grid { grid-template-columns: 1fr; }
           .setup-main { padding: 28px 20px; }
-          .client-list, .endpoint-box, .actions, .ready-message { margin-left: 0; }
+          .client-list, .endpoint-box, .login-note, .actions, .ready-message { margin-left: 0; }
           .client-list { margin-top: 17px; }
           .endpoint-box { grid-template-columns: 1fr; }
           .endpoint-box code { min-height: 56px; }
