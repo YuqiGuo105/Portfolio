@@ -343,6 +343,22 @@ export default function VisitorsPage() {
                 </span>
                 <span>Include admin</span>
               </label>
+              <label
+                className={`${visitorStyles.trafficToggle} ${visitorStyles.peopleOnlyToggle}`}
+                title="Exclude traffic classified as automated. This is a likelihood classification, not identity verification."
+              >
+                <input
+                  className={visitorStyles.toggleInput}
+                  type="checkbox"
+                  checked={draft.bot === "EXCLUDE"}
+                  onChange={(event) => updateDraft("bot", event.target.checked ? "EXCLUDE" : "ALL")}
+                  aria-label="Likely people only"
+                />
+                <span className={visitorStyles.toggleTrack} aria-hidden="true">
+                  <span className={visitorStyles.toggleThumb} />
+                </span>
+                <span>Likely people only</span>
+              </label>
               <div className={visitorStyles.queryActions}>
                 <button className={ui.buttonPrimary} type="submit" disabled={loading}>
                   <Search size={14} /> Query
@@ -361,7 +377,7 @@ export default function VisitorsPage() {
                 onChange={updateDraft}
                 options={[
                   { value: "ALL", label: "All traffic" },
-                  { value: "EXCLUDE", label: "Likely people" },
+                  { value: "EXCLUDE", label: "Likely people only" },
                   { value: "ONLY", label: "Detected bots" },
                 ]}
               />
@@ -1587,7 +1603,7 @@ function windowLabel(hours) {
 }
 
 function botFilterLabel(value) {
-  if (value === "EXCLUDE") return "Likely people";
+  if (value === "EXCLUDE") return "Likely people only";
   if (value === "ONLY") return "Detected bots";
   return "All traffic";
 }

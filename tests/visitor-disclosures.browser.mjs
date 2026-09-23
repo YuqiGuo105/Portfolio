@@ -75,7 +75,10 @@ try {
       const url = new URL(request.url());
       return url.pathname.endsWith("/api/admin/visitors") && url.searchParams.get("bot") === "EXCLUDE";
     });
-    await page.getByLabel("Traffic type").selectOption("EXCLUDE");
+    const peopleOnlyInput = page.locator('input[aria-label="Likely people only"]');
+    await page.locator('label:has(input[aria-label="Likely people only"])').click();
+    assert.equal(await peopleOnlyInput.isChecked(), true);
+    assert.equal(await page.getByLabel("Traffic type").inputValue(), "EXCLUDE");
     await page.getByRole("button", { name: "Query", exact: true }).click();
     const request = await filteredRequest;
     assert.equal(new URL(request.url()).searchParams.get("bot"), "EXCLUDE");

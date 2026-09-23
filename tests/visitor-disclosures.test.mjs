@@ -25,8 +25,10 @@ test("visitor records expose a server-backed bot classification filter", () => {
   const apiSource = fs.readFileSync(new URL("../pages/api/admin/visitors.js", import.meta.url), "utf8");
 
   assert.match(source, /bot: "ALL"/);
+  assert.match(source, /aria-label="Likely people only"/);
+  assert.match(source, /event\.target\.checked \? "EXCLUDE" : "ALL"/);
   assert.match(source, /label="Traffic type"/);
-  assert.match(source, /value: "EXCLUDE", label: "Likely people"/);
+  assert.match(source, /value: "EXCLUDE", label: "Likely people only"/);
   assert.match(source, /value: "ONLY", label: "Detected bots"/);
   assert.match(apiSource, /"bot"/);
 });
