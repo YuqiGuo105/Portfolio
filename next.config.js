@@ -32,7 +32,7 @@ const nextConfig = {
     ];
     return [
       { source: "/:path*", headers: securityHeaders },
-      ...["/api/admin/:path*", "/api/rag/:path*", "/oauth/:path*", "/mcp/admin"].map((source) => ({
+      ...["/api/admin/:path*", "/api/rag/:path*", "/oauth/:path*", "/mcp/admin", "/mcp/connect"].map((source) => ({
         source,
         headers: [
           { key: "Cache-Control", value: "private, no-store, max-age=0" },
