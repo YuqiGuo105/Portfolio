@@ -54,72 +54,51 @@ function splitEye(eye, pupilX) {
   return { white, pupil }
 }
 
-const TEXTURE_SCALE = 4
-
-function smoothArtwork(source) {
-  const size = 96 * TEXTURE_SCALE
-  const result = surface(size, size)
-  result.context.drawImage(source, 0, 0, size, size)
-  const pixels = result.context.getImageData(0, 0, size, size)
-  let input = new Float32Array(pixels.data.length)
-  let output = new Float32Array(input.length)
-  for (let i = 0; i < input.length; i += 4) {
-    const alpha = pixels.data[i + 3] / 255
-    for (let c = 0; c < 3; c++) input[i + c] = pixels.data[i + c] * alpha
-    input[i + 3] = pixels.data[i + 3]
-  }
-  // Smooth the low-resolution contour once in premultiplied color space.
-  // This avoids dark fringes and works without browser-specific canvas filters.
-  for (let pass = 0; pass < 4; pass++) {
-    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-      const at = (y * size + x) * 4
-      for (let c = 0; c < 4; c++) {
-        let sum = 0
-        for (let offset = -2; offset <= 2; offset++) {
-          const sx = pass % 2 ? x : Math.max(0, Math.min(size - 1, x + offset))
-          const sy = pass % 2 ? Math.max(0, Math.min(size - 1, y + offset)) : y
-          sum += input[(sy * size + sx) * 4 + c]
-        }
-        output[at + c] = sum / 5
-      }
+export async function decodePotFrames(src) {
+  if (typeof ImageDecoder === "undefined") return null
+  const response = await fetch(src)
+  if (!response.ok) throw new Error("Mr Pot artwork unavailable")
+  const decoder = new ImageDecoder({ data: await response.arrayBuffer(), type: "image/gif" })
+  const frames = []
+  try {
+    await decoder.tracks.ready
+    const count = Math.min(decoder.tracks.selectedTrack.frameCount, 60)
+    for (let i = 0; i < count; i++) {
+      const { image } = await decoder.decode({ frameIndex: i })
+      try { frames.push(await createImageBitmap(image)) }
+      finally { image.close() }
     }
-    ;[input, output] = [output, input]
+    return frames
+  } catch (error) {
+    frames.forEach(frame => frame.close())
+    throw error
+  } finally {
+    decoder.close()
   }
-  for (let i = 0; i < input.length; i += 4) {
-    const alpha = input[i + 3] / 255
-    for (let c = 0; c < 3; c++) pixels.data[i + c] = alpha ? input[i + c] / alpha : 0
-    pixels.data[i + 3] = Math.max(0, Math.min(1, (alpha - 0.12) / 0.76)) * 255
-  }
-  result.context.putImageData(pixels, 0, 0)
-  // Keep the original steam and tiny facial details sharp.
-  result.context.clearRect(0, 0, size, 26 * TEXTURE_SCALE)
-  result.context.drawImage(source, 0, 0, 96, 26, 0, 0, size, 26 * TEXTURE_SCALE)
-  result.context.drawImage(source, 31, 45, 34, 21,
-    31 * TEXTURE_SCALE, 45 * TEXTURE_SCALE, 34 * TEXTURE_SCALE, 21 * TEXTURE_SCALE)
-  return result
 }
 
-export function createPotRenderer(canvas, image) {
+export function createPotRenderer(canvas, images) {
   const context = canvas.getContext("2d")
   if (!context) throw new Error("Canvas unavailable")
   context.imageSmoothingEnabled = true
   context.imageSmoothingQuality = "high"
-  const source = surface(96, 96)
-  // drawImage uses the GIF's default frame, so all texture pieces stay aligned.
-  source.context.drawImage(image, 0, 0, 96, 96)
-  const base = surface(96, 96)
-  base.context.drawImage(source.canvas, 0, 0)
-  const left = liftFeature(source, base, 35, 52, 8, 10)
-  const right = liftFeature(source, base, 53, 52, 8, 10)
-  const leftBrow = liftFeature(source, base, 34, 47, 7, 5)
-  const rightBrow = liftFeature(source, base, 54, 47, 8, 5)
-  const mouth = liftFeature(source, base, 44, 59, 8, 5)
-  const eyes = [splitEye(left, 2), splitEye(right, 1)]
-  const smoothSource = smoothArtwork(source.canvas)
-  const smoothBase = smoothArtwork(base.canvas)
+  const frames = (Array.isArray(images) ? images : [images]).map(image => {
+    const source = surface(96, 96)
+    source.context.drawImage(image, 0, 0, 96, 96)
+    const base = surface(96, 96)
+    base.context.drawImage(source.canvas, 0, 0)
+    const left = liftFeature(source, base, 35, 52, 8, 10)
+    const right = liftFeature(source, base, 53, 52, 8, 10)
+    const leftBrow = liftFeature(source, base, 34, 47, 7, 5)
+    const rightBrow = liftFeature(source, base, 54, 47, 8, 5)
+    const mouth = liftFeature(source, base, 44, 59, 8, 5)
+    return { source, base, left, right, leftBrow, rightBrow, mouth,
+      eyes: [splitEye(left, 2), splitEye(right, 1)] }
+  })
   const eyeFrame = surface(16, 20)
-  const frame = surface(96 * TEXTURE_SCALE, 96 * TEXTURE_SCALE)
-  frame.context.scale(TEXTURE_SCALE, TEXTURE_SCALE)
+  const frame = surface(192, 192)
+  frame.context.scale(2, 2)
+  let active
 
   function feature(part, scaleX = 1, scaleY = 1, rotation = 0, y = 0, texture = part.canvas) {
     frame.context.save()
@@ -130,36 +109,39 @@ export function createPotRenderer(canvas, image) {
     frame.context.restore()
   }
 
-  return function render(pose) {
+  function render(pose, frameIndex = 0) {
+    active = frames[frameIndex % frames.length]
     context.setTransform(canvas.width / 96, 0, 0, canvas.height / 96, 0, 0)
     context.clearRect(0, 0, 96, 96)
     if (Object.keys(POT_REST).every(key => pose[key] === POT_REST[key])) {
-      context.drawImage(smoothSource.canvas, 0, 0, 96, 96)
+      context.drawImage(active.source.canvas, 0, 0, 96, 96)
       return
     }
     frame.context.clearRect(0, 0, 96, 96)
-    frame.context.drawImage(smoothBase.canvas, 0, 0, 96, 96)
-    for (const [i, eye] of [left, right].entries()) {
+    frame.context.drawImage(active.base.canvas, 0, 0, 96, 96)
+    for (const [i, eye] of [active.left, active.right].entries()) {
       eyeFrame.context.setTransform(2, 0, 0, 2, 0, 0)
       eyeFrame.context.clearRect(0, 0, 8, 10)
-      eyeFrame.context.drawImage(eyes[i].white.canvas, 0, 0)
-      eyeFrame.context.drawImage(eyes[i].pupil.canvas,
+      eyeFrame.context.drawImage(active.eyes[i].white.canvas, 0, 0)
+      eyeFrame.context.drawImage(active.eyes[i].pupil.canvas,
         Math.max(-0.85, Math.min(0.85, pose.gazeX)), Math.max(-0.65, Math.min(0.65, pose.gazeY)))
       eyeFrame.context.globalCompositeOperation = "destination-in"
       eyeFrame.context.drawImage(eye.canvas, 0, 0)
       eyeFrame.context.globalCompositeOperation = "source-over"
       feature(eye, 1, i === 0 ? pose.eyeLeft : pose.eyeRight, 0, 0, eyeFrame.canvas)
     }
-    feature(leftBrow, 1, 1, pose.browLeft, pose.browLift)
-    feature(rightBrow, 1, 1, pose.browRight, pose.browLift)
-    feature(mouth, pose.mouthWidth, pose.mouthHeight)
+    feature(active.leftBrow, 1, 1, pose.browLeft, pose.browLift)
+    feature(active.rightBrow, 1, 1, pose.browRight, pose.browLift)
+    feature(active.mouth, pose.mouthWidth, pose.mouthHeight)
     context.save()
     context.translate(48, 60 + pose.lift)
     context.rotate(pose.tilt * Math.PI / 180)
     context.translate(-48, -60)
-    context.drawImage(frame.canvas, 0, 26 * TEXTURE_SCALE, 96 * TEXTURE_SCALE, 70 * TEXTURE_SCALE, 0, 26, 96, 70)
-    context.drawImage(smoothSource.canvas, 0, 0, 96 * TEXTURE_SCALE, 26 * TEXTURE_SCALE,
+    context.drawImage(frame.canvas, 0, 52, 192, 140, 0, 26, 96, 70)
+    context.drawImage(active.source.canvas, 0, 0, 96, 26,
       pose.steam * 0.4, -Math.abs(pose.steam), 96, 26)
     context.restore()
   }
+  render.frameCount = frames.length
+  return render
 }

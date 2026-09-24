@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import { Cog, Sparkle } from "lucide-react"
-import { createPotRenderer, POT_REST } from "../lib/mrPotAnimation.mjs"
+import { createPotRenderer, decodePotFrames, POT_REST } from "../lib/mrPotAnimation.mjs"
 import styles from "./MrPotAvatar.module.css"
 
 const DESCRIPTIONS = {
@@ -15,10 +15,10 @@ const DESCRIPTIONS = {
 }
 
 function expression(state, t) {
-  const pose = { ...POT_REST, lift: Math.sin(t * 1.6) * 0.3, steam: Math.sin(t * 1.3) * 0.6 }
+  const pose = { ...POT_REST }
   const glance = Math.floor(t / 4) % 2 === 0 ? 1 : -1
   if (state === "thinking") Object.assign(pose, {
-    tilt: -3.5 * glance, gazeX: -0.65 * glance, gazeY: -0.6,
+    tilt: -2 * glance, gazeX: -0.65 * glance, gazeY: -0.6,
     eyeLeft: glance > 0 ? 0.84 : 0.97, eyeRight: glance > 0 ? 0.97 : 0.84,
     browLeft: 10 * glance, browRight: -10 * glance,
     mouthWidth: 0.88, mouthHeight: 0.72,
@@ -55,7 +55,7 @@ export default function MrPotAvatar({ state = "idle", size = "medium", announce 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
     const current = { ...POT_REST }
     const pointer = { x: 0, y: 0, active: false }
-    let render, disposed = false, visible = true, frame = 0, lastTime = 0, elapsed = 0, stateTime = 0
+    let render, loading = false, disposed = false, visible = true, frame = 0, lastTime = 0, elapsed = 0, stateTime = 0
     let previousState = stateRef.current, gazeAt = 0, gazeCount = 0, gaze = { x: 0, y: 0 }
     let blinkAt = 2 + Math.random() * 2, blinkStart = -10
 
@@ -104,7 +104,7 @@ export default function MrPotAvatar({ state = "idle", size = "medium", announce 
         const speed = key.startsWith("eye") ? 42 : key.startsWith("gaze") ? 16 : 5
         current[key] += (pose[key] - current[key]) * (1 - Math.exp(-speed * dt))
       }
-      render(current)
+      render(current, Math.floor(elapsed * 12.5) % render.frameCount)
       if (visible && !document.hidden) frame = requestAnimationFrame(draw)
     }
 
@@ -112,17 +112,25 @@ export default function MrPotAvatar({ state = "idle", size = "medium", announce 
       cancelAnimationFrame(frame)
       lastTime = 0
       root.dataset.paused = String(reducedMotion.matches || document.hidden || !visible)
+      root.dataset.expression = stateRef.current
       if (render && !disposed && visible && !document.hidden) frame = requestAnimationFrame(draw)
     }
-    function load() {
-      if (disposed || render || !image.naturalWidth) return
+    async function load() {
+      if (disposed || loading || render || !image.naturalWidth) return
+      loading = true
+      let frames
       try {
-        render = createPotRenderer(canvas, image)
+        frames = await decodePotFrames(image.currentSrc || image.src)
+        if (disposed || !frames?.length) return
+        render = createPotRenderer(canvas, frames)
         render(POT_REST)
         root.dataset.ready = "true"
         resume()
       } catch {
-        // Keep the original GIF visible if canvas is unavailable.
+        // Keep the original animated GIF visible when frame decoding is unavailable.
+      } finally {
+        frames?.forEach(frame => frame.close())
+        loading = false
       }
     }
     const onPointer = event => {

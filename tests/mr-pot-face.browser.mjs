@@ -57,17 +57,18 @@ try {
     assert.equal(await page.locator('[data-nextjs-dialog]').count(), 0)
     await page.evaluate(() => { document.body.classList.remove('light-skin'); document.body.classList.add('dark-skin') })
     const fidelity = await page.evaluate(async () => {
-      const { createPotRenderer, POT_REST } = await import('/__test-pot-renderer.mjs')
+      const { createPotRenderer, decodePotFrames, POT_REST } = await import('/__test-pot-renderer.mjs')
       const original = document.querySelector('.cw-pot-avatar img')
+      const frames = await decodePotFrames(original.src)
       const canvas = document.createElement('canvas'), expected = document.createElement('canvas')
       canvas.width = canvas.height = expected.width = expected.height = 192
-      // Match the renderer's initial 96px texture and 2x output scaling.
+      // Compare against the GIF's real first frame, not a new illustration.
       const texture = document.createElement('canvas')
       texture.width = texture.height = 96
-      texture.getContext('2d').drawImage(original, 0, 0, 96, 96)
+      texture.getContext('2d').drawImage(frames[0], 0, 0, 96, 96)
       expected.getContext('2d').imageSmoothingQuality = 'high'
       expected.getContext('2d').drawImage(texture, 0, 0, 192, 192)
-      const render = createPotRenderer(canvas, original)
+      const render = createPotRenderer(canvas, frames)
       const pixels = () => canvas.getContext('2d').getImageData(0, 0, 192, 192).data
       const originalPixels = expected.getContext('2d').getImageData(0, 0, 192, 192).data
       render(POT_REST)
@@ -81,14 +82,18 @@ try {
         }
         return box
       }
-      let faceError = 0, faceSamples = 0, contourChanges = 0
+      let faceError = 0, faceSamples = 0, artworkChanges = 0
       baseline.forEach((value, i) => {
         const x = Math.floor(i / 4) % 192 / 2, y = Math.floor(i / 4 / 192) / 2
         if (x >= 33 && x <= 63 && y >= 47 && y <= 64) {
           faceError += Math.abs(value - originalPixels[i]); faceSamples++
-        } else if (y >= 26 && value !== originalPixels[i]) contourChanges++
+        } else if (y >= 26 && value !== originalPixels[i]) artworkChanges++
       })
       const originalBounds = bounds(originalPixels), smoothBounds = bounds(baseline)
+      render(POT_REST, 1)
+      let frameChanges = 0
+      pixels().forEach((value, i) => { if (value !== baseline[i]) frameChanges++ })
+      render(POT_REST, 0)
       render({ ...POT_REST, gazeX: 0.8, gazeY: -0.5, eyeLeft: 0.85, browRight: -8 })
       let faceChanges = 0, outsideChanges = 0
       pixels().forEach((value, i) => {
@@ -110,11 +115,15 @@ try {
       const open = eyeWhite()
       render({ ...POT_REST, eyeLeft: 0.1, eyeRight: 0.1 })
       const closed = eyeWhite()
-      return { originalBounds, smoothBounds, faceError: faceError / faceSamples, contourChanges, faceChanges, outsideChanges, open, closed }
+      frames.forEach(frame => frame.close())
+      return { originalBounds, smoothBounds, faceError: faceError / faceSamples, artworkChanges,
+        frameCount: render.frameCount, frameChanges, faceChanges, outsideChanges, open, closed }
     })
-    assert.ok(fidelity.originalBounds.every((value, i) => Math.abs(value - fidelity.smoothBounds[i]) <= 1), 'smoothing preserves the original silhouette and proportions')
+    assert.deepEqual(fidelity.smoothBounds, fidelity.originalBounds, 'the original silhouette and proportions are unchanged')
     assert.ok(fidelity.faceError < 3, 'facial details remain sharp and preserve the original artwork')
-    assert.ok(fidelity.contourChanges > 0, 'the low-resolution contour is actually resampled and smoothed')
+    assert.equal(fidelity.artworkChanges, 0, 'the resting artwork retains the original contour and colors')
+    assert.equal(fidelity.frameCount, 24, 'all original GIF frames remain available')
+    assert.ok(fidelity.frameChanges > 0, 'the original head movement is retained')
     assert.equal(fidelity.outsideChanges, 0, 'facial animation cannot repaint the pot, handles, lid, blush or silhouette')
     assert.ok(fidelity.faceChanges > 0)
     assert.ok(fidelity.closed < fidelity.open * 0.4, 'blink closes the original eyes')
