@@ -9,6 +9,7 @@ import { useRouter } from "next/router"
 import LogInDialog from "../components/LogInDialog"
 import AnswerSources from "./AnswerSources"
 import VoiceInput from "./VoiceInput"
+import MrPotAvatar from "./MrPotAvatar"
 import { Mic, Plus, Upload } from "lucide-react"
 import { mergeEvidence } from "../lib/chatEvidence.mjs"
 import { postSSE } from "../lib/chatStream.mjs"
@@ -1397,17 +1398,6 @@ function getStageMeta(stage, title) {
   return DEFAULT_STAGE_META
 }
 
-const MR_POT_STATES = {
-  idle: { label: "Ready", description: "Mr Pot is ready" },
-  listening: { label: "Listening", description: "Mr Pot is listening" },
-  thinking: { label: "Thinking", description: "Mr Pot is thinking" },
-  searching: { label: "Searching", description: "Mr Pot is searching the portfolio" },
-  working: { label: "Working", description: "Mr Pot is using a tool" },
-  speaking: { label: "Answering", description: "Mr Pot is composing an answer" },
-  success: { label: "Ready", description: "Mr Pot finished the answer" },
-  error: { label: "Needs attention", description: "Mr Pot could not finish the answer" },
-}
-
 function getMrPotState(message) {
   if (!message) return "idle"
   const active = message.thinkingNow || [...(message.executionStages || [])].reverse().find((step) => !step?.tsEnd)
@@ -1423,43 +1413,6 @@ function getMrPotState(message) {
   if (message.streaming) return "thinking"
   if (message.content) return "success"
   return "idle"
-}
-
-function MrPotAvatar({ state = "idle", size = "medium", announce = false }) {
-  const meta = MR_POT_STATES[state] || MR_POT_STATES.idle
-  return (
-    <span
-      className={`cw-pot-avatar cw-pot-${size}`}
-      data-state={state}
-      role={announce ? "status" : undefined}
-      aria-live={announce ? "polite" : undefined}
-      aria-label={announce ? meta.description : undefined}
-      aria-hidden={announce ? undefined : "true"}
-    >
-      <span className="cw-pot-orbit" />
-      <span className="cw-pot-steam cw-pot-steam-one" />
-      <span className="cw-pot-steam cw-pot-steam-two" />
-      <span className="cw-pot-spark cw-pot-spark-one" />
-      <span className="cw-pot-spark cw-pot-spark-two" />
-      <span className="cw-pot-thought" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-      </span>
-      <span className="cw-pot-brow cw-pot-brow-left" aria-hidden="true" />
-      <span className="cw-pot-brow cw-pot-brow-right" aria-hidden="true" />
-      <span className="cw-pot-scanline" aria-hidden="true" />
-      <span className="cw-pot-listen-wave" aria-hidden="true" />
-      <span className="cw-pot-voice" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-      </span>
-      <span className="cw-pot-alert" aria-hidden="true">!</span>
-      <img src="/assets/images/chatbot_pot_thinking.gif" alt="" draggable="false" />
-      <span className="cw-pot-shadow" />
-    </span>
-  )
 }
 
 // Pull a short one-line summary from a card payload (without huge JSON)
@@ -3915,7 +3868,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   }
 
   const latestAssistantMessage = [...messages].reverse().find((message) => message.role === "assistant")
-  const headerPetState = getMrPotState(latestAssistantMessage)
+  const headerPetState = voiceOpen ? "listening" : getMrPotState(latestAssistantMessage)
 
   return (
     <div
@@ -5252,362 +5205,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           min-width: 0;
         }
 
-        #__chat_widget_root .cw-pot-avatar {
-          --pot-size: 44px;
-          position: relative;
-          display: inline-grid;
-          place-items: end center;
-          width: var(--pot-size);
-          height: var(--pot-size);
-          flex: 0 0 var(--pot-size);
-          isolation: isolate;
-          overflow: visible;
-        }
-
-        #__chat_widget_root .cw-pot-header { --pot-size: 64px; }
-
-        #__chat_widget_root .cw-pot-avatar img {
-          position: relative;
-          z-index: 3;
-          width: 116%;
-          height: 116%;
-          max-width: none;
-          object-fit: contain;
-          object-position: center bottom;
-          user-select: none;
-          filter: drop-shadow(0 5px 5px rgba(15, 23, 42, 0.2));
-          transform-origin: 50% 88%;
-          animation: cw-pot-breathe 3.8s cubic-bezier(.45, 0, .3, 1) infinite;
-        }
-
-        #__chat_widget_root .cw-pot-shadow {
-          position: absolute;
-          z-index: 1;
-          bottom: 0;
-          width: 56%;
-          height: 8%;
-          border-radius: 50%;
-          background: rgba(15, 23, 42, 0.2);
-          filter: blur(2px);
-          animation: cw-pot-shadow-breathe 3.8s cubic-bezier(.45, 0, .3, 1) infinite;
-        }
-
-        #__chat_widget_root .cw-pot-orbit {
-          position: absolute;
-          z-index: 1;
-          inset: 4%;
-          border: 1px solid rgba(99, 102, 241, 0.3);
-          border-radius: 50%;
-          opacity: 0;
-          transform: scale(0.72);
-        }
-
-        #__chat_widget_root .cw-pot-steam {
-          position: absolute;
-          z-index: 4;
-          top: -2%;
-          width: 3px;
-          height: 12px;
-          border-radius: 50%;
-          border-left: 2px solid rgba(148, 163, 184, 0.78);
-          opacity: 0.55;
-          transform-origin: bottom center;
-          animation: cw-pot-steam 2.2s ease-in-out infinite;
-        }
-
-        #__chat_widget_root .cw-pot-steam-one { left: 44%; }
-        #__chat_widget_root .cw-pot-steam-two { left: 55%; animation-delay: 0.72s; }
-
-        #__chat_widget_root .cw-pot-spark {
-          position: absolute;
-          z-index: 5;
-          width: 5px;
-          height: 5px;
-          border-radius: 50%;
-          background: #fbbf24;
-          box-shadow: 0 0 8px rgba(251, 191, 36, 0.7);
-          opacity: 0;
-        }
-
-        #__chat_widget_root .cw-pot-spark-one { top: 6%; left: 7%; }
-        #__chat_widget_root .cw-pot-spark-two { top: 16%; right: 4%; }
-
-        #__chat_widget_root .cw-pot-thought {
-          position: absolute;
-          z-index: 7;
-          top: -8%;
-          right: -12%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 2px;
-          width: 30px;
-          height: 20px;
-          border: 1px solid rgba(100, 116, 139, 0.25);
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.96);
-          box-shadow: 0 5px 12px rgba(15, 23, 42, 0.14);
-          opacity: 0;
-          transform: translateY(4px) scale(0.7);
-          pointer-events: none;
-        }
-
-        #__chat_widget_root .cw-pot-thought::after {
-          content: "";
-          position: absolute;
-          left: 3px;
-          bottom: -5px;
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          background: rgba(255, 255, 255, 0.96);
-          box-shadow: -4px 4px 0 -1px rgba(255, 255, 255, 0.92);
-        }
-
-        #__chat_widget_root .cw-pot-thought i {
-          width: 4px;
-          height: 4px;
-          border-radius: 50%;
-          background: #64748b;
-        }
-
-        #__chat_widget_root .cw-pot-brow {
-          position: absolute;
-          z-index: 6;
-          top: 42%;
-          width: 8px;
-          height: 2px;
-          border-radius: 999px;
-          background: #334155;
-          opacity: 0;
-          pointer-events: none;
-        }
-
-        #__chat_widget_root .cw-pot-brow-left { left: 34%; }
-        #__chat_widget_root .cw-pot-brow-right { right: 34%; }
-
-        #__chat_widget_root .cw-pot-scanline {
-          position: absolute;
-          z-index: 6;
-          top: 27%;
-          left: 19%;
-          right: 19%;
-          height: 2px;
-          border-radius: 999px;
-          background: linear-gradient(90deg, transparent, #38bdf8 22%, #67e8f9 50%, #38bdf8 78%, transparent);
-          box-shadow: 0 0 8px rgba(56, 189, 248, 0.75);
-          opacity: 0;
-          pointer-events: none;
-        }
-
-        #__chat_widget_root .cw-pot-listen-wave {
-          position: absolute;
-          z-index: 2;
-          top: 42%;
-          left: -4%;
-          width: 16px;
-          height: 16px;
-          border: 2px solid rgba(14, 165, 233, 0.65);
-          border-right-color: transparent;
-          border-radius: 50%;
-          opacity: 0;
-          pointer-events: none;
-        }
-
-        #__chat_widget_root .cw-pot-voice {
-          position: absolute;
-          z-index: 6;
-          top: 42%;
-          right: -9%;
-          width: 18px;
-          height: 18px;
-          opacity: 0;
-          pointer-events: none;
-        }
-
-        #__chat_widget_root .cw-pot-voice i {
-          position: absolute;
-          top: 50%;
-          left: 0;
-          border: 2px solid #38bdf8;
-          border-top-color: transparent;
-          border-bottom-color: transparent;
-          border-left-color: transparent;
-          border-radius: 50%;
-          transform: translateY(-50%);
-        }
-
-        #__chat_widget_root .cw-pot-voice i:nth-child(1) { width: 6px; height: 8px; }
-        #__chat_widget_root .cw-pot-voice i:nth-child(2) { width: 11px; height: 13px; }
-        #__chat_widget_root .cw-pot-voice i:nth-child(3) { width: 16px; height: 18px; }
-
-        #__chat_widget_root .cw-pot-alert {
-          position: absolute;
-          z-index: 7;
-          top: 0;
-          right: 1%;
-          display: grid;
-          place-items: center;
-          width: 16px;
-          height: 16px;
-          border-radius: 50%;
-          background: #fb7185;
-          color: #fff;
-          font-size: 11px;
-          font-weight: 800;
-          line-height: 1;
-          box-shadow: 0 4px 10px rgba(225, 29, 72, 0.28);
-          opacity: 0;
-          transform: scale(0.4);
-          pointer-events: none;
-        }
-
-        :global(body.dark-skin) #__chat_widget_root .cw-pot-thought,
-        :global(.dark) #__chat_widget_root .cw-pot-thought,
-        :global(body.dark-skin) #__chat_widget_root .cw-pot-thought::after,
-        :global(.dark) #__chat_widget_root .cw-pot-thought::after {
-          background: rgba(30, 41, 59, 0.97);
-        }
-
-        :global(body.dark-skin) #__chat_widget_root .cw-pot-thought i,
-        :global(.dark) #__chat_widget_root .cw-pot-thought i {
-          background: #cbd5e1;
-        }
-
-        #__chat_widget_root .cw-pot-avatar[data-state="listening"] img { animation: cw-pot-listen 1.8s cubic-bezier(.4, 0, .2, 1) infinite; }
-        #__chat_widget_root .cw-pot-avatar[data-state="listening"] .cw-pot-listen-wave { animation: cw-pot-listen-wave 1.55s ease-out infinite; }
-        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] img { animation: cw-pot-ponder 3s cubic-bezier(.45, 0, .25, 1) infinite; }
-        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-thought { animation: cw-pot-thought-float 2.3s cubic-bezier(.4, 0, .2, 1) infinite; }
-        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-thought i { animation: cw-pot-thought-dot 1.2s ease-in-out infinite; }
-        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-thought i:nth-child(2) { animation-delay: 140ms; }
-        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-thought i:nth-child(3) { animation-delay: 280ms; }
-        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-brow { opacity: 0.88; animation: cw-pot-brow-focus 2.2s ease-in-out infinite; }
-        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-brow-left { transform: rotate(13deg); }
-        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-brow-right { transform: rotate(-13deg); }
-        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-steam { animation-duration: 3.1s; }
-
-        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-orbit,
-        #__chat_widget_root .cw-pot-avatar[data-state="searching"] .cw-pot-orbit,
-        #__chat_widget_root .cw-pot-avatar[data-state="working"] .cw-pot-orbit {
-          opacity: 1;
-          animation: cw-pot-orbit 1.9s cubic-bezier(.4, 0, .2, 1) infinite;
-        }
-
-        #__chat_widget_root .cw-pot-avatar[data-state="searching"] img { animation: cw-pot-scan 1.7s cubic-bezier(.4, 0, .2, 1) infinite; }
-        #__chat_widget_root .cw-pot-avatar[data-state="searching"] .cw-pot-scanline { animation: cw-pot-scanline 1.55s ease-in-out infinite; }
-        #__chat_widget_root .cw-pot-avatar[data-state="working"] img { animation: cw-pot-work 1.25s cubic-bezier(.4, 0, .2, 1) infinite; }
-        #__chat_widget_root .cw-pot-avatar[data-state="speaking"] img { animation: cw-pot-speak 1.15s cubic-bezier(.34, 1.2, .64, 1) infinite; }
-        #__chat_widget_root .cw-pot-avatar[data-state="speaking"] .cw-pot-voice { animation: cw-pot-voice 1.25s ease-out infinite; }
-
-        #__chat_widget_root .cw-pot-avatar[data-state="success"] img {
-          animation: cw-pot-celebrate 820ms cubic-bezier(.2, .8, .3, 1) 1, cw-pot-breathe 3.8s 820ms cubic-bezier(.45, 0, .3, 1) infinite;
-        }
-
-        #__chat_widget_root .cw-pot-avatar[data-state="success"] .cw-pot-spark { animation: cw-pot-spark 1.5s ease-out 1; }
-        #__chat_widget_root .cw-pot-avatar[data-state="success"] .cw-pot-spark-two { animation-delay: 120ms; }
-
-        #__chat_widget_root .cw-pot-avatar[data-state="error"] img {
-          animation: cw-pot-error 520ms cubic-bezier(.36, .07, .19, .97) 1;
-          filter: saturate(0.75) drop-shadow(0 5px 5px rgba(15, 23, 42, 0.2));
-        }
-        #__chat_widget_root .cw-pot-avatar[data-state="error"] .cw-pot-alert { animation: cw-pot-alert 1.45s cubic-bezier(.34, 1.56, .64, 1) 1; }
-
-        @keyframes cw-pot-breathe {
-          0%, 100% { transform: translateY(0) rotate(-0.8deg) scale(1); }
-          47% { transform: translateY(-2px) rotate(0.7deg) scale(1.015); }
-          63% { transform: translateY(-1px) rotate(0.2deg) scale(1.008); }
-        }
-        @keyframes cw-pot-shadow-breathe {
-          0%, 100% { opacity: 0.24; transform: scaleX(1); }
-          50% { opacity: 0.14; transform: scaleX(0.86); }
-        }
-        @keyframes cw-pot-steam {
-          0% { opacity: 0; transform: translateY(4px) translateX(0) scaleY(0.72); }
-          28% { opacity: 0.62; }
-          70% { opacity: 0.26; }
-          100% { opacity: 0; transform: translateY(-8px) translateX(3px) scaleY(1.2); }
-        }
-        @keyframes cw-pot-listen {
-          0%, 100% { transform: translateY(0) rotate(0); }
-          35% { transform: translateY(-2px) rotate(-3deg); }
-          58% { transform: translateY(-1px) rotate(-1.5deg); }
-        }
-        @keyframes cw-pot-listen-wave {
-          0% { opacity: 0; transform: scale(0.55); }
-          35% { opacity: 0.8; }
-          100% { opacity: 0; transform: scale(1.45); }
-        }
-        @keyframes cw-pot-ponder {
-          0%, 18%, 100% { transform: translateY(0) rotate(0); }
-          34%, 72% { transform: translateY(3px) rotate(-7deg); }
-          48%, 62% { transform: translateY(2px) rotate(-6deg); }
-          82% { transform: translateY(-1px) rotate(-1deg); }
-        }
-        @keyframes cw-pot-thought-float {
-          0%, 100% { opacity: 0.82; transform: translateY(1px) scale(0.94) rotate(-2deg); }
-          50% { opacity: 1; transform: translateY(-3px) scale(1) rotate(1deg); }
-        }
-        @keyframes cw-pot-thought-dot {
-          0%, 60%, 100% { opacity: 0.35; transform: translateY(0) scale(0.8); }
-          30% { opacity: 1; transform: translateY(-2px) scale(1); }
-        }
-        @keyframes cw-pot-brow-focus {
-          0%, 100% { opacity: 0.62; margin-top: 0; }
-          50% { opacity: 0.95; margin-top: 1px; }
-        }
-        @keyframes cw-pot-scan {
-          0%, 100% { transform: translateX(-1px) translateY(0) rotate(-1deg); }
-          44% { transform: translateX(2px) translateY(-2px) rotate(1.5deg); }
-          68% { transform: translateX(1px) translateY(-1px) rotate(0); }
-        }
-        @keyframes cw-pot-scanline {
-          0% { opacity: 0; transform: translateY(0) scaleX(0.65); }
-          18%, 76% { opacity: 0.9; }
-          100% { opacity: 0; transform: translateY(28px) scaleX(1); }
-        }
-        @keyframes cw-pot-work {
-          0%, 100% { transform: translateY(0) rotate(-1.3deg); }
-          42% { transform: translateY(-3px) rotate(1.6deg); }
-          62% { transform: translateY(-1px) rotate(0.5deg); }
-        }
-        @keyframes cw-pot-speak {
-          0%, 100% { transform: translateY(0) scale(1); }
-          48% { transform: translateY(-2px) scale(1.025, 0.99); }
-          68% { transform: translateY(-1px) scale(1.01); }
-        }
-        @keyframes cw-pot-voice {
-          0% { opacity: 0; transform: translateX(-3px) scale(0.65); }
-          28% { opacity: 0.9; }
-          100% { opacity: 0; transform: translateX(4px) scale(1.08); }
-        }
-        @keyframes cw-pot-celebrate {
-          0% { transform: translateY(0) rotate(0) scale(1); }
-          34% { transform: translateY(-7px) rotate(-4deg) scale(1.03); }
-          62% { transform: translateY(-2px) rotate(3deg) scale(1.015); }
-          100% { transform: translateY(0) rotate(0) scale(1); }
-        }
-        @keyframes cw-pot-error {
-          0%, 100% { transform: translateX(0); }
-          20% { transform: translateX(-3px) rotate(-2deg); }
-          40% { transform: translateX(3px) rotate(2deg); }
-          65% { transform: translateX(-2px) rotate(-1deg); }
-          82% { transform: translateX(1px); }
-        }
-        @keyframes cw-pot-alert {
-          0% { opacity: 0; transform: translateY(4px) scale(0.35); }
-          24%, 68% { opacity: 1; transform: translateY(0) scale(1); }
-          100% { opacity: 0; transform: translateY(-3px) scale(0.82); }
-        }
-        @keyframes cw-pot-orbit {
-          0% { opacity: 0; transform: scale(0.72) rotate(0); }
-          32% { opacity: 0.65; }
-          100% { opacity: 0; transform: scale(1.12) rotate(180deg); }
-        }
-        @keyframes cw-pot-spark {
-          0% { opacity: 0; transform: scale(0.2) rotate(0); }
-          32% { opacity: 1; transform: scale(1.1) rotate(35deg); }
-          100% { opacity: 0; transform: translateY(-8px) scale(0.35) rotate(90deg); }
-        }
         @keyframes cw-status-pulse {
           0%, 100% { opacity: 0.5; transform: scale(0.86); }
           50% { opacity: 1; transform: scale(1.08); }
@@ -5885,40 +5482,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         #__chat_widget_root .cw-md p { margin: 0.55rem 0; }
 
         @media (max-width: 520px) {
-          #__chat_widget_root .cw-pot-header { --pot-size: 56px; }
           #__chat_widget_root .cw-bubble-bot {
             max-width: 96%;
             padding: 9px 12px 12px;
           }
           #__chat_widget_root .cw-title { font-size: 16px; }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          #__chat_widget_root .cw-pot-avatar img,
-          #__chat_widget_root .cw-pot-avatar .cw-pot-shadow,
-          #__chat_widget_root .cw-pot-avatar .cw-pot-steam,
-          #__chat_widget_root .cw-pot-avatar .cw-pot-orbit,
-          #__chat_widget_root .cw-pot-avatar .cw-pot-spark,
-          #__chat_widget_root .cw-pot-avatar .cw-pot-thought,
-          #__chat_widget_root .cw-pot-avatar .cw-pot-thought i,
-          #__chat_widget_root .cw-pot-avatar .cw-pot-brow,
-          #__chat_widget_root .cw-pot-avatar .cw-pot-scanline,
-          #__chat_widget_root .cw-pot-avatar .cw-pot-listen-wave,
-          #__chat_widget_root .cw-pot-avatar .cw-pot-voice,
-          #__chat_widget_root .cw-pot-avatar .cw-pot-alert { animation: none !important; }
-
-          #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-thought {
-            opacity: 1;
-            transform: none;
-          }
-
-          #__chat_widget_root .cw-pot-avatar[data-state="searching"] .cw-pot-scanline,
-          #__chat_widget_root .cw-pot-avatar[data-state="listening"] .cw-pot-listen-wave,
-          #__chat_widget_root .cw-pot-avatar[data-state="speaking"] .cw-pot-voice,
-          #__chat_widget_root .cw-pot-avatar[data-state="error"] .cw-pot-alert {
-            opacity: 0.85;
-            transform: none;
-          }
         }
 
         #__chat_widget_root .cw-chev {
