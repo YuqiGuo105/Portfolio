@@ -5744,15 +5744,20 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           align-items: center;
           gap: 6px;
           width: 100%;
+          height: auto !important;
+          min-height: 56px;
           padding: 9px 11px;
           font-size: 12px;
           font-weight: 650;
+          line-height: 1.3 !important;
           cursor: pointer;
           background: none;
           border: none;
           color: inherit;
           text-align: left;
           opacity: 0.9;
+          overflow: visible;
+          white-space: normal;
         }
         #__chat_widget_root .cw-reasoning-toggle:hover { opacity: 1; }
         #__chat_widget_root .cw-r-ico { flex: 0 0 auto; color: #6366f1; }
