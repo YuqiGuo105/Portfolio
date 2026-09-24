@@ -1,4 +1,4 @@
-import { BookOpen, ChevronDown, ExternalLink } from "lucide-react"
+import { BookOpen, ChevronDown, ExternalLink, LockKeyhole } from "lucide-react"
 import { isSourceLinked, mergeEvidence } from "../lib/chatEvidence.mjs"
 
 export default function AnswerSources({ cards = [], related = [], answer = "" }) {
@@ -19,8 +19,9 @@ export default function AnswerSources({ cards = [], related = [], answer = "" })
           </a>
           <div className="source-meta">
             {new URL(source.url).hostname.replace(/^www\./, "")} · {isSourceLinked(answer, source.url) ? "Linked in answer" : "Retrieved context"}
+            {source.sourceRequiresLogin ? <span className="source-access"><LockKeyhole size={11} aria-hidden="true" /> Log in to read original</span> : null}
           </div>
-          {source.snippet ? <details>
+          {!source.sourceRequiresLogin && source.snippet ? <details>
             <summary>View source excerpt</summary>
             <blockquote>{source.snippet}</blockquote>
           </details> : null}
@@ -45,6 +46,7 @@ export default function AnswerSources({ cards = [], related = [], answer = "" })
       a { display: inline; font-size: 13px; font-weight: 600; line-height: 1.5; color: inherit; text-decoration: underline; text-decoration-color: #268d8277; text-underline-offset: 3px; overflow-wrap: anywhere; }
       a :global(svg) { margin-left: 5px; vertical-align: middle; }
       .source-meta { font-size: 11px; opacity: .75; line-height: 1.6; margin-top: 3px; overflow-wrap: anywhere; }
+      .source-access { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
       details { margin-top: 4px; font-size: 12px; }
       summary { cursor: pointer; padding: 4px 0; line-height: 1.5; }
       blockquote { margin: 6px 0 2px; padding: 4px 10px; border-left: 2px solid #268d82; font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }

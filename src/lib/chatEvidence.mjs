@@ -14,9 +14,11 @@ export function mergeEvidence(...groups) {
     const url = evidenceUrl(item.url)
     if (!url) continue
     const previous = byUrl.get(url) || {}
+    const sourceRequiresLogin = previous.sourceRequiresLogin === true || item.sourceRequiresLogin === true
     byUrl.set(url, { ...previous, ...item, url,
+      sourceRequiresLogin,
       title: item.title || previous.title || new URL(url).hostname,
-      snippet: item.snippet || previous.snippet || "" })
+      snippet: sourceRequiresLogin ? "" : item.snippet || previous.snippet || "" })
   }
   return [...byUrl.values()].slice(0, 12)
 }

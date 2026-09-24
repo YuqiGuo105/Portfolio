@@ -57,8 +57,8 @@ export async function postSSE(url, body, { onEvent, signal, deviceId, timeoutMs 
     signal?.removeEventListener("abort", abort)
     controller.abort()
     if (reader) {
-      void reader.cancel().catch(() => {})
-      reader.releaseLock()
+      try { await reader.cancel() } catch {}
+      try { reader.releaseLock() } catch {}
     }
   }
 }

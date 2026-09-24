@@ -32,3 +32,13 @@ test("keeps latest source version, deduplicates and bounds context", () => {
   ], 5)
   assert.deepEqual(result.map((r) => r.id), ["new"])
 })
+test("restricted sources cannot regain excerpts through later streamed cards", () => {
+  const first = { url: "/life-blog/2", title: "Travel", snippet: "Restricted excerpt" }
+  const locked = { url: "/life-blog/2", sourceRequiresLogin: true }
+  for (const inputs of [[first, locked], [locked, first], [locked, { ...first, sourceRequiresLogin: false }]]) {
+    const [result] = mergeEvidence(inputs)
+    assert.equal(result.sourceRequiresLogin, true)
+    assert.equal(result.snippet, "")
+    assert.equal(result.title, "Travel")
+  }
+})

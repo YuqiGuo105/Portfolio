@@ -8,6 +8,13 @@ try {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     page.setDefaultTimeout(15000);
     page.on('pageerror', e => console.log('PAGE ERROR', e.message));
+    page.on('console', message => {
+      if (message.type() === 'error' || message.text().includes('[ChatWidget]')) console.log('BROWSER', message.type(), message.text());
+    });
+    const observedRequests = [];
+    page.on('request', request => {
+      if (request.url().includes('/answer/stream')) observedRequests.push(`${request.method()} ${request.url()}`);
+    });
     const wav = Buffer.from(encodeWav(Float32Array.from({length: 16000}, (_, i) => Math.sin(i / 10) * .1))).toString('base64');
     await page.addInitScript(wav => {
       window.__recorders = [];
@@ -33,6 +40,8 @@ try {
     await page.route('**/*', route => {
       const request = route.request();
       const url = new URL(request.url());
+      const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,PUT,DELETE,OPTIONS' };
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
       if (url.pathname === '/api/rag/transcribe') {
         const body = request.postDataJSON();
         assert.deepEqual(Object.keys(body), ['audio']);
@@ -40,20 +49,20 @@ try {
         assert.equal(bytes.subarray(0, 4).toString(), 'RIFF');
         assert.equal(bytes.readUInt32LE(24), 16000);
         transcriptions++;
-        return route.fulfill({json: {text: transcriptions === 1 ? 'Please summarize my file.' : '请总结附件。'}});
+        return route.fulfill({headers: cors, json: {text: transcriptions === 1 ? 'Please summarize my file.' : '请总结附件。'}});
       }
-      if (url.pathname.endsWith('/attachments/upload-url')) return route.fulfill({ json: { attachmentId: `test-${++grant}`, mimeType: 'text/plain', uploadUrl: `${base}/fixture-upload` } });
+      if (url.pathname.endsWith('/attachments/upload-url')) return route.fulfill({ headers: cors, json: { attachmentId: `test-${++grant}`, mimeType: 'text/plain', uploadUrl: `${base}/fixture-upload` } });
       if (url.pathname === '/fixture-upload') {
         uploads++;
         assert.equal(request.postDataBuffer().toString(), 'Synthetic upload fixture.');
-        return route.fulfill({ json: { status: 'READY' } });
+        return route.fulfill({ headers: cors, json: { status: 'READY' } });
       }
       if (url.pathname.includes('/attachments/') && request.method() === 'DELETE') {
         deletes++;
-        return route.fulfill({ status: 204 });
+        return route.fulfill({ status: 204, headers: cors });
       }
-      if (url.pathname.endsWith('/api/intent/route')) return route.fulfill({ json: { routeKind: 'GENERAL_CHAT' } });
-      if (url.pathname.endsWith('/answer/stream')) return route.fulfill({ contentType: 'text/event-stream', body: 'event: answer_final\ndata: {"payload":{"answer":"Fixture analyzed."}}\n\n' });
+      if (url.pathname.endsWith('/api/intent/route')) return route.fulfill({ headers: cors, json: { routeKind: 'GENERAL_CHAT' } });
+      if (url.pathname.endsWith('/answer/stream')) return route.fulfill({ headers: cors, contentType: 'text/event-stream', body: 'event: answer_final\ndata: {"payload":{"answer":"Fixture analyzed."}}\n\n' });
       if (url.hostname.endsWith('supabase.co') && request.method() !== 'GET') return route.fulfill({ json: [] });
       return route.continue();
     });
@@ -100,8 +109,17 @@ try {
     await page.waitForFunction(() => document.querySelectorAll('.cw-chip').length === 0);
     await page.locator('#__chat_widget_root input[type=file]').setInputFiles(fixture);
     await page.getByRole('button', { name: 'Remove file', exact: true }).waitFor();
+    await page.waitForFunction(() => {
+      const chip = document.querySelector('#__chat_widget_root .cw-chip');
+      return chip && !chip.querySelector('.cw-chip-meta');
+    });
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
-    await page.getByText('Fixture analyzed.', { exact: true }).waitFor();
+    try {
+      await page.getByText('Fixture analyzed.', { exact: true }).waitFor();
+    } catch (error) {
+      console.log(JSON.stringify({ observedRequests, body: (await page.locator('body').innerText()).slice(-1200) }));
+      throw error;
+    }
     await page.waitForTimeout(300);
     assert.equal(uploads, 2);
     assert.equal(deletes, 2);

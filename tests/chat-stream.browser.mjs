@@ -13,6 +13,8 @@ try {
     await page.route('**/*', async route => {
       const req = route.request()
       const url = new URL(req.url())
+      const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS' }
+      if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors })
       if (url.pathname.endsWith('/answer/stream')) {
         if (scenario === 'pending') {
           await new Promise(resolve => { releasePending = resolve })
@@ -22,7 +24,7 @@ try {
           ? 'data: {"stage":"routing","payload":{"route":"WEB_GUIDE"}}\n\n'
           : scenario === 'error' ? 'data: {"stage":"error","message":"fixture failure"}\n\n'
           : 'data: {"stage":"answer_final","payload":{"answer":"Fixture completed."}}\n\ndata: {"stage":"done"}\n\n'
-        return route.fulfill({ contentType: 'text/event-stream', body })
+        return route.fulfill({ headers: cors, contentType: 'text/event-stream', body })
       }
       // No live model requests or persistent test conversations.
       if (url.hostname.endsWith('supabase.co') && req.method() !== 'GET') return route.abort()

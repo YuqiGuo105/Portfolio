@@ -687,9 +687,39 @@ function MarkdownMessage({ content, streaming = false }) {
     )
   }
 
+  const Link = ({ href = "", children, ...props }) => {
+    const childText = (Array.isArray(children) ? children : [children])
+      .filter((child) => typeof child === "string" || typeof child === "number")
+      .join("")
+      .trim()
+    const external = /^https?:\/\//i.test(href)
+    let label = childText || href
+
+    if (external && (!childText || /^https?:\/\//i.test(childText))) {
+      try {
+        const url = new URL(href)
+        const path = url.pathname.replace(/\/$/, "")
+        label = `${url.hostname.replace(/^www\./, "")}${path}`
+      } catch {}
+    }
+
+    return (
+      <a
+        {...props}
+        href={href}
+        className="cw-smart-link"
+        target={external ? "_blank" : undefined}
+        rel={external ? "noreferrer noopener" : undefined}
+      >
+        <span className="cw-smart-link-label">{label}</span>
+        {external ? <ArrowUpRight className="cw-smart-link-icon" aria-hidden="true" /> : null}
+      </a>
+    )
+  }
+
   return (
     <div className="cw-md">
-      <ChatMarkdown content={content} streaming={streaming} components={{ pre: Pre }} />
+      <ChatMarkdown content={content} streaming={streaming} components={{ pre: Pre, a: Link }} />
     </div>
   )
 }
@@ -1365,6 +1395,71 @@ function getStageMeta(stage, title) {
     if (entry.match(s)) return entry
   }
   return DEFAULT_STAGE_META
+}
+
+const MR_POT_STATES = {
+  idle: { label: "Ready", description: "Mr Pot is ready" },
+  listening: { label: "Listening", description: "Mr Pot is listening" },
+  thinking: { label: "Thinking", description: "Mr Pot is thinking" },
+  searching: { label: "Searching", description: "Mr Pot is searching the portfolio" },
+  working: { label: "Working", description: "Mr Pot is using a tool" },
+  speaking: { label: "Answering", description: "Mr Pot is composing an answer" },
+  success: { label: "Ready", description: "Mr Pot finished the answer" },
+  error: { label: "Needs attention", description: "Mr Pot could not finish the answer" },
+}
+
+function getMrPotState(message) {
+  if (!message) return "idle"
+  const active = message.thinkingNow || [...(message.executionStages || [])].reverse().find((step) => !step?.tsEnd)
+  const stateText = `${active?.stage || ""} ${active?.title || ""} ${active?.status || ""}`.toLowerCase()
+  const answerText = String(message.content || "").toLowerCase()
+
+  if (/fail|error|blocked|unavailable/.test(stateText) || (!message.streaming && /could not|isn't reachable|unable to/.test(answerText))) return "error"
+  if (message.streaming && message.content) return "speaking"
+  if (/retriev|search|query|rag|document|chunk|index/.test(stateText)) return "searching"
+  if (/tool|call|invoke|api|fetch/.test(stateText)) return "working"
+  if (/connect|network|transport|admit/.test(stateText)) return "listening"
+  if (/generate|compose|answer|reply|stream/.test(stateText)) return "speaking"
+  if (message.streaming) return "thinking"
+  if (message.content) return "success"
+  return "idle"
+}
+
+function MrPotAvatar({ state = "idle", size = "medium", announce = false }) {
+  const meta = MR_POT_STATES[state] || MR_POT_STATES.idle
+  return (
+    <span
+      className={`cw-pot-avatar cw-pot-${size}`}
+      data-state={state}
+      role={announce ? "status" : undefined}
+      aria-live={announce ? "polite" : undefined}
+      aria-label={announce ? meta.description : undefined}
+      aria-hidden={announce ? undefined : "true"}
+    >
+      <span className="cw-pot-orbit" />
+      <span className="cw-pot-steam cw-pot-steam-one" />
+      <span className="cw-pot-steam cw-pot-steam-two" />
+      <span className="cw-pot-spark cw-pot-spark-one" />
+      <span className="cw-pot-spark cw-pot-spark-two" />
+      <span className="cw-pot-thought" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className="cw-pot-brow cw-pot-brow-left" aria-hidden="true" />
+      <span className="cw-pot-brow cw-pot-brow-right" aria-hidden="true" />
+      <span className="cw-pot-scanline" aria-hidden="true" />
+      <span className="cw-pot-listen-wave" aria-hidden="true" />
+      <span className="cw-pot-voice" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className="cw-pot-alert" aria-hidden="true">!</span>
+      <img src="/assets/images/chatbot_pot_thinking.gif" alt="" draggable="false" />
+      <span className="cw-pot-shadow" />
+    </span>
+  )
 }
 
 // Pull a short one-line summary from a card payload (without huge JSON)
@@ -3249,6 +3344,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       const fallback = answerBuf || "The response ended before an answer was received. Please try again."
       finalizeAssistant(assistantId, fallback, answerBuf ? onFinal : undefined)
     }
+    } catch (error) {
+      if (!finalized) throw error
+      logger.warn("Stream cleanup failed after answer_final", error?.message || error)
     } finally {
       clearStage(assistantId)
       setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, streaming: false, thinkingNow: null } : m))
@@ -3816,6 +3914,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
     }
   }
 
+  const latestAssistantMessage = [...messages].reverse().find((message) => message.role === "assistant")
+  const headerPetState = getMrPotState(latestAssistantMessage)
+
   return (
     <div
       className="bot-container relative mb-6 flex flex-col w-screen md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700"
@@ -3872,8 +3973,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >
-            <img src="/assets/images/chatbot_pot_thinking.gif" alt="Chat Bot" />
-            <span className="cw-title">Mr Pot</span>
+            <MrPotAvatar state={headerPetState} size="header" announce />
+            <span className="cw-brand-copy">
+              <span className="cw-title">Mr Pot</span>
+            </span>
           </div>
 
           <div ref={modeWrapRef} className="cw-mode-wrap">
@@ -3923,10 +4026,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
                 >
                   <span className="cw-mode-item-head">
                     <Brain className="cw-mode-item-ico" />
-                    <span className="cw-mode-left">
-                      <span className="cw-mode-name">Deep</span>
-                      <span className="cw-mode-desc">Searches the web, verifies sources, and gives specific answers</span>
-                    </span>
+                      <span className="cw-mode-left">
+                        <span className="cw-mode-name">Deep</span>
+                        <span className="cw-mode-desc">Searches and verifies sources</span>
+                      </span>
                   </span>
                   {mode === "thinking" ? <Check className="cw-check" /> : null}
                 </button>
@@ -4036,6 +4139,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
               {m.role === "assistant" && (m.sourceCards?.length > 0 || m.relatedLinks?.length > 0) ? (
                 <AnswerSources cards={m.sourceCards} related={m.relatedLinks} answer={m.content} />
               ) : null}
+              {m.role === "assistant" && m.runId ? <details style={{ marginTop: 10, fontSize: 12, overflowWrap: "anywhere" }}>
+                <summary style={{ cursor: "pointer" }}>Run details</summary>
+                <code style={{ userSelect: "text" }}>{m.runId}</code>
+              </details> : null}
 
               {/* Related links — dynamic content suggestions from semantic search */}
             </div>
@@ -4441,6 +4548,84 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         :global(.dark) #__chat_widget_root .cw-md li::marker {
           color: #9ca3af;
         }
+
+        #__chat_widget_root .cw-md .cw-smart-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          min-width: 0;
+          max-width: 100%;
+          color: #2563eb;
+          font-weight: 600;
+          line-height: 1.4;
+          text-decoration: none;
+          text-underline-offset: 3px;
+        }
+
+        #__chat_widget_root .cw-md .cw-smart-link:hover {
+          text-decoration: underline;
+        }
+
+        #__chat_widget_root .cw-md .cw-smart-link-label {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        #__chat_widget_root .cw-md .cw-smart-link-icon {
+          width: 14px;
+          height: 14px;
+          flex: 0 0 14px;
+        }
+
+        #__chat_widget_root .cw-md ul:has(.cw-smart-link),
+        #__chat_widget_root .cw-md ol:has(.cw-smart-link) {
+          display: grid;
+          gap: 7px;
+          padding-left: 0;
+          list-style: none;
+        }
+
+        #__chat_widget_root .cw-md li:has(.cw-smart-link) {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 6px 10px;
+          margin: 0;
+          padding: 9px 10px;
+          border: 1px solid rgba(100, 116, 139, 0.16);
+          border-radius: 8px;
+          background: rgba(248, 250, 252, 0.7);
+        }
+
+        #__chat_widget_root .cw-md li:has(.cw-smart-link)::marker {
+          content: "";
+        }
+
+        #__chat_widget_root .cw-md li:has(.cw-smart-link) .cw-smart-link {
+          flex: 1 1 180px;
+          justify-content: space-between;
+          padding: 5px 8px;
+          border-radius: 6px;
+          background: rgba(37, 99, 235, 0.08);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-md .cw-smart-link,
+        :global(.dark) #__chat_widget_root .cw-md .cw-smart-link {
+          color: #7dd3fc;
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-md li:has(.cw-smart-link),
+        :global(.dark) #__chat_widget_root .cw-md li:has(.cw-smart-link) {
+          border-color: rgba(148, 163, 184, 0.16);
+          background: rgba(15, 23, 42, 0.34);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-md li:has(.cw-smart-link) .cw-smart-link,
+        :global(.dark) #__chat_widget_root .cw-md li:has(.cw-smart-link) .cw-smart-link {
+          background: rgba(56, 189, 248, 0.1);
+        }
         
         /* Inline styles */
         #__chat_widget_root .cw-md strong {
@@ -4735,6 +4920,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         }
         #__chat_widget_root .cw-msg-row.cw-bot {
           justify-content: flex-start;
+          align-items: flex-start;
         }
 
         #__chat_widget_root .cw-bubble {
@@ -4777,22 +4963,24 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
 
         /* AG-UI Bot/Agent Bubble */
         #__chat_widget_root .cw-bubble-bot {
-          background: rgba(241, 245, 249, 0.9);
-          backdrop-filter: blur(12px);
-          border: 1px solid rgba(99, 102, 241, 0.15);
+          background: rgba(248, 250, 252, 0.94);
+          backdrop-filter: blur(16px);
+          border: 1px solid rgba(100, 116, 139, 0.18);
           color: #1e293b;
-          padding: 12px 18px;
+          padding: 10px 14px 14px;
           font-size: 14px;
-          line-height: 1.55;
-          border-radius: 20px 20px 20px 6px;
+          line-height: 1.68;
+          border-radius: 8px;
           box-shadow: 
-            0 4px 16px rgba(0, 0, 0, 0.06),
+            0 10px 28px rgba(15, 23, 42, 0.08),
             inset 0 1px 0 rgba(255, 255, 255, 0.8);
           position: relative;
+          width: min(100%, 760px);
+          max-width: 92%;
         }
         
         #__chat_widget_root .cw-bubble-bot::before {
-          content: '';
+          content: none;
           position: absolute;
           left: -8px;
           top: 12px;
@@ -4805,15 +4993,14 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
 
         :global(body.dark-skin) #__chat_widget_root .cw-bubble-bot,
         :global(.dark) #__chat_widget_root .cw-bubble-bot {
-          background: rgba(30, 41, 59, 0.85);
-          backdrop-filter: blur(12px);
-          border-color: rgba(99, 102, 241, 0.2);
+          background: rgba(22, 32, 52, 0.92);
+          backdrop-filter: blur(16px);
+          border-color: rgba(148, 163, 184, 0.18);
           color: #e2e8f0;
           box-shadow: 
-            0 4px 16px rgba(0, 0, 0, 0.2),
+            0 14px 34px rgba(0, 0, 0, 0.26),
             inset 0 1px 0 rgba(255, 255, 255, 0.05);
         }
-
 
         .bot-message a.chat-link {
           text-decoration: underline;
@@ -5048,12 +5235,376 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         #__chat_widget_root .cw-brand {
           display: inline-flex;
           align-items: center;
-          gap: 8px;
+          gap: 9px;
           min-width: 0;
         }
 
-        #__chat_widget_root .cw-brand img {
-          flex: 0 0 auto;
+        #__chat_widget_root .cw-brand-copy {
+          display: flex;
+          flex-direction: column;
+          gap: 1px;
+          min-width: 0;
+        }
+
+        #__chat_widget_root .cw-pot-avatar {
+          --pot-size: 44px;
+          position: relative;
+          display: inline-grid;
+          place-items: end center;
+          width: var(--pot-size);
+          height: var(--pot-size);
+          flex: 0 0 var(--pot-size);
+          isolation: isolate;
+          overflow: visible;
+        }
+
+        #__chat_widget_root .cw-pot-header { --pot-size: 64px; }
+
+        #__chat_widget_root .cw-pot-avatar img {
+          position: relative;
+          z-index: 3;
+          width: 116%;
+          height: 116%;
+          max-width: none;
+          object-fit: contain;
+          object-position: center bottom;
+          user-select: none;
+          filter: drop-shadow(0 5px 5px rgba(15, 23, 42, 0.2));
+          transform-origin: 50% 88%;
+          animation: cw-pot-breathe 3.8s cubic-bezier(.45, 0, .3, 1) infinite;
+        }
+
+        #__chat_widget_root .cw-pot-shadow {
+          position: absolute;
+          z-index: 1;
+          bottom: 0;
+          width: 56%;
+          height: 8%;
+          border-radius: 50%;
+          background: rgba(15, 23, 42, 0.2);
+          filter: blur(2px);
+          animation: cw-pot-shadow-breathe 3.8s cubic-bezier(.45, 0, .3, 1) infinite;
+        }
+
+        #__chat_widget_root .cw-pot-orbit {
+          position: absolute;
+          z-index: 1;
+          inset: 4%;
+          border: 1px solid rgba(99, 102, 241, 0.3);
+          border-radius: 50%;
+          opacity: 0;
+          transform: scale(0.72);
+        }
+
+        #__chat_widget_root .cw-pot-steam {
+          position: absolute;
+          z-index: 4;
+          top: -2%;
+          width: 3px;
+          height: 12px;
+          border-radius: 50%;
+          border-left: 2px solid rgba(148, 163, 184, 0.78);
+          opacity: 0.55;
+          transform-origin: bottom center;
+          animation: cw-pot-steam 2.2s ease-in-out infinite;
+        }
+
+        #__chat_widget_root .cw-pot-steam-one { left: 44%; }
+        #__chat_widget_root .cw-pot-steam-two { left: 55%; animation-delay: 0.72s; }
+
+        #__chat_widget_root .cw-pot-spark {
+          position: absolute;
+          z-index: 5;
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          background: #fbbf24;
+          box-shadow: 0 0 8px rgba(251, 191, 36, 0.7);
+          opacity: 0;
+        }
+
+        #__chat_widget_root .cw-pot-spark-one { top: 6%; left: 7%; }
+        #__chat_widget_root .cw-pot-spark-two { top: 16%; right: 4%; }
+
+        #__chat_widget_root .cw-pot-thought {
+          position: absolute;
+          z-index: 7;
+          top: -8%;
+          right: -12%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 2px;
+          width: 30px;
+          height: 20px;
+          border: 1px solid rgba(100, 116, 139, 0.25);
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.96);
+          box-shadow: 0 5px 12px rgba(15, 23, 42, 0.14);
+          opacity: 0;
+          transform: translateY(4px) scale(0.7);
+          pointer-events: none;
+        }
+
+        #__chat_widget_root .cw-pot-thought::after {
+          content: "";
+          position: absolute;
+          left: 3px;
+          bottom: -5px;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.96);
+          box-shadow: -4px 4px 0 -1px rgba(255, 255, 255, 0.92);
+        }
+
+        #__chat_widget_root .cw-pot-thought i {
+          width: 4px;
+          height: 4px;
+          border-radius: 50%;
+          background: #64748b;
+        }
+
+        #__chat_widget_root .cw-pot-brow {
+          position: absolute;
+          z-index: 6;
+          top: 42%;
+          width: 8px;
+          height: 2px;
+          border-radius: 999px;
+          background: #334155;
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        #__chat_widget_root .cw-pot-brow-left { left: 34%; }
+        #__chat_widget_root .cw-pot-brow-right { right: 34%; }
+
+        #__chat_widget_root .cw-pot-scanline {
+          position: absolute;
+          z-index: 6;
+          top: 27%;
+          left: 19%;
+          right: 19%;
+          height: 2px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, transparent, #38bdf8 22%, #67e8f9 50%, #38bdf8 78%, transparent);
+          box-shadow: 0 0 8px rgba(56, 189, 248, 0.75);
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        #__chat_widget_root .cw-pot-listen-wave {
+          position: absolute;
+          z-index: 2;
+          top: 42%;
+          left: -4%;
+          width: 16px;
+          height: 16px;
+          border: 2px solid rgba(14, 165, 233, 0.65);
+          border-right-color: transparent;
+          border-radius: 50%;
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        #__chat_widget_root .cw-pot-voice {
+          position: absolute;
+          z-index: 6;
+          top: 42%;
+          right: -9%;
+          width: 18px;
+          height: 18px;
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        #__chat_widget_root .cw-pot-voice i {
+          position: absolute;
+          top: 50%;
+          left: 0;
+          border: 2px solid #38bdf8;
+          border-top-color: transparent;
+          border-bottom-color: transparent;
+          border-left-color: transparent;
+          border-radius: 50%;
+          transform: translateY(-50%);
+        }
+
+        #__chat_widget_root .cw-pot-voice i:nth-child(1) { width: 6px; height: 8px; }
+        #__chat_widget_root .cw-pot-voice i:nth-child(2) { width: 11px; height: 13px; }
+        #__chat_widget_root .cw-pot-voice i:nth-child(3) { width: 16px; height: 18px; }
+
+        #__chat_widget_root .cw-pot-alert {
+          position: absolute;
+          z-index: 7;
+          top: 0;
+          right: 1%;
+          display: grid;
+          place-items: center;
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: #fb7185;
+          color: #fff;
+          font-size: 11px;
+          font-weight: 800;
+          line-height: 1;
+          box-shadow: 0 4px 10px rgba(225, 29, 72, 0.28);
+          opacity: 0;
+          transform: scale(0.4);
+          pointer-events: none;
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-pot-thought,
+        :global(.dark) #__chat_widget_root .cw-pot-thought,
+        :global(body.dark-skin) #__chat_widget_root .cw-pot-thought::after,
+        :global(.dark) #__chat_widget_root .cw-pot-thought::after {
+          background: rgba(30, 41, 59, 0.97);
+        }
+
+        :global(body.dark-skin) #__chat_widget_root .cw-pot-thought i,
+        :global(.dark) #__chat_widget_root .cw-pot-thought i {
+          background: #cbd5e1;
+        }
+
+        #__chat_widget_root .cw-pot-avatar[data-state="listening"] img { animation: cw-pot-listen 1.8s cubic-bezier(.4, 0, .2, 1) infinite; }
+        #__chat_widget_root .cw-pot-avatar[data-state="listening"] .cw-pot-listen-wave { animation: cw-pot-listen-wave 1.55s ease-out infinite; }
+        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] img { animation: cw-pot-ponder 3s cubic-bezier(.45, 0, .25, 1) infinite; }
+        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-thought { animation: cw-pot-thought-float 2.3s cubic-bezier(.4, 0, .2, 1) infinite; }
+        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-thought i { animation: cw-pot-thought-dot 1.2s ease-in-out infinite; }
+        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-thought i:nth-child(2) { animation-delay: 140ms; }
+        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-thought i:nth-child(3) { animation-delay: 280ms; }
+        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-brow { opacity: 0.88; animation: cw-pot-brow-focus 2.2s ease-in-out infinite; }
+        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-brow-left { transform: rotate(13deg); }
+        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-brow-right { transform: rotate(-13deg); }
+        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-steam { animation-duration: 3.1s; }
+
+        #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-orbit,
+        #__chat_widget_root .cw-pot-avatar[data-state="searching"] .cw-pot-orbit,
+        #__chat_widget_root .cw-pot-avatar[data-state="working"] .cw-pot-orbit {
+          opacity: 1;
+          animation: cw-pot-orbit 1.9s cubic-bezier(.4, 0, .2, 1) infinite;
+        }
+
+        #__chat_widget_root .cw-pot-avatar[data-state="searching"] img { animation: cw-pot-scan 1.7s cubic-bezier(.4, 0, .2, 1) infinite; }
+        #__chat_widget_root .cw-pot-avatar[data-state="searching"] .cw-pot-scanline { animation: cw-pot-scanline 1.55s ease-in-out infinite; }
+        #__chat_widget_root .cw-pot-avatar[data-state="working"] img { animation: cw-pot-work 1.25s cubic-bezier(.4, 0, .2, 1) infinite; }
+        #__chat_widget_root .cw-pot-avatar[data-state="speaking"] img { animation: cw-pot-speak 1.15s cubic-bezier(.34, 1.2, .64, 1) infinite; }
+        #__chat_widget_root .cw-pot-avatar[data-state="speaking"] .cw-pot-voice { animation: cw-pot-voice 1.25s ease-out infinite; }
+
+        #__chat_widget_root .cw-pot-avatar[data-state="success"] img {
+          animation: cw-pot-celebrate 820ms cubic-bezier(.2, .8, .3, 1) 1, cw-pot-breathe 3.8s 820ms cubic-bezier(.45, 0, .3, 1) infinite;
+        }
+
+        #__chat_widget_root .cw-pot-avatar[data-state="success"] .cw-pot-spark { animation: cw-pot-spark 1.5s ease-out 1; }
+        #__chat_widget_root .cw-pot-avatar[data-state="success"] .cw-pot-spark-two { animation-delay: 120ms; }
+
+        #__chat_widget_root .cw-pot-avatar[data-state="error"] img {
+          animation: cw-pot-error 520ms cubic-bezier(.36, .07, .19, .97) 1;
+          filter: saturate(0.75) drop-shadow(0 5px 5px rgba(15, 23, 42, 0.2));
+        }
+        #__chat_widget_root .cw-pot-avatar[data-state="error"] .cw-pot-alert { animation: cw-pot-alert 1.45s cubic-bezier(.34, 1.56, .64, 1) 1; }
+
+        @keyframes cw-pot-breathe {
+          0%, 100% { transform: translateY(0) rotate(-0.8deg) scale(1); }
+          47% { transform: translateY(-2px) rotate(0.7deg) scale(1.015); }
+          63% { transform: translateY(-1px) rotate(0.2deg) scale(1.008); }
+        }
+        @keyframes cw-pot-shadow-breathe {
+          0%, 100% { opacity: 0.24; transform: scaleX(1); }
+          50% { opacity: 0.14; transform: scaleX(0.86); }
+        }
+        @keyframes cw-pot-steam {
+          0% { opacity: 0; transform: translateY(4px) translateX(0) scaleY(0.72); }
+          28% { opacity: 0.62; }
+          70% { opacity: 0.26; }
+          100% { opacity: 0; transform: translateY(-8px) translateX(3px) scaleY(1.2); }
+        }
+        @keyframes cw-pot-listen {
+          0%, 100% { transform: translateY(0) rotate(0); }
+          35% { transform: translateY(-2px) rotate(-3deg); }
+          58% { transform: translateY(-1px) rotate(-1.5deg); }
+        }
+        @keyframes cw-pot-listen-wave {
+          0% { opacity: 0; transform: scale(0.55); }
+          35% { opacity: 0.8; }
+          100% { opacity: 0; transform: scale(1.45); }
+        }
+        @keyframes cw-pot-ponder {
+          0%, 18%, 100% { transform: translateY(0) rotate(0); }
+          34%, 72% { transform: translateY(3px) rotate(-7deg); }
+          48%, 62% { transform: translateY(2px) rotate(-6deg); }
+          82% { transform: translateY(-1px) rotate(-1deg); }
+        }
+        @keyframes cw-pot-thought-float {
+          0%, 100% { opacity: 0.82; transform: translateY(1px) scale(0.94) rotate(-2deg); }
+          50% { opacity: 1; transform: translateY(-3px) scale(1) rotate(1deg); }
+        }
+        @keyframes cw-pot-thought-dot {
+          0%, 60%, 100% { opacity: 0.35; transform: translateY(0) scale(0.8); }
+          30% { opacity: 1; transform: translateY(-2px) scale(1); }
+        }
+        @keyframes cw-pot-brow-focus {
+          0%, 100% { opacity: 0.62; margin-top: 0; }
+          50% { opacity: 0.95; margin-top: 1px; }
+        }
+        @keyframes cw-pot-scan {
+          0%, 100% { transform: translateX(-1px) translateY(0) rotate(-1deg); }
+          44% { transform: translateX(2px) translateY(-2px) rotate(1.5deg); }
+          68% { transform: translateX(1px) translateY(-1px) rotate(0); }
+        }
+        @keyframes cw-pot-scanline {
+          0% { opacity: 0; transform: translateY(0) scaleX(0.65); }
+          18%, 76% { opacity: 0.9; }
+          100% { opacity: 0; transform: translateY(28px) scaleX(1); }
+        }
+        @keyframes cw-pot-work {
+          0%, 100% { transform: translateY(0) rotate(-1.3deg); }
+          42% { transform: translateY(-3px) rotate(1.6deg); }
+          62% { transform: translateY(-1px) rotate(0.5deg); }
+        }
+        @keyframes cw-pot-speak {
+          0%, 100% { transform: translateY(0) scale(1); }
+          48% { transform: translateY(-2px) scale(1.025, 0.99); }
+          68% { transform: translateY(-1px) scale(1.01); }
+        }
+        @keyframes cw-pot-voice {
+          0% { opacity: 0; transform: translateX(-3px) scale(0.65); }
+          28% { opacity: 0.9; }
+          100% { opacity: 0; transform: translateX(4px) scale(1.08); }
+        }
+        @keyframes cw-pot-celebrate {
+          0% { transform: translateY(0) rotate(0) scale(1); }
+          34% { transform: translateY(-7px) rotate(-4deg) scale(1.03); }
+          62% { transform: translateY(-2px) rotate(3deg) scale(1.015); }
+          100% { transform: translateY(0) rotate(0) scale(1); }
+        }
+        @keyframes cw-pot-error {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-3px) rotate(-2deg); }
+          40% { transform: translateX(3px) rotate(2deg); }
+          65% { transform: translateX(-2px) rotate(-1deg); }
+          82% { transform: translateX(1px); }
+        }
+        @keyframes cw-pot-alert {
+          0% { opacity: 0; transform: translateY(4px) scale(0.35); }
+          24%, 68% { opacity: 1; transform: translateY(0) scale(1); }
+          100% { opacity: 0; transform: translateY(-3px) scale(0.82); }
+        }
+        @keyframes cw-pot-orbit {
+          0% { opacity: 0; transform: scale(0.72) rotate(0); }
+          32% { opacity: 0.65; }
+          100% { opacity: 0; transform: scale(1.12) rotate(180deg); }
+        }
+        @keyframes cw-pot-spark {
+          0% { opacity: 0; transform: scale(0.2) rotate(0); }
+          32% { opacity: 1; transform: scale(1.1) rotate(35deg); }
+          100% { opacity: 0; transform: translateY(-8px) scale(0.35) rotate(90deg); }
+        }
+        @keyframes cw-status-pulse {
+          0%, 100% { opacity: 0.5; transform: scale(0.86); }
+          50% { opacity: 1; transform: scale(1.08); }
         }
 
         /* AG-UI Mode Pills */
@@ -5300,8 +5851,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           display: inline-flex;
           align-items: baseline;
           gap: 6px;
-          font-size: 20px;
-          font-weight: 600;
+          font-size: 17px;
+          font-weight: 700;
+          line-height: 1.05;
           color: #1e293b;
           text-shadow: none;
         }
@@ -5315,6 +5867,47 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         #__chat_widget_root .cw-title-fade {
           opacity: 0.55;
           font-weight: 600;
+        }
+
+        #__chat_widget_root .cw-md > :first-child { margin-top: 0; }
+        #__chat_widget_root .cw-md > :last-child { margin-bottom: 0; }
+        #__chat_widget_root .cw-md p { margin: 0.55rem 0; }
+
+        @media (max-width: 520px) {
+          #__chat_widget_root .cw-pot-header { --pot-size: 56px; }
+          #__chat_widget_root .cw-bubble-bot {
+            max-width: 96%;
+            padding: 9px 12px 12px;
+          }
+          #__chat_widget_root .cw-title { font-size: 16px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          #__chat_widget_root .cw-pot-avatar img,
+          #__chat_widget_root .cw-pot-avatar .cw-pot-shadow,
+          #__chat_widget_root .cw-pot-avatar .cw-pot-steam,
+          #__chat_widget_root .cw-pot-avatar .cw-pot-orbit,
+          #__chat_widget_root .cw-pot-avatar .cw-pot-spark,
+          #__chat_widget_root .cw-pot-avatar .cw-pot-thought,
+          #__chat_widget_root .cw-pot-avatar .cw-pot-thought i,
+          #__chat_widget_root .cw-pot-avatar .cw-pot-brow,
+          #__chat_widget_root .cw-pot-avatar .cw-pot-scanline,
+          #__chat_widget_root .cw-pot-avatar .cw-pot-listen-wave,
+          #__chat_widget_root .cw-pot-avatar .cw-pot-voice,
+          #__chat_widget_root .cw-pot-avatar .cw-pot-alert { animation: none !important; }
+
+          #__chat_widget_root .cw-pot-avatar[data-state="thinking"] .cw-pot-thought {
+            opacity: 1;
+            transform: none;
+          }
+
+          #__chat_widget_root .cw-pot-avatar[data-state="searching"] .cw-pot-scanline,
+          #__chat_widget_root .cw-pot-avatar[data-state="listening"] .cw-pot-listen-wave,
+          #__chat_widget_root .cw-pot-avatar[data-state="speaking"] .cw-pot-voice,
+          #__chat_widget_root .cw-pot-avatar[data-state="error"] .cw-pot-alert {
+            opacity: 0.85;
+            transform: none;
+          }
         }
 
         #__chat_widget_root .cw-chev {
@@ -5334,10 +5927,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         #__chat_widget_root .cw-mode-menu {
           position: absolute;
           top: calc(100% + 6px);
+          right: auto;
           left: 0;
-          width: 240px;
+          width: min(250px, calc(100vw - 24px));
           z-index: 200;
-          border-radius: 14px;
+          border-radius: 12px;
           border: 1px solid rgba(99, 102, 241, 0.2);
           background: rgba(255, 255, 255, 0.98);
           backdrop-filter: blur(16px);
@@ -5359,17 +5953,27 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
 
         #__chat_widget_root .cw-mode-item {
           width: 100%;
+          height: auto !important;
+          min-height: 52px;
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           justify-content: space-between;
           gap: 12px;
-          padding: 12px 12px;
+          padding: 13px 14px;
+          overflow: visible;
+          line-height: normal;
           background: transparent;
           border: none;
           cursor: pointer;
           text-align: left;
           color: #1e293b;
           transition: background-color 150ms ease;
+        }
+
+        #__chat_widget_root .cw-mode-item::before,
+        #__chat_widget_root .cw-mode-item::after {
+          content: none !important;
+          display: none !important;
         }
 
         :global(body.dark-skin) #__chat_widget_root .cw-mode-item,
@@ -5388,7 +5992,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         #__chat_widget_root .cw-mode-left {
           display: flex;
           flex-direction: column;
-          gap: 2px;
+          flex: 1 1 auto;
+          gap: 3px;
           min-width: 0;
         }
 
@@ -5405,15 +6010,19 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         }
 
         #__chat_widget_root .cw-mode-desc {
+          display: block;
           font-size: 12px;
           opacity: 0.6;
-          line-height: 1.2;
+          line-height: 1.4;
           color: #94a3b8;
+          overflow-wrap: anywhere;
         }
 
         #__chat_widget_root .cw-check {
           width: 16px;
           height: 16px;
+          flex: 0 0 auto;
+          margin-top: 1px;
           opacity: 0.9;
           color: #818cf8;
         }
