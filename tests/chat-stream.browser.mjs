@@ -44,6 +44,9 @@ try {
       if (scenario === 'final') {
         assert.match(await page.locator('#__chat_widget_root').innerText(), /Fixture completed\./)
         assert.doesNotMatch(await page.locator('#__chat_widget_root').innerText(), /Cannot read properties/)
+        const toggle = page.locator('#__chat_widget_root .cw-th-toggle').last()
+        assert.equal(await toggle.evaluate((element) => getComputedStyle(element, '::before').content), 'none')
+        assert.equal(await toggle.evaluate((element) => getComputedStyle(element, '::after').content), 'none')
       }
       assert.equal(await page.getByRole('button', { name: 'Stop generating', exact: true }).count(), 0)
       await input.fill('Next question')

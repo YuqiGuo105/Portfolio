@@ -4412,6 +4412,12 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       </form>
 
       <style jsx global>{`
+        #__chat_widget_root button::before,
+        #__chat_widget_root button::after {
+          content: none !important;
+          display: none !important;
+        }
+
         #__chat_widget_root .cw-file-drop {
           position: absolute;
           inset: 8px;
