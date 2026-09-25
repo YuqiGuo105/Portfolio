@@ -19,6 +19,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { resolveManagedAdminRoles } from "./managedAdminRoles.mjs";
+import { pipeAgentSse } from "./agentSsePipe.mjs";
 
 // Initialize lazily to avoid throwing at import time during build.
 let _supabaseAdmin = null;
@@ -220,7 +221,7 @@ export async function forwardRagSse(req, res, { auth }) {
     res.status(502).json({ error: "upstream_unreachable", message: err.message });
     return;
   }
-  await pipeSse(req, res, upstream);
+  await pipeAgentSse(req, res, upstream);
 }
 
 /**
@@ -291,53 +292,7 @@ export async function forwardSse(req, res, { auth }) {
     return;
   }
 
-  await pipeSse(req, res, upstream);
-}
-
-async function pipeSse(req, res, upstream) {
-  if (!upstream.ok || !upstream.body) {
-    const errBody = await upstream.text().catch(() => "");
-    res.status(upstream.status || 502);
-    res.setHeader("Content-Type", "application/json");
-    res.send(
-      JSON.stringify({
-        error: "agent_error",
-        status: upstream.status,
-        body: errBody,
-      })
-    );
-    return;
-  }
-
-  // Stream the upstream SSE bytes straight through.
-  res.status(200);
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "private, no-store, no-transform");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no"); // disables Nginx buffering on Vercel
-
-  const reader = upstream.body.getReader();
-  const decoder = new TextDecoder();
-
-  req.on("close", () => {
-    try { reader.cancel(); } catch {}
-  });
-
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (value && value.length) {
-        res.write(decoder.decode(value, { stream: true }));
-      }
-    }
-  } catch (err) {
-    try {
-      res.write(`event: error\ndata: ${JSON.stringify({ message: String(err) })}\n\n`);
-    } catch {}
-  } finally {
-    res.end();
-  }
+  await pipeAgentSse(req, res, upstream);
 }
 
 function copyConversationHeaders(req, headers) {

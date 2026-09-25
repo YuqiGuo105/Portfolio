@@ -3004,6 +3004,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
     let answerBuf = ""
     let finalized = false
     let pageRelevanceResult = null  // Store page relevance from answer_final
+    let pendingAutoGuide = null
     
     // Map frontend mode to backend mode string
     const backendMode = requestMode === "thinking" ? "DEEPTHINKING" : "FAST"
@@ -3115,6 +3116,15 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           }
           
           finalizeAssistant(assistantId, finalAnswer, onFinal)
+          if (pendingAutoGuide) {
+            const guideToStart = pendingAutoGuide
+            pendingAutoGuide = null
+            // Keep the verified answer visible before a guide can navigate.
+            setTimeout(() => {
+              try { applyWebGuidePlan(guideToStart, { start: true }) }
+              catch (error) { logger.warn("Web guide could not open", error?.message) }
+            }, 250)
+          }
 
           return false
         }
@@ -3160,7 +3170,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
               }))
             )
             try {
-              applyWebGuidePlan(guidePlan, { start: guidePlan.autoStart })
+              applyWebGuidePlan(guidePlan, { start: false })
+              if (guidePlan.autoStart) pendingAutoGuide = guidePlan
             } catch (error) {
               logger.warn("Web guide could not open", error?.message)
               setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, showGuideCta: true } : m))
