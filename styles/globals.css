@@ -2248,6 +2248,28 @@ body.light-skin .text .mermaid { background: rgba(28,37,40,0.03); border-color: 
   color: #ff8059;
 }
 
+#contact-section .contact-map-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+#contact-section .contact-map-link .icon {
+  display: block;
+}
+
+#contact-section .contact-map-link:hover .contact-value,
+#contact-section .contact-map-link:focus-visible .contact-value {
+  color: #ff8059;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+#contact-section .contact-map-link:focus-visible {
+  outline: 2px solid #ff8059;
+  outline-offset: 6px;
+}
+
 @media (max-width: 991px) {
   #contact-section .contact-layout {
     grid-template-columns: 1fr;
@@ -2290,5 +2312,13 @@ body.light-skin .text .mermaid { background: rgba(28,37,40,0.03); border-color: 
   #contact-section .contacts-items .numbers-item .icon {
     margin: 0;
     font-size: 26px;
+  }
+
+  #contact-section .contacts-items .contact-map-link {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: center;
+    gap: 14px;
   }
 }

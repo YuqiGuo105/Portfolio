@@ -58,8 +58,16 @@ const ContactForm = () => {
                 <a className="num contact-value" href="mailto:yuqi.guo17@gmail.com">yuqi.guo17@gmail.com</a>
               </div>
               <div className="numbers-item">
-                <div className="icon"><i className="fas fa-location-arrow"/></div>
-                <div className="num contact-value">Syracuse, NY, USA 13210</div>
+                <a
+                  className="contact-map-link"
+                  href="https://www.google.com/maps/search/?api=1&query=Syracuse%2C%20NY%2013210%2C%20USA"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open Syracuse, NY 13210 in Google Maps (new tab)"
+                >
+                  <span className="icon"><i className="fas fa-location-arrow" aria-hidden="true" /></span>
+                  <span className="num contact-value">Syracuse, NY, USA 13210</span>
+                </a>
               </div>
             </div>
           </div>
