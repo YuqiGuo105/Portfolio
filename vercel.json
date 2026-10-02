@@ -1,6 +1,7 @@
 {
   "functions": {
-    "pages/api/rag/transcribe.js": { "maxDuration": 60 }
+    "pages/api/rag/transcribe.js": { "maxDuration": 60 },
+    "pages/api/mcp/playground.js": { "maxDuration": 30 }
   },
   "rewrites": [
     {

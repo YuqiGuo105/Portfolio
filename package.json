@@ -8,13 +8,14 @@
     "start": "next start",
     "lint": "next lint",
     "test:security": "node --test tests/admin-access-boundaries.test.mjs tests/admin-guard.integration.test.mjs",
-    "test": "node --test tests/agent-sse-pipe.test.mjs tests/chat-stream.test.mjs tests/mr-pot-motion.test.mjs tests/tour-scene.test.mjs tests/tour-narrative.test.mjs tests/chat-evidence.test.mjs tests/visitor-disclosures.test.mjs tests/mcp-connect.test.mjs tests/knowledge-api.test.mjs tests/knowledge-preview.test.mjs tests/analytics-*.test.mjs tests/ranked-search.test.mjs tests/search-overlay.test.mjs"
+    "test": "node --test tests/agent-sse-pipe.test.mjs tests/chat-stream.test.mjs tests/mr-pot-motion.test.mjs tests/tour-scene.test.mjs tests/tour-narrative.test.mjs tests/chat-evidence.test.mjs tests/visitor-disclosures.test.mjs tests/mcp-connect.test.mjs tests/mcp-playground.test.mjs tests/knowledge-api.test.mjs tests/knowledge-preview.test.mjs tests/analytics-*.test.mjs tests/ranked-search.test.mjs tests/search-overlay.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.100.0",
     "ai": "^4.3.16",
     "dompurify": "^3.0.9",
     "heic2any": "^0.0.4",
+    "htmlparser2": "^10.1.0",
     "isomorphic-dompurify": "^3.18.0",
     "isotope-layout": "^3.0.6",
     "jarallax": "^2.0.4",

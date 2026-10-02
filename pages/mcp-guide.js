@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, Check, Copy, LockKeyhole, Search, ShieldCheck, History } from 'lucide-react';
 import SeoHead from '../src/components/SeoHead';
+import McpPlayground from '../src/components/McpPlayground';
 import styles from '../styles/McpGuide.module.css';
 
 const SOURCE = 'https://github.com/YuqiGuo105/portfolio-mcp-server';
@@ -45,6 +46,7 @@ export default function McpGuidePage() {
         <aside className={styles.sidebar}>
           <p>ON THIS PAGE</p>
           <nav aria-label="Guide sections">
+            <a href="#playground">00 <span>Try it live</span></a>
             <a href="#connect">01 <span>Public edition</span></a>
             <a href="#authorization">02 <span>Administrator edition</span></a>
             <a href="#architecture">03 <span>Behind the gateway</span></a>
@@ -62,6 +64,11 @@ export default function McpGuidePage() {
               <div><History size={19} /><strong>Traceable operations</strong></div>
             </div>
           </header>
+
+          <section id="playground" className={styles.section}>
+            <header className={styles.sectionTitle}><span>00 / LIVE MCP</span><h2>MCP playground</h2></header>
+            <McpPlayground />
+          </section>
 
           <section id="connect" className={styles.section}>
             <header className={styles.sectionTitle}><span>01 / PUBLIC</span><h2>Explore the work. Ask your AI.</h2><p>Find projects, articles, architecture, and professional background. Read-only. No portfolio login required.</p></header>

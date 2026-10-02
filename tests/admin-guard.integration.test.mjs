@@ -8,7 +8,8 @@ const fixtureUser = { email: "admin@example.test", id: "test-owner" };
 const mockedSource = source
   .replace('import { createClient } from "@supabase/supabase-js";',
     'const createClient = () => ({auth:{getUser: async () => globalThis.__adminGuardTestUser}});')
-  .replace('"./managedAdminRoles.mjs"', JSON.stringify(rolesModule));
+  .replace('"./managedAdminRoles.mjs"', JSON.stringify(rolesModule))
+  .replace('"./agentSsePipe.mjs"', JSON.stringify(new URL("../src/lib/agentSsePipe.mjs", import.meta.url).href));
 const { requireAdminUser, requireSupabaseUser, forwardJson } = await import(
   `data:text/javascript;base64,${Buffer.from(mockedSource).toString("base64")}`
 );
