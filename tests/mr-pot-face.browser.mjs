@@ -42,16 +42,19 @@ try {
     const avatar = page.locator('#__chat_widget_root .cw-pot-avatar')
     await avatar.waitFor()
     await page.waitForFunction(() => document.querySelector('.cw-pot-avatar')?.dataset.ready === 'true')
+    assert.equal(await page.locator('#cw-guide-tab').count(), 0, 'the rejected guide redesign is not part of the avatar change')
     assert.equal(await avatar.locator('svg:not(.lucide)').count(), 0, 'only small status accessories may use icons; the pot uses its original artwork')
     assert.equal(await avatar.locator('img').getAttribute('src'), '/assets/images/chatbot_pot_thinking.gif')
     const rendering = await avatar.locator('canvas').evaluate(el => ({
       smoothing: el.getContext('2d').imageSmoothingEnabled,
       quality: el.getContext('2d').imageSmoothingQuality,
       filter: getComputedStyle(el).filter,
+      width: el.width,
     }))
     assert.equal(rendering.smoothing, true)
     assert.equal(rendering.quality, 'high')
-    assert.ok(!rendering.filter.includes('blur('), 'contour smoothing must not blur the eyes or facial expressions')
+    assert.equal(rendering.filter, 'none', 'neither blur nor a wide drop shadow should soften the contour')
+    assert.equal(rendering.width, 384, 'high-resolution facial geometry stays crisp on Retina screens')
     assert.match(await avatar.evaluate(el => getComputedStyle(el).transform), /-5\)/, 'avatar and accessories sit 5px higher together')
     assert.equal(await avatar.evaluate(el => getComputedStyle(el).width), width === 390 ? '56px' : '64px')
     assert.equal(await page.locator('[data-nextjs-dialog]').count(), 0)
@@ -85,7 +88,7 @@ try {
       let faceError = 0, faceSamples = 0, artworkChanges = 0
       baseline.forEach((value, i) => {
         const x = Math.floor(i / 4) % 192 / 2, y = Math.floor(i / 4 / 192) / 2
-        if (x >= 33 && x <= 63 && y >= 47 && y <= 64) {
+        if (x >= 32 && x <= 64 && y >= 46 && y <= 65) {
           faceError += Math.abs(value - originalPixels[i]); faceSamples++
         } else if (y >= 26 && value !== originalPixels[i]) artworkChanges++
       })
@@ -94,7 +97,7 @@ try {
       let frameChanges = 0
       pixels().forEach((value, i) => { if (value !== baseline[i]) frameChanges++ })
       render(POT_REST, 0)
-      render({ ...POT_REST, gazeX: 0.8, gazeY: -0.5, eyeLeft: 0.85, browRight: -8 })
+      render({ ...POT_REST, browRight: -8, browLift: -0.5 })
       let faceChanges = 0, outsideChanges = 0
       pixels().forEach((value, i) => {
         if (value === baseline[i]) return
@@ -111,24 +114,91 @@ try {
         }
         return count
       }
-      render({ ...POT_REST, gazeX: 0.1 })
+      render(POT_REST)
       const open = eyeWhite()
-      render({ ...POT_REST, eyeLeft: 0.1, eyeRight: 0.1 })
+      const restingEyes = canvas.toDataURL()
+      render({ ...POT_REST, eyeOpen: 0.1 })
       const closed = eyeWhite()
+      const legacyEyeMotionIgnored = restingEyes === canvas.toDataURL()
+      // Frame-relative symmetry and gaze are checked in mr-pot-eyes.browser.mjs.
+      render(POT_REST)
+      const rig = pixels()
+      const articulation = {}
+      for (const [name, value, region] of [
+        ['mouthOpen', 0.9, [42, 58, 54, 67]],
+        ['blush', 0.65, [29, 57, 67, 71]],
+        ['lidOpen', 1, [0, 0, 96, 48]],
+        ['handleLeft', 8, [12, 36, 84, 59]],
+        ['handleRight', 8, [12, 36, 84, 59]],
+      ]) {
+        render({ ...POT_REST, [name]: value })
+        let changes = 0, outside = 0
+        pixels().forEach((v, i) => {
+          if (v === rig[i]) return
+          changes++
+          const x = Math.floor(i / 4) % 192 / 2, y = Math.floor(i / 4 / 192) / 2
+          if (x < region[0] || y < region[1] || x > region[2] || y > region[3]) outside++
+        })
+        articulation[name] = { changes, outside }
+      }
+      render({ ...POT_REST, bow: 24 })
+      articulation.bowBounds = bounds(pixels())
       frames.forEach(frame => frame.close())
       return { originalBounds, smoothBounds, faceError: faceError / faceSamples, artworkChanges,
-        frameCount: render.frameCount, frameChanges, faceChanges, outsideChanges, open, closed }
+        frameCount: render.frameCount, frameChanges, faceChanges, outsideChanges, open, closed,
+        legacyEyeMotionIgnored, articulation }
     })
-    assert.deepEqual(fidelity.smoothBounds, fidelity.originalBounds, 'the original silhouette and proportions are unchanged')
-    assert.ok(fidelity.faceError < 3, 'facial details remain sharp and preserve the original artwork')
-    assert.equal(fidelity.artworkChanges, 0, 'the resting artwork retains the original contour and colors')
+    assert.ok(fidelity.smoothBounds.every((value, i) => Math.abs(value - fidelity.originalBounds[i]) <= 1), 'contour reconstruction stays within half a source pixel of the original bounds')
+    assert.ok(fidelity.faceError < 12, `only the cleaned eye region changes in the resting face: ${fidelity.faceError}`)
+    assert.ok(fidelity.artworkChanges > 0, 'the low-resolution contour is refined; interior colors are checked separately')
     assert.equal(fidelity.frameCount, 24, 'all original GIF frames remain available')
     assert.ok(fidelity.frameChanges > 0, 'the original head movement is retained')
     assert.equal(fidelity.outsideChanges, 0, 'facial animation cannot repaint the pot, handles, lid, blush or silhouette')
     assert.ok(fidelity.faceChanges > 0)
-    assert.ok(fidelity.closed < fidelity.open * 0.4, 'blink closes the original eyes')
+    assert.equal(fidelity.closed, fidelity.open, 'eyes retain their size instead of squashing or blinking')
+    assert.equal(fidelity.legacyEyeMotionIgnored, true, 'legacy eye controls cannot deform the baked eye pair')
+    for (const part of ['mouthOpen', 'blush', 'lidOpen', 'handleLeft', 'handleRight']) {
+      assert.ok(fidelity.articulation[part].changes > 0, `${part} visibly animates`)
+      assert.equal(fidelity.articulation[part].outside, 0, `${part} cannot alter unrelated artwork`)
+    }
+    assert.ok(fidelity.articulation.bowBounds.every(value => value > 0 && value < 191), 'forward bow remains inside the canvas')
     const snapshots = []
     const bitmap = () => avatar.locator('canvas').evaluate(el => el.toDataURL())
+    await page.waitForFunction(() => document.querySelector('.cw-pot-avatar')?.dataset.expression === 'idle')
+    await page.mouse.move(0, 0)
+    const restCanvas = await avatar.locator('canvas').boundingBox()
+    const restHeader = await page.locator('.bot-header').boundingBox()
+    const restTitle = await page.locator('.cw-title').boundingBox()
+    await avatar.hover()
+    const hoverGestures = new Set()
+    for (let i = 0; i < 50; i++) {
+      const gesture = await avatar.getAttribute('data-gesture')
+      if (gesture?.startsWith('hover-')) {
+        assert.equal(await avatar.getAttribute('data-frame-index'), '0', 'hover must not play the GIF left/right sway')
+      }
+      const animatedCanvas = await avatar.locator('canvas').boundingBox()
+      const currentTitle = await page.locator('.cw-title').boundingBox()
+      const currentHeader = await page.locator('.bot-header').boundingBox()
+      assert.deepEqual(animatedCanvas, restCanvas, 'hover must keep the avatar size and canvas position fixed')
+      assert.ok(animatedCanvas.x >= 0 && animatedCanvas.x + animatedCanvas.width <= currentTitle.x, 'hover must not overlap the name or viewport')
+      assert.equal(currentTitle.x, restTitle.x, 'hover must not move the name')
+      assert.equal(currentHeader.height, restHeader.height, 'hover must not change the header layout')
+      if (!hoverGestures.has(gesture) && gesture?.startsWith('hover-')) {
+        await page.locator('.bot-header').screenshot({ path: `${output}/${width}-${gesture}.png` })
+      }
+      hoverGestures.add(gesture)
+      await page.waitForTimeout(100)
+    }
+    for (const gesture of ['hover-consider', 'hover-look-down', 'hover-ponder', 'hover-look-up']) {
+      assert.ok(hoverGestures.has(gesture), `${width}: real pointer hover performs ${gesture}`)
+    }
+    assert.deepEqual(await avatar.locator('canvas').boundingBox(), restCanvas, 'greeting ends at the same fixed size')
+    await page.waitForTimeout(1500)
+    assert.doesNotMatch(await avatar.getAttribute('data-gesture'), /^(hover-|hello)/, 'stationary pointer does not loop the greeting')
+    await page.mouse.move(0, 0)
+    await avatar.dispatchEvent('pointerenter', { pointerType: 'touch' })
+    await page.waitForTimeout(350)
+    assert.doesNotMatch(await avatar.getAttribute('data-gesture'), /^(hover-|hello)/, 'touch does not trigger a hover gesture')
     const headerBox = await page.locator('.bot-header').boundingBox()
     const capture = async state => {
       await page.waitForFunction(expected => document.querySelector('.cw-pot-avatar')?.dataset.state === expected, state)
@@ -158,16 +228,21 @@ try {
     await page.waitForFunction(() => typeof window.emitAvatarEvent === 'function')
     await emit({ stage: 'processing', message: 'Considering the question' })
     await capture('thinking')
+    await avatar.hover()
+    await page.waitForTimeout(550)
+    assert.doesNotMatch(await avatar.getAttribute('data-gesture'), /^(hover-|hello)/, 'hover does not interrupt a running answer')
 
     const eyeMotion = await avatar.evaluate(async root => {
-      const samples = []
+      const samples = [], gestures = new Set()
       for (let i = 0; i < 120; i++) {
         samples.push(root.querySelector('canvas').toDataURL())
+        gestures.add(root.dataset.gesture)
         await new Promise(resolve => setTimeout(resolve, 50))
       }
-      return samples
+      return { samples, gestures: [...gestures] }
     })
-    assert.ok(new Set(eyeMotion).size > 20, 'thinking animates the original artwork')
+    assert.ok(new Set(eyeMotion.samples).size > 20, 'thinking animates the original artwork')
+    assert.ok(eyeMotion.gestures.length >= 3, 'thinking progresses through distinct gestures, beyond the GIF loop')
 
     await emit({ stage: 'retrieval', message: 'Searching portfolio knowledge' })
     await capture('searching')
@@ -193,15 +268,19 @@ try {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.waitForTimeout(120)
     const still = await bitmap()
+    const reducedWidth = (await avatar.locator('canvas').boundingBox()).width
+    await page.mouse.move(0, 0)
+    await avatar.hover()
     await page.waitForTimeout(250)
     assert.equal(await bitmap(), still, 'reduced motion stops continuous movement')
+    assert.equal((await avatar.locator('canvas').boundingBox()).width, reducedWidth, 'reduced motion keeps the avatar size fixed')
     assert.equal(await avatar.locator('[data-pot-effect="success"]').evaluate(el => getComputedStyle(el.parentElement).display), 'none')
     await page.getByRole('textbox', { name: 'Message input', exact: true }).fill('Try once more.')
     await page.getByRole('button', { name: 'Send message', exact: true }).click()
     await page.waitForTimeout(150)
     await emit({ stage: 'error', message: 'Unable to complete this response.' })
     await capture('error')
-    assert.equal(await bitmap(), still, 'reduced motion preserves the exact original resting artwork')
+    assert.equal(await bitmap(), still, 'reduced motion preserves the cleaned resting artwork')
     assert.match(await avatar.getAttribute('aria-label'), /could not finish/, 'status remains available without animation')
     const box = await avatar.locator('canvas').boundingBox()
     const title = await page.locator('.cw-title').boundingBox()
@@ -248,7 +327,27 @@ try {
       }, snapshots)
       await page.screenshot({ path: `${output}/expressions-with-effects.png` })
     }
-    console.log(JSON.stringify({ width, expressions: snapshots.map(x => x.state), fidelity, reducedMotion: true, backgroundPaused: true, errors }))
+    console.log(JSON.stringify({ width, hoverSizeStable: true, expressions: snapshots.map(x => x.state), fidelity, reducedMotion: true, backgroundPaused: true, errors }))
     await context.close()
   }
+  const fallback = await browser.newPage({ viewport: { width: 390, height: 800 }, reducedMotion: 'reduce' })
+  await fallback.addInitScript(() => { Object.defineProperty(window, 'ImageDecoder', { configurable: true, value: undefined }) })
+  await fallback.route('**/api/track', route => route.fulfill({ json: { ok: true } }))
+  await fallback.goto(`${base}/?openChat=1`, { waitUntil: 'domcontentloaded' })
+  const avatar = fallback.locator('.cw-pot-avatar')
+  await fallback.waitForFunction(() => document.querySelector('.cw-pot-avatar')?.dataset.ready === 'true')
+  assert.equal(await avatar.getAttribute('data-artwork'), 'original-frame')
+  const snapshot = () => avatar.locator('canvas').evaluate(el => el.toDataURL())
+  const still = await snapshot()
+  await fallback.waitForTimeout(300)
+  assert.equal(await snapshot(), still, 'reduced motion is static even without ImageDecoder')
+  await fallback.emulateMedia({ reducedMotion: 'no-preference' })
+  await fallback.waitForFunction(() => document.querySelector('.cw-pot-avatar')?.dataset.expression === 'idle')
+  await avatar.hover()
+  await fallback.waitForFunction(() => document.querySelector('.cw-pot-avatar')?.dataset.gesture === 'hover-look-down')
+  await fallback.waitForTimeout(450)
+  assert.notEqual(await snapshot(), still, 'fallback supports the new gestures, not just a static GIF')
+  await fallback.screenshot({ path: `${output}/390-fallback-greeting.png` })
+  console.log(JSON.stringify({ decoderFallback: true, reducedMotionFallback: true, hoverGreeting: true }))
+  await fallback.close()
 } finally { await browser.close() }
