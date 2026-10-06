@@ -971,14 +971,14 @@ const Index = () => {
                   <div className="history-items">
                     <div className="p-title">EDUCATION</div>
                     <div className="history-item">
-                      <div className="date">2022 - 2024</div>
+                      <div className="date">Graduated May 2024</div>
                       <div className="name">Syracuse University</div>
                       <div className="subname">
                         Master Of Science, Computer Science
                       </div>
                     </div>
                     <div className="history-item">
-                      <div className="date">2017 - 2022</div>
+                      <div className="date">Graduated July 2022</div>
                       <div className="name">University of Liverpool</div>
                       <div className="subname">
                         Bachelors of Science, Computer Science
