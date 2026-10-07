@@ -1,8 +1,212 @@
 .overlay {
+  --surface: #fff;
+  --ink: #20282a;
+  --muted: #596568;
+  --line: #e1e7e5;
+  --input: #f7faf9;
+  --accent: #146e61;
+  --error: #ad302d;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 48%);
+  color: var(--ink);
+  font-family: inherit;
   text-align: left;
   letter-spacing: 0;
   outline: none;
 }
+
+.overlay[data-theme="dark"] {
+  --surface: #202629;
+  --ink: #f0f4f3;
+  --muted: #b4c0be;
+  --line: #3c4749;
+  --input: #292f32;
+  --accent: #88d4bb;
+  --error: #ffa4a0;
+  color-scheme: dark;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 460px;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 20px 64px rgb(0 0 0 / 24%);
+}
+
+.panel .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 12px;
+  padding: 12px 18px 12px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.heading svg { flex: 0 0 auto; color: var(--accent); }
+
+.heading h3 {
+  margin: 0;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.form { display: flex; flex-direction: column; min-height: 0; margin: 0; }
+
+.body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 24px;
+  scroll-padding-block: 16px;
+}
+
+.body .introduction {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.emailField { margin-bottom: 20px; }
+
+.emailField label,
+.choices legend {
+  display: block;
+  margin: 0 0 6px;
+  padding: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+.emailField input {
+  width: 100%;
+  height: 48px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--input);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  box-sizing: border-box;
+}
+
+.emailField input::placeholder { color: var(--muted); }
+
+.choices {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choices + .choices { margin-top: 14px; }
+
+.choices .option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  margin: 0;
+  padding: 9px 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.option input {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.option span { min-width: 0; overflow-wrap: anywhere; }
+
+.actions {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.overlay .actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.overlay .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.overlay[data-theme="dark"] .primary { color: #162622; }
+.overlay .secondary { background: transparent; color: var(--muted); }
+.overlay .primary:disabled { opacity: 0.6; cursor: wait; }
+.overlay .actions button:hover { filter: brightness(0.94); }
+
+.overlay .close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.overlay .close:hover { background: var(--input); }
+
+.error { margin-top: 14px; color: var(--error); font-size: 14px; line-height: 1.5; }
+.success { text-align: center; padding-block: 28px; }
+.success > svg { color: var(--accent); }
+.success p { margin: 14px 0; font-size: 15px; line-height: 1.6; }
 
 .dialogOpen :global(#__chat_widget_root) {
   display: none;
@@ -16,6 +220,8 @@
   letter-spacing: 0;
 }
 
+.overlay *, .overlay *::before, .overlay *::after { box-sizing: border-box; }
+
 .overlay button::before,
 .overlay button::after {
   display: none !important;
@@ -25,4 +231,30 @@
 .overlay input:focus-visible {
   outline: 2px solid #168577 !important;
   outline-offset: 3px;
+}
+
+@media (max-width: 519px) {
+  .overlay {
+    top: var(--visible-top, 0px);
+    bottom: auto;
+    height: var(--visible-height, 100dvh);
+    align-items: flex-end;
+    padding: 0;
+  }
+  .panel {
+    max-width: none;
+    max-height: calc(100% - max(12px, env(safe-area-inset-top)));
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+  }
+  .panel .header { padding: 8px 10px 8px 18px; }
+  .heading h3 { font-size: 18px; }
+  .body { padding: 16px 18px; }
+  .body .introduction { margin-bottom: 14px; }
+  .emailField { margin-bottom: 16px; }
+  .actions {
+    padding: 12px 18px max(12px, env(safe-area-inset-bottom));
+    gap: 10px;
+  }
+  .actions .primary { flex: 1; }
 }

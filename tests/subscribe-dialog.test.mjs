@@ -75,6 +75,27 @@ test('manual opening keeps the existing form and focuses email', () => {
   assert.equal(document.activeElement, document.getElementById('sub-email'));
   assert.match(document.body.textContent, /Subscribe to updates/);
   assert.ok(button('Cancel'));
+  assert.equal(document.getElementById('sub-email').getAttribute('inputmode'), 'email');
+  assert.equal(document.getElementById('sub-email').getAttribute('autocomplete'), 'email');
+});
+
+test('mobile visual viewport resize and keyboard panning keep the overlay in view', () => {
+  const viewport = new window.EventTarget();
+  viewport.height = 844; viewport.offsetTop = 0;
+  Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+  try {
+    render(true);
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.equal(dialog.style.getPropertyValue('--visible-height'), '844px');
+    viewport.height = 360; viewport.offsetTop = 48;
+    viewport.dispatchEvent(new window.Event('resize'));
+    viewport.dispatchEvent(new window.Event('scroll'));
+    assert.equal(dialog.style.getPropertyValue('--visible-height'), '360px');
+    assert.equal(dialog.style.getPropertyValue('--visible-top'), '48px');
+    render(false);
+    viewport.height = 844; viewport.dispatchEvent(new window.Event('resize'));
+    assert.equal(dialog.style.getPropertyValue('--visible-height'), '360px');
+  } finally { delete window.visualViewport; }
 });
 
 test('email-only subscribers retain their preferences without a misleading push toggle', () => {
@@ -82,7 +103,7 @@ test('email-only subscribers retain their preferences without a misleading push 
   invitation = false; render(true);
   assert.equal(document.querySelector('[data-testid="push-settings"]'), null);
   const selected = [...document.querySelectorAll('input[type="checkbox"]')].filter(input => input.checked).map(input => input.parentElement.textContent);
-  assert.deepEqual(selected, ['Job position updates', 'Email notifications']);
+  assert.deepEqual(selected, ['Job updates', 'Email notifications']);
 });
 
 test('only explicit form submission invokes the unchanged subscription API', async () => {

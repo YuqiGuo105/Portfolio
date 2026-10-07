@@ -6,24 +6,36 @@ events, email delivery and encrypted Web Push delivery.
 
 ## Reading invitation
 
-On the homepage, **15 seconds of foreground reading OR reaching My Background**
+On the homepage, **15 seconds of foreground reading OR reaching My Background OR 25% scroll progress**
 qualifies. The heading (`#tour-background`) must reach the upper 75% of the viewport
 after scrolling; this stays aligned when images or mobile layout change page
-length. Public blogs and project pages keep **15 seconds OR 25% scroll progress**.
-The invitation waits for a 1.5-second break in scrolling. Restored scroll positions
-are checked on initialization.
+length. The 25% fallback also works if the heading is delayed or unavailable.
+Public blogs and project pages keep **15 seconds OR 25% scroll progress**.
+The scroll threshold is evaluated immediately on scroll, without waiting for a
+pause or debounce. Continued scrolling cannot defer an eligible invitation.
+Restored scroll positions are checked on initialization and each timer tick.
+Hidden overlays do not block the invitation.
 Time spent in hidden tabs, search, chat, a tour or form editing does not count.
 Admin, authentication, CV and private life-blog routes are excluded.
 
-Opening the dialog saves a seven-day cooldown in
+Actually mounting the dialog saves a seven-day cooldown in
 `portfolioSubscriptionPrompt:v1`. Existing locally stored subscribers are skipped.
 When storage is unavailable, suppression lasts for the current document. The bell
 can always open the form manually. The invitation never submits a subscription
 or requests browser permission automatically.
 
-For repeated local testing, open `/?subscriptionPreview=1`. This bypasses only
-the cooldown, and only in development. Existing-subscriber suppression remains;
-the parameter has no effect in a production build.
+Local development previews bypass only the cooldown by default, so refreshing
+the normal homepage supports repeated tests. Use `/?subscriptionPreview=0` to
+test the production cooldown policy locally. `/?subscriptionPreview=1` remains
+supported. Existing-subscriber suppression remains, and all query values are
+ignored in a production build. Local diagnostics include the route,
+preview/cooldown/subscriber booleans, trigger reason, elapsed foreground time and
+scroll percentage, never subscriber identifiers or tokens.
+
+The mobile form uses a bottom sheet with a separately scrolling body, a visible
+header/action footer, safe-area padding and a 16px email field. Its height follows
+the visual viewport when a phone keyboard opens. No subscription is created
+until the visitor explicitly submits the form.
 
 ## Delivery surfaces
 

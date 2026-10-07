@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import {
   isSubscriptionPromptPage, recordSubscriptionPrompt, startSubscriptionPrompt,
   SUBSCRIPTION_PROMPT_KEY, SUBSCRIPTION_PROMPT_COOLDOWN_MS,
+  subscriptionPromptPreviewMode,
 } from '../src/lib/subscriptionPrompt.mjs';
 
 function setup(t, { page = '/', subscriber = false, storageBlocked = false, scrollY = 0, ignoreCooldown = false, backgroundTop = 1750 } = {}) {
@@ -16,7 +17,7 @@ function setup(t, { page = '/', subscriber = false, storageBlocked = false, scro
     heading.getBoundingClientRect = () => ({ top: backgroundTop - win.scrollY, height: 60 });
     doc.body.append(heading);
   }
-  let time = 1_800_000_000_000, tick, prompts = 0;
+  let time = 1_800_000_000_000, tick, prompts = 0, lastPrompt;
   let subscribed = subscriber;
   Object.defineProperty(doc, 'hidden', { value: false, writable: true });
   Object.defineProperty(doc.documentElement, 'scrollHeight', { value: 5000 });
@@ -27,12 +28,12 @@ function setup(t, { page = '/', subscriber = false, storageBlocked = false, scro
   const start = (path = page) => startSubscriptionPrompt({
     win, doc, page: path, hasSubscriber: () => subscribed, now: () => time,
     ignoreCooldown,
-    onPrompt: () => { prompts++; },
+    onPrompt: details => { prompts++; lastPrompt = details; recordSubscriptionPrompt(win, time); },
   });
   let stop = start();
   t.after(() => { stop(); dom.window.close(); });
   return {
-    win, doc, get prompts() { return prompts; },
+    win, doc, get prompts() { return prompts; }, get lastPrompt() { return lastPrompt; },
     advance(ms) { for (let left = ms; left > 0; left -= 1000) { time += Math.min(left, 1000); tick?.(); } },
     scroll(y) { win.scrollY = y; win.dispatchEvent(new win.Event('scroll')); },
     hide(hidden) { doc.hidden = hidden; doc.dispatchEvent(new win.Event('visibilitychange')); },
@@ -44,6 +45,26 @@ function setup(t, { page = '/', subscriber = false, storageBlocked = false, scro
   };
 }
 
+test('normal development homepage permits retesting; production never bypasses cooldown', () => {
+  assert.equal(subscriptionPromptPreviewMode('development', undefined), true);
+  assert.equal(subscriptionPromptPreviewMode('development', '1'), true);
+  assert.equal(subscriptionPromptPreviewMode('development', '0'), false);
+  for (const environment of ['production', 'test', undefined]) {
+    for (const query of [undefined, '0', '1']) {
+      assert.equal(subscriptionPromptPreviewMode(environment, query), false);
+    }
+  }
+});
+
+test('default local preview retries on navigation without deleting the saved cooldown', t => {
+  const h = setup(t, { ignoreCooldown: subscriptionPromptPreviewMode('development') });
+  h.record();
+  h.scroll(1000); h.advance(2000); assert.equal(h.prompts, 1);
+  assert.ok(h.win.localStorage.getItem(SUBSCRIPTION_PROMPT_KEY));
+  h.restart('/'); h.advance(2000); assert.equal(h.prompts, 2);
+  h.subscribe(); h.restart('/'); h.advance(2000); assert.equal(h.prompts, 2);
+});
+
 test('15 seconds of visible reading alone triggers once, with no scrolling', t => {
   const h = setup(t);
   h.advance(14_000); assert.equal(h.prompts, 0);
@@ -51,27 +72,71 @@ test('15 seconds of visible reading alone triggers once, with no scrolling', t =
   h.advance(60_000); assert.equal(h.prompts, 1);
 });
 
-test('content pages still trigger at 25 percent before 15 seconds after a short scroll rest', t => {
+test('content pages trigger at exactly 25 percent without waiting for a timer or scroll rest', t => {
   const h = setup(t, { page: '/blog-single/example' });
   h.scroll(999); h.advance(2000); assert.equal(h.prompts, 0);
-  h.scroll(1000); h.advance(1000); assert.equal(h.prompts, 0);
-  h.advance(1000); assert.equal(h.prompts, 1);
+  h.scroll(1000); assert.equal(h.prompts, 1);
+  assert.deepEqual(h.lastPrompt, { trigger: 'scroll-progress', elapsedMs: 2000, progressPercent: 25 });
 });
 
-test('homepage follows the Background heading, even before or after 25 percent', t => {
+test('homepage triggers at the earlier of Background entry and 25 percent', t => {
   for (const backgroundTop of [1250, 4000]) {
     const h = setup(t, { backgroundTop });
-    const threshold = backgroundTop - 750;
+    const threshold = Math.min(backgroundTop - 750, 1000);
     h.scroll(threshold - 1); h.advance(2000); assert.equal(h.prompts, 0);
-    h.scroll(threshold); h.advance(1000); assert.equal(h.prompts, 0);
-    h.advance(1000); assert.equal(h.prompts, 1);
+    h.scroll(threshold); assert.equal(h.prompts, 1);
   }
 });
 
-test('missing homepage heading does not silently fall back to 25 percent; time still works', t => {
+test('missing homepage heading still permits the 25 percent trigger', t => {
   const h = setup(t, { backgroundTop: null });
-  h.scroll(2000); h.advance(2000); assert.equal(h.prompts, 0);
-  h.advance(13_000); assert.equal(h.prompts, 1);
+  h.scroll(1000); h.advance(2000); assert.equal(h.prompts, 1);
+});
+
+test('layout changes after scrolling are checked without another scroll event', t => {
+  const h = setup(t, { backgroundTop: 4000 });
+  h.scroll(800); h.advance(2000); assert.equal(h.prompts, 0);
+  h.doc.getElementById('tour-background').getBoundingClientRect = () => ({ top: 650, height: 60 });
+  h.advance(1000); assert.equal(h.prompts, 1);
+});
+
+test('mobile toolbar resizing cannot delay or duplicate an invitation', t => {
+  const h = setup(t);
+  h.scroll(1000);
+  for (let i = 0; i < 3; i++) { h.win.dispatchEvent(new h.win.Event('resize')); h.advance(1000); }
+  assert.equal(h.prompts, 1);
+});
+
+test('scrolling while blocked is rechecked after the overlay closes', t => {
+  const h = setup(t);
+  const overlay = h.doc.createElement('div'); overlay.setAttribute('role', 'dialog'); h.doc.body.append(overlay);
+  h.scroll(1000); h.advance(2000); assert.equal(h.prompts, 0);
+  overlay.remove(); h.advance(1000); assert.equal(h.prompts, 1);
+});
+
+test('hidden dialogs and collapsed chat containers do not block invitations', t => {
+  for (const html of [
+    '<div role="dialog" hidden></div>', '<div aria-hidden="true"><div role="dialog"></div></div>',
+    '<div style="display:none"><div role="dialog"></div></div>',
+    '<div role="dialog" style="visibility:hidden"></div>',
+    '<div id="__chat_widget_root" style="display:none"><div class="bot-container"></div></div>',
+  ]) {
+    const h = setup(t); h.doc.body.insertAdjacentHTML('beforeend', html);
+    h.scroll(1000); h.advance(2000); assert.equal(h.prompts, 1, html);
+  }
+});
+
+test('requesting a dialog does not consume cooldown before it is actually mounted', () => {
+  const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://www.yuqi.site/' });
+  const win = dom.window; let tick, time = 1_800_000_000_000, requested = 0;
+  Object.defineProperty(win.document, 'hidden', { value: false });
+  win.setInterval = fn => { tick = fn; return 1; }; win.clearInterval = () => {};
+  const stop = startSubscriptionPrompt({ win, doc: win.document, page: '/', hasSubscriber: () => false,
+    now: () => time, onPrompt: () => requested++ });
+  for (let i = 0; i < 15; i++) { time += 1000; tick(); }
+  assert.equal(requested, 1);
+  assert.equal(win.localStorage.getItem(SUBSCRIPTION_PROMPT_KEY), null);
+  stop(); dom.window.close();
 });
 
 test('restored scroll position is recognized without waiting for another scroll', t => {
@@ -84,17 +149,31 @@ test('explicit development preview can repeat while normal visitors retain coold
   h.record(); h.scroll(1000); h.advance(2000); assert.equal(h.prompts, 1);
 });
 
-test('continuous scrolling defers the prompt even after either threshold', t => {
-  const h = setup(t);
-  for (let i = 0; i < 20; i++) { h.scroll(1200 + i); h.advance(1000); }
+test('continuous scrolling triggers at the first threshold crossing instead of much farther down', t => {
+  const h = setup(t, { backgroundTop: null });
+  for (let y = 100; y < 1000; y += 100) {
+    h.scroll(y); h.advance(50); assert.equal(h.prompts, 0);
+  }
+  h.scroll(1000); assert.equal(h.prompts, 1);
+  assert.equal(h.lastPrompt.progressPercent, 25);
+  assert.ok(h.lastPrompt.elapsedMs < 1000);
+  for (let y = 1100; y < 3000; y += 100) { h.scroll(y); h.advance(50); }
+  assert.equal(h.prompts, 1);
+});
+
+test('15 second fallback is not delayed by scrolling below the progress threshold', t => {
+  const h = setup(t, { backgroundTop: null });
+  for (let i = 0; i < 14; i++) { h.scroll(i); h.advance(1000); }
   assert.equal(h.prompts, 0);
-  h.advance(1000); assert.equal(h.prompts, 1);
+  h.scroll(20); h.advance(1000); assert.equal(h.prompts, 1);
+  assert.equal(h.lastPrompt.trigger, 'reading-time');
 });
 
 test('hidden tabs do not count time or scroll, and sleeping timers cannot skip the delay', t => {
   const h = setup(t);
   h.advance(5000); h.hide(true); h.scroll(2000); h.advance(60_000);
   assert.equal(h.prompts, 0);
+  h.scroll(0);
   h.hide(false); h.advance(9000); assert.equal(h.prompts, 0);
   h.advance(1000); assert.equal(h.prompts, 1);
   const other = setup(t);
