@@ -1,101 +1,113 @@
-# Notification System (frontend integration)
+# Notifications
 
-The notification UI in this repo is **just the components and Next.js proxy routes**. All backend logic — REST APIs, Kafka consumer, email dispatch, Supabase writes — lives in the standalone Spring Boot service at [`portfolio-notification-service`](../portfolio-notification-service).
+Next.js owns the subscription dialog, website inbox and browser Service Worker.
+The standalone `portfolio-notification-service` owns preferences, publication
+events, email delivery and encrypted Web Push delivery.
 
-## 1. Env vars (Vercel + local `.env`)
+## Reading invitation
 
-Add to `.env.local` and to the Vercel project:
+On the homepage, **15 seconds of foreground reading OR reaching My Background**
+qualifies. The heading (`#tour-background`) must reach the upper 75% of the viewport
+after scrolling; this stays aligned when images or mobile layout change page
+length. Public blogs and project pages keep **15 seconds OR 25% scroll progress**.
+The invitation waits for a 1.5-second break in scrolling. Restored scroll positions
+are checked on initialization.
+Time spent in hidden tabs, search, chat, a tour or form editing does not count.
+Admin, authentication, CV and private life-blog routes are excluded.
+
+Opening the dialog saves a seven-day cooldown in
+`portfolioSubscriptionPrompt:v1`. Existing locally stored subscribers are skipped.
+When storage is unavailable, suppression lasts for the current document. The bell
+can always open the form manually. The invitation never submits a subscription
+or requests browser permission automatically.
+
+For repeated local testing, open `/?subscriptionPreview=1`. This bypasses only
+the cooldown, and only in development. Existing-subscriber suppression remains;
+the parameter has no effect in a production build.
+
+## Delivery surfaces
+
+- **Email:** the existing email worker delivers selected topics.
+- **Website inbox:** the bell loads authorized `/api/notifications` data when
+  opened, on focus/reconnection and every 60 seconds while visible. Subscriber
+  changes update it immediately. There is no direct Supabase Realtime access.
+- **Browser notifications:** a separate, explicit enable button requests browser
+  permission and registers this device. Closing the page does not remove that
+  registration. Browser/OS notification settings still apply.
+
+The `WEB` preference covers inbox and eligible browser notifications. Selecting
+it alone does not grant permission. Email-only subscriptions cannot register push.
+Topic changes and unsubscribe are rechecked before delivery. Turning off push on
+one device leaves email/inbox unchanged. On iOS/iPadOS, push requires a supported
+Home Screen web app. Unsupported contexts show an explanation, not false success.
+
+## Configuration
+
+Next.js requires these server-only environment variables:
+
+```text
+NOTIFICATION_SERVICE_URL=https://<notification-service>
+NOTIFICATION_SERVICE_TOKEN=<same value as backend INTERNAL_API_TOKEN>
+```
+
+The browser calls same-origin `/api/subscriptions*`, `/api/notifications*` and
+`/api/push/*`. The proxy injects `X-Internal-Token`. Responses are not cached.
+Supabase public/service-role keys are not used by the notification UI.
+
+Push additionally requires backend migration `V8__browser_push.sql` and:
+
+```text
+WEB_PUSH_PUBLIC_KEY=<base64url uncompressed P-256 public key>
+WEB_PUSH_PRIVATE_KEY=<base64url P-256 private scalar>
+WEB_PUSH_SUBJECT=mailto:<operational contact>
+```
+
+Store one stable VAPID key pair in the backend secret management system. Only the
+public key is returned by `/api/push/config`; never use `NEXT_PUBLIC_*` for the
+private key. Existing registrations depend on that key pair, so rotation needs
+planning. Missing keys disable push without disabling email/inbox.
+
+See the backend `WEB_PUSH.md` for rollout requirements. Frontend-only deployment
+does not enable push. The existing five-minute recovery job also drains browser
+push, waking the scale-to-zero backend even when nobody has the website open.
+
+## Flow and security
+
+```text
+Explicit subscription -> subscriber credentials -> prepare Service Worker
+Enable click -> browser permission -> PushManager subscription
+  -> token-verified device registration -> UI confirms enabled
+
+Public content event -> selected WEB recipients -> durable per-device delivery
+  -> encrypted provider request -> Service Worker -> system notification
+  -> notification click opens same-origin content
+```
+
+`/notifications/sw.js` handles push/click events only. It has no fetch handler and
+does not cache pages/APIs. Payloads contain public previews, not email addresses,
+credentials or administrator alerts. Endpoint/key tables have RLS and no anonymous
+grants. Subscriber tokens remain bearer credentials in localStorage, matching the
+existing subscription design. Never log them or expose them in screenshots.
+
+## Verification
 
 ```bash
-# Already present in your .env
-NEXT_PUBLIC_SUPABASE_URL=https://iyvhmpdfrnznxgyvvkvx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-
-# NEW — server-side only, never prefix with NEXT_PUBLIC_
-NOTIFICATION_SERVICE_URL=https://portfolio-notification-service-xxxx.run.app
-
-# NEW — shared secret. MUST equal the Spring service's INTERNAL_API_TOKEN env.
-# Generate once with: openssl rand -hex 32
-# This is read ONLY in pages/api/* (server-side); it never reaches the browser.
-NOTIFICATION_SERVICE_TOKEN=replace-with-32-byte-hex-random-string
+npm test
+TEST_ORIGIN=http://127.0.0.1:3105 node tests/subscription-prompt.browser.mjs
+TEST_ORIGIN=http://127.0.0.1:3105 node tests/browser-push.browser.mjs
 ```
 
-The browser never talks to Spring directly. All UI calls hit `/api/subscriptions*` and `/api/notifications*` on Vercel; those proxy to `NOTIFICATION_SERVICE_URL` and inject `X-Internal-Token` from `NOTIFICATION_SERVICE_TOKEN`. The Spring service rejects (`401`) every request that doesn't carry a constant-time-matching header value, and fails closed (`503`) if its own `INTERNAL_API_TOKEN` is unset.
+Set `PLAYWRIGHT_MODULE_PATH` when Playwright is not installed in the project.
+Browser tests use isolated profiles and mocked subscription/provider APIs. They
+do not email or push real subscribers. The closed-page test uses real Chrome
+Service Worker/notification APIs with a local CDP push event after closing the
+website. It verifies browser behavior, not real-provider delivery.
 
-## 2. Mount the components
+A release still needs an authorized real-device test: register only the owner's
+test device, close the page, send one targeted public preview, check the delivery
+ledger and observe the system notification. Never broadcast fake publications
+or insert fake production inbox records as default tests.
 
-In `src/layout/Header.js` (or wherever your nav lives):
-
-```jsx
-import { useState } from "react";
-import NotificationBell from "../components/NotificationBell";
-import SubscribeDialog from "../components/SubscribeDialog";
-
-export default function Header() {
-  const [subscribeOpen, setSubscribeOpen] = useState(false);
-  return (
-    <header>
-      {/* …existing nav… */}
-      <NotificationBell onOpenSubscribe={() => setSubscribeOpen(true)} />
-      <button onClick={() => setSubscribeOpen(true)}>Subscribe</button>
-      <SubscribeDialog open={subscribeOpen} onClose={() => setSubscribeOpen(false)} />
-    </header>
-  );
-}
-```
-
-That's it. Behavior:
-
-- `SubscribeDialog` POSTs to `/api/subscriptions` (proxied to Spring), which returns `subscriberId` + `subscriberToken`. Both are stored in `localStorage` under key `portfolioSubscriber:v1`.
-- `NotificationBell` reads localStorage, calls `GET /api/notifications`, subscribes to Supabase Realtime INSERTs on `notification_recipients` filtered by `subscriber_id`, and refetches whenever a new WEB recipient row appears.
-- Clicking an item or the ✓ button calls `PATCH /api/notifications/{recipientId}/read`.
-
-## 3. Supabase Realtime
-
-The Spring service migration enables Realtime on `notification_recipients` automatically:
-
-```sql
-alter publication supabase_realtime add table public.notification_recipients;
-```
-
-The notification bell uses `supabase.channel(...).on("postgres_changes", …)` from `@supabase/supabase-js` (already in the project).
-
-## 4. Local dev against the Spring service
-
-```bash
-# Terminal 1: Spring service
-cd ../portfolio-notification-service
-./mvnw spring-boot:run
-
-# Terminal 2: Next.js
-cd ../Portfolio
-echo 'NOTIFICATION_SERVICE_URL=http://localhost:8080' >> .env.local
-echo 'NOTIFICATION_SERVICE_TOKEN=local-dev-internal-token' >> .env.local
-npm run dev
-```
-
-## 5. Verifying end-to-end
-
-1. Open `http://localhost:3000`, click **Subscribe**, complete the dialog.
-2. Confirm the bell appears in the header.
-3. Insert a fake notification straight into Supabase:
-   ```bash
-   SUPABASE_DB_URL='postgres://postgres:PASS@db.<ref>.supabase.co:5432/postgres?sslmode=require' \
-   SUBSCRIBER_ID='<id-from-localStorage>' \
-   bash ../portfolio-notification-service/scripts/insert-fake-notification.sh
-   ```
-4. The bell badge should bump to **1** within a few seconds (via Supabase Realtime).
-5. Or send a real Kafka event:
-   ```bash
-   KAFKA_BROKERS=... KAFKA_USERNAME=... KAFKA_PASSWORD=... \
-     bash ../portfolio-notification-service/scripts/send-test-event.sh
-   ```
-
-## 6. Security notes for this repo
-
-- `SUPABASE_SERVICE_ROLE_KEY` is **not** used by any of the new code. It stays server-side for the existing admin features.
-- The notification components only use `NEXT_PUBLIC_SUPABASE_ANON_KEY` for Realtime — never service-role.
-- `subscriberToken` is treated as a bearer credential: stored in `localStorage`, sent over HTTPS, never logged.
-- See the [Spring service SECURITY.md](../portfolio-notification-service/SECURITY.md) for the full threat model.
-
-> **Reminder:** the `SUPABASE_SERVICE_ROLE_KEY` and Gmail app password from your existing `.env` were shared in chat during planning. Rotate both before this change goes to prod.
+`SENT` means provider acceptance, not a read receipt or proof of OS display.
+Permissions, Focus/Do Not Disturb and browser policies can suppress display.
+Closing a page and forcibly terminating a browser are not equivalent guarantees.

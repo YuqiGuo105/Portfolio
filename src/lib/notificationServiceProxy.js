@@ -31,6 +31,7 @@ export async function forward(
   res,
   { path, method = "GET", forwardBody = true, forwardQuery = true }
 ) {
+  res.setHeader("Cache-Control", "private, no-store");
   const base = getBase();
   if (!base) {
     res.status(500).json({
@@ -65,6 +66,7 @@ export async function forward(
 
   const init = {
     method,
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",

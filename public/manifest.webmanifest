@@ -1,0 +1,9 @@
+{
+  "id": "/",
+  "name": "Yuqi Portfolio",
+  "short_name": "Yuqi",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "icons": [{ "src": "/assets/images/yuqi-guo-profile-512.png", "sizes": "512x512", "type": "image/png" }]
+}

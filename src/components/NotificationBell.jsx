@@ -1,114 +1,110 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { supabase } from "../supabase/supabaseClient";
-import { loadSubscriber } from "../lib/notificationsClient";
+import { clearSubscriber, loadSubscriber, watchSubscriber } from "../lib/notificationsClient";
 import NotificationDropdown from "./NotificationDropdown";
+import { Bell } from "lucide-react";
+import styles from "../../styles/NotificationBell.module.css";
 
 /**
  * Bell icon + unread badge that lives in the site header.
  * - reads subscriberId / subscriberToken from localStorage
- * - polls GET /api/notifications once on mount
- * - subscribes to Supabase Realtime INSERT events on notification_recipients
- *   (filtered by subscriber_id) and re-fetches when a new WEB row appears
+ * - uses the subscriber-verified API on changes, opening, focus and visible polling
  *
  * If no subscriber exists in localStorage, the bell is hidden.
  */
 export default function NotificationBell({ onOpenSubscribe, isDark = false }) {
   const [open, setOpen] = useState(false);
+  const anchorRef = useRef(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [items, setItems] = useState([]);
   const [subscriber, setSubscriber] = useState(null);
   const [loading, setLoading] = useState(false);
-  const channelRef = useRef(null);
+  const requestRef = useRef(null);
+  const markingRef = useRef(new Set());
+  const [error, setError] = useState("");
 
   const fetchNotifications = useCallback(async (sub) => {
     if (!sub) return;
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 10000);
     setLoading(true);
     try {
       const qs = new URLSearchParams({
         subscriberId: sub.subscriberId,
         subscriberToken: sub.subscriberToken,
       });
-      const res = await fetch(`/api/notifications?${qs.toString()}`);
+      const res = await fetch(`/api/notifications?${qs.toString()}`, { signal: controller.signal, cache: "no-store" });
+      if (requestRef.current !== controller) return;
       if (!res.ok) {
         if (res.status === 401 || res.status === 404) {
-          // stale token — silently disable
-          setSubscriber(null);
+          clearSubscriber();
         }
-        return;
+        throw new Error("Notification request failed");
       }
       const data = await res.json();
+      if (requestRef.current !== controller || controller.signal.aborted) return;
       setItems(Array.isArray(data.items) ? data.items : []);
       setUnreadCount(Number(data.unreadCount || 0));
+      setError("");
     } catch (_) {
-      /* offline / abort — keep stale data */
+      if (requestRef.current === controller) setError("Couldn't load notifications. Try refreshing.");
     } finally {
-      setLoading(false);
+      clearTimeout(timeout);
+      if (requestRef.current === controller) { requestRef.current = null; setLoading(false); }
     }
   }, []);
 
   useEffect(() => {
-    const sub = loadSubscriber();
-    if (!sub) return;
-    setSubscriber(sub);
-    fetchNotifications(sub);
-  }, [fetchNotifications]);
+    return watchSubscriber(sub => {
+      requestRef.current?.abort(); requestRef.current = null;
+      setSubscriber(sub); setOpen(false); setItems([]); setUnreadCount(0); setError("");
+    });
+  }, []);
 
-  // Realtime: subscribe to INSERTs on notification_recipients for this subscriber
+  // No direct database subscription: only the server verifies inbox ownership.
   useEffect(() => {
     if (!subscriber) return;
-    const channel = supabase
-      .channel(`nr-${subscriber.subscriberId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notification_recipients",
-          filter: `subscriber_id=eq.${subscriber.subscriberId}`,
-        },
-        (payload) => {
-          // Only refresh for WEB rows; EMAIL rows don't change the bell.
-          const row = payload && payload.new;
-          if (row && row.channel === "WEB") {
-            fetchNotifications(subscriber);
-          }
-        }
-      )
-      .subscribe();
-    channelRef.current = channel;
+    const refresh = () => { if (!document.hidden && !requestRef.current) fetchNotifications(subscriber); };
+    refresh();
+    const interval = setInterval(refresh, 60000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
+      clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      requestRef.current?.abort(); requestRef.current = null;
     };
   }, [subscriber, fetchNotifications]);
 
   const handleMarkRead = useCallback(
     async (recipientId) => {
-      if (!subscriber) return;
+      if (!subscriber || markingRef.current.has(recipientId)) return;
+      markingRef.current.add(recipientId);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
       try {
         const res = await fetch(`/api/notifications/${recipientId}/read`, {
           method: "PATCH",
+          signal: controller.signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             subscriberId: subscriber.subscriberId,
             subscriberToken: subscriber.subscriberToken,
           }),
         });
-        if (res.ok) {
-          setItems((prev) =>
-            prev.map((it) =>
-              it.recipientId === recipientId ? { ...it, status: "READ" } : it
-            )
-          );
-          setUnreadCount((c) => Math.max(0, c - 1));
-        }
+        if (!res.ok) throw new Error("Mark read failed");
+        if (loadSubscriber()?.subscriberToken === subscriber.subscriberToken) await fetchNotifications(subscriber);
       } catch (_) {
-        /* ignore */
+        setError("Couldn't mark the notification as read. Please try again.");
+      } finally {
+        clearTimeout(timer); markingRef.current.delete(recipientId);
       }
     },
-    [subscriber]
+    [subscriber, fetchNotifications]
   );
 
   if (!subscriber) {
@@ -117,12 +113,13 @@ export default function NotificationBell({ onOpenSubscribe, isDark = false }) {
     return (
       <button
         type="button"
+        className={styles.bell}
         onClick={onOpenSubscribe}
         aria-label="Subscribe to notifications"
         style={bellButtonStyle}
         title="Subscribe to notifications"
       >
-        <BellIcon />
+        <Bell size={22} aria-hidden="true" />
       </button>
     );
   }
@@ -131,13 +128,15 @@ export default function NotificationBell({ onOpenSubscribe, isDark = false }) {
     <div style={{ position: "relative", display: "inline-block" }}>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="true"
+        className={styles.bell}
+        ref={anchorRef}
+        onClick={() => { if (!open) fetchNotifications(subscriber); setOpen((o) => !o); }}
+        aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={`Notifications (${unreadCount} unread)`}
         style={bellButtonStyle}
       >
-        <BellIcon />
+        <Bell size={22} aria-hidden="true" />
         {unreadCount > 0 && (
           <span style={badgeStyle} aria-hidden="true">
             {unreadCount > 99 ? "99+" : unreadCount}
@@ -147,24 +146,17 @@ export default function NotificationBell({ onOpenSubscribe, isDark = false }) {
       {open && (
         <NotificationDropdown
           items={items}
+          anchorRef={anchorRef}
           loading={loading}
+          error={error}
           onClose={() => setOpen(false)}
           onMarkRead={handleMarkRead}
           onRefresh={() => fetchNotifications(subscriber)}
           isDark={isDark}
+          onSettings={() => { setOpen(false); onOpenSubscribe?.(); }}
         />
       )}
     </div>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-    </svg>
   );
 }
 

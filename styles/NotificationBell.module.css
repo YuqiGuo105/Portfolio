@@ -1,0 +1,19 @@
+.bell::before,
+.bell::after,
+.panel button::before,
+.panel button::after { display: none !important; }
+.panel button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  min-width: 26px;
+  line-height: 1.4;
+  box-shadow: none;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.panel a { min-width: 0; overflow-wrap: anywhere; }
+.panel button:focus-visible,
+.panel a:focus-visible,
+.bell:focus-visible { outline: 2px solid #087b80; outline-offset: 2px; }

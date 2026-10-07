@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 import { saveSubscriber, loadSubscriber } from "../lib/notificationsClient";
+import { recordSubscriptionPrompt } from "../lib/subscriptionPrompt.mjs";
+import styles from "../../styles/SubscribeDialog.module.css";
+import BrowserPushSettings from "./BrowserPushSettings";
 
 const TOPIC_OPTIONS = [
   { value: "ARTICLE_UPDATES", label: "Article updates" },
@@ -9,7 +13,7 @@ const TOPIC_OPTIONS = [
 ];
 
 const CHANNEL_OPTIONS = [
-  { value: "WEB", label: "Website notifications" },
+  { value: "WEB", label: "Website inbox & browser alerts" },
   { value: "EMAIL", label: "Email notifications" },
 ];
 
@@ -21,15 +25,20 @@ const CHANNEL_OPTIONS = [
  *   - onClose: () => void
  *   - onSubscribed?: ({ subscriberId, subscriberToken }) => void
  */
-export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = false }) {
+export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = false, invitation = false }) {
   const [email, setEmail] = useState("");
   const [topics, setTopics] = useState(["ARTICLE_UPDATES", "FEATURE_UPDATES"]);
   const [channels, setChannels] = useState(["WEB", "EMAIL"]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [subscriber, setSubscriber] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const firstFieldRef = useRef(null);
+  const dialogRef = useRef(null);
+  const doneRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 520);
@@ -41,18 +50,48 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
   useEffect(() => {
     if (open) {
       const existing = loadSubscriber();
+      setSubscriber(existing);
       if (existing && existing.email) setEmail(existing.email);
+      if (Array.isArray(existing?.topics) && existing.topics.length) setTopics(existing.topics);
+      if (Array.isArray(existing?.channels) && existing.channels.length) setChannels(existing.channels);
       setError(null);
       setSuccess(false);
-      setTimeout(() => firstFieldRef.current && firstFieldRef.current.focus(), 50);
     }
   }, [open]);
 
   useEffect(() => {
-    function onKey(e) { if (e.key === "Escape" && open) onClose && onClose(); }
-    if (open) window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+    if (!open) return undefined;
+    recordSubscriptionPrompt(window);
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    const alreadyOpen = document.body.classList.contains(styles.dialogOpen);
+    document.body.classList.add(styles.dialogOpen);
+    document.body.style.overflow = "hidden";
+    // An automatic invitation must not summon the phone keyboard.
+    (invitation ? dialogRef.current : firstFieldRef.current)?.focus({ preventScroll: true });
+    function onKey(e) {
+      if (e.key === "Escape" && !e.isComposing) closeRef.current?.();
+      if (e.key !== "Tab") return;
+      const fields = dialogRef.current?.querySelectorAll('input:not([disabled]), button:not([disabled]), a[href]');
+      const first = fields?.[0], last = fields?.[fields.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) {
+        e.preventDefault(); last?.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+      if (!alreadyOpen) document.body.classList.remove(styles.dialogOpen);
+      if (previousFocus?.isConnected) previousFocus.focus?.({ preventScroll: true });
+    };
+  }, [open, invitation]);
+
+  useEffect(() => {
+    if (open && success) doneRef.current?.focus({ preventScroll: true });
+  }, [open, success]);
 
   if (!open) return null;
 
@@ -90,7 +129,9 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
       saveSubscriber(data.subscriberId, data.subscriberToken, {
         email,
         unsubscribeToken: data.unsubscribeToken,
+        channels, topics,
       });
+      setSubscriber({ subscriberId: data.subscriberId, subscriberToken: data.subscriberToken, channels, topics });
       setSuccess(true);
       if (onSubscribed) onSubscribed({ subscriberId: data.subscriberId, subscriberToken: data.subscriberToken });
     } catch (err) {
@@ -120,9 +161,13 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
 
   const dialog = (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
+      className={styles.overlay}
       role="dialog"
       aria-modal="true"
       aria-labelledby="subscribe-title"
+      aria-describedby={invitation && !success ? "subscribe-invitation" : undefined}
       onClick={(e) => { if (e.target === e.currentTarget) onClose && onClose(); }}
       style={{
         position: "fixed", inset: 0,
@@ -135,7 +180,7 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
         style={{
           background: bg,
           color: fg,
-          borderRadius: isMobile ? "14px 14px 0 0" : 14,
+          borderRadius: isMobile ? "8px 8px 0 0" : 8,
           width: "100%", maxWidth: isMobile ? "100%" : 460,
           boxShadow: isDark ? "0 24px 60px rgba(0,0,0,.75)" : "0 24px 60px rgba(0,0,0,.22)",
           fontFamily: "inherit",
@@ -149,18 +194,18 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
           padding: "20px 24px 16px",
           borderBottom: `1px solid ${border}`,
         }}>
-          <h3 id="subscribe-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em" }}>
-            Subscribe to updates
+          <h3 id="subscribe-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: 0 }}>
+            {invitation ? "Stay in the loop?" : "Subscribe to updates"}
           </h3>
           <button
-            type="button" onClick={onClose} aria-label="Close"
+            type="button" onClick={onClose} aria-label="Close" title="Close"
             style={{
               background: "none", border: "none", cursor: "pointer",
               color: subtle, fontSize: 22, lineHeight: 1,
               padding: "2px 6px", borderRadius: 6,
               display: "inline-flex", alignItems: "center", justifyContent: "center",
             }}
-          >×</button>
+          ><X size={20} aria-hidden="true" /></button>
         </div>
 
         {/* Body */}
@@ -171,13 +216,18 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
               <p style={{ margin: "0 0 20px", fontSize: 15, lineHeight: 1.5 }}>
                 You&apos;re subscribed! You&apos;ll be notified{channels.includes("EMAIL") ? " by email" : ""} the next time something matching your selection goes live.
               </p>
+              {channels.includes("WEB") && subscriber && <BrowserPushSettings subscriber={subscriber} />}
               <button
-                type="button" onClick={onClose}
+                ref={doneRef} type="button" onClick={onClose}
                 style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1, padding: "11px 28px", borderRadius: 8, border: "none", background: accentBg, color: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 600 }}
               >Done</button>
             </div>
           ) : (
             <form onSubmit={handleSubmit}>
+              {subscriber && (!Array.isArray(subscriber.channels) || subscriber.channels.includes("WEB")) && <BrowserPushSettings subscriber={subscriber} />}
+              {invitation && <p id="subscribe-invitation" style={{ margin: "0 0 20px", fontSize: 15, lineHeight: 1.6, color: subtle }}>
+                Get new articles and project updates from Yuqi. Choose what interests you, and unsubscribe anytime.
+              </p>}
               {/* Email */}
               <div style={{ marginBottom: 20 }}>
                 <label htmlFor="sub-email" style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: subtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>
@@ -276,7 +326,7 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
                     cursor: "pointer", fontSize: 14, fontWeight: 500,
                     width: isMobile ? "100%" : undefined,
                   }}
-                >Cancel</button>
+                >{invitation ? "Not now" : "Cancel"}</button>
                 <button
                   type="submit" disabled={submitting}
                   style={{

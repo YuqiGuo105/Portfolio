@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 
 const NotificationBell = dynamic(() => import("../components/NotificationBell"), { ssr: false });
 const SubscribeDialog = dynamic(() => import("../components/SubscribeDialog"), { ssr: false });
+const SubscriptionPrompt = dynamic(() => import("../components/SubscriptionPrompt"), { ssr: false });
 
 import SocialLinks from '../components/SocialLinks';
 
@@ -163,6 +164,7 @@ const Header = ({ onOpenSearch }) => {
             <NotificationBell onOpenSubscribe={() => setSubscribeOpen(true)} isDark={!day} />
             {/* subscribe button — only shown when NOT already subscribed (Bell handles that case) */}
             <SubscribeDialog open={subscribeOpen} onClose={() => setSubscribeOpen(false)} isDark={!day} />
+            <SubscriptionPrompt isDark={!day} />
             {/* switcher btn */}
             <a
               className={`switcher-btn ${day ? "active" : ""}`}

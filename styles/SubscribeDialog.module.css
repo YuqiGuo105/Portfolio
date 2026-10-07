@@ -1,0 +1,28 @@
+.overlay {
+  text-align: left;
+  letter-spacing: 0;
+  outline: none;
+}
+
+.dialogOpen :global(#__chat_widget_root) {
+  display: none;
+}
+
+.overlay button {
+  height: auto;
+  min-height: 40px;
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.overlay button::before,
+.overlay button::after {
+  display: none !important;
+}
+
+.overlay button:focus-visible,
+.overlay input:focus-visible {
+  outline: 2px solid #168577 !important;
+  outline-offset: 3px;
+}

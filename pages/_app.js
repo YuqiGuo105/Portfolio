@@ -145,6 +145,7 @@ function MyApp({ Component, pageProps }) {
         />
       )}
       <Head>
+        <link rel="manifest" href="/manifest.webmanifest" />
         {isHomePage && (
           <>
             <title>Yuqi Guo | Software Engineer Portfolio</title>

@@ -1,4 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Check, RefreshCw } from "lucide-react";
+import styles from "../../styles/NotificationBell.module.css";
 
 /**
  * Dropdown panel rendered by NotificationBell.
@@ -9,39 +12,53 @@ import { useEffect, useRef } from "react";
  *   - onMarkRead: (recipientId) => Promise<void>
  *   - onRefresh: () => void
  */
-export default function NotificationDropdown({ items, loading, onClose, onMarkRead, onRefresh, isDark = false }) {
+export default function NotificationDropdown({ anchorRef, items, loading, error, onClose, onMarkRead, onRefresh, onSettings, isDark = false }) {
   const ref = useRef(null);
+  const [position, setPosition] = useState({ visibility: "hidden" });
+  useLayoutEffect(() => {
+    const place = () => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = Math.min(340, window.innerWidth - 24);
+      const top = Math.min(rect.bottom + 8, window.innerHeight - 100);
+      setPosition({ width, top, right: "auto", left: Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12)), maxHeight: Math.min(420, window.innerHeight - top - 12) });
+    };
+    place();
+    window.addEventListener("resize", place); window.addEventListener("scroll", place, true);
+    return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
+  }, [anchorRef]);
 
   useEffect(() => {
     function onDocClick(e) {
-      if (ref.current && !ref.current.contains(e.target)) onClose && onClose();
+      if (ref.current && !ref.current.contains(e.target) && !anchorRef.current?.contains(e.target)) onClose && onClose();
     }
-    function onKey(e) { if (e.key === "Escape") onClose && onClose(); }
+    function onKey(e) { if (e.key === "Escape") { onClose?.(); anchorRef.current?.focus(); } }
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKey);
     };
-  }, [onClose]);
+  }, [onClose, anchorRef]);
 
   const dk = isDark;
   const panel = { ...panelStyle, background: dk ? "#1e1e2a" : "#fff", color: dk ? "#e8e8e8" : "#111", boxShadow: dk ? "0 10px 30px rgba(0,0,0,0.5)" : panelStyle.boxShadow };
   const hdr = { ...headerStyle, background: dk ? "#1e1e2a" : "#fff", borderBottom: `1px solid ${dk ? "#333" : "#eee"}` };
   const refBtn = { ...refreshBtnStyle, border: `1px solid ${dk ? "#444" : "#ddd"}`, color: dk ? "#ccc" : "inherit" };
 
-  return (
-    <div ref={ref} role="menu" aria-label="Notifications" style={panel}>
+  return createPortal(
+    <div ref={ref} role="dialog" aria-label="Notifications" className={styles.panel} style={{ ...panel, ...position }}>
       <div style={hdr}>
         <strong style={{ fontSize: 14 }}>Notifications</strong>
-        <button type="button" onClick={onRefresh} disabled={loading} style={refBtn} aria-label="Refresh">
-          {loading ? "…" : "↻"}
+        <button type="button" onClick={onRefresh} disabled={loading} style={refBtn} aria-label="Refresh notifications" title="Refresh notifications">
+          <RefreshCw size={16} aria-hidden="true" />
         </button>
       </div>
 
+      {error && <div role="alert" style={emptyStyle}>{error}</div>}
       {items.length === 0 ? (
         <div style={emptyStyle}>
-          {loading ? "Loading…" : "You're all caught up."}
+          {loading ? "Loading…" : error ? "" : "No notifications yet."}
         </div>
       ) : (
         <ul style={listStyle}>
@@ -77,7 +94,7 @@ export default function NotificationDropdown({ items, loading, onClose, onMarkRe
                       style={markBtnStyle}
                       title="Mark as read"
                     >
-                      ✓
+                    <Check size={16} aria-hidden="true" />
                     </button>
                   )}
                 </div>
@@ -86,7 +103,8 @@ export default function NotificationDropdown({ items, loading, onClose, onMarkRe
           })}
         </ul>
       )}
-    </div>
+      {onSettings && <button type="button" onClick={onSettings} style={{ ...refreshBtnStyle, margin: 12, width: "auto", height: "auto", padding: "8px 12px" }}>Notification settings</button>}
+    </div>, document.body
   );
 }
 
@@ -110,7 +128,7 @@ function labelForTopic(t) {
 }
 
 const panelStyle = {
-  position: "absolute",
+  position: "fixed",
   right: 0,
   top: "calc(100% + 8px)",
   width: 340,
