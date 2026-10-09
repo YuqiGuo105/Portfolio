@@ -163,16 +163,15 @@ async function callGeminiRouter({
 
   const url =
     `${GEMINI_BASE_URL}/models/${encodeURIComponent(GEMINI_MODEL)}` +
-    `:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+    ":generateContent";
 
   const r = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
     body: JSON.stringify(body),
   });
   if (!r.ok) {
-    const errBody = await r.text().catch(() => "");
-    throw new Error(`Gemini HTTP ${r.status}: ${errBody.slice(0, 400)}`);
+    throw new Error(`Gemini HTTP ${r.status}`);
   }
   const json = await r.json();
   const text =
@@ -184,7 +183,7 @@ async function callGeminiRouter({
   try {
     parsed = JSON.parse(text);
   } catch (err) {
-    throw new Error(`Gemini returned non-JSON: ${text.slice(0, 200)}`);
+    throw new Error("Gemini returned non-JSON");
   }
 
   // The schema asks Gemini for a stringified `toolArgumentsJson`. Promote it
@@ -268,7 +267,8 @@ export default async function handler(req, res) {
       );
     }
   } catch (err) {
-    classifierError = err.message || String(err);
+    // Provider errors may contain credentials or request content.
+    classifierError = "MODEL_UNAVAILABLE";
     console.error("[intent/route] classifier failed:", classifierError);
     // Fail safe: route to KB_QA. RAG is always available and the user
     // still gets a useful answer instead of an error toast.

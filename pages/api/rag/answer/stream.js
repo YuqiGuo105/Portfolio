@@ -259,7 +259,7 @@ export default async function handler(req, res) {
 
     const url =
       GEMINI_BASE_URL + "/models/" + encodeURIComponent(GEMINI_MODEL) +
-      ":streamGenerateContent?alt=sse&key=" + encodeURIComponent(GEMINI_API_KEY);
+      ":streamGenerateContent?alt=sse";
 
     // --- Stage: generating ------------------------------------------------
     sseWrite(res, {
@@ -271,13 +271,12 @@ export default async function handler(req, res) {
 
     upstream = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
       body: JSON.stringify(body),
     });
 
     if (!upstream.ok || !upstream.body) {
-      const errBody = await upstream.text().catch(() => "");
-      throw new Error("Gemini HTTP " + upstream.status + ": " + errBody.slice(0, 400));
+      throw new Error("Gemini HTTP " + upstream.status);
     }
 
     const reader = upstream.body.getReader();
@@ -393,8 +392,8 @@ export default async function handler(req, res) {
 
     sseWrite(res, { stage: "answer_final", payload: { answer: finalText } });
   } catch (err) {
-    console.error("[rag/answer/stream]", err);
-    const msg = "\u26a0\ufe0f RAG failed: " + (err?.message || String(err));
+    console.error("[rag/answer/stream] generation failed");
+    const msg = "The answer is temporarily unavailable. Please try again.";
     try {
       sseWrite(res, { stage: "answer_delta", payload: { delta: msg } });
       sseWrite(res, { stage: "answer_final", payload: { answer: msg } });
