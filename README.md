@@ -21,7 +21,7 @@ A modern Next.js portfolio application for showcasing projects, blogs, CV, visit
 ## MCP Integrations
 
 Connect Claude, Codex, or any Streamable HTTP MCP client to the public endpoint
-at `https://www.yuqi.site/mcp`. The connector exposes seven read-only tools for
+at `https://www.yuqi.site/mcp`. The connector exposes read-only tools for
 searching portfolio content and retrieving articles, projects, architecture,
 and professional profile evidence.
 
@@ -38,7 +38,7 @@ server-managed roles. The public endpoint above remains available without sign-i
   <tr>
     <td align="center" valign="top" width="50%">
       <a href="docs/readme-assets/claude-yuqi-portfolio-connector.png">
-        <img src="docs/readme-assets/claude-yuqi-portfolio-connector.png" alt="Public Yuqi Portfolio connector in Claude with seven read-only tools" width="410" />
+        <img src="docs/readme-assets/claude-yuqi-portfolio-connector.png" alt="Public Yuqi Portfolio connector in Claude with read-only tools" width="410" />
       </a>
     </td>
     <td align="center" valign="top" width="50%">
@@ -51,7 +51,7 @@ server-managed roles. The public endpoint above remains available without sign-i
 
 **[Read the illustrated MCP connection guide →](https://www.yuqi.site/mcp-guide)**
 
-The guide covers client setup, the seven public tools, example questions, and
+The guide covers client setup, public tools, example questions, and
 the administrator sign-in and consent flow, with screenshots of the interfaces.
 
 ### Connect from Claude or Codex
@@ -185,7 +185,7 @@ Copy `.env.example` to `.env.local` and fill in your values:
 cp .env.example .env.local
 ```
 
-See [`.env.example`](.env.example) for all variables with descriptions. For production, configure the same variables in **Vercel → Project Settings → Environment Variables**.
+See [`.env.example`](.env.example) for the core variables. Feature-specific settings are documented alongside each service. For production, configure the same variables in **Vercel → Project Settings → Environment Variables**.
 
 Score-based bot detection uses Google reCAPTCHA Enterprise and degrades to the
 existing server-side heuristic when it is not configured or temporarily
@@ -211,7 +211,7 @@ Restrict the API key to the reCAPTCHA Enterprise API. Never expose
 3. Add them to `.env` as `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 4. Copy the `service_role` key and set it as `SUPABASE_SERVICE_ROLE_KEY`.
 5. Open the Supabase SQL Editor.
-6. Run the schema and RLS policy script from `create_sql.txt` in the repository root.
+6. Review `creat_sql.txt` and `docs/security/` before setting up the database. Do not run legacy bootstrap SQL against an existing production database.
 7. Confirm that required tables, policies, and server-side access patterns are configured correctly.
 
 ---

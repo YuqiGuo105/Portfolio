@@ -9,7 +9,7 @@ const TIMEOUT_MS = 18_000;
 const SCENARIOS = Object.freeze({
   projects: { name: 'search_portfolio', arguments: { query: 'distributed systems', types: ['PROJECT'], limit: 3 } },
   kubernetes: { name: 'search_articles', arguments: { keyword: 'Kubernetes', sourceType: 'BLOG', limit: 3 } },
-  publishing: { name: 'get_project', arguments: { projectId: '8edf9020-39b6-4db4-83b3-43c459bef1cf' } },
+  publishing: { name: 'get_project', arguments: { projectId: '8edf9020-39b6-4db4-83b3-43c459bef1cf', format: 'html' } },
 });
 
 export class PlaygroundError extends Error {

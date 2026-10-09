@@ -119,3 +119,16 @@ test('only explicit form submission invokes the unchanged subscription API', asy
   assert.match(document.body.textContent, /You.re subscribed/);
   assert.equal(document.activeElement, button('Done'));
 });
+
+test('pending email confirmation never saves credentials or claims an active subscription', async () => {
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ status: 'CONFIRMATION_REQUIRED' }) });
+  render(true);
+  act(() => Simulate.change(document.getElementById('sub-email'), { target: { value: 'owner@example.test' } }));
+  await act(async () => Simulate.submit(document.querySelector('form')));
+  assert.equal(saved, null);
+  assert.match(document.body.textContent, /Check your email/);
+  assert.doesNotMatch(document.body.textContent, /You.re subscribed/);
+  assert.equal(document.querySelector('[data-testid="push-settings"]'), null);
+  render(false); render(true);
+  assert.ok(document.querySelector('form'));
+});

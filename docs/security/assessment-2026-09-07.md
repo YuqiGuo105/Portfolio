@@ -1,5 +1,10 @@
 # Security Assessment: 2026-09-07
 
+Update 2026-10-08: the 43 internal tables below were hardened in production
+with explicit owner approval. See [the follow-up](assessment-2026-10-08.md).
+The historical findings below describe the September snapshot; they do not
+establish today's grants or imply that the four function changes were applied.
+
 Status: **not production-security approved**. This is a targeted assessment,
 not an OWASP ASVS certification or a complete penetration test.
 

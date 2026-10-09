@@ -224,6 +224,11 @@ alter table public.cv_comments
 
 create index if not exists cv_comments_anno_idx on public.cv_comments (anno_id);
 
+-- Public readers must never receive comment authors' email addresses.
+revoke select on public.cv_comments from PUBLIC, anon, authenticated;
+grant select (id, content, author_name, is_approved, created_at, anno_id, quote, occurrence_index)
+  on public.cv_comments to anon, authenticated;
+
 -- ===========================================================
 -- CV: allow owner (yuqi.guo17@gmail.com) to delete any comment
 -- ===========================================================
@@ -239,10 +244,9 @@ create policy "Owner can delete cv_comments"
 -- ============================================================
 alter table public.visitor_logs enable row level security;
 
--- anon 可以 select（DashboardPanels 读取需要）
-create policy "Anyone can read visitor_logs"
-  on public.visitor_logs for select
-  using (true);
+-- Raw visitor data is server-only. Public dashboards use aggregate APIs.
+drop policy if exists "Anyone can read visitor_logs" on public.visitor_logs;
+revoke all privileges on public.visitor_logs from PUBLIC, anon, authenticated;
 
 -- Explicitly deny direct inserts from the anon role.
 -- All inserts MUST go through the API route which uses the service_role key
@@ -268,9 +272,8 @@ drop policy if exists "Allow public inserts on visitor_logs" on public.visitor_l
 -- ============================================================
 alter table public.visitor_clicks enable row level security;
 
-create policy "Anyone can read visitor_clicks"
-  on public.visitor_clicks for select
-  using (true);
+drop policy if exists "Anyone can read visitor_clicks" on public.visitor_clicks;
+revoke all privileges on public.visitor_clicks from PUBLIC, anon, authenticated;
 
 -- Explicitly deny direct inserts from the anon role.
 drop policy if exists "Deny anon inserts on visitor_clicks" on public.visitor_clicks;

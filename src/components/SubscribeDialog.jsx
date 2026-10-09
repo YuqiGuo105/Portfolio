@@ -24,6 +24,7 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [confirmationRequired, setConfirmationRequired] = useState(false);
   const [subscriber, setSubscriber] = useState(null);
   const firstFieldRef = useRef(null);
   const dialogRef = useRef(null);
@@ -40,6 +41,7 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
       if (Array.isArray(existing?.channels) && existing.channels.length) setChannels(existing.channels);
       setError(null);
       setSuccess(false);
+      setConfirmationRequired(false);
     }
   }, [open]);
 
@@ -126,6 +128,12 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
         setError(data.message || "Subscription failed. Please try again.");
         return;
       }
+      if (data.status === "CONFIRMATION_REQUIRED") {
+        setConfirmationRequired(true);
+        setSuccess(true);
+        return;
+      }
+      setConfirmationRequired(false);
       saveSubscriber(data.subscriberId, data.subscriberToken, {
         email,
         unsubscribeToken: data.unsubscribeToken,
@@ -171,8 +179,8 @@ export default function SubscribeDialog({ open, onClose, onSubscribed, isDark = 
           <>
             <div className={`${styles.body} ${styles.success}`}>
               <Check size={32} aria-hidden="true" />
-              <p>You&apos;re subscribed! You&apos;ll be notified{channels.includes("EMAIL") ? " by email" : ""} when an update matches your interests.</p>
-              {channels.includes("WEB") && subscriber && <BrowserPushSettings subscriber={subscriber} />}
+              <p>{confirmationRequired ? "Check your email and confirm your subscription. Nothing changes until you confirm." : <>You&apos;re subscribed! You&apos;ll be notified{channels.includes("EMAIL") ? " by email" : ""} when an update matches your interests.</>}</p>
+              {!confirmationRequired && channels.includes("WEB") && subscriber && <BrowserPushSettings subscriber={subscriber} />}
             </div>
             <footer className={styles.actions}>
               <button ref={doneRef} type="button" onClick={onClose} className={styles.primary}>Done</button>

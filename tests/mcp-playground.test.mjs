@@ -45,6 +45,7 @@ test('article example requests only technical articles with a bounded result cou
 test('publishing reads the existing project and parses authored table rows without generating or writing', async () => {
   const result = await runPlayground('publishing', { fetchImpl: upstream({ ...project, body: contract, adminNotes: 'SECRET' }, (_url, _opts, request) => {
     assert.equal(request.params.name, 'get_project');
+    assert.equal(request.params.arguments.format, 'html');
     assert.equal(request.params.arguments.projectId, '8edf9020-39b6-4db4-83b3-43c459bef1cf');
   }) });
   assert.deepEqual(result.steps, [{ title: 'Commit', responsibility: 'Source & outbox', guarantee: 'Atomic transaction' }]);
