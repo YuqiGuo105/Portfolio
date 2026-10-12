@@ -54,13 +54,15 @@ export function startSubscriptionPrompt({ win, doc, page, hasSubscriber, onPromp
 
   const checkReadingPoint = () => {
     if (doc.hidden || subscriptionPromptBlocked(doc)) return;
+    if (isHomepage) {
+      // The homepage invitation must never precede My Blogs, even after the timer.
+      const heading = doc.getElementById("Blog-section")?.querySelector("h2")?.getBoundingClientRect();
+      readingTrigger = win.scrollY > 0 && heading?.height > 0 && heading.top <= win.innerHeight * 0.75
+        ? "blogs-section" : null;
+      return;
+    }
     const scrollable = doc.documentElement.scrollHeight - win.innerHeight;
     if (!readingTrigger && scrollable > 0 && win.scrollY / scrollable >= 0.25) readingTrigger = "scroll-progress";
-    if (isHomepage) {
-      // Prefer the meaningful section when it arrives before 25% on this viewport.
-      const heading = doc.getElementById("tour-background")?.getBoundingClientRect();
-      if (!readingTrigger && win.scrollY > 0 && heading?.height > 0 && heading.top <= win.innerHeight * 0.75) readingTrigger = "background-section";
-    }
   };
   const onScroll = () => {
     checkReadingPoint();
@@ -86,7 +88,8 @@ export function startSubscriptionPrompt({ win, doc, page, hasSubscriber, onPromp
     // Images, restored scrolling and closing an overlay can change eligibility
     // without another scroll event.
     if (canRead) checkReadingPoint();
-    if (!canRead || (elapsed < SUBSCRIPTION_PROMPT_DELAY_MS && !readingTrigger)) return;
+    const ready = isHomepage ? Boolean(readingTrigger) : elapsed >= SUBSCRIPTION_PROMPT_DELAY_MS || Boolean(readingTrigger);
+    if (!canRead || !ready) return;
     stop();
     // The mounted dialog records cooldown, never a request that wasn't rendered.
     const scrollable = doc.documentElement.scrollHeight - win.innerHeight;

@@ -25,6 +25,8 @@ async function openPage({ width = 1440, height = 1000, subscriber = false, dark 
   const page = await context.newPage();
   // Exercise production cooldown locally unless a case explicitly tests preview.
   await page.goto(preview ? origin : `${origin}/?subscriptionPreview=0`, { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('load');
+  await page.bringToFront();
   await page.locator('.header').waitFor();
   if (dark && !await page.locator('body').evaluate(el => el.classList.contains('dark-skin'))) {
     await page.locator('.switcher-btn').click();
@@ -33,9 +35,9 @@ async function openPage({ width = 1440, height = 1000, subscriber = false, dark 
   return { page, context, get submissions() { return submissions; } };
 }
 
-async function scrollToBackground(page, viewportFraction = 0.65) {
+async function scrollToBlogs(page, viewportFraction = 0.65) {
   await page.evaluate(() => document.fonts.ready);
-  await page.locator('#tour-background').evaluate((heading, fraction) => window.scrollTo({
+  await page.locator('#Blog-section h2').evaluate((heading, fraction) => window.scrollTo({
     top: window.scrollY + heading.getBoundingClientRect().top - window.innerHeight * fraction, behavior: 'instant',
   }), viewportFraction);
 }
@@ -61,35 +63,44 @@ async function checkBounds(page) {
 try {
   const timed = await openPage();
   await timed.page.getByRole('button', { name: 'Subscribe to notifications' }).waitFor();
-  await timed.page.getByRole('dialog', { name: 'Stay in the loop?' }).waitFor({ timeout: 22000 });
+  await timed.page.waitForTimeout(17_000);
   assert.equal(await timed.page.evaluate(() => window.scrollY), 0);
+  assert.equal(await timed.page.locator('[role="dialog"]').count(), 0, 'Time alone must not prompt on the homepage');
+  await timed.page.locator('#tour-background').evaluate(heading => window.scrollTo({
+    top: window.scrollY + heading.getBoundingClientRect().top - innerHeight * .65, behavior: 'instant',
+  }));
+  await timed.page.waitForTimeout(1500);
+  assert.equal(await timed.page.locator('[role="dialog"]').count(), 0, 'Background is too early');
+  await scrollToBlogs(timed.page);
+  await timed.page.getByRole('dialog', { name: 'Stay in the loop?' }).waitFor({ timeout: 8000 });
   assert.equal(timed.submissions, 0);
   await checkBounds(timed.page);
   await timed.page.screenshot({ path: '/private/tmp/subscription-invitation-desktop.png' });
   await timed.page.getByRole('button', { name: 'Not now', exact: true }).click();
   assert.equal(await timed.page.locator('[role="dialog"]').count(), 0);
   await timed.page.reload({ waitUntil: 'domcontentloaded' });
-  await scrollToBackground(timed.page);
-  await timed.page.waitForTimeout(17_000);
+  await scrollToBlogs(timed.page);
+  await timed.page.waitForTimeout(2000);
   assert.equal(await timed.page.locator('[role="dialog"]').count(), 0);
   // Cooldown never disables the visitor's explicit choice to subscribe.
   await timed.page.getByRole('button', { name: 'Subscribe to notifications' }).click();
   await timed.page.getByRole('dialog', { name: 'Subscribe to updates' }).waitFor();
   await timed.page.getByRole('button', { name: 'Cancel', exact: true }).click();
-  console.log('Desktop: time-only trigger, dismissal, reload cooldown and manual opening passed.');
+  console.log('Desktop: no time-only or Background trigger; My Blogs, dismissal, reload cooldown and manual opening passed.');
 
   for (const [width, height, dark] of [[1440, 900, false], [390, 844, false], [320, 568, true]]) {
     const scrolled = await openPage({ width, height, dark });
     await scrolled.page.getByRole('button', { name: 'Subscribe to notifications' }).waitFor();
     const started = Date.now();
     await scrolled.page.evaluate(() => document.fonts.ready);
-    await scrolled.page.locator('#tour-background').evaluate(heading => window.scrollTo({
-      top: Math.max(0, Math.min(window.scrollY + heading.getBoundingClientRect().top - innerHeight * .75,
-        (document.documentElement.scrollHeight - innerHeight) * .25) - 250), behavior: 'instant',
-    }));
-    await scrolled.page.waitForTimeout(2200);
-    assert.equal(await scrolled.page.locator('[role="dialog"]').count(), 0);
     await scrolled.page.evaluate(() => window.scrollTo({ top: (document.documentElement.scrollHeight - innerHeight) * .251, behavior: 'instant' }));
+    await scrolled.page.waitForTimeout(1500);
+    assert.ok(await scrolled.page.locator('#Blog-section h2').evaluate(el => el.getBoundingClientRect().top > innerHeight * .75));
+    assert.equal(await scrolled.page.locator('[role="dialog"]').count(), 0, '25% must not bypass My Blogs');
+    await scrollToBlogs(scrolled.page, .85);
+    await scrolled.page.waitForTimeout(1500);
+    assert.equal(await scrolled.page.locator('[role="dialog"]').count(), 0, 'Wait until the heading is clearly in view');
+    await scrollToBlogs(scrolled.page);
     await scrolled.page.getByRole('dialog', { name: 'Stay in the loop?' }).waitFor({ timeout: 8000 });
     assert.ok(Date.now() - started < 15_000);
     assert.equal(scrolled.submissions, 0);
@@ -110,23 +121,23 @@ try {
       assert.equal(scrolled.submissions, 1);
       await dialog.getByRole('button', { name: 'Done', exact: true }).click();
     }
-    console.log(`Viewport ${width}: 25% trigger, fixed actions, ${dark ? 'short viewport, dark theme and Escape' : 'explicit mocked subscription'} passed.`);
+    console.log(`Viewport ${width}: My Blogs gate, fixed actions, ${dark ? 'short viewport, dark theme and Escape' : 'explicit mocked subscription'} passed.`);
   }
 
   const subscribed = await openPage({ subscriber: true });
-  await scrollToBackground(subscribed.page);
-  await subscribed.page.waitForTimeout(17_000);
+  await scrollToBlogs(subscribed.page);
+  await subscribed.page.waitForTimeout(2000);
   assert.equal(await subscribed.page.locator('[role="dialog"]').count(), 0);
   assert.equal(subscribed.submissions, 0);
   console.log('Existing subscriber: neither trigger shows an invitation. No real subscriptions or emails were sent.');
 
   if (!process.env.TEST_PRODUCTION) {
     const local = await openPage({ width: 390, preview: true });
-    await scrollToBackground(local.page);
+    await scrollToBlogs(local.page);
     await local.page.getByRole('dialog', { name: 'Stay in the loop?' }).waitFor();
     await local.page.getByRole('button', { name: 'Not now', exact: true }).click();
     await local.page.reload({ waitUntil: 'domcontentloaded' });
-    await scrollToBackground(local.page);
+    await scrollToBlogs(local.page);
     await local.page.getByRole('dialog', { name: 'Stay in the loop?' }).waitFor();
     assert.equal(local.submissions, 0);
     console.log('Default local homepage repeats after reload despite existing cooldown.');
