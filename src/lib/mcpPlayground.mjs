@@ -98,7 +98,7 @@ function unwrap(message, id) {
   catch { throw new PlaygroundError('invalid_result'); }
 }
 
-async function readResult(response, id) {
+export async function readResult(response, id, maxBytes = MAX_BYTES) {
   const type = response.headers.get('content-type') || '';
   const sse = type.includes('text/event-stream');
   if (!sse && !type.includes('application/json')) throw new PlaygroundError('invalid_result');
@@ -115,7 +115,7 @@ async function readResult(response, id) {
     while (true) {
       const { done, value } = await reader.read();
       bytes += value?.byteLength || 0;
-      if (bytes > MAX_BYTES) throw new PlaygroundError('invalid_result');
+      if (bytes > maxBytes) throw new PlaygroundError('invalid_result');
       buffer += decoder.decode(value, { stream: !done });
       if (sse) {
         let boundary;

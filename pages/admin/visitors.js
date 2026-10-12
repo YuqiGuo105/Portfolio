@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   BellRing,
@@ -31,6 +31,9 @@ import AdminLayout from "../../src/components/admin/AdminLayout";
 import { DataState, PageHeader, adminStyles as ui } from "../../src/components/admin/AdminUI";
 import visitorStyles from "../../src/components/admin/VisitorsPage.module.css";
 import { adminApi } from "../../src/lib/adminApi";
+import { useAdminSession } from "../../src/components/admin/AdminSessionContext";
+import { VisitorContext, VisitorInspector, VisitorToolbar, alertFromVisitor, useDialogFocus } from "../../src/components/admin/VisitorWorkbench";
+import { eventTimestamp } from "../../src/lib/visitorWorkbench.mjs";
 
 const PAGE_SIZE = 50;
 const WINDOWS = [
@@ -79,6 +82,15 @@ const PAGE_TITLES = {
 };
 
 export default function VisitorsPage() {
+  return <AdminLayout><VisitorsWorkspace /></AdminLayout>;
+}
+
+export function VisitorsWorkspace({ api = adminApi, storageScope }) {
+  const session = useAdminSession();
+  const [zone, setZone] = useState("local");
+  const [selection, setSelection] = useState(null);
+  const [alertDraft, setAlertDraft] = useState(null);
+  const requests = useRef({ logs: 0, alerts: 0, intelligence: 0 });
   const [items, setItems] = useState([]);
   const [draft, setDraft] = useState(EMPTY_FILTERS);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -99,42 +111,50 @@ export default function VisitorsPage() {
   const [queryExpanded, setQueryExpanded] = useState(true);
 
   const load = useCallback(async () => {
+    const sequence = ++requests.current.logs;
     setLoading(true);
     setError("");
     try {
-      const data = await adminApi.visitors.list({ ...filters, hours, page, size: PAGE_SIZE });
+      const data = await api.visitors.list({ ...filters, hours, page, size: PAGE_SIZE });
+      if (sequence !== requests.current.logs) return;
       setItems(Array.isArray(data.items) ? data.items : []);
       setSummary(data.summary || EMPTY_SUMMARY);
       setPageInfo(data.page || { number: page, size: PAGE_SIZE, totalElements: 0, totalPages: 0 });
     } catch (requestError) {
+      if (sequence !== requests.current.logs) return;
       setError(requestError.message || "Visitor logs could not be loaded.");
     } finally {
-      setLoading(false);
+      if (sequence === requests.current.logs) setLoading(false);
     }
-  }, [filters, hours, page]);
+  }, [api, filters, hours, page]);
 
   const loadAlerts = useCallback(async () => {
+    const sequence = ++requests.current.alerts;
     setAlertsLoading(true);
     setAlertsError("");
     try {
-      const data = await adminApi.visitorAlerts.overview({ hours });
+      const data = await api.visitorAlerts.overview({ hours });
+      if (sequence !== requests.current.alerts) return;
       setAlerts({
         rules: Array.isArray(data.rules) ? data.rules : [],
         incidents: Array.isArray(data.incidents) ? data.incidents : [],
         summary: data.summary || EMPTY_ALERTS.summary,
       });
     } catch (requestError) {
+      if (sequence !== requests.current.alerts) return;
       setAlertsError(requestError.message || "Visitor alerts could not be loaded.");
     } finally {
-      setAlertsLoading(false);
+      if (sequence === requests.current.alerts) setAlertsLoading(false);
     }
-  }, [hours]);
+  }, [api, hours]);
 
   const loadIntelligence = useCallback(async () => {
+    const sequence = ++requests.current.intelligence;
     setIntelligenceLoading(true);
     setIntelligenceError("");
     try {
-      const data = await adminApi.visitorIntelligence.overview({ ...filters, hours });
+      const data = await api.visitorIntelligence.overview({ ...filters, hours });
+      if (sequence !== requests.current.intelligence) return;
       setIntelligence({
         ...EMPTY_INTELLIGENCE,
         ...(data || {}),
@@ -146,11 +166,23 @@ export default function VisitorsPage() {
         recentJourneys: Array.isArray(data?.recentJourneys) ? data.recentJourneys : [],
       });
     } catch (requestError) {
+      if (sequence !== requests.current.intelligence) return;
       setIntelligenceError(requestError.message || "Visitor intelligence could not be loaded.");
     } finally {
-      setIntelligenceLoading(false);
+      if (sequence === requests.current.intelligence) setIntelligenceLoading(false);
     }
-  }, [filters, hours]);
+  }, [api, filters, hours]);
+
+  useEffect(() => () => { Object.keys(requests.current).forEach(key => requests.current[key]++); }, []);
+
+  function quickFilter(patch) {
+    const next = { ...EMPTY_FILTERS, bot: filters.bot, includeAdmin: filters.includeAdmin, ...patch };
+    setDraft(next); setFilters(next); setPage(0); setQueryExpanded(true);
+  }
+  function createAlert(item) {
+    const sites = [...new Set(alerts.rules.map(rule => rule.siteId).filter(Boolean))];
+    setAlertDraft({ key: Date.now(), rule: alertFromVisitor(item, sites.length === 1 ? sites[0] : "") });
+  }
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadAlerts(); }, [loadAlerts]);
@@ -181,7 +213,7 @@ export default function VisitorsPage() {
     setExportingFormat(format);
     setExportStatus({ tone: "", message: "" });
     try {
-      const result = await adminApi.visitors.download({ ...filters, hours, format });
+      const result = await api.visitors.download({ ...filters, hours, format });
       saveDownload(result.blob, result.filename || `visitor-logs.${format}`);
       setExportStatus({
         tone: result.truncated ? "warning" : "success",
@@ -236,7 +268,7 @@ export default function VisitorsPage() {
     .length + (filters.bot === "ALL" ? 0 : 1);
 
   return (
-    <AdminLayout>
+    <>
       <div className={ui.page}>
         <PageHeader
           title="Visitor logs"
@@ -274,6 +306,8 @@ export default function VisitorsPage() {
         />
 
         <VisitorAlerts
+          api={api}
+          draftRequest={alertDraft}
           data={alerts}
           loading={alertsLoading}
           error={alertsError}
@@ -392,6 +426,10 @@ export default function VisitorsPage() {
             </div>
             </form>
 
+            <VisitorToolbar filters={filters} hours={hours} zone={zone} onZone={setZone}
+              storageScope={storageScope || session?.profile?.email || session?.email}
+              onRestore={view => { const next = { ...EMPTY_FILTERS, ...view.filters }; setDraft(next); setFilters(next); setHours(view.hours); setPage(0); }} />
+
             <VisitorPagination
               {...paginationProps}
               top
@@ -407,7 +445,7 @@ export default function VisitorsPage() {
             <DataState loading={loading} error={error && !items.length ? error : ""} empty={!loading && !error && items.length === 0} onRetry={load}>
               <div className={visitorStyles.eventList}>
                 {items.map((item) => (
-                  <VisitorEventCard item={item} key={item.eventId || `${item.eventTime}-${item.pageUrl}`} />
+                  <VisitorEventCard item={item} zone={zone} onFilter={quickFilter} onInspect={(item, tab) => setSelection({ item, tab })} onAlert={createAlert} key={item.eventId || `${item.eventTime}-${item.pageUrl}`} />
                 ))}
               </div>
             </DataState>
@@ -416,7 +454,8 @@ export default function VisitorsPage() {
           </div>
         </section>
       </div>
-    </AdminLayout>
+      {selection && <VisitorInspector key={selection.item.eventId || selection.item.sessionId} selection={selection} api={api} hours={hours} zone={zone} onClose={() => setSelection(null)} onFilter={quickFilter} onAlert={createAlert} />}
+    </>
   );
 }
 
@@ -852,13 +891,8 @@ function InsightNumber({ label, value, hint }) {
   );
 }
 
-function VisitorEventCard({ item }) {
+function VisitorEventCard({ item, zone, onFilter, onInspect, onAlert }) {
   const eventTone = visitorStyles[`eventTone${eventToneName(item.eventName)}`] || visitorStyles.eventToneNeutral;
-  const locationPrimary = [item.city, item.region].filter(Boolean).join(", ") || "Unknown location";
-  const locationSecondary = item.country || "No country";
-  const clientPrimary = [cleanValue(item.deviceType), cleanValue(item.browser)].filter(Boolean).join(" · ") || "Unknown client";
-  const clientSecondary = [cleanValue(item.os), item.bot ? "Bot traffic" : ""].filter(Boolean).join(" · ") || "No OS";
-  const referrerHost = displayHost(item.referrer);
   const pagePath = displayPath(item.pageUrl);
   const targetPath = displayPath(item.targetUrl);
 
@@ -869,8 +903,7 @@ function VisitorEventCard({ item }) {
           {eventAbbrev(item.eventName)}
         </span>
         <time className={visitorStyles.eventTime} dateTime={item.eventTime} title={formatDateTime(item.eventTime)}>
-          <span>{formatDate(item.eventTime)}</span>
-          <small>{formatTime(item.eventTime)}</small>
+          <span>{eventTimestamp(item.eventTime, zone)}</span>
         </time>
       </div>
 
@@ -899,53 +932,11 @@ function VisitorEventCard({ item }) {
             )}
           </div>
 
-          <div className={visitorStyles.contextGrid}>
-            <ContextItem icon={<MapPin size={14} />} label="Location" primary={locationPrimary} secondary={locationSecondary} />
-            <ContextItem icon={<Laptop size={14} />} label="Client" primary={clientPrimary} secondary={clientSecondary} />
-            <ContextItem
-              icon={<Link2 size={14} />}
-              label="Referrer"
-              primary={referrerHost || "Direct"}
-              secondary={item.referrer ? "Referral traffic" : "No referrer"}
-              title={item.referrer}
-            />
-            <ContextItem
-              icon={<Globe2 size={14} />}
-              label="Visitor"
-              primary={item.ipAddress || "Unknown IP"}
-              secondary={`Session ${shortId(item.sessionId)}`}
-              title={item.ipAddress}
-            />
-          </div>
+          <VisitorContext item={item} zone={zone} onFilter={onFilter} onInspect={onInspect} onAlert={onAlert} />
         </div>
 
-        <details className={visitorStyles.identityDrawer}>
-          <summary>
-            <UserRound size={13} aria-hidden="true" />
-            Show visitor identifiers
-          </summary>
-          <div>
-            <span title={item.sessionId}>Session <strong>{shortId(item.sessionId)}</strong></span>
-            <span title={item.anonymousId}>Anon <strong>{shortId(item.anonymousId)}</strong></span>
-            <span title={item.eventId}>Event <strong>{shortId(item.eventId)}</strong></span>
-            <span title={formatDateTime(item.eventTime)}><Clock3 size={11} aria-hidden="true" /> {formatDateTime(item.eventTime)}</span>
-          </div>
-        </details>
       </div>
     </article>
-  );
-}
-
-function ContextItem({ icon, label, primary, secondary, title }) {
-  return (
-    <div className={visitorStyles.contextItem} title={title || primary || ""}>
-      <span className={visitorStyles.contextIcon} aria-hidden="true">{icon}</span>
-      <span className={visitorStyles.contextCopy}>
-        <span>{label}</span>
-        <strong>{primary || "Unknown"}</strong>
-        <small>{secondary || "—"}</small>
-      </span>
-    </div>
   );
 }
 
@@ -999,7 +990,7 @@ function ContentReference({ content, url, label, compact = false }) {
   );
 }
 
-function VisitorAlerts({ data, loading, error, hours, onRetry, onChanged }) {
+function VisitorAlerts({ data, loading, error, hours, onRetry, onChanged, api, draftRequest }) {
   const rules = data.rules || [];
   const incidents = data.incidents || [];
   const activeRules = rules.filter((rule) => rule.enabled).length;
@@ -1010,11 +1001,16 @@ function VisitorAlerts({ data, loading, error, hours, onRetry, onChanged }) {
   const [mutationBusy, setMutationBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
+  useEffect(() => {
+    if (!draftRequest) return;
+    setMutationError(""); setPreparedChange(null); setEditingRule(draftRequest.rule); setExpanded(true);
+  }, [draftRequest]);
+
   async function prepareRuleChange({ patch, reason }) {
     setMutationBusy(true);
     setMutationError("");
     try {
-      const prepared = await adminApi.visitorAlerts.prepareChange({
+      const prepared = await api.visitorAlerts.prepareChange({
         ruleId: editingRule.ruleId,
         patch,
         reason,
@@ -1036,7 +1032,7 @@ function VisitorAlerts({ data, loading, error, hours, onRetry, onChanged }) {
     setMutationBusy(true);
     setMutationError("");
     try {
-      await adminApi.visitorAlerts.applyChange(preparedChange.changeId);
+      await api.visitorAlerts.applyChange(preparedChange.changeId);
       setPreparedChange(null);
       await onChanged();
     } catch (requestError) {
@@ -1168,7 +1164,7 @@ function VisitorAlerts({ data, loading, error, hours, onRetry, onChanged }) {
 
       {editingRule && (
         <AlertRuleEditor
-          key={editingRule.ruleId}
+          key={editingRule.ruleId || draftRequest?.key || "new"}
           rule={editingRule}
           busy={mutationBusy}
           error={mutationError}
@@ -1217,6 +1213,8 @@ function DisclosureButton({ controls, expanded, label, onClick }) {
 }
 
 function AlertRuleEditor({ rule, busy, error, onCancel, onReview }) {
+  const dialogRef = useRef(null);
+  useDialogFocus(dialogRef, () => { if (!busy) onCancel(); });
   const [form, setForm] = useState({
     siteId: rule.siteId || "",
     name: rule.name || "",
@@ -1228,6 +1226,8 @@ function AlertRuleEditor({ rule, busy, error, onCancel, onReview }) {
     comparator: rule.comparator || ">=",
     cooldownSeconds: String(rule.cooldownSeconds ?? 1800),
     enabled: Boolean(rule.enabled),
+    bot: rule.filters?.bot || "ALL",
+    referrerDomain: rule.filters?.referrerDomain || "",
     reason: "",
   });
   const [localError, setLocalError] = useState("");
@@ -1252,6 +1252,10 @@ function AlertRuleEditor({ rule, busy, error, onCancel, onReview }) {
       setLocalError("Cooldown must be at least 60 seconds.");
       return;
     }
+    if (form.referrerDomain.trim() && !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(form.referrerDomain.trim())) {
+      setLocalError("Use a domain such as linkedin.com, without a URL or path.");
+      return;
+    }
     setLocalError("");
     onReview({
       patch: {
@@ -1265,6 +1269,7 @@ function AlertRuleEditor({ rule, busy, error, onCancel, onReview }) {
         comparator: form.comparator,
         cooldownSeconds,
         enabled: form.enabled,
+        filters: { bot: form.bot, referrerDomain: form.referrerDomain.trim().toLowerCase() },
       },
       reason: form.reason.trim(),
     });
@@ -1272,7 +1277,7 @@ function AlertRuleEditor({ rule, busy, error, onCancel, onReview }) {
 
   return (
     <div className={visitorStyles.dialogBackdrop} role="presentation">
-      <section className={visitorStyles.policyDialog} role="dialog" aria-modal="true" aria-labelledby="alert-rule-editor-title">
+      <section ref={dialogRef} className={visitorStyles.policyDialog} role="dialog" aria-modal="true" aria-labelledby="alert-rule-editor-title">
         <header className={visitorStyles.dialogHeader}>
           <div>
             <span className={visitorStyles.dialogEyebrow}>Alert policy</span>
@@ -1293,6 +1298,12 @@ function AlertRuleEditor({ rule, busy, error, onCancel, onReview }) {
             </PolicyField>
             <PolicyField label="Event type">
               <input value={form.eventType} onChange={(event) => update("eventType", event.target.value)} maxLength={80} />
+            </PolicyField>
+            <PolicyField label="Traffic classification">
+              <select aria-label="Traffic classification" value={form.bot} onChange={event => update("bot", event.target.value)}><option value="ALL">All traffic</option><option value="EXCLUDE">Exclude detected bots</option><option value="ONLY">Detected bots only</option></select>
+            </PolicyField>
+            <PolicyField label="Referrer domain (exact)">
+              <input value={form.referrerDomain} onChange={event => update("referrerDomain", event.target.value)} placeholder="All sources" maxLength={253} />
             </PolicyField>
             <PolicyField label="Scope level">
               <select value={form.geoLevel} onChange={(event) => update("geoLevel", event.target.value)}>
@@ -1354,10 +1365,16 @@ function AlertRuleEditor({ rule, busy, error, onCancel, onReview }) {
 }
 
 function PreparedRuleChange({ change, busy, error, onBack, onCancel, onApply }) {
-  const entries = Object.entries(change.diff || {});
+  const dialogRef = useRef(null);
+  useDialogFocus(dialogRef, () => { if (!busy) onCancel(); });
+  const entries = Object.entries(change.diff || {}).flatMap(([field, values]) => field === "filters"
+    ? [...new Set([...Object.keys(values.from || {}), ...Object.keys(values.to || {})])].map(key => [
+      key === "bot" ? "Traffic classification" : key === "referrerDomain" ? "Referrer domain (exact)" : key,
+      { from: values.from?.[key], to: values.to?.[key] },
+    ]) : [[field, values]]);
   return (
     <div className={visitorStyles.dialogBackdrop} role="presentation">
-      <section className={`${visitorStyles.policyDialog} ${visitorStyles.reviewDialog}`} role="alertdialog" aria-modal="true" aria-labelledby="alert-rule-review-title">
+      <section ref={dialogRef} className={`${visitorStyles.policyDialog} ${visitorStyles.reviewDialog}`} role="alertdialog" aria-modal="true" aria-labelledby="alert-rule-review-title">
         <header className={visitorStyles.dialogHeader}>
           <div>
             <span className={visitorStyles.dialogEyebrow}>Confirmation</span>
@@ -1456,6 +1473,7 @@ function humanizeField(value) {
 function formatPolicyValue(value) {
   if (value === null || value === undefined || value === "null" || value === "") return "Not set";
   if (typeof value === "boolean") return value ? "Enabled" : "Paused";
+  if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 

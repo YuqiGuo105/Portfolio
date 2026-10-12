@@ -141,7 +141,20 @@ function sanitizeRulePatch(value) {
     comparator: allowedValue(value.comparator, "comparator", [">=", "<="]),
     cooldownSeconds: parsePositiveInteger(value.cooldownSeconds, "cooldownSeconds", 60),
     enabled: parseBoolean(value.enabled, "enabled"),
+    ...(value.filters === undefined ? {} : { filters: sanitizeRuleFilters(value.filters) }),
   };
+}
+
+function sanitizeRuleFilters(filters) {
+  if (!filters || Array.isArray(filters) || typeof filters !== "object" || Object.keys(filters).some(key => !["bot", "referrerDomain"].includes(key))) throw new RequestValidationError("Invalid rule filters.");
+  const result = { bot: allowedValue(filters.bot, "filters.bot", ["ALL", "EXCLUDE", "ONLY"]) };
+  if (filters.referrerDomain !== undefined) {
+    if (typeof filters.referrerDomain !== "string") throw new RequestValidationError("Invalid referrer domain.");
+    const domain = filters.referrerDomain.trim().toLowerCase();
+    if (domain && (domain.length > 253 || !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain))) throw new RequestValidationError("Use a domain such as linkedin.com, without a URL or path.");
+    result.referrerDomain = domain;
+  }
+  return result;
 }
 
 function allowedValue(value, field, allowed) {
