@@ -30,7 +30,7 @@ after(() => dom.window.close());
 
 test('read failure offers retry without reporting a successful empty session', async () => {
   let attempts = 0;
-  const api = { visitors: { sessionEvidence: async () => { if (++attempts === 1) throw new Error('Read unavailable'); return { items: [], page: { totalElements: 0 } }; } } };
+  const api = { visitors: { list: async () => { if (++attempts === 1) throw new Error('Read unavailable'); return { items: [], page: { totalElements: 0 } }; } } };
   await render({ api });
   assert.match(document.body.textContent, /Read unavailable/);
   assert.doesNotMatch(document.body.textContent, /No events in this time window/);
@@ -40,14 +40,16 @@ test('read failure offers retry without reporting a successful empty session', a
 
 test('late response from a previous session is aborted and cannot replace the current session', async () => {
   const pending = [];
-  const api = { visitors: { sessionEvidence: (args, options) => new Promise(resolve => pending.push({ args, ...options, resolve })) } };
+  const api = { visitors: { list: (args, options) => new Promise(resolve => pending.push({ args, ...options, resolve })) } };
   await render({ api });
   await render({ api, selection: { item: { ...item, eventId: 'event-two', sessionId: 'session-two' }, tab: 'timeline' } });
   assert.equal(pending[0].signal.aborted, true);
   await act(async () => pending[1].resolve({ items: [{ eventId: 'two', eventName: 'current', eventTime: item.eventTime }], page: {} }));
   await act(async () => pending[0].resolve({ items: [{ eventId: 'one', eventName: 'obsolete', eventTime: item.eventTime }], page: {} }));
   assert.match(document.body.textContent, /current/); assert.doesNotMatch(document.body.textContent, /obsolete/);
-  assert.deepEqual(pending[0].args.window, pending[1].args.window);
+  assert.equal(pending[0].args.from, pending[1].args.from);
+  assert.equal(pending[0].args.to, pending[1].args.to);
+  assert.equal(pending[1].args.view, 'visits');
 });
 
 test('classification evidence is immediate; session analysis is fetched only on demand and cancelled on close', async () => {
@@ -113,7 +115,7 @@ test('scroll depth renders stored percentages without requests or inferring dept
 });
 
 test('session timeline replaces duration display with approximate scroll checkpoints', async () => {
-  const api = { visitors: { sessionEvidence: async () => ({ items: [
+  const api = { visitors: { list: async () => ({ items: [
     { ...item, eventName: 'read_progress', properties: { progressPercent: 50 } },
     { ...item, eventId: 'old-duration', eventName: 'engaged_time', properties: { engagedSeconds: 120 } },
   ], page: { totalElements: 2 } }) } };
@@ -122,4 +124,32 @@ test('session timeline replaces duration display with approximate scroll checkpo
   assert.match(document.body.textContent, /Legacy duration event/);
   assert.match(document.body.textContent, /Scroll depth not recorded/);
   assert.doesNotMatch(document.body.textContent, /Reported engagement|120 seconds/);
+});
+
+test('grouped session exposes the peak and checkpoint times, with no IP identity inference', async () => {
+  let filter, closed = false;
+  const selected = { ...item, ipAddress: '198.51.100.24' };
+  const grouped = { ...selected, eventName: 'read_progress', visit: {
+    eventCount: 5, maxProgressPercent: 100, openedAt: item.eventTime,
+    checkpoints: [25,50,75,100].map(percent => ({ percent, eventTime: item.eventTime })),
+  } };
+  const api = { visitors: { list: async () => ({ items: [grouped], summary: { totalEvents: 5 }, page: { totalElements: 1 } }) } };
+  await render({ api, selection: { item: selected, tab: 'timeline' }, onFilter: value => { filter = value; }, onClose: () => { closed = true; } });
+  assert.match(document.body.textContent, /1 activities in window from 5 recorded events/);
+  assert.equal(document.querySelectorAll('ol > li').length, 1);
+  assert.match(document.querySelector('summary').textContent, /25% \/ 50% \/ 75% \/ 100%/);
+  assert.equal(document.querySelectorAll('details li').length, 5);
+  await click(' Find same-IP records');
+  assert.deepEqual(filter, { query: selected.ipAddress, sessionId: '' });
+  assert.equal(closed, true);
+  assert.match(document.body.textContent, /other visitors on a shared network/);
+});
+
+test('timeline orders a grouped visit by its first event rather than its last checkpoint', async () => {
+  const api = { visitors: { list: async () => ({ items: [
+    { ...item, eventId: 'visit', eventTime: '2026-10-12T10:15:00Z', visit: { eventCount: 5, firstEventTime: '2026-10-12T10:00:00Z', maxProgressPercent: 100, checkpoints: [] } },
+    { ...item, eventId: 'click', eventName: 'click', eventTime: '2026-10-12T10:10:00Z' },
+  ], page: { totalElements: 2 } }) } };
+  await render({ api });
+  assert.deepEqual([...document.querySelectorAll('ol > li > strong')].map(el => el.textContent), ['Page visit', 'click']);
 });

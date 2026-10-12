@@ -19,6 +19,20 @@
 .depthTrack { display: block; height: 4px; width: 100%; overflow: hidden; border-radius: 2px; background: #e5eee9; }
 .depthTrack > span { display: block; height: 100%; background: #168477; }
 .depthCompact { display: inline-flex; max-width: 100%; font-size: 12px; color: #64766d; }
+.recordView { padding: 14px 0; }
+.recordView .zoneSwitch { width: 260px; max-width: 100%; }
+.checkpoints { margin: 10px 0; }
+.checkpoints summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; cursor: pointer; color: #47655c; font-size: 12px; }
+.checkpoints summary::before { content: '+'; font-size: 16px; width: 12px; }
+.checkpoints[open] summary::before { content: '-'; }
+.checkpoints summary span { color: #087d6c; }
+.checkpoints ul { list-style: none; margin: 10px 0 0; padding: 0; }
+.checkpoints li { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; margin: 0; border: 0; }
+.checkpoints li::before { content: none; }
+.checkpoints li strong { font-size: 12px; font-weight: 600; }
+.checkpoints time { font-size: 11px; color: #69776f; }
+.related { margin-top: 20px; padding-top: 14px; border-top: 1px solid #dce5df; }
+.related p { margin-top: 8px !important; }
 .root .icon { border: 1px solid #dce5df; background: transparent; color: #47655c; width: 30px; height: 30px; padding: 0; border-radius: 6px; display: inline-flex; justify-content: center; align-items: center; flex-shrink: 0; }
 .icon:hover, .button:hover { background: #edf5f1; }
 .root .button { display: inline-flex; justify-content: center; align-items: center; gap: 6px; border: 1px solid #d7e2dc; color: #244b40; background: #fff; border-radius: 6px; padding: 7px 10px; min-height: 34px; }
@@ -61,8 +75,8 @@
 .notice { border-left: 3px solid #c08a29; padding: 10px 12px; background: #fff9ed; margin: 12px 0; color: #694c18; }
 .error { color: #af3737; }
 .timeline { list-style: none; padding: 0; margin: 16px 0; }
-.timeline li { position: relative; border-left: 2px solid #dce8e1; padding: 0 0 22px 18px; margin-left: 5px; overflow-wrap: anywhere; }
-.timeline li::before { content: ''; width: 8px; height: 8px; background: #168477; border-radius: 50%; position: absolute; left: -5px; top: 6px; }
+.timeline > li { position: relative; border-left: 2px solid #dce8e1; padding: 0 0 22px 18px; margin-left: 5px; overflow-wrap: anywhere; }
+.timeline > li::before { content: ''; width: 8px; height: 8px; background: #168477; border-radius: 50%; position: absolute; left: -5px; top: 6px; }
 .timeline strong, .timeline time { display: block; }
 .timeline time { color: #64766d; font-size: 12px; }
 .pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 14px; }

@@ -1,5 +1,6 @@
 import { validateSessionRequest } from './visitorSessionRequest.mjs';
 import { sampleHistory, previewOverview } from './visitorOverviewPreview.mjs';
+import { groupVisitorEvents } from './visitorWorkbench.mjs';
 
 // Synthetic fixtures only. Never contains production visitor data or credentials.
 export function createVisitorPreviewApi() {
@@ -29,7 +30,7 @@ export function createVisitorPreviewApi() {
   return {
     visitors: {
       async overview(filters) { return previewOverview(events.filter(item => matches(item, filters)), filters, now); },
-      async list(filters) { const items = events.filter(item => matches(item, filters)).reverse(); return { ...paginate(items, filters.page || 0, filters.size || 50), summary: { totalEvents: items.length, uniqueVisitors: new Set(items.map(e => e.sessionId)).size, countries: new Set(items.map(e => e.country)).size, cities: new Set(items.map(e => e.city).filter(Boolean)).size } }; },
+      async list(filters) { const items = events.filter(item => matches(item, filters)).reverse(); return { ...paginate(filters.view === 'visits' ? groupVisitorEvents(items) : items, filters.page || 0, filters.size || 50), view: filters.view || 'events', summary: { totalEvents: items.length, uniqueVisitors: new Set(items.map(e => e.sessionId)).size, countries: new Set(items.map(e => e.country)).size, cities: new Set(items.map(e => e.city).filter(Boolean)).size } }; },
       async sessionEvidence(body) {
         const { sessionId, window, page } = validateSessionRequest(body);
         const all = events.filter(e => e.sessionId === sessionId && e.eventTime >= window.from && e.eventTime < window.to).reverse();

@@ -13,7 +13,7 @@ export function mapLink(item) {
 }
 
 export function scrollDepthPercent(event) {
-  const value = event?.properties?.progressPercent ?? event?.progressPercent;
+  const value = event?.visit?.maxProgressPercent ?? event?.properties?.progressPercent ?? event?.progressPercent;
   if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return null;
   const percent = Number(value);
   return Number.isFinite(percent) && percent >= 0 && percent <= 100 ? Math.round(percent) : null;
@@ -27,9 +27,34 @@ export function eventTimestamp(value, zone = 'local') {
   }).format(date) + (zone === 'UTC' ? ' UTC' : ` ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
 }
 
+// Only the local preview groups in JS; production groups the full window in SQL.
+export function groupVisitorEvents(events) {
+  const groups = new Map();
+  for (const event of [...events].sort((a, b) => Date.parse(a.eventTime) - Date.parse(b.eventTime) || String(a.eventId).localeCompare(String(b.eventId)))) {
+    const reading = ['page_view', 'read_progress', 'engaged_time'].includes(event.eventName) && event.sessionId && event.pageUrl;
+    let path = event.pageUrl;
+    try { path = new URL(path, 'https://www.yuqi.site').pathname; } catch { /* Keep malformed paths separate. */ }
+    const key = JSON.stringify(reading ? ['visit', event.siteId || '', event.sessionId, path] : ['event', event.eventId]);
+    const previous = groups.get(key);
+    if (!reading) { groups.set(key, { ...event }); continue; }
+    const visit = previous?.visit || { eventCount: 0, firstEventTime: event.eventTime, openedAt: null, maxProgressPercent: null, checkpoints: [] };
+    visit.eventCount++;
+    visit.lastEventTime = event.eventTime;
+    if (event.eventName === 'page_view' && !visit.openedAt) visit.openedAt = event.eventTime;
+    const progress = event.eventName === 'read_progress' ? scrollDepthPercent(event) : null;
+    if (progress !== null) {
+      visit.maxProgressPercent = Math.max(visit.maxProgressPercent ?? 0, progress);
+      if (!visit.checkpoints.some(point => point.percent === progress)) visit.checkpoints.push({ percent: progress, eventTime: event.eventTime });
+    }
+    groups.set(key, { ...event, visit });
+  }
+  return [...groups.values()].sort((a, b) => Date.parse(b.eventTime) - Date.parse(a.eventTime) || String(a.eventId).localeCompare(String(b.eventId)));
+}
+
 export function sessionWindow(item, hours = 24, now = Date.now()) {
-  const eventTime = Date.parse(item.eventTime);
-  const end = Math.max(now, Number.isFinite(eventTime) ? eventTime + 1000 : now);
+  const eventTime = Date.parse(item.visit?.firstEventTime || item.eventTime);
+  const lastEventTime = Date.parse(item.visit?.lastEventTime || item.eventTime);
+  const end = Math.max(now, Number.isFinite(lastEventTime) ? lastEventTime + 1000 : now);
   const start = Math.min(end - hours * 3600000, Number.isFinite(eventTime) ? eventTime - 1000 : end);
   return { from: new Date(Math.max(start, end - 31 * 86400000)).toISOString(), to: new Date(end).toISOString() };
 }

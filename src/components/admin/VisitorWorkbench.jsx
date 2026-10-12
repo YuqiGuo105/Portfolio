@@ -25,6 +25,25 @@ export function ScrollDepth({ event, compact = false }) {
   </span>;
 }
 
+export function VisitorRecordView({ value, onChange }) {
+  return <div className={`${styles.root} ${styles.recordView}`}>
+    <div className={styles.zoneSwitch} role="group" aria-label="Visitor record view">
+      {[['visits', 'Page visits'], ['events', 'Raw events']].map(([id, label]) => <button key={id} type="button" aria-pressed={value === id} onClick={() => onChange(id)}>{label}</button>)}
+    </div>
+  </div>;
+}
+
+export function VisitCheckpoints({ event, zone }) {
+  if (!event.visit) return null;
+  const { eventCount, checkpoints = [], openedAt } = event.visit;
+  return <details className={`${styles.root} ${styles.checkpoints}`}>
+    <summary>{eventCount} recorded {eventCount === 1 ? 'event' : 'events'}{checkpoints.length > 0 && <span>{checkpoints.map(point => `${point.percent}%`).join(' / ')}</span>}</summary>
+    <ul>{openedAt && <li><strong>Page opened</strong><time>{eventTimestamp(openedAt, zone)}</time></li>}
+      {checkpoints.map(point => <li key={point.percent}><strong>About {point.percent}%</strong><time>{eventTimestamp(point.eventTime, zone)}</time></li>)}
+    </ul>
+  </details>;
+}
+
 export function VisitorContext({ item, onFilter, onInspect, onAlert, zone }) {
   const map = mapLink(item), source = referrerOrigin(item.referrer);
   return <div className={styles.root}>
@@ -96,7 +115,7 @@ export function useDialogFocus(ref, onClose) {
   useEffect(() => {
     const previous = document.activeElement, overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const focusables = () => [...(ref.current?.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]') || [])].filter(el => el.getClientRects().length);
+    const focusables = () => [...(ref.current?.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]') || [])].filter(el => el.getClientRects().length);
     focusables()[0]?.focus();
     const handler = e => {
       if (e.key === 'Escape') { e.preventDefault(); close.current?.(); }
@@ -116,17 +135,21 @@ export function VisitorInspector({ selection, api, hours, zone, onClose, onFilte
     if (tab === 'evidence' || !item.sessionId) return;
     let active = true; const controller = new AbortController();
     setLoading(true); setError(''); setResult(null);
-    api.visitors.sessionEvidence({ sessionId: item.sessionId, window, page: { number: page, size: 25 } }, { signal: controller.signal })
+    const read = tab === 'timeline'
+      ? api.visitors.list({ sessionId: item.sessionId, ...window, page, size: 25, view: 'visits' }, { signal: controller.signal })
+      : api.visitors.sessionEvidence({ sessionId: item.sessionId, window, page: { number: page, size: 25 } }, { signal: controller.signal });
+    read
       .then(data => { if (active) setResult(data); }).catch(e => { if (active) setError(e.message || 'Session evidence is unavailable.'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; controller.abort(); };
   }, [api, item.sessionId, window, page, retry, tab]);
   const evidence = assessmentEvidence(item), analysis = result?.trafficAnalysis;
-  const events = [...(result?.items || [])].sort((a, b) => Date.parse(a.eventTime) - Date.parse(b.eventTime));
+  const events = [...(result?.items || [])].sort((a, b) => Date.parse(a.visit?.firstEventTime || a.eventTime) - Date.parse(b.visit?.firstEventTime || b.eventTime));
   const pages = [...new Set(events.map(event => event.pageUrl || event.pagePath).filter(Boolean))];
+  const selectTab = next => { setTab(next); setPage(0); setResult(null); };
   return <div className={`${styles.root} ${styles.shade}`} onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
     <section className={styles.drawer} role="dialog" aria-modal="true" aria-labelledby="visitor-inspector-title" ref={ref}>
       <header className={styles.header}><div><span className={styles.label}>Private visitor record</span><h2 id="visitor-inspector-title">Session details</h2><code>{item.sessionId || 'Session not recorded'}</code></div><IconAction label="Close session details" onClick={onClose}><X size={18} /></IconAction></header>
-      <div className={styles.tabs} role="tablist" aria-label="Session detail views">{[['timeline', 'Timeline'], ['evidence', 'Classification'], ['analysis', 'MCP analysis']].map(([id, label], index, tabs) => <button id={`visitor-tab-${id}`} aria-controls="visitor-detail-panel" role="tab" className={styles.tab} aria-selected={tab === id} tabIndex={tab === id ? 0 : -1} key={id} onClick={() => setTab(id)} onKeyDown={e => { if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return; e.preventDefault(); const next = e.key === 'Home' ? 0 : e.key === 'End' ? 2 : (index + (e.key === 'ArrowRight' ? 1 : 2)) % 3; setTab(tabs[next][0]); document.getElementById(`visitor-tab-${tabs[next][0]}`)?.focus(); }}>{label}</button>)}</div>
+      <div className={styles.tabs} role="tablist" aria-label="Session detail views">{[['timeline', 'Timeline'], ['evidence', 'Classification'], ['analysis', 'MCP analysis']].map(([id, label], index, tabs) => <button id={`visitor-tab-${id}`} aria-controls="visitor-detail-panel" role="tab" className={styles.tab} aria-selected={tab === id} tabIndex={tab === id ? 0 : -1} key={id} onClick={() => selectTab(id)} onKeyDown={e => { if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return; e.preventDefault(); const next = e.key === 'Home' ? 0 : e.key === 'End' ? 2 : (index + (e.key === 'ArrowRight' ? 1 : 2)) % 3; selectTab(tabs[next][0]); document.getElementById(`visitor-tab-${tabs[next][0]}`)?.focus(); }}>{label}</button>)}</div>
       <div className={styles.body} role="tabpanel" id="visitor-detail-panel" aria-labelledby={`visitor-tab-${tab}`} tabIndex={0}>
         {tab === 'evidence' ? <>
           <h3>Stored classification for this event</h3><dl><dt>Classification</dt><dd>{evidence.stored}</dd><dt>Assessment provider</dt><dd>{evidence.provider}</dd><dt>Assessment status</dt><dd>{evidence.status}</dd><dt>Human-likelihood score</dt><dd>{evidence.score === null ? 'Not available' : `${evidence.score} / 1 (higher means more human-like)`}</dd><dt>Verified bot flag</dt><dd>{evidence.verifiedBot ? 'Yes' : 'Not present'}</dd><dt>Reasons</dt><dd>{evidence.reasons.join(', ') || 'No provider reasons recorded'}</dd></dl>
@@ -137,8 +160,9 @@ export function VisitorInspector({ selection, api, hours, zone, onClose, onFilte
           {loading && <p role="status">Reading session evidence...</p>}
           {error && <div role="alert"><p className={styles.error}>{error}</p><button className={styles.button} onClick={() => setRetry(v => v + 1)}>Retry</button></div>}
           {!item.sessionId && <p>No session identifier was recorded.</p>}
-          {result && tab === 'timeline' && <><p className={styles.muted}>{result.page?.totalElements ?? events.length} events in window. This page is ordered by event time; gaps are not measured dwell time.</p>
-            <ol className={styles.timeline}>{events.map((event, index) => <li key={event.eventId || index}><time>{eventTimestamp(event.eventTime, zone)}</time><strong>{event.eventName === 'engaged_time' ? 'Legacy duration event' : String(event.eventName || 'Event').replace(/_/g, ' ')}</strong><span>{event.pageUrl || event.pagePath || 'Page not recorded'}</span><ScrollDepth event={event} />{event.targetUrl && <div className={styles.muted}>Target: {event.targetUrl}</div>}</li>)}</ol>{!events.length && <p>No events in this time window.</p>}</>}
+          {result && tab === 'timeline' && <><p className={styles.muted}>{result.page?.totalElements ?? events.length} activities in window{result.summary && ` from ${result.summary.totalEvents} recorded events`}. Reading checkpoints are grouped by session and page.</p>
+            {result.summary?.totalEvents === 1 && <div className={styles.notice}>This session has one recorded event. Activity with a different session ID is kept separate.</div>}
+            <ol className={styles.timeline}>{events.map((event, index) => <li key={event.eventId || index}><time>{eventTimestamp(event.visit?.firstEventTime || event.eventTime, zone)}</time><strong>{event.visit ? 'Page visit' : event.eventName === 'engaged_time' ? 'Legacy duration event' : String(event.eventName || 'Event').replace(/_/g, ' ')}</strong><span>{event.pageUrl || event.pagePath || 'Page not recorded'}</span><ScrollDepth event={event} /><VisitCheckpoints event={event} zone={zone} />{event.targetUrl && <div className={styles.muted}>Target: {event.targetUrl}</div>}</li>)}</ol>{!events.length && <p>No events in this time window.</p>}</>}
           {result && tab === 'analysis' && <>
             <h3>{analysis ? String(analysis.verdict).replace(/_/g, ' ') : 'Analysis not available'}</h3>
             {analysis ? <><dl><dt>Evidence source</dt><dd>Admin MCP · visitor.get_session_events</dd><dt>Detector</dt><dd>{analysis.detector}</dd><dt>Sampled events</dt><dd>{analysis.sampledEvents} / {analysis.windowTotalEvents ?? 'unknown'}</dd><dt>Automation indicated</dt><dd>{analysis.counts?.automationIndicated ?? 0}</dd><dt>Stored flag conflicts</dt><dd>{analysis.counts?.storedFlagConflicts ?? 0}</dd><dt>Human verification</dt><dd>Not performed</dd></dl><div className={styles.notice}>{analysis.completeWindow ? 'All events in this window were returned.' : 'Partial evidence only. Read other pages before drawing conclusions.'}</div>
@@ -149,6 +173,7 @@ export function VisitorInspector({ selection, api, hours, zone, onClose, onFilte
           {result && <div className={styles.pager}><button className={styles.button} disabled={!page || loading} onClick={() => setPage(p => p - 1)}>Previous</button><span>Page {page + 1}</span><button className={styles.button} disabled={loading || page + 1 >= (result.page?.totalPages || 1)} onClick={() => setPage(p => p + 1)}>Next</button></div>}
         </>}
         <div className={styles.actions}><button type="button" className={styles.button} disabled={!item.sessionId} onClick={() => { onFilter({ sessionId: item.sessionId }); onClose(); }}><Filter size={14} /> Filter session</button><button type="button" className={styles.button} onClick={() => { onAlert(item); onClose(); }}><BellPlus size={14} /> Create alert</button></div>
+        {item.ipAddress && <div className={styles.related}><button type="button" className={styles.button} onClick={() => { onFilter({ query: item.ipAddress, sessionId: '' }); onClose(); }}><SearchCheck size={14} /> Find same-IP records</button><p className={styles.muted}>May include other visitors on a shared network.</p></div>}
       </div>
     </section>
   </div>;

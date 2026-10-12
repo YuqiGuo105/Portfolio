@@ -62,17 +62,39 @@ try {
     assert.equal(await page.getByLabel('City', { exact: true }).inputValue(), 'Jaipur');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByLabel('Saved filter views').selectOption('Jaipur mobile');
+    const view = page.getByRole('group', { name: 'Visitor record view' });
+    assert.equal(await view.getByRole('button', { name: 'Page visits', exact: true }).getAttribute('aria-pressed'), 'true');
+    await view.getByRole('button', { name: 'Raw events', exact: true }).click();
+    await page.getByText(/of \d+ events · Page/).first().waitFor();
+    const rawCount = await page.locator('article').count();
+    await view.getByRole('button', { name: 'Page visits', exact: true }).click();
+    await page.waitForFunction(count => document.querySelectorAll('article').length === count - 18, rawCount);
     const row = page.locator('article').filter({ hasText: 'Jaipur' }).first();
+    assert.ok(await row.getByTitle('Approximate furthest scroll checkpoint on this page, not proof that the content was read.').getByText('About 100%', { exact: true }).isVisible());
+    assert.ok(await row.getByText('25% / 50% / 75% / 100%', { exact: true }).isVisible());
+    await row.locator('details').filter({ hasText: '25% / 50% / 75% / 100%' }).locator('summary').click();
+    assert.equal(await row.locator('details[open] li').count(), 4);
+    await row.screenshot({ path: `${output}/${width}-grouped-visit.png` });
     await row.getByRole('button', { name: 'Timeline', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Session details' });
-    await dialog.getByText('29 events in window.', { exact: false }).waitFor();
-    assert.equal(await dialog.locator('ol li').count(), 25);
-    await dialog.getByRole('button', { name: 'Next', exact: true }).click();
-    await page.waitForFunction(() => document.querySelector('[role="dialog"] ol')?.children.length === 4);
+    await dialog.getByText('11 activities in window from 29 recorded events.', { exact: false }).waitFor();
+    assert.equal(await dialog.locator('ol > li').count(), 11);
+    assert.ok(await dialog.getByRole('button', { name: 'Next', exact: true }).isDisabled());
+    const checkpoint = dialog.locator('details').filter({ hasText: '25% / 50% / 75% / 100%' });
+    await checkpoint.locator('summary').click();
+    await checkpoint.scrollIntoViewIfNeeded();
+    assert.equal(await checkpoint.locator('li').count(), 4);
+    assert.equal(await dialog.evaluate(el => el.scrollWidth > el.clientWidth + 1), false, `Timeline overflow at ${width}`);
+    await page.screenshot({ path: `${output}/${width}-grouped-timeline.png` });
     await dialog.getByRole('tab', { name: 'MCP analysis' }).click();
     await dialog.getByText('Partial evidence only.', { exact: false }).waitFor();
     assert.ok(await dialog.getByText('Not performed', { exact: true }).isVisible());
     await page.screenshot({ path: `${output}/${width}-analysis.png` });
+    await dialog.getByRole('button', { name: 'Next', exact: true }).click();
+    await dialog.getByText('Page 2', { exact: true }).waitFor();
+    await dialog.getByRole('tab', { name: 'Timeline', exact: true }).click();
+    await dialog.getByText('11 activities in window from 29 recorded events.', { exact: false }).waitFor();
+    assert.ok(await dialog.getByText('Page 1', { exact: true }).isVisible());
     await dialog.getByRole('tab', { name: 'Classification', exact: true }).click();
     assert.ok(await dialog.getByText('Not classified as a bot', { exact: true }).isVisible());
     await page.keyboard.press('Escape');
@@ -110,4 +132,5 @@ try {
     await context.close();
   }
   console.log(`${checks} viewport scenarios passed. Screenshots: ${output}`);
-} finally { await browser.close(); }
+} catch (error) { console.error(error); throw error; }
+finally { await browser.close(); }

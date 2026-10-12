@@ -48,6 +48,8 @@ export default async function handler(req, res) {
 
   const base = (process.env.ANALYTICS_API_URL || PROD_DEFAULT).replace(/\/+$/, "");
   const format = firstQueryValue(req.query.format)?.toLowerCase();
+  const view = firstQueryValue(req.query.view) || "events";
+  if (!["events", "visits"].includes(view)) return res.status(400).json({ error: "invalid_view" });
   if (format && !EXPORT_FORMATS.has(format)) {
     return res.status(400).json({
       error: "invalid_export_format",
@@ -62,7 +64,7 @@ export default async function handler(req, res) {
       return sendExport(res, format, exported);
     }
 
-    const payload = await fetchVisitorPage(base, token, params);
+    const payload = await fetchVisitorPage(base, token, params, view);
     const items = filterLocalhostRecords(payload.items);
     const contentByPath = await loadContentReferences(items);
 
@@ -82,11 +84,12 @@ export default async function handler(req, res) {
   }
 }
 
-async function fetchVisitorPage(base, token, params) {
+async function fetchVisitorPage(base, token, params, view = "events") {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
-    const upstream = await fetch(`${base}/api/admin/visitors?${params.toString()}`, {
+    const endpoint = view === "visits" ? "visitor-visits" : "visitors";
+    const upstream = await fetch(`${base}/api/admin/${endpoint}?${params.toString()}`, {
       headers: {
         Accept: "application/json",
         "X-Internal-Token": token,

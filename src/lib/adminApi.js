@@ -135,9 +135,9 @@ export const adminApi = {
     sessionEvidence(body, { signal } = {}) {
       return request("/api/admin/visitor-session", { method: "POST", body: JSON.stringify(body), signal });
     },
-    list({ query = "", hours = 24, page = 0, size = 50, ...filters } = {}) {
+    list({ query = "", hours = 24, page = 0, size = 50, ...filters } = {}, { signal } = {}) {
       const params = visitorParams({ query, hours, page, size, ...filters });
-      return request(`/api/admin/visitors?${params.toString()}`);
+      return request(`/api/admin/visitors?${params.toString()}`, { signal });
     },
     download({ format, ...query } = {}) {
       if (!["csv", "json"].includes(format)) throw new Error("Export format must be csv or json.");

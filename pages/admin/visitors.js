@@ -32,7 +32,7 @@ import { DataState, PageHeader, adminStyles as ui } from "../../src/components/a
 import visitorStyles from "../../src/components/admin/VisitorsPage.module.css";
 import { adminApi } from "../../src/lib/adminApi";
 import { useAdminSession } from "../../src/components/admin/AdminSessionContext";
-import { ScrollDepth, VisitorContext, VisitorInspector, VisitorToolbar, alertFromVisitor, useDialogFocus } from "../../src/components/admin/VisitorWorkbench";
+import { ScrollDepth, VisitCheckpoints, VisitorRecordView, VisitorContext, VisitorInspector, VisitorToolbar, alertFromVisitor, useDialogFocus } from "../../src/components/admin/VisitorWorkbench";
 import { eventTimestamp } from "../../src/lib/visitorWorkbench.mjs";
 import VisitorOverview from "../../src/components/admin/VisitorOverview";
 
@@ -92,6 +92,7 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
   const [alertDraft, setAlertDraft] = useState(null);
   const requests = useRef({ logs: 0, alerts: 0, intelligence: 0 });
   const [items, setItems] = useState([]);
+  const [recordView, setRecordView] = useState('visits');
   const [draft, setDraft] = useState(EMPTY_FILTERS);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [hours, setHours] = useState(24);
@@ -116,7 +117,7 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
     setLoading(true);
     setError("");
     try {
-      const data = await api.visitors.list({ ...filters, ...range, page, size: PAGE_SIZE });
+      const data = await api.visitors.list({ ...filters, ...range, page, size: PAGE_SIZE, view: recordView });
       if (sequence !== requests.current.logs) return;
       setItems(Array.isArray(data.items) ? data.items : []);
       setPageInfo(data.page || { number: page, size: PAGE_SIZE, totalElements: 0, totalPages: 0 });
@@ -126,7 +127,7 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
     } finally {
       if (sequence === requests.current.logs) setLoading(false);
     }
-  }, [api, filters, range, page]);
+  }, [api, filters, range, page, recordView]);
 
   const loadAlerts = useCallback(async () => {
     const sequence = ++requests.current.alerts;
@@ -268,6 +269,7 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
     end,
     loading,
     onPageChange: setPage,
+    recordView,
   };
   const activeFilterCount = Object.entries(filters)
     .filter(([name, value]) => name !== "includeAdmin" && name !== "bot" && Boolean(value))
@@ -428,6 +430,7 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
               storageScope={storageScope || session?.profile?.email || session?.email}
               onRestore={view => { const next = { ...EMPTY_FILTERS, ...view.filters }; setDraft(next); setFilters(next); setHours(view.hours); setPage(0); }} />
 
+            <VisitorRecordView value={recordView} onChange={value => { setRecordView(value); setPage(0); }} />
             <VisitorPagination
               {...paginationProps}
               top
@@ -468,14 +471,15 @@ function VisitorPagination({
   top = false,
   exportingFormat = "",
   onExport,
+  recordView,
 }) {
   const totalPages = Number(pageInfo.totalPages || 0);
   return (
     <div className={`${ui.pagination} ${top ? visitorStyles.topPagination : ""}`}>
       <span>
         {total === 0
-          ? "0 events"
-          : `${start}–${end} of ${total} · Page ${page + 1} of ${Math.max(totalPages, 1)}`}
+          ? "0 records"
+          : `${start}–${end} of ${total} ${recordView === 'visits' ? 'activities' : 'events'} · Page ${page + 1} of ${Math.max(totalPages, 1)}`}
       </span>
       <div className={ui.paginationActions}>
         {onExport && (
@@ -909,9 +913,9 @@ function VisitorEventCard({ item, zone, onFilter, onInspect, onAlert }) {
           <div className={visitorStyles.eventTitleBlock}>
             <span className={visitorStyles.eventAction}>
               <MousePointerClick size={15} aria-hidden="true" />
-              {humanizeEventName(item.eventName)}
+              {item.visit ? 'Page visit' : humanizeEventName(item.eventName)}
             </span>
-            <span className={visitorStyles.eventIntent}>{eventIntent(item.eventName)}</span>
+            <span className={visitorStyles.eventIntent}>{item.visit ? `${item.visit.eventCount} recorded events` : eventIntent(item.eventName)}</span>
           </div>
           {pagePath && (
             <a className={visitorStyles.pathPill} href={pagePath} target="_blank" rel="noreferrer" title={item.pageUrl || pagePath}>
@@ -925,6 +929,7 @@ function VisitorEventCard({ item, zone, onFilter, onInspect, onAlert }) {
           <div className={visitorStyles.contentStack}>
             <ContentReference content={item.pageContent} url={item.pageUrl} label="Page" />
             <ScrollDepth event={item} />
+            <VisitCheckpoints event={item} zone={zone} />
             {targetPath && targetPath !== pagePath && (
               <ContentReference content={item.targetContent} url={item.targetUrl} label="Target" compact />
             )}
