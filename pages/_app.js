@@ -102,7 +102,7 @@ function MyApp({ Component, pageProps }) {
   const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
   const loadRecaptcha = recaptchaSiteKey && !isPrivateAnalyticsPage(router.asPath);
 
-  // One tracker owns page views, engagement time and reading milestones.
+  // One tracker owns page views and throttled scroll-depth checkpoints.
   useEffect(() => {
     const track = (url) => {
       cleanupTracking.current?.();

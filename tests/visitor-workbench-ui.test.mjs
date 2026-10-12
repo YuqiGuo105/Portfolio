@@ -69,3 +69,29 @@ test('saved view storage failure is visible and cannot claim success', async () 
     assert.match(document.body.textContent, /Could not save/); assert.doesNotMatch(document.body.textContent, /Saved on this browser/);
   } finally { dom.window.Storage.prototype.setItem = original; }
 });
+
+test('scroll depth renders stored percentages without requests or inferring depth from duration', async () => {
+  await act(() => root.render(React.createElement(exports.ScrollDepth, { event: { properties: { progressPercent: 75 } } })));
+  assert.match(document.body.textContent, /Scroll depth\s*About 75%/);
+  assert.match(document.querySelector('[title]').title, /not proof/);
+  for (const value of [undefined, null, '', true, -1, 101, 'not-a-number']) {
+    assert.equal(helpers.scrollDepthPercent({ properties: { progressPercent: value } }), null);
+  }
+  assert.equal(helpers.scrollDepthPercent({ progressPercent: '50' }), 50);
+  assert.equal(helpers.scrollDepthPercent({ properties: { progressPercent: 0 } }), 0);
+  await act(() => root.render(React.createElement(exports.ScrollDepth, { event: { eventName: 'engaged_time', properties: { engagedSeconds: 90 } } })));
+  assert.match(document.body.textContent, /Scroll depth not recorded/);
+  assert.doesNotMatch(document.body.textContent, /90|%/);
+});
+
+test('session timeline replaces duration display with approximate scroll checkpoints', async () => {
+  const api = { visitors: { sessionEvidence: async () => ({ items: [
+    { ...item, eventName: 'read_progress', properties: { progressPercent: 50 } },
+    { ...item, eventId: 'old-duration', eventName: 'engaged_time', properties: { engagedSeconds: 120 } },
+  ], page: { totalElements: 2 } }) } };
+  await render({ api });
+  assert.match(document.body.textContent, /About 50%/);
+  assert.match(document.body.textContent, /Legacy duration event/);
+  assert.match(document.body.textContent, /Scroll depth not recorded/);
+  assert.doesNotMatch(document.body.textContent, /Reported engagement|120 seconds/);
+});

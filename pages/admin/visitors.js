@@ -32,7 +32,7 @@ import { DataState, PageHeader, adminStyles as ui } from "../../src/components/a
 import visitorStyles from "../../src/components/admin/VisitorsPage.module.css";
 import { adminApi } from "../../src/lib/adminApi";
 import { useAdminSession } from "../../src/components/admin/AdminSessionContext";
-import { VisitorContext, VisitorInspector, VisitorToolbar, alertFromVisitor, useDialogFocus } from "../../src/components/admin/VisitorWorkbench";
+import { ScrollDepth, VisitorContext, VisitorInspector, VisitorToolbar, alertFromVisitor, useDialogFocus } from "../../src/components/admin/VisitorWorkbench";
 import { eventTimestamp } from "../../src/lib/visitorWorkbench.mjs";
 import VisitorOverview from "../../src/components/admin/VisitorOverview";
 
@@ -864,8 +864,7 @@ function JourneyTimelineStep({ index, previous, step }) {
           <a href={path} target="_blank" rel="noreferrer">{path}<ExternalLink size={10} /></a>
         ) : <span className={visitorStyles.timelinePath}>{path}</span>}
         <span className={visitorStyles.timelineSignals}>
-          {Number.isFinite(step.progressPercent) && <small>{step.progressPercent}% read</small>}
-          {Number.isFinite(step.engagedSeconds) && step.engagedSeconds > 0 && <small>{step.engagedSeconds}s engaged</small>}
+          <ScrollDepth event={step} compact />
           {step.contentType && <small>{humanizeField(step.contentType)}</small>}
         </span>
       </div>
@@ -925,6 +924,7 @@ function VisitorEventCard({ item, zone, onFilter, onInspect, onAlert }) {
         <div className={visitorStyles.eventBody}>
           <div className={visitorStyles.contentStack}>
             <ContentReference content={item.pageContent} url={item.pageUrl} label="Page" />
+            <ScrollDepth event={item} />
             {targetPath && targetPath !== pagePath && (
               <ContentReference content={item.targetContent} url={item.targetUrl} label="Target" compact />
             )}
@@ -1520,6 +1520,8 @@ function formatTime(value) {
 }
 
 function humanizeEventName(value) {
+  if (value === "engaged_time") return "Legacy Duration";
+  if (value === "read_progress") return "Scroll Depth";
   const normalized = String(value || "unknown").replace(/[_-]+/g, " ").trim();
   return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -1545,8 +1547,8 @@ function eventToneName(value) {
 function eventIntent(value) {
   const text = String(value || "").toLowerCase();
   if (text.includes("page_view")) return "Visitor loaded a page";
-  if (text.includes("read_progress")) return "Reading progress checkpoint";
-  if (text.includes("engaged_time")) return "Active time recorded";
+  if (text.includes("read_progress")) return "Approximate page scroll checkpoint";
+  if (text.includes("engaged_time")) return "Historical duration; not a reading measurement";
   if (text.includes("project_open")) return "Project detail opened";
   if (text.includes("content_open")) return "Content detail opened";
   if (text.includes("outbound_link")) return "External link click";

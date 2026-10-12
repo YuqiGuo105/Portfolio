@@ -13,7 +13,7 @@ export function createVisitorPreviewApi() {
     city: index < 29 ? 'Jaipur' : '', region: index < 29 ? 'RJ' : '', country: index < 29 ? 'IN' : 'US',
     referrer: index < 29 ? 'https://linkedin.com/feed/?private=removed' : '', ipAddress: index < 29 ? '198.51.100.24' : '203.0.113.9', bot: index >= 29,
     userAgent: index < 29 ? 'Sample Safari iPhone' : 'Sample Googlebot/2.1',
-    properties: index < 29 ? {} : { botAssessmentProvider: 'GOOGLE_RECAPTCHA_ENTERPRISE', botAssessmentStatus: 'VALID', botAssessmentHumanScore: 0.1, botAssessmentReasons: ['AUTOMATION'], botAssessmentVerifiedBot: true },
+    properties: { ...(index % 3 === 1 ? { progressPercent: [25, 50, 75, 100][Math.floor(index / 3) % 4] } : {}), ...(index < 29 ? {} : { botAssessmentProvider: 'GOOGLE_RECAPTCHA_ENTERPRISE', botAssessmentStatus: 'VALID', botAssessmentHumanScore: 0.1, botAssessmentReasons: ['AUTOMATION'], botAssessmentVerifiedBot: true }) },
   }))].sort((a, b) => a.eventTime.localeCompare(b.eventTime));
   const rules = [{ ruleId: 1, siteId: 'preview.local', name: 'Sample visitor alert', eventType: 'page_view', geoLevel: 'GLOBAL', geoAreaId: '', threshold: 1, comparator: '>=', granularity: '5m', cooldownSeconds: 1800, filters: { bot: 'EXCLUDE' }, enabled: false }];
   const pending = new Map();

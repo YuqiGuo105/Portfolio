@@ -12,6 +12,13 @@ export function mapLink(item) {
   return parts.length ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts.join(', '))}` : null;
 }
 
+export function scrollDepthPercent(event) {
+  const value = event?.properties?.progressPercent ?? event?.progressPercent;
+  if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return null;
+  const percent = Number(value);
+  return Number.isFinite(percent) && percent >= 0 && percent <= 100 ? Math.round(percent) : null;
+}
+
 export function eventTimestamp(value, zone = 'local') {
   const date = new Date(value);
   if (!value || !Number.isFinite(date.getTime())) return 'Not recorded';

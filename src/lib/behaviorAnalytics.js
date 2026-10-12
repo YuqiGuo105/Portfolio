@@ -210,40 +210,60 @@ export function startPageBehaviorTracking(page, { recordPageView = true } = {}) 
       || isPrivateAnalyticsPage(page) || isPrivateAnalyticsPage(window.location.href)) {
     return () => {};
   }
-  const startedAt = Date.now();
-  const milestones = new Set();
-  let discarded = false;
-  let flushed = false;
+  if (getAnalyticsConsent() !== "granted") return () => {};
+  let timer = null;
+  let peakScrollY = 0;
+  let reported = 0;
+  let stopped = false;
   if (recordPageView) trackBehavior("page_view", { page });
 
-  const onScroll = () => {
-    if (getAnalyticsConsent() !== "granted") return;
-    const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+  const sample = (leaving = false) => {
+    timer = null;
+    if (stopped || getAnalyticsConsent() !== "granted"
+        || (!leaving && document.visibilityState === "hidden")
+        || currentPath(window.location.href) !== currentPath(page)) return;
+    const scrollable = Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight || 0) - window.innerHeight;
     if (scrollable <= 0) return;
-    const percentage = Math.min(100, Math.round((window.scrollY / scrollable) * 100));
-    for (const milestone of [25, 50, 75, 100]) {
-      if (percentage >= milestone && !milestones.has(milestone)) {
-        milestones.add(milestone);
-        trackBehavior("read_progress", { page, properties: { progressPercent: milestone } });
-      }
+    // Scroll offsets can be fractional while scrollHeight is rounded to pixels.
+    const percentage = peakScrollY >= scrollable - 1 ? 100
+      : Math.min(100, Math.max(0, peakScrollY / scrollable * 100));
+    const checkpoint = Math.floor(percentage / 25) * 25;
+    peakScrollY = window.scrollY;
+    if (checkpoint > reported) {
+      reported = checkpoint;
+      // Skip intermediate checkpoints after a fast scroll: at most four events per page.
+      trackBehavior("read_progress", { page, properties: { progressPercent: checkpoint } });
+      if (reported === 100) window.removeEventListener("scroll", onScroll);
     }
   };
 
-  const flushEngagement = () => {
-    if (flushed || discarded) return;
-    flushed = true;
-    const seconds = Math.min(3600, Math.round((Date.now() - startedAt) / 1000));
-    if (seconds >= 5) {
-      trackBehavior("engaged_time", { page, properties: { engagedSeconds: seconds } });
+  const onScroll = () => {
+    if (stopped || reported === 100) return;
+    peakScrollY = Math.max(peakScrollY, window.scrollY);
+    // Only read document geometry once per second, never in the scroll handler.
+    if (timer === null) timer = window.setTimeout(sample, 1000);
+  };
+  const flushProgress = () => {
+    if (timer !== null) {
+      window.clearTimeout(timer);
+      sample(true);
     }
+  };
+  const onVisibilityChange = () => {
+    if (document.visibilityState === "hidden") flushProgress();
   };
 
   window.addEventListener("scroll", onScroll, { passive: true });
-  window.addEventListener("pagehide", flushEngagement, { once: true });
+  window.addEventListener("pagehide", flushProgress);
+  document.addEventListener("visibilitychange", onVisibilityChange);
   return ({ discard = false } = {}) => {
-    discarded ||= discard;
+    if (stopped) return;
+    if (!discard) flushProgress();
+    stopped = true;
+    if (timer !== null) window.clearTimeout(timer);
+    timer = null;
     window.removeEventListener("scroll", onScroll);
-    window.removeEventListener("pagehide", flushEngagement);
-    flushEngagement();
+    window.removeEventListener("pagehide", flushProgress);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
   };
 }

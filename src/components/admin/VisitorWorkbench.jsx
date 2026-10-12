@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { BellPlus, Check, Copy, ExternalLink, Filter, List, SearchCheck, Save, Trash2, X } from 'lucide-react';
-import { alertFromVisitor, assessmentEvidence, eventTimestamp, mapLink, readSavedViews, referrerOrigin, sanitizeSavedView, sessionWindow } from '../../lib/visitorWorkbench.mjs';
+import { alertFromVisitor, assessmentEvidence, eventTimestamp, mapLink, readSavedViews, referrerOrigin, sanitizeSavedView, sessionWindow, scrollDepthPercent } from '../../lib/visitorWorkbench.mjs';
 import styles from './VisitorWorkbench.module.css';
 
 export function CopyValue({ value, label }) {
@@ -13,6 +13,16 @@ export function CopyValue({ value, label }) {
 
 function IconAction({ label, onClick, children, disabled }) {
   return <button type="button" title={label} aria-label={label} className={styles.icon} onClick={onClick} disabled={disabled}>{children}</button>;
+}
+
+export function ScrollDepth({ event, compact = false }) {
+  const percent = scrollDepthPercent(event);
+  if (percent === null) return ['read_progress', 'engaged_time'].includes(event?.eventName)
+    ? <span className={styles.muted}>Scroll depth not recorded</span> : null;
+  return <span className={compact ? styles.depthCompact : styles.depth} title="Approximate furthest scroll checkpoint on this page, not proof that the content was read.">
+    <span className={styles.depthLabel}>Scroll depth <strong>About {percent}%</strong></span>
+    {!compact && <span className={styles.depthTrack} aria-hidden="true"><span style={{ width: `${percent}%` }} /></span>}
+  </span>;
 }
 
 export function VisitorContext({ item, onFilter, onInspect, onAlert, zone }) {
@@ -114,7 +124,7 @@ export function VisitorInspector({ selection, api, hours, zone, onClose, onFilte
           {error && <div role="alert"><p className={styles.error}>{error}</p><button className={styles.button} onClick={() => setRetry(v => v + 1)}>Retry</button></div>}
           {!item.sessionId && <p>No session identifier was recorded.</p>}
           {result && tab === 'timeline' && <><p className={styles.muted}>{result.page?.totalElements ?? events.length} events in window. This page is ordered by event time; gaps are not measured dwell time.</p>
-            <ol className={styles.timeline}>{events.map((event, index) => <li key={event.eventId || index}><time>{eventTimestamp(event.eventTime, zone)}</time><strong>{String(event.eventName || 'Event').replace(/_/g, ' ')}</strong><span>{event.pageUrl || event.pagePath || 'Page not recorded'}</span>{event.properties?.progressPercent != null && <div className={styles.muted}>Reading progress: {String(event.properties.progressPercent)}%</div>}{event.targetUrl && <div className={styles.muted}>Target: {event.targetUrl}</div>}{event.properties?.engagedSeconds != null && <div className={styles.muted}>Reported engagement: {String(event.properties.engagedSeconds)} seconds</div>}</li>)}</ol>{!events.length && <p>No events in this time window.</p>}</>}
+            <ol className={styles.timeline}>{events.map((event, index) => <li key={event.eventId || index}><time>{eventTimestamp(event.eventTime, zone)}</time><strong>{event.eventName === 'engaged_time' ? 'Legacy duration event' : String(event.eventName || 'Event').replace(/_/g, ' ')}</strong><span>{event.pageUrl || event.pagePath || 'Page not recorded'}</span><ScrollDepth event={event} />{event.targetUrl && <div className={styles.muted}>Target: {event.targetUrl}</div>}</li>)}</ol>{!events.length && <p>No events in this time window.</p>}</>}
           {result && tab === 'analysis' && <>
             <h3>{analysis ? String(analysis.verdict).replace(/_/g, ' ') : 'Analysis not available'}</h3>
             {analysis ? <><dl><dt>Evidence source</dt><dd>Admin MCP · visitor.get_session_events</dd><dt>Detector</dt><dd>{analysis.detector}</dd><dt>Sampled events</dt><dd>{analysis.sampledEvents} / {analysis.windowTotalEvents ?? 'unknown'}</dd><dt>Automation indicated</dt><dd>{analysis.counts?.automationIndicated ?? 0}</dd><dt>Stored flag conflicts</dt><dd>{analysis.counts?.storedFlagConflicts ?? 0}</dd><dt>Human verification</dt><dd>Not performed</dd></dl><div className={styles.notice}>{analysis.completeWindow ? 'All events in this window were returned.' : 'Partial evidence only. Read other pages before drawing conclusions.'}</div>
