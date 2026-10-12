@@ -66,8 +66,36 @@ test('saved view storage failure is visible and cannot claim success', async () 
     await act(() => root.render(React.createElement(exports.VisitorToolbar, { filters: {}, hours: 24, zone: 'UTC', onZone: () => {}, onRestore: () => {}, storageScope: 'test-admin' })));
     await act(() => Simulate.change(document.querySelector('input'), { target: { value: 'Mobile' } }));
     await act(() => Simulate.submit(document.querySelector('form')));
-    assert.match(document.body.textContent, /Could not save/); assert.doesNotMatch(document.body.textContent, /Saved on this browser/);
+    assert.match(document.body.textContent, /Could not save/); assert.doesNotMatch(document.body.textContent, /View saved/);
+    assert.equal(document.querySelector('input').value, 'Mobile', 'Failed saves preserve the name for retry');
   } finally { dom.window.Storage.prototype.setItem = original; }
+});
+
+test('toolbar exposes timezone selection and disables unavailable saved-view actions', async () => {
+  let zone;
+  await act(() => root.render(React.createElement(exports.VisitorToolbar, { filters: {}, hours: 24, zone: 'UTC', onZone: value => { zone = value; }, onRestore: () => {} })));
+  assert.equal(document.querySelector('select').disabled, true);
+  assert.equal(document.querySelector('[aria-label="Save view"]').disabled, true);
+  assert.equal(document.querySelector('[aria-label="Delete selected view"]').disabled, true);
+  assert.equal(document.querySelector('[aria-pressed="true"]').textContent, 'UTC');
+  await click('Local'); assert.equal(zone, 'local');
+});
+
+test('toolbar saves, restores and deletes a named view without storing visitor identifiers', async () => {
+  let restored;
+  await act(() => root.render(React.createElement(exports.VisitorToolbar, { filters: { city: 'Jaipur', query: 'private search', sessionId: 'private-id' }, hours: 24, zone: 'UTC', onZone: () => {}, onRestore: view => { restored = view; }, storageScope: 'test-admin' })));
+  await act(() => Simulate.change(document.querySelector('input'), { target: { value: 'Mobile' } }));
+  await act(() => Simulate.submit(document.querySelector('form')));
+  assert.match(document.body.textContent, /View saved/);
+  assert.equal(document.querySelector('select').value, 'Mobile');
+  assert.equal(document.querySelector('input').value, '');
+  assert.doesNotMatch(localStorage.getItem('visitor-views:v1:test-admin'), /private/);
+  await act(() => Simulate.change(document.querySelector('select'), { target: { value: 'Mobile' } }));
+  assert.equal(restored.filters.city, 'Jaipur');
+  await act(() => Simulate.click(document.querySelector('[aria-label="Delete selected view"]')));
+  assert.equal(document.querySelector('select').disabled, true);
+  assert.equal(localStorage.getItem('visitor-views:v1:test-admin'), '[]');
+  assert.match(document.body.textContent, /View deleted/);
 });
 
 test('scroll depth renders stored percentages without requests or inferring depth from duration', async () => {

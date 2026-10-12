@@ -7,7 +7,7 @@ await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 let checks = 0;
 try {
-  for (const width of [1440, 390, 320]) {
+  for (const width of [1440, 768, 390, 320]) {
     const context = await browser.newContext({ viewport: { width, height: 950 }, permissions: ['clipboard-read', 'clipboard-write'] });
     const page = await context.newPage(); const errors = [], apiWrites = [];
     page.setDefaultTimeout(15000);
@@ -16,7 +16,32 @@ try {
     await page.goto(`${base}/admin/visitor-preview`, { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: 'Classification evidence', exact: true }).first().waitFor();
     assert.ok(await page.getByText('Local preview · Sample data', { exact: true }).isVisible());
-    await page.getByLabel('Display time zone').selectOption('UTC');
+    const toolbar = page.getByRole('region', { name: 'Visitor view options' });
+    const zone = toolbar.getByRole('group', { name: 'Display time zone' });
+    await zone.getByRole('button', { name: 'UTC', exact: true }).click();
+    assert.equal(await zone.getByRole('button', { name: 'UTC', exact: true }).getAttribute('aria-pressed'), 'true');
+    assert.equal(await zone.getByRole('button', { name: 'Local', exact: true }).getAttribute('aria-pressed'), 'false');
+    assert.ok(await toolbar.getByLabel('Saved filter views').isDisabled());
+    assert.ok(await toolbar.getByRole('button', { name: 'Save view', exact: true }).isDisabled());
+    const geometry = await toolbar.evaluate(el => {
+      const rect = node => { const r = node.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+      return { bounds: rect(el), controls: [...el.querySelectorAll('input, select, button')].map(rect), rows: [...el.children].map(child => rect(child)) };
+    });
+    for (const control of geometry.controls) {
+      assert.ok(control.x >= geometry.bounds.x - 1 && control.x + control.width <= geometry.bounds.x + geometry.bounds.width + 1, `Toolbar control overflow at ${width}`);
+    }
+    if (width === 1440) {
+      assert.ok(geometry.rows.every(row => Math.abs(row.y - geometry.rows[0].y) < 1), 'Desktop fields align');
+      const switchBox = await zone.boundingBox(), selectBox = await toolbar.getByLabel('Saved filter views').boundingBox();
+      const inputBox = await toolbar.getByLabel('New view name').boundingBox();
+      assert.equal(switchBox.y, selectBox.y, 'Timezone and saved-view controls align');
+      assert.equal(inputBox.y, selectBox.y, 'All desktop control baselines align');
+      assert.equal(switchBox.height, selectBox.height, 'Timezone and inputs have equal heights');
+    } else if (width < 540) assert.ok(geometry.rows[1].y >= geometry.rows[0].y + geometry.rows[0].height, 'Mobile fields stack');
+    const savedSelect = await toolbar.getByLabel('Saved filter views').boundingBox();
+    const deleteButton = await toolbar.getByRole('button', { name: 'Delete selected view' }).boundingBox();
+    assert.equal(savedSelect.y, deleteButton.y, 'Saved-view actions align');
+    assert.equal(savedSelect.height, deleteButton.height, 'Saved-view controls have equal heights');
     const card = page.locator('article').filter({ hasText: 'Jaipur' }).first();
     await card.scrollIntoViewIfNeeded();
     const map = card.getByRole('link', { name: /Jaipur/ });
@@ -30,6 +55,8 @@ try {
     assert.equal(await page.getByLabel('Country', { exact: true }).inputValue(), 'IN');
     await page.getByLabel('New view name').fill('Jaipur mobile');
     await page.getByRole('button', { name: 'Save view', exact: true }).click();
+    assert.equal(await page.getByLabel('Saved filter views').inputValue(), 'Jaipur mobile');
+    assert.equal(await page.getByLabel('New view name').inputValue(), '');
     await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
     await page.getByLabel('Saved filter views').selectOption('Jaipur mobile');
     assert.equal(await page.getByLabel('City', { exact: true }).inputValue(), 'Jaipur');
@@ -67,10 +94,13 @@ try {
     await page.getByLabel('Saved filter views').selectOption('Jaipur mobile');
     await page.getByRole('button', { name: 'Delete selected view' }).click();
     assert.equal(await page.getByLabel('Saved filter views').locator('option').count(), 1);
+    assert.ok(await page.getByLabel('Saved filter views').isDisabled());
     await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
     await page.locator('article').first().getByRole('button', { name: 'Classification evidence' }).click();
     assert.ok(await page.getByRole('dialog').getByText('0.1 / 1 (higher means more human-like)').isVisible());
     await page.keyboard.press('Escape');
+    await toolbar.scrollIntoViewIfNeeded();
+    await toolbar.screenshot({ path: `${output}/${width}-toolbar.png` });
     await page.locator('article').first().scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${output}/${width}-records.png` });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);

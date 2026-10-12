@@ -78,6 +78,31 @@ roles, audited execution, and explicit confirmation for write operations.
 
 ---
 
+## Admin Visitor Workbench
+
+Filter traffic, switch between local time and UTC, and reuse saved views.
+Inspect session timelines, classification evidence, and approximate scroll depth
+at 25%, 50%, 75%, and 100% checkpoints. Visitor records require administrator access;
+saved views stay in the current browser and omit visitor identifiers and free-text searches.
+
+<p align="center">
+  <a href="docs/readme-assets/visitor-view-controls-desktop.png">
+    <img src="docs/readme-assets/visitor-view-controls-desktop.png" alt="Desktop visitor workbench with aligned view controls and a sample 50 percent scroll-depth event" width="820" />
+  </a>
+</p>
+
+<details>
+  <summary>Mobile layout</summary>
+  <p align="center">
+    <img src="docs/readme-assets/visitor-view-controls-mobile.png" alt="Mobile visitor controls with stacked labels, Local and UTC selection, and accessible save and delete buttons" width="320" />
+  </p>
+</details>
+
+*Screenshots use synthetic local-preview data, not real visitor records.
+Scroll depth is an approximate checkpoint, not proof that content was read.*
+
+---
+
 ## Chrome Extension: Application Copilot
 
 Application Copilot is a Chrome Manifest V3 extension that runs directly on job

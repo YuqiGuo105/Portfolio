@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { BellPlus, Check, Copy, ExternalLink, Filter, List, SearchCheck, Save, Trash2, X } from 'lucide-react';
 import { alertFromVisitor, assessmentEvidence, eventTimestamp, mapLink, readSavedViews, referrerOrigin, sanitizeSavedView, sessionWindow, scrollDepthPercent } from '../../lib/visitorWorkbench.mjs';
 import styles from './VisitorWorkbench.module.css';
@@ -61,17 +61,31 @@ export function VisitorContext({ item, onFilter, onInspect, onAlert, zone }) {
 }
 
 export function VisitorToolbar({ filters, hours, onRestore, zone, onZone, storageScope }) {
+  const id = useId();
   const [views, setViews] = useState([]), [name, setName] = useState(''), [selected, setSelected] = useState(''), [status, setStatus] = useState('');
   const key = storageScope ? `visitor-views:v1:${storageScope}` : null;
-  useEffect(() => { setSelected(''); setViews([]); if (!key) return; try { setViews(readSavedViews(localStorage.getItem(key))); } catch { setStatus('Browser storage is unavailable.'); } }, [key]);
-  function persist(next) { if (!key) return; try { localStorage.setItem(key, JSON.stringify(next)); setViews(next); setStatus('Saved on this browser. Visitor identifiers and free-text searches are not stored.'); } catch { setStatus('Could not save. Browser storage is unavailable.'); } }
-  return <div className={`${styles.root} ${styles.toolbar}`}>
-    <label>Time <select aria-label="Display time zone" value={zone} onChange={e => onZone(e.target.value)}><option value="local">Local</option><option value="UTC">UTC</option></select></label>
-    <select aria-label="Saved filter views" value={selected} onChange={e => { setSelected(e.target.value); const view = views.find(v => v.name === e.target.value); if (view) onRestore(view); }}><option value="">Saved views</option>{views.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}</select>
-    <IconAction label="Delete selected view" disabled={!selected} onClick={() => { persist(views.filter(v => v.name !== selected)); setSelected(''); }}><Trash2 size={14} /></IconAction>
-    <form onSubmit={e => { e.preventDefault(); const view = sanitizeSavedView({ name, filters, hours }); if (!view) return; if (views.some(v => v.name === view.name)) { setStatus('That name is already used.'); return; } if (views.length >= 12) { setStatus('Delete a saved view before adding another.'); return; } persist([...views, view]); setName(''); }}>
-      <input aria-label="New view name" placeholder="View name" value={name} maxLength={60} onChange={e => setName(e.target.value)} />
-      <button className={styles.button} type="submit" disabled={!name.trim() || !key}><Save size={14} /> Save view</button>
+  useEffect(() => { setSelected(''); setViews([]); setStatus(''); setName(''); if (!key) return; try { setViews(readSavedViews(localStorage.getItem(key))); } catch { setStatus('Browser storage is unavailable.'); } }, [key]);
+  function persist(next, message) { if (!key) return false; try { localStorage.setItem(key, JSON.stringify(next)); setViews(next); setStatus(message); return true; } catch { setStatus('Could not save. Browser storage is unavailable.'); return false; } }
+  return <div className={`${styles.root} ${styles.toolbar}`} role="region" aria-label="Visitor view options">
+    <div className={styles.toolbarField}>
+      <span id={`${id}-zone`} className={styles.toolbarLabel}>Time zone</span>
+      <div className={styles.zoneSwitch} role="group" aria-label="Display time zone" aria-describedby={`${id}-zone`}>
+        {[['local', 'Local'], ['UTC', 'UTC']].map(([value, label]) => <button key={value} type="button" aria-pressed={zone === value} onClick={() => onZone(value)}>{label}</button>)}
+      </div>
+    </div>
+    <div className={styles.toolbarField}>
+      <label htmlFor={`${id}-views`} className={styles.toolbarLabel}>Saved views</label>
+      <div className={styles.controlRow}>
+        <select id={`${id}-views`} aria-label="Saved filter views" disabled={!views.length} value={selected} onChange={e => { setSelected(e.target.value); const view = views.find(v => v.name === e.target.value); if (view) onRestore(view); }}><option value="">{views.length ? 'Select a view' : 'No saved views'}</option>{views.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}</select>
+        <IconAction label="Delete selected view" disabled={!selected} onClick={() => { if (persist(views.filter(v => v.name !== selected), 'View deleted.')) setSelected(''); }}><Trash2 size={16} /></IconAction>
+      </div>
+    </div>
+    <form className={styles.toolbarField} onSubmit={e => { e.preventDefault(); const view = sanitizeSavedView({ name, filters, hours }); if (!view) return; if (views.some(v => v.name === view.name)) { setStatus('That name is already used.'); return; } if (views.length >= 12) { setStatus('Delete a saved view before adding another.'); return; } if (persist([...views, view], 'View saved in this browser.')) { setName(''); setSelected(view.name); } }}>
+      <label htmlFor={`${id}-name`} className={styles.toolbarLabel}>Save current view</label>
+      <div className={styles.controlRow}>
+        <input id={`${id}-name`} aria-label="New view name" placeholder="Name this view" autoComplete="off" value={name} maxLength={60} onChange={e => setName(e.target.value)} />
+        <button className={`${styles.icon} ${styles.saveAction}`} type="submit" title="Save view" aria-label="Save view" disabled={!name.trim() || !key}><Save size={16} /></button>
+      </div>
     </form>
     {status && <span role="status" className={styles.status}>{status}</span>}
   </div>;

@@ -22,14 +22,23 @@
 .root .icon { border: 1px solid #dce5df; background: transparent; color: #47655c; width: 30px; height: 30px; padding: 0; border-radius: 6px; display: inline-flex; justify-content: center; align-items: center; flex-shrink: 0; }
 .icon:hover, .button:hover { background: #edf5f1; }
 .root .button { display: inline-flex; justify-content: center; align-items: center; gap: 6px; border: 1px solid #d7e2dc; color: #244b40; background: #fff; border-radius: 6px; padding: 7px 10px; min-height: 34px; }
-.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 16px 0; border-top: 1px solid #e3e9e5; }
-.toolbar input, .toolbar select { max-width: 100%; min-width: 0; height: 36px; line-height: 1.4; margin: 0; padding: 7px 9px; border: 1px solid #d7e2dc; border-radius: 6px; background: #fff; color: inherit; }
-.toolbar input { width: 155px; }
-.toolbar select { width: auto; }
-.toolbar label { display: flex; align-items: center; gap: 6px; font: inherit; margin: 0; }
+.toolbar { display: grid; grid-template-columns: 148px minmax(180px, 1fr) minmax(200px, 1fr); align-items: start; gap: 16px 24px; padding: 20px 0; border-top: 1px solid #e3e9e5; }
+.toolbar .toolbarField { display: grid; min-width: 0; gap: 8px; margin: 0; }
+.toolbar .toolbarLabel { display: block; margin: 0; padding: 0; color: #526c61; font: 600 12px/18px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.controlRow { display: grid; grid-template-columns: minmax(0, 1fr) 40px; align-items: center; gap: 8px; min-width: 0; }
+.toolbar input, .toolbar select { width: 100%; max-width: 100%; min-width: 0; height: 40px; line-height: 1.4; margin: 0; padding: 9px 12px; border: 1px solid #cbdad2; border-radius: 6px; background: #fff; color: inherit; box-shadow: none; }
+.toolbar select { appearance: auto; padding-right: 30px; text-overflow: ellipsis; }
+.toolbar select:disabled { opacity: 1; color: #657970; background: #f6f8f7; }
 .toolbar input::placeholder { color: #69776f; opacity: 1; }
-.toolbar form { display: flex; flex-wrap: wrap; gap: 6px; }
-.status { flex-basis: 100%; font-size: 12px; color: #69776f; }
+.toolbar .icon { width: 40px; height: 40px; border-color: #cbdad2; }
+.toolbar .saveAction:not(:disabled) { color: #fff; background: #087d6c; border-color: #087d6c; }
+.toolbar .saveAction:not(:disabled):hover { background: #066456; }
+.zoneSwitch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; height: 40px; padding: 3px; background: #edf2ef; border: 1px solid #d7e2dc; border-radius: 6px; }
+.root .zoneSwitch button { display: flex; align-items: center; justify-content: center; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: #526c61; font-weight: 600; }
+.root .zoneSwitch button[aria-pressed="true"] { background: #fff; border-color: #cedbd4; color: #086d60; box-shadow: 0 1px 2px #18332e0d; }
+.root .zoneSwitch button:hover { color: #086d60; }
+.root .zoneSwitch button:focus-visible { outline-offset: -2px; }
+.status { grid-column: 1 / -1; font-size: 12px; color: #69776f; }
 .ids { display: grid; gap: 7px; border-top: 1px solid #e3e9e5; margin-top: 16px; padding-top: 10px; }
 .ids summary { cursor: pointer; }
 .ids code { overflow-wrap: anywhere; white-space: normal; font-size: 11px; }
@@ -59,4 +68,14 @@
 .pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 14px; }
 .preview { padding: 12px 24px; background: #fff6dc; color: #5e4a1a; border-bottom: 1px solid #e9d79e; font: 13px/1.5 system-ui; }
 @media (max-width: 800px) { .context { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; } }
-@media (max-width: 420px) { .header, .body { padding: 16px; } .body dl { grid-template-columns: minmax(0,1fr); gap: 4px; } .body dd { margin-bottom: 8px; } .toolbar { gap: 8px; } .tabs { padding: 0 8px; gap: 0; } .tab { padding: 12px 7px; } }
+@media (max-width: 900px) { .toolbar { grid-template-columns: 148px minmax(0, 1fr); gap: 16px; } .toolbar form { grid-column: 1 / -1; } }
+@media (max-width: 540px) {
+  .toolbar { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .toolbar .toolbarField { gap: 6px; }
+  .controlRow { grid-template-columns: minmax(0, 1fr) 44px; }
+  .toolbar input, .toolbar select { height: 44px; font-size: 16px; }
+  .toolbar .icon { width: 44px; height: 44px; }
+  .zoneSwitch { width: 164px; height: 44px; }
+  .root .zoneSwitch button { height: 36px; }
+}
+@media (max-width: 420px) { .header, .body { padding: 16px; } .body dl { grid-template-columns: minmax(0,1fr); gap: 4px; } .body dd { margin-bottom: 8px; } .tabs { padding: 0 8px; gap: 0; } .tab { padding: 12px 7px; } }
