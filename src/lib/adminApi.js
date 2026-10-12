@@ -129,6 +129,9 @@ export const adminApi = {
     },
   },
   visitors: {
+    overview(query, { signal } = {}) {
+      return request(`/api/admin/visitor-overview?${visitorParams(query)}`, { signal });
+    },
     sessionEvidence(body, { signal } = {}) {
       return request("/api/admin/visitor-session", { method: "POST", body: JSON.stringify(body), signal });
     },

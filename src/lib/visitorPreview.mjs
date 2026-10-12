@@ -1,9 +1,10 @@
 import { validateSessionRequest } from './visitorSessionRequest.mjs';
+import { sampleHistory, previewOverview } from './visitorOverviewPreview.mjs';
 
 // Synthetic fixtures only. Never contains production visitor data or credentials.
 export function createVisitorPreviewApi() {
   const now = Date.now();
-  const events = Array.from({ length: 32 }, (_, index) => ({
+  const events = [...sampleHistory(now), ...Array.from({ length: 32 }, (_, index) => ({
     eventId: `sample-event-${index}`, siteId: 'preview.local', sessionId: index < 29 ? 'sample-jaipur-session' : 'sample-bot-session',
     anonymousId: 'sample-anonymous', eventTime: new Date(now - (33 - index) * 90000).toISOString(),
     serverTime: new Date(now - (33 - index) * 90000 + 1200).toISOString(),
@@ -13,17 +14,21 @@ export function createVisitorPreviewApi() {
     referrer: index < 29 ? 'https://linkedin.com/feed/?private=removed' : '', ipAddress: index < 29 ? '198.51.100.24' : '203.0.113.9', bot: index >= 29,
     userAgent: index < 29 ? 'Sample Safari iPhone' : 'Sample Googlebot/2.1',
     properties: index < 29 ? {} : { botAssessmentProvider: 'GOOGLE_RECAPTCHA_ENTERPRISE', botAssessmentStatus: 'VALID', botAssessmentHumanScore: 0.1, botAssessmentReasons: ['AUTOMATION'], botAssessmentVerifiedBot: true },
-  }));
+  }))].sort((a, b) => a.eventTime.localeCompare(b.eventTime));
   const rules = [{ ruleId: 1, siteId: 'preview.local', name: 'Sample visitor alert', eventType: 'page_view', geoLevel: 'GLOBAL', geoAreaId: '', threshold: 1, comparator: '>=', granularity: '5m', cooldownSeconds: 1800, filters: { bot: 'EXCLUDE' }, enabled: false }];
   const pending = new Map();
   function matches(item, f) {
-    if (f.bot === 'EXCLUDE' && item.bot || f.bot === 'ONLY' && !item.bot) return false;
+    if (f.bot === 'EXCLUDE' && item.bot !== false || f.bot === 'ONLY' && item.bot !== true) return false;
+    const to = f.to ? Date.parse(f.to) : now;
+    const from = f.from ? Date.parse(f.from) : to - (f.hours || 24) * 3600000;
+    if (Date.parse(item.eventTime) < from || Date.parse(item.eventTime) >= to) return false;
     const names = { event: 'eventName', path: 'pageUrl', country: 'country', city: 'city', device: 'deviceType', browser: 'browser', referrer: 'referrer', sessionId: 'sessionId' };
-    return Object.entries(names).every(([key, field]) => !f[key] || String(item[field]).toLowerCase().includes(f[key].toLowerCase())) && (!f.query || JSON.stringify(item).toLowerCase().includes(f.query.toLowerCase()));
+    return Object.entries(names).every(([key, field]) => !f[key] || (['path', 'referrer'].includes(key) ? String(item[field] || '').toLowerCase().includes(f[key].toLowerCase()) : String(item[field] || '').toLowerCase() === f[key].toLowerCase())) && (!f.query || JSON.stringify(item).toLowerCase().includes(f.query.toLowerCase()));
   }
   function paginate(items, page, size) { return { items: items.slice(page * size, (page + 1) * size), page: { number: page, size, totalElements: items.length, totalPages: Math.ceil(items.length / size) } }; }
   return {
     visitors: {
+      async overview(filters) { return previewOverview(events.filter(item => matches(item, filters)), filters, now); },
       async list(filters) { const items = events.filter(item => matches(item, filters)).reverse(); return { ...paginate(items, filters.page || 0, filters.size || 50), summary: { totalEvents: items.length, uniqueVisitors: new Set(items.map(e => e.sessionId)).size, countries: new Set(items.map(e => e.country)).size, cities: new Set(items.map(e => e.city).filter(Boolean)).size } }; },
       async sessionEvidence(body) {
         const { sessionId, window, page } = validateSessionRequest(body);

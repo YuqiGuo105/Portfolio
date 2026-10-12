@@ -1,0 +1,80 @@
+.overview { color: #24312d; border-top: 1px solid #e2e9e5; border-bottom: 1px solid #e2e9e5; padding: 24px 0 16px; }
+.heading, .scope, .chartHeading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.overview h2, .overview h3, .overview p { margin: 0; letter-spacing: 0; }
+.overview h2, .overview h3 { color: #24312d; }
+.overview h2 { font-size: 22px; font-weight: 650; line-height: 1.4; }
+.overview h3 { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; line-height: 1.4; }
+.eyebrow { font-size: 10px; font-weight: 650; color: #62766a; line-height: 2; }
+.segmented { display: inline-flex; gap: 2px; background: #edf1ef; border-radius: 6px; padding: 3px; flex-shrink: 0; max-width: 100%; }
+.overview button { font: inherit; letter-spacing: 0; cursor: pointer; background: transparent; border: 0; color: inherit; box-shadow: none; text-transform: none; height: auto; }
+.overview button::before, .overview button::after { display: none !important; }
+.overview [hidden] { display: none !important; }
+.headingActions { display: flex; align-items: center; gap: 12px; max-width: 100%; }
+.overview .overviewToggle { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 1px solid #dce5df; border-radius: 4px; flex-shrink: 0; }
+.overview .sectionTitle { flex: 1; min-width: 0; }
+.overview .disclosure { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 36px; padding: 4px 0; border-radius: 4px; text-align: left; font-size: 14px; font-weight: 600; line-height: 1.4; }
+.disclosure > span { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.disclosure svg { flex-shrink: 0; }
+.closedChevron { transform: rotate(-90deg); }
+.overview .collapsedSummary { margin-top: 10px; font-size: 12px; color: #64766b; line-height: 1.6; }
+.segmented button { font-size: 12px; line-height: 1.4; border-radius: 4px; padding: 7px 11px; min-height: 32px; white-space: nowrap; }
+.segmented button[aria-pressed="true"] { background: #fff; color: #116a50; box-shadow: 0 1px 3px #1b34251a; font-weight: 600; }
+.overview button:hover { background: #edf5f0; }
+.overview button:focus-visible, .chart rect:focus-visible { outline: 2px solid #168364; outline-offset: 2px; }
+.scope { margin-top: 18px; font-size: 12px; color: #64766b; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.filters button { display: flex; align-items: center; gap: 8px; padding: 4px 7px; background: #e9f3ed; border-radius: 4px; max-width: 100%; font-size: 12px; }
+.filters button span { overflow-wrap: anywhere; }
+.filters svg { flex-shrink: 0; }
+.metricsSection { border-block: 1px solid #e2e9e5; margin-top: 20px; padding: 12px 0; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 12px 0 10px; }
+.stat { display: flex; flex-direction: column; gap: 5px; padding: 0 24px; border-left: 1px solid #e2e9e5; min-width: 0; }
+.stat:first-child { border: 0; padding-left: 0; }
+.stat > span { font-size: 12px; color: #5e6e65; }
+.stat strong { font-size: 30px; line-height: 1.25; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat small { color: #728076; font-size: 11px; line-height: 1.6; }
+.charts { display: grid; grid-template-columns: minmax(0, 2.7fr) minmax(225px, 1fr); gap: 32px; padding: 24px 0; border-bottom: 1px solid #e2e9e5; }
+.trend { min-width: 0; }
+.chartHeading { align-items: flex-start; }
+.chartHeading .sectionTitle { flex: 1 0 180px; }
+.chartHeading .segmented button { padding: 4px 8px; font-size: 11px; }
+.chartReadout { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 11px; color: #7a857e; min-height: 46px; padding-top: 16px; }
+.chartReadout strong { color: #324b40; font-size: 13px; font-weight: 600; }
+.chart { display: block; width: 100%; height: 190px; overflow: visible; }
+.chart text { fill: #738278; font-family: inherit; font-size: 12px; letter-spacing: 0; }
+.chart rect { cursor: crosshair; }
+.traffic { padding-left: 24px; border-left: 1px solid #e2e9e5; }
+.meta { display: block; font-size: 11px; color: #758279; margin-top: 5px; line-height: 1.5; }
+.stacked { display: flex; height: 12px; border-radius: 3px; overflow: hidden; background: #edf1ef; margin: 18px 0; }
+.traffic dl { margin: 0 0 12px; }
+.traffic dl > div, .traffic dt, .traffic dd { display: flex; align-items: center; gap: 7px; }
+.traffic dl > div { justify-content: space-between; padding: 6px 0; font-size: 12px; }
+.traffic dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+.traffic dd span { color: #819085; font-weight: 400; width: 34px; text-align: right; }
+.traffic i { width: 7px; height: 7px; border-radius: 2px; }
+.overview .footnote { color: #77857c; font-size: 11px; line-height: 1.7; margin-top: 12px; }
+.rankings { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; padding: 24px 0 14px; }
+.ranking { min-width: 0; }
+.ranking ol { margin: 12px 0 0; padding: 0; list-style: none; }
+.ranking li { border-bottom: 1px solid #f0f3f1; }
+.ranking li button, .rankRow { position: relative; display: flex; align-items: center; gap: 7px; width: 100%; min-height: 39px; text-align: left; padding: 7px 2px !important; font-size: 12px !important; }
+.rankIndex { font-size: 10px; color: #93a097; width: 10px; flex-shrink: 0; }
+.rankLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranking strong { font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.ranking svg { flex-shrink: 0; }
+.share { font-size: 10px; width: 29px; text-align: right; color: #798b7f; }
+.rankBar { position: absolute; bottom: 0; left: 0; height: 2px; max-width: 100%; background: #d4e9dc; pointer-events: none; }
+.state { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; padding: 48px 16px; min-height: 225px; color: #6d7b73; font-size: 13px; text-align: center; }
+.state strong { color: #354b3f; font-size: 16px; }
+.state button { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #d1ded5; padding: 8px 12px; border-radius: 4px; }
+@media (max-width: 1150px) { .rankings { grid-template-columns: repeat(2, minmax(0, 1fr)); } .charts { gap: 20px; } .chartHeading { gap: 10px; } }
+@media (max-width: 700px) {
+  .heading { align-items: flex-start; gap: 12px; } .overview h2 { font-size: 20px; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 0; }
+  .stat { padding: 0 14px; } .stat:nth-child(3) { border: 0; padding-left: 0; }
+  .stat strong { font-size: 26px; } .stat small { font-size: 10px; }
+  .charts { grid-template-columns: minmax(0, 1fr); }
+  .traffic { border: 0; border-top: 1px solid #e2e9e5; padding: 20px 0 0; }
+  .rankings { gap: 24px 16px; } .segmented button { padding: 7px 9px; }
+}
+@media (max-width: 440px) { .rankings { grid-template-columns: minmax(0, 1fr); } .scope { gap: 10px; } }

@@ -34,6 +34,7 @@ import { adminApi } from "../../src/lib/adminApi";
 import { useAdminSession } from "../../src/components/admin/AdminSessionContext";
 import { VisitorContext, VisitorInspector, VisitorToolbar, alertFromVisitor, useDialogFocus } from "../../src/components/admin/VisitorWorkbench";
 import { eventTimestamp } from "../../src/lib/visitorWorkbench.mjs";
+import VisitorOverview from "../../src/components/admin/VisitorOverview";
 
 const PAGE_SIZE = 50;
 const WINDOWS = [
@@ -54,7 +55,6 @@ const EMPTY_FILTERS = {
   sessionId: "",
   includeAdmin: false,
 };
-const EMPTY_SUMMARY = { totalEvents: 0, uniqueVisitors: 0, countries: 0, cities: 0 };
 const EMPTY_ALERTS = {
   rules: [],
   incidents: [],
@@ -97,7 +97,8 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
   const [hours, setHours] = useState(24);
   const [page, setPage] = useState(0);
   const [pageInfo, setPageInfo] = useState({ number: 0, size: PAGE_SIZE, totalElements: 0, totalPages: 0 });
-  const [summary, setSummary] = useState(EMPTY_SUMMARY);
+  const [rangeEnd, setRangeEnd] = useState(() => new Date().toISOString());
+  const range = useMemo(() => ({ hours, to: rangeEnd, from: new Date(Date.parse(rangeEnd) - hours * 3600000).toISOString() }), [hours, rangeEnd]);
   const [alerts, setAlerts] = useState(EMPTY_ALERTS);
   const [intelligence, setIntelligence] = useState(EMPTY_INTELLIGENCE);
   const [alertsLoading, setAlertsLoading] = useState(true);
@@ -115,10 +116,9 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
     setLoading(true);
     setError("");
     try {
-      const data = await api.visitors.list({ ...filters, hours, page, size: PAGE_SIZE });
+      const data = await api.visitors.list({ ...filters, ...range, page, size: PAGE_SIZE });
       if (sequence !== requests.current.logs) return;
       setItems(Array.isArray(data.items) ? data.items : []);
-      setSummary(data.summary || EMPTY_SUMMARY);
       setPageInfo(data.page || { number: page, size: PAGE_SIZE, totalElements: 0, totalPages: 0 });
     } catch (requestError) {
       if (sequence !== requests.current.logs) return;
@@ -126,7 +126,7 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
     } finally {
       if (sequence === requests.current.logs) setLoading(false);
     }
-  }, [api, filters, hours, page]);
+  }, [api, filters, range, page]);
 
   const loadAlerts = useCallback(async () => {
     const sequence = ++requests.current.alerts;
@@ -206,14 +206,20 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
 
   function selectWindow(value) {
     setHours(value);
+    setRangeEnd(new Date().toISOString());
     setPage(0);
+  }
+
+  function overviewFilter(patch) {
+    const next = { ...filters, ...patch };
+    setFilters(next); setDraft(next); setPage(0);
   }
 
   async function exportVisitorLogs(format) {
     setExportingFormat(format);
     setExportStatus({ tone: "", message: "" });
     try {
-      const result = await api.visitors.download({ ...filters, hours, format });
+      const result = await api.visitors.download({ ...filters, ...range, format });
       saveDownload(result.blob, result.filename || `visitor-logs.${format}`);
       setExportStatus({
         tone: result.truncated ? "warning" : "success",
@@ -271,13 +277,13 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
     <>
       <div className={ui.page}>
         <PageHeader
-          title="Visitor logs"
-          subtitle="Query protected visitor events by time, behavior, page, location and client context."
+          title="Visitors"
+          subtitle="Traffic trends and protected visitor records."
           actions={(
             <button
               className={ui.buttonSecondary}
               type="button"
-              onClick={() => { load(); loadAlerts(); loadIntelligence(); }}
+              onClick={() => { setPage(0); setRangeEnd(new Date().toISOString()); loadAlerts(); loadIntelligence(); }}
               disabled={loading || alertsLoading || intelligenceLoading}
             >
               <RefreshCw size={15} /> Refresh
@@ -285,16 +291,8 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
           )}
         />
 
-        <section className={ui.metrics} aria-label="Visitor query summary">
-          <Metric
-            label="Events"
-            value={summary.totalEvents}
-            hint={`${windowLabel(hours)} · ${botFilterLabel(filters.bot)} · ${filters.includeAdmin ? "Admin included" : "Public pages"}`}
-          />
-          <Metric label="Unique visitors" value={summary.uniqueVisitors} hint="Session, anonymous ID or IP" />
-          <Metric label="Countries" value={summary.countries} hint="Matching events" />
-          <Metric label="Cities" value={summary.cities} hint="Matching events" />
-        </section>
+        <VisitorOverview api={api} filters={filters} range={range} onWindow={selectWindow}
+          onFilter={overviewFilter} onReset={resetQuery} />
 
         <VisitorIntelligence
           data={intelligence}
@@ -1453,10 +1451,6 @@ function SelectFilter({ label, name, value, onChange, options }) {
       </select>
     </label>
   );
-}
-
-function Metric({ label, value, hint }) {
-  return <div className={ui.metric}><div className={ui.metricLabel}>{label}</div><div className={ui.metricValue}>{value ?? 0}</div><div className={ui.metricHint}>{hint}</div></div>;
 }
 
 function formatScope(rule) {
