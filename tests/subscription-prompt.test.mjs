@@ -4,21 +4,26 @@ import { JSDOM } from 'jsdom';
 import {
   isSubscriptionPromptPage, recordSubscriptionPrompt, startSubscriptionPrompt,
   SUBSCRIPTION_PROMPT_KEY, SUBSCRIPTION_PROMPT_COOLDOWN_MS,
+  SUBSCRIPTION_PROMPT_VISITOR_LEAD_PX,
   subscriptionPromptPreviewMode,
 } from '../src/lib/subscriptionPrompt.mjs';
 
-function setup(t, { page = '/blogs', subscriber = false, storageBlocked = false, scrollY = 0, ignoreCooldown = false, blogsTop = 3250 } = {}) {
+const visitorTop = 4250;
+const homepageThreshold = visitorTop - 1000 - SUBSCRIPTION_PROMPT_VISITOR_LEAD_PX;
+
+function setup(t, { page = '/blogs', subscriber = false, storageBlocked = false, scrollY = 0, ignoreCooldown = false, visitorsTop = visitorTop } = {}) {
   const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://www.yuqi.site/' });
   const win = dom.window, doc = win.document;
   win.scrollY = scrollY;
-  if (blogsTop !== null) {
-    const section = doc.createElement('section');
-    section.id = 'Blog-section';
-    const heading = doc.createElement('h2');
-    heading.textContent = 'My Blogs';
-    heading.getBoundingClientRect = () => ({ top: blogsTop - win.scrollY, height: 60 });
-    section.append(heading);
-    doc.body.append(section);
+  doc.body.innerHTML = '<section id="Blog-section"><h2>My Blogs</h2></section><h3 id="tour-real-time-data">Real-Time Data</h3>';
+  doc.querySelector('#Blog-section h2').getBoundingClientRect = () => ({ top: 2500 - win.scrollY, height: 60 });
+  doc.getElementById('tour-real-time-data').getBoundingClientRect = () => ({ top: 3000 - win.scrollY, height: 60 });
+  if (visitorsTop !== null) {
+    const heading = doc.createElement('h3');
+    heading.id = 'visitor-insights';
+    heading.textContent = 'Visitor Insights';
+    heading.getBoundingClientRect = () => ({ top: visitorsTop - win.scrollY, height: 40 });
+    doc.body.append(heading);
   }
   let time = 1_800_000_000_000, tick, prompts = 0, lastPrompt;
   let subscribed = subscriber;
@@ -62,7 +67,7 @@ test('normal development homepage permits retesting; production never bypasses c
 test('default local preview retries on navigation without deleting the saved cooldown', t => {
   const h = setup(t, { page: '/', ignoreCooldown: subscriptionPromptPreviewMode('development') });
   h.record();
-  h.scroll(2500); h.advance(2000); assert.equal(h.prompts, 1);
+  h.scroll(homepageThreshold); h.advance(2000); assert.equal(h.prompts, 1);
   assert.ok(h.win.localStorage.getItem(SUBSCRIPTION_PROMPT_KEY));
   h.restart('/'); h.advance(2000); assert.equal(h.prompts, 2);
   h.subscribe(); h.restart('/'); h.advance(2000); assert.equal(h.prompts, 2);
@@ -82,40 +87,41 @@ test('content pages trigger at exactly 25 percent without waiting for a timer or
   assert.deepEqual(h.lastPrompt, { trigger: 'scroll-progress', elapsedMs: 2000, progressPercent: 25 });
 });
 
-test('homepage waits for My Blogs regardless of reading time, Background or 25 percent', t => {
+test('homepage waits until just before Visitor Insights, never at Background, Blogs, Real-Time Data or 25 percent', t => {
   for (const page of ['/', '/?source=resume#about']) {
     const h = setup(t, { page });
     h.advance(60_000); assert.equal(h.prompts, 0);
     h.doc.body.insertAdjacentHTML('afterbegin', '<h2 id="tour-background">My Background</h2>');
     h.doc.getElementById('tour-background').getBoundingClientRect = () => ({ top: 200, height: 60 });
     h.scroll(1000); h.advance(20_000); assert.equal(h.prompts, 0);
-    const threshold = 3250 - 750;
-    h.scroll(threshold - 1); h.advance(20_000); assert.equal(h.prompts, 0);
-    h.scroll(threshold); assert.equal(h.prompts, 1);
-    assert.equal(h.lastPrompt.trigger, 'blogs-section');
+    h.scroll(2000); h.advance(20_000); assert.equal(h.prompts, 0, 'My Blogs is too early');
+    h.scroll(2500); h.advance(20_000); assert.equal(h.prompts, 0, 'Real-Time Data heading is too early');
+    h.scroll(homepageThreshold - 1); h.advance(20_000); assert.equal(h.prompts, 0);
+    h.scroll(homepageThreshold); assert.equal(h.prompts, 1);
+    assert.equal(h.lastPrompt.trigger, 'visitor-insights');
     h.advance(30_000); h.scroll(3000); assert.equal(h.prompts, 1);
   }
 });
 
-test('homepage with missing or unmeasurable My Blogs never falls back to an early trigger', t => {
-  for (const blogsTop of [null, 3250]) {
-    const h = setup(t, { page: '/', blogsTop });
-    const heading = h.doc.querySelector('#Blog-section h2');
+test('homepage with missing or unmeasurable Visitor Insights never falls back to Blogs or a timer', t => {
+  for (const visitorsTop of [null, visitorTop]) {
+    const h = setup(t, { page: '/', visitorsTop });
+    const heading = h.doc.getElementById('visitor-insights');
     if (heading) heading.getBoundingClientRect = () => ({ top: 0, height: 0 });
     h.scroll(4000); h.advance(60_000); assert.equal(h.prompts, 0);
   }
 });
 
 test('layout changes after scrolling are checked without another scroll event', t => {
-  const h = setup(t, { page: '/', blogsTop: 4000 });
+  const h = setup(t, { page: '/', visitorsTop: 4000 });
   h.scroll(800); h.advance(2000); assert.equal(h.prompts, 0);
-  h.doc.querySelector('#Blog-section h2').getBoundingClientRect = () => ({ top: 650, height: 60 });
+  h.doc.getElementById('visitor-insights').getBoundingClientRect = () => ({ top: 1050, height: 40 });
   h.advance(1000); assert.equal(h.prompts, 1);
 });
 
 test('mobile toolbar resizing cannot delay or duplicate an invitation', t => {
   const h = setup(t, { page: '/' });
-  h.scroll(2500);
+  h.scroll(homepageThreshold);
   for (let i = 0; i < 3; i++) { h.win.dispatchEvent(new h.win.Event('resize')); h.advance(1000); }
   assert.equal(h.prompts, 1);
 });
@@ -123,26 +129,26 @@ test('mobile toolbar resizing cannot delay or duplicate an invitation', t => {
 test('scrolling while blocked is rechecked after the overlay closes', t => {
   const h = setup(t, { page: '/' });
   const overlay = h.doc.createElement('div'); overlay.setAttribute('role', 'dialog'); h.doc.body.append(overlay);
-  h.scroll(2500); h.advance(20_000); assert.equal(h.prompts, 0);
+  h.scroll(homepageThreshold); h.advance(20_000); assert.equal(h.prompts, 0);
   overlay.remove(); h.advance(1000); assert.equal(h.prompts, 1);
 });
 
-test('homepage does not prompt after returning above My Blogs while a dialog was open', t => {
+test('homepage does not prompt after returning above Visitor Insights while a dialog was open', t => {
   const h = setup(t, { page: '/' });
   const overlay = h.doc.createElement('div'); overlay.setAttribute('role', 'dialog'); h.doc.body.append(overlay);
-  h.scroll(2500); h.advance(20_000);
+  h.scroll(homepageThreshold); h.advance(20_000);
   h.scroll(1000); overlay.remove(); h.advance(20_000);
   assert.equal(h.prompts, 0);
-  h.scroll(2500); assert.equal(h.prompts, 1);
+  h.scroll(homepageThreshold); assert.equal(h.prompts, 1);
 });
 
-test('homepage still respects existing subscribers, cooldown and tab visibility at My Blogs', t => {
+test('homepage still respects existing subscribers, cooldown and tab visibility at Visitor Insights', t => {
   const subscribed = setup(t, { page: '/', subscriber: true });
-  subscribed.scroll(2500); subscribed.advance(30_000); assert.equal(subscribed.prompts, 0);
+  subscribed.scroll(homepageThreshold); subscribed.advance(30_000); assert.equal(subscribed.prompts, 0);
   const cooldown = setup(t, { page: '/' });
-  cooldown.record(); cooldown.scroll(2500); cooldown.advance(30_000); assert.equal(cooldown.prompts, 0);
+  cooldown.record(); cooldown.scroll(homepageThreshold); cooldown.advance(30_000); assert.equal(cooldown.prompts, 0);
   const hidden = setup(t, { page: '/' });
-  hidden.hide(true); hidden.scroll(2500); hidden.advance(30_000); assert.equal(hidden.prompts, 0);
+  hidden.hide(true); hidden.scroll(homepageThreshold); hidden.advance(30_000); assert.equal(hidden.prompts, 0);
   hidden.hide(false); assert.equal(hidden.prompts, 1);
 });
 
@@ -172,7 +178,7 @@ test('requesting a dialog does not consume cooldown before it is actually mounte
 });
 
 test('restored scroll position is recognized without waiting for another scroll', t => {
-  const h = setup(t, { page: '/', scrollY: 2500 });
+  const h = setup(t, { page: '/', scrollY: homepageThreshold });
   h.advance(2000); assert.equal(h.prompts, 1);
 });
 

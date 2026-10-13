@@ -1,6 +1,7 @@
 export const SUBSCRIPTION_PROMPT_KEY = "portfolioSubscriptionPrompt:v1";
 export const SUBSCRIPTION_PROMPT_DELAY_MS = 15_000;
 export const SUBSCRIPTION_PROMPT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+export const SUBSCRIPTION_PROMPT_VISITOR_LEAD_PX = 96;
 const shownInWindow = new WeakMap();
 
 export function subscriptionPromptPreviewMode(environment, preference) {
@@ -55,10 +56,10 @@ export function startSubscriptionPrompt({ win, doc, page, hasSubscriber, onPromp
   const checkReadingPoint = () => {
     if (doc.hidden || subscriptionPromptBlocked(doc)) return;
     if (isHomepage) {
-      // The homepage invitation must never precede My Blogs, even after the timer.
-      const heading = doc.getElementById("Blog-section")?.querySelector("h2")?.getBoundingClientRect();
-      readingTrigger = win.scrollY > 0 && heading?.height > 0 && heading.top <= win.innerHeight * 0.75
-        ? "blogs-section" : null;
+      // Invite just before Visitor Insights enters view, never on a homepage timer.
+      const heading = doc.getElementById("visitor-insights")?.getBoundingClientRect();
+      readingTrigger = win.scrollY > 0 && heading?.height > 0 && heading.top <= win.innerHeight + SUBSCRIPTION_PROMPT_VISITOR_LEAD_PX
+        ? "visitor-insights" : null;
       return;
     }
     const scrollable = doc.documentElement.scrollHeight - win.innerHeight;

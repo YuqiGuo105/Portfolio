@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { SUBSCRIPTION_PROMPT_VISITOR_LEAD_PX } from '../src/lib/subscriptionPrompt.mjs';
 
 const { chromium, webkit } = await import(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
 const origin = process.env.TEST_ORIGIN || 'http://127.0.0.1:3105';
@@ -35,11 +36,11 @@ async function openPage({ width = 1440, height = 1000, subscriber = false, dark 
   return { page, context, get submissions() { return submissions; } };
 }
 
-async function scrollToBlogs(page, viewportFraction = 0.65) {
+async function scrollToVisitors(page, leadPixels = 64) {
   await page.evaluate(() => document.fonts.ready);
-  await page.locator('#Blog-section h2').evaluate((heading, fraction) => window.scrollTo({
-    top: window.scrollY + heading.getBoundingClientRect().top - window.innerHeight * fraction, behavior: 'instant',
-  }), viewportFraction);
+  await page.locator('#visitor-insights').evaluate((heading, lead) => window.scrollTo({
+    top: window.scrollY + heading.getBoundingClientRect().top - window.innerHeight - lead, behavior: 'instant',
+  }), leadPixels);
 }
 
 async function checkBounds(page) {
@@ -71,7 +72,14 @@ try {
   }));
   await timed.page.waitForTimeout(1500);
   assert.equal(await timed.page.locator('[role="dialog"]').count(), 0, 'Background is too early');
-  await scrollToBlogs(timed.page);
+  for (const selector of ['#Blog-section h2', '#tour-real-time-data']) {
+    await timed.page.locator(selector).evaluate(heading => window.scrollTo({
+      top: window.scrollY + heading.getBoundingClientRect().top - innerHeight * .65, behavior: 'instant',
+    }));
+    await timed.page.waitForTimeout(1500);
+    assert.equal(await timed.page.locator('[role="dialog"]').count(), 0, `${selector} is too early`);
+  }
+  await scrollToVisitors(timed.page);
   await timed.page.getByRole('dialog', { name: 'Stay in the loop?' }).waitFor({ timeout: 8000 });
   assert.equal(timed.submissions, 0);
   await checkBounds(timed.page);
@@ -79,14 +87,14 @@ try {
   await timed.page.getByRole('button', { name: 'Not now', exact: true }).click();
   assert.equal(await timed.page.locator('[role="dialog"]').count(), 0);
   await timed.page.reload({ waitUntil: 'domcontentloaded' });
-  await scrollToBlogs(timed.page);
+  await scrollToVisitors(timed.page);
   await timed.page.waitForTimeout(2000);
   assert.equal(await timed.page.locator('[role="dialog"]').count(), 0);
   // Cooldown never disables the visitor's explicit choice to subscribe.
   await timed.page.getByRole('button', { name: 'Subscribe to notifications' }).click();
   await timed.page.getByRole('dialog', { name: 'Subscribe to updates' }).waitFor();
   await timed.page.getByRole('button', { name: 'Cancel', exact: true }).click();
-  console.log('Desktop: no time-only or Background trigger; My Blogs, dismissal, reload cooldown and manual opening passed.');
+  console.log('Desktop: no timer, Background, Blogs or Real-Time heading trigger; Visitor Insights, dismissal, reload cooldown and manual opening passed.');
 
   for (const [width, height, dark] of [[1440, 900, false], [390, 844, false], [320, 568, true]]) {
     const scrolled = await openPage({ width, height, dark });
@@ -95,12 +103,12 @@ try {
     await scrolled.page.evaluate(() => document.fonts.ready);
     await scrolled.page.evaluate(() => window.scrollTo({ top: (document.documentElement.scrollHeight - innerHeight) * .251, behavior: 'instant' }));
     await scrolled.page.waitForTimeout(1500);
-    assert.ok(await scrolled.page.locator('#Blog-section h2').evaluate(el => el.getBoundingClientRect().top > innerHeight * .75));
-    assert.equal(await scrolled.page.locator('[role="dialog"]').count(), 0, '25% must not bypass My Blogs');
-    await scrollToBlogs(scrolled.page, .85);
+    assert.ok(await scrolled.page.locator('#visitor-insights').evaluate((el, lead) => el.getBoundingClientRect().top > innerHeight + lead, SUBSCRIPTION_PROMPT_VISITOR_LEAD_PX));
+    assert.equal(await scrolled.page.locator('[role="dialog"]').count(), 0, '25% must not bypass Visitor Insights');
+    await scrollToVisitors(scrolled.page, SUBSCRIPTION_PROMPT_VISITOR_LEAD_PX + 64);
     await scrolled.page.waitForTimeout(1500);
-    assert.equal(await scrolled.page.locator('[role="dialog"]').count(), 0, 'Wait until the heading is clearly in view');
-    await scrollToBlogs(scrolled.page);
+    assert.equal(await scrolled.page.locator('[role="dialog"]').count(), 0, 'Do not prompt more than 96px before Visitor Insights');
+    await scrollToVisitors(scrolled.page);
     await scrolled.page.getByRole('dialog', { name: 'Stay in the loop?' }).waitFor({ timeout: 8000 });
     assert.ok(Date.now() - started < 15_000);
     assert.equal(scrolled.submissions, 0);
@@ -121,11 +129,11 @@ try {
       assert.equal(scrolled.submissions, 1);
       await dialog.getByRole('button', { name: 'Done', exact: true }).click();
     }
-    console.log(`Viewport ${width}: My Blogs gate, fixed actions, ${dark ? 'short viewport, dark theme and Escape' : 'explicit mocked subscription'} passed.`);
+    console.log(`Viewport ${width}: Visitor Insights gate, fixed actions, ${dark ? 'short viewport, dark theme and Escape' : 'explicit mocked subscription'} passed.`);
   }
 
   const subscribed = await openPage({ subscriber: true });
-  await scrollToBlogs(subscribed.page);
+  await scrollToVisitors(subscribed.page);
   await subscribed.page.waitForTimeout(2000);
   assert.equal(await subscribed.page.locator('[role="dialog"]').count(), 0);
   assert.equal(subscribed.submissions, 0);
@@ -133,11 +141,11 @@ try {
 
   if (!process.env.TEST_PRODUCTION) {
     const local = await openPage({ width: 390, preview: true });
-    await scrollToBlogs(local.page);
+    await scrollToVisitors(local.page);
     await local.page.getByRole('dialog', { name: 'Stay in the loop?' }).waitFor();
     await local.page.getByRole('button', { name: 'Not now', exact: true }).click();
     await local.page.reload({ waitUntil: 'domcontentloaded' });
-    await scrollToBlogs(local.page);
+    await scrollToVisitors(local.page);
     await local.page.getByRole('dialog', { name: 'Stay in the loop?' }).waitFor();
     assert.equal(local.submissions, 0);
     console.log('Default local homepage repeats after reload despite existing cooldown.');

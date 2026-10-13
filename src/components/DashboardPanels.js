@@ -848,7 +848,7 @@ const DashboardPanels = () => {
         {/* Visitors */}
         <div className="dashboard-card-4 visitors-card">
           <header>
-            <h3>Visitor Insights</h3>
+            <h3 id="visitor-insights">Visitor Insights</h3>
             <p className="card-subtitle">A quick snapshot of who’s dropping by.</p>
           </header>
 
