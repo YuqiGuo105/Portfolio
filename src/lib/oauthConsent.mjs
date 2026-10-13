@@ -16,3 +16,22 @@ export function consentError(error) {
 export function canDecideConsent({ details, authorizationId, status, error, decision }) {
   return Boolean(details?.authorization_id && details.authorization_id === authorizationId && !status && !error && !decision);
 }
+
+export function oauthClientName(name) {
+  return (typeof name === 'string' && name.trim()) || 'your AI client';
+}
+
+// Keep the one-time code only in component memory until the client callback.
+export function authorizationHandoff(data, clientName) {
+  const url = new URL(data?.redirect_url);
+  const loopback = ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname);
+  if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback))
+      || url.username || url.password || !url.searchParams.get('code') || url.searchParams.has('error')) {
+    throw new Error('Invalid authorization callback');
+  }
+  return {
+    redirectUrl: url.href,
+    clientName: oauthClientName(clientName),
+    destination: loopback ? 'This computer' : url.hostname,
+  };
+}
