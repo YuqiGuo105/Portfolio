@@ -123,8 +123,10 @@ export function useServiceHoverDetails(services, summaryAt) {
 
   useClientLayoutEffect(() => {
     if (!active || !floating.current || !trigger.current) return;
+    let placedAnchor;
     const place = () => {
       const anchor = trigger.current.getBoundingClientRect(), panel = floating.current.getBoundingClientRect();
+      placedAnchor = anchor;
       // Leave room for the existing Mr. Pot launcher without changing its layer.
       const width = document.documentElement.clientWidth, height = window.innerHeight - 88;
       let left = anchor.right + 12, top = anchor.top;
@@ -147,7 +149,13 @@ export function useServiceHoverDetails(services, summaryAt) {
     const observer = new ResizeObserver(place); observer.observe(floating.current);
     const chat = document.querySelector("#__chat_widget_root .bot-container");
     if (chat) observer.observe(chat);
-    const onScroll = event => { if (!floating.current?.contains(event.target)) close(); };
+    const onScroll = event => {
+      if (floating.current?.contains(event.target)) return;
+      // Focus scrolling can finish before click but dispatch after the popover opens.
+      // Close only when its anchor actually moves, not for chat-internal scrolling.
+      const anchor = trigger.current?.getBoundingClientRect();
+      if (!anchor || Math.abs(anchor.top - placedAnchor.top) > 1 || Math.abs(anchor.left - placedAnchor.left) > 1) close();
+    };
     const onPointer = event => { if (!floating.current?.contains(event.target) && !trigger.current?.contains(event.target)) close(); };
     const onKey = event => { if (event.key === "Escape") { event.preventDefault(); close(true); } };
     window.addEventListener("resize", place);

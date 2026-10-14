@@ -11,7 +11,7 @@ try {
   for (const [width, height] of [[1440, 900], [1024, 768], [768, 600], [390, 844], [320, 568]]) {
     const page = await browser.newPage({ viewport: { width, height }, isMobile: width < 768, hasTouch: width < 768 })
     const errors = []
-    page.on('pageerror', error => errors.push(error.message))
+    page.on('pageerror', error => errors.push(error.stack || error.message))
     await page.route('**/*', route => {
       const request = route.request(), url = new URL(request.url())
       if (url.pathname.endsWith('/answer/stream')) {
@@ -20,7 +20,8 @@ try {
           { stage: 'answer_final', payload: { answer } }, { stage: 'done' },
         ].map(event => `data: ${JSON.stringify(event)}\n\n`).join('') })
       }
-      if (request.method() !== 'GET') return route.fulfill({ json: { ok: true } })
+      // Preserve third-party protocols such as reCAPTCHA; only stub app writes.
+      if (request.method() !== 'GET' && (url.origin === new URL(origin).origin || url.hostname.endsWith('.supabase.co'))) return route.fulfill({ json: { ok: true } })
       return route.continue()
     })
     await page.goto(`${origin}/?openChat=1`, { waitUntil: 'domcontentloaded' })

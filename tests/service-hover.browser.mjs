@@ -119,6 +119,12 @@ try {
   await together.page.locator('#__chat_widget_root .bot-container').waitFor();
   await together.page.getByRole('button', { name: 'Admin service details', exact: true }).click();
   await together.page.locator('#service-hover-details').waitFor();
+  await together.page.evaluate(() => {
+    document.dispatchEvent(new Event('scroll'));
+    document.querySelector('.bot-messages').dispatchEvent(new Event('scroll'));
+  });
+  await together.page.waitForTimeout(100);
+  assert.ok(await together.page.locator('#service-hover-details').isVisible(), 'Delayed focus scrolling and chat scroll events must not dismiss an unchanged anchor');
   await together.page.waitForFunction(() => !document.querySelector('#service-hover-details').textContent.includes('Loading Grafana'));
   await assertGeometry(together.page, 1126, 726);
   const detailBox = await together.page.locator('#service-hover-details').boundingBox();
@@ -126,6 +132,8 @@ try {
   assert.ok(detailBox.x + detailBox.width <= chatBox.x || detailBox.y + detailBox.height <= chatBox.y, 'Service details should avoid the expanded chat when room is available');
   await shot(together.page, 'compact-with-chat');
   checks.push(`Alongside chat: ${Math.round(detailBox.width)}x${Math.round(detailBox.height)}, no overlap`);
+  await together.page.evaluate(() => window.scrollBy(0, 80));
+  await together.page.locator('#service-hover-details').waitFor({ state: 'hidden' });
   await together.context.close();
 
   for (const width of [768, 390, 320]) {
