@@ -60,9 +60,9 @@ export default function MrPotAvatar({ state = "idle", size = "medium", announce 
       if (root.dataset.expression !== activeState) root.dataset.expression = activeState
       const { pose, gesture, steady = false } = samplePotPerformance(activeState, stateTime, elapsed - greetingAt)
       if (root.dataset.gesture !== gesture) root.dataset.gesture = gesture
-      // Facial expression comes from the brows; the eyes belong to the head.
+      // Pupils and paired eyelids animate inside sockets attached to the head.
       for (const key of Object.keys(current)) {
-        const speed = key.startsWith("mouth") ? 20 : 7
+        const speed = key === "blink" ? 55 : key.startsWith("mouth") ? 20 : key === "lidBounce" ? 14 : 7
         current[key] += (pose[key] - current[key]) * (1 - Math.exp(-speed * dt))
       }
       artworkTime = steady ? 0 : artworkTime + dt

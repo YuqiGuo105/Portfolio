@@ -2390,11 +2390,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   const clamp = (n, min, max) => Math.min(max, Math.max(min, n))
 
   const [desktopResizable, setDesktopResizable] = useState(false)
-  const DEFAULT_WIDGET_SIZE = { w: 520, h: 576 }
+  const DEFAULT_WIDGET_SIZE = { w: 440, h: 500 }
   const getDefaultWidgetSize = () => {
     if (typeof window === "undefined") return DEFAULT_WIDGET_SIZE
     const maxW = Math.min(900, window.innerWidth - 24)
-    const maxH = Math.min(900, window.innerHeight - 40)
+    const maxH = Math.min(DEFAULT_WIDGET_SIZE.h, Math.round(window.innerHeight * 0.62), window.innerHeight - 40)
     return {
       w: clamp(DEFAULT_WIDGET_SIZE.w, 360, maxW),
       h: clamp(DEFAULT_WIDGET_SIZE.h, 420, maxH),
@@ -3883,7 +3883,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
 
   return (
     <div
-      className="bot-container relative mb-6 flex flex-col w-screen md:w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700"
+      className="bot-container relative mb-6 flex flex-col w-screen md:w-[440px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700"
       onDragEnter={(event) => {
         if (!isFileTransfer(event.dataTransfer)) return
         event.preventDefault()
@@ -4400,8 +4400,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         }
         /* ===== AG-UI Chat Agent Styles ===== */
         #__chat_widget_root .bot-container {
-          height: min(68vh, 576px);
-          max-height: 576px;
+          height: min(62vh, 500px);
+          max-height: 500px;
           background: linear-gradient(145deg, #ffffff 0%, #f8fafc 60%, #f1f5f9 100%) !important;
           position: relative;
           border: 1px solid rgba(99, 102, 241, 0.18) !important;
@@ -4856,7 +4856,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
 
         @supports (height: 100dvh) {
           #__chat_widget_root .bot-container {
-            height: min(68dvh, 576px);
+            height: min(62dvh, 500px);
           }
         }
 

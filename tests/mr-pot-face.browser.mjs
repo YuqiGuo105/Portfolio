@@ -65,6 +65,9 @@ try {
       const frames = await decodePotFrames(original.src)
       const canvas = document.createElement('canvas'), expected = document.createElement('canvas')
       canvas.width = canvas.height = expected.width = expected.height = 192
+      // Keep pixel comparisons on one raster backend; repeated readbacks can
+      // otherwise switch Chrome from GPU to CPU antialiasing halfway through.
+      const pixelContext = canvas.getContext('2d', { willReadFrequently: true })
       // Compare against the GIF's real first frame, not a new illustration.
       const texture = document.createElement('canvas')
       texture.width = texture.height = 96
@@ -72,7 +75,7 @@ try {
       expected.getContext('2d').imageSmoothingQuality = 'high'
       expected.getContext('2d').drawImage(texture, 0, 0, 192, 192)
       const render = createPotRenderer(canvas, frames)
-      const pixels = () => canvas.getContext('2d').getImageData(0, 0, 192, 192).data
+      const pixels = () => pixelContext.getImageData(0, 0, 192, 192).data
       const originalPixels = expected.getContext('2d').getImageData(0, 0, 192, 192).data
       render(POT_REST)
       const baseline = pixels()
@@ -123,11 +126,14 @@ try {
       // Frame-relative symmetry and gaze are checked in mr-pot-eyes.browser.mjs.
       render(POT_REST)
       const rig = pixels()
+      render({ ...POT_REST, lidBounce: 0.00001 })
+      const lidSettlesExactly = pixels().every((value, i) => value === rig[i])
       const articulation = {}
       for (const [name, value, region] of [
         ['mouthOpen', 0.9, [42, 58, 54, 67]],
         ['blush', 0.65, [29, 57, 67, 71]],
         ['lidOpen', 1, [0, 0, 96, 48]],
+        ['lidBounce', 1, [0, 0, 96, 48]],
         ['handleLeft', 8, [12, 36, 84, 59]],
         ['handleRight', 8, [12, 36, 84, 59]],
       ]) {
@@ -146,7 +152,7 @@ try {
       frames.forEach(frame => frame.close())
       return { originalBounds, smoothBounds, faceError: faceError / faceSamples, artworkChanges,
         frameCount: render.frameCount, frameChanges, faceChanges, outsideChanges, open, closed,
-        legacyEyeMotionIgnored, articulation }
+        legacyEyeMotionIgnored, lidSettlesExactly, articulation }
     })
     assert.ok(fidelity.smoothBounds.every((value, i) => Math.abs(value - fidelity.originalBounds[i]) <= 1), 'contour reconstruction stays within half a source pixel of the original bounds')
     assert.ok(fidelity.faceError < 12, `only the cleaned eye region changes in the resting face: ${fidelity.faceError}`)
@@ -155,9 +161,10 @@ try {
     assert.ok(fidelity.frameChanges > 0, 'the original head movement is retained')
     assert.equal(fidelity.outsideChanges, 0, 'facial animation cannot repaint the pot, handles, lid, blush or silhouette')
     assert.ok(fidelity.faceChanges > 0)
-    assert.equal(fidelity.closed, fidelity.open, 'eyes retain their size instead of squashing or blinking')
-    assert.equal(fidelity.legacyEyeMotionIgnored, true, 'legacy eye controls cannot deform the baked eye pair')
-    for (const part of ['mouthOpen', 'blush', 'lidOpen', 'handleLeft', 'handleRight']) {
+    assert.equal(fidelity.closed, fidelity.open, 'legacy eyeOpen cannot resize the fixed sockets')
+    assert.equal(fidelity.legacyEyeMotionIgnored, true, 'legacy controls cannot deform the paired eyes')
+    assert.equal(fidelity.lidSettlesExactly, true, 'the settled lid returns to the exact resting artwork')
+    for (const part of ['mouthOpen', 'blush', 'lidOpen', 'lidBounce', 'handleLeft', 'handleRight']) {
       assert.ok(fidelity.articulation[part].changes > 0, `${part} visibly animates`)
       assert.equal(fidelity.articulation[part].outside, 0, `${part} cannot alter unrelated artwork`)
     }

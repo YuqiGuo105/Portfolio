@@ -20,7 +20,7 @@ try {
     const render = createPotRenderer(canvas, frames)
     const failures = [], tracked = []
     let checked = 0
-    function eyes() {
+    function eyes(mergeApertures = false) {
       const data = ctx.getImageData(0, 0, 384, 384).data
       const white = new Set()
       for (let y = 47 * 4; y < 72 * 4; y++) for (let x = 27 * 4; x < 70 * 4; x++) {
@@ -44,6 +44,15 @@ try {
           y: (Math.min(...ys) + Math.max(...ys) + 1) / 8,
           width: (Math.max(...xs) - Math.min(...xs) + 1) / 4,
           height: (Math.max(...ys) - Math.min(...ys) + 1) / 4, area: points.length })
+      }
+      if (mergeApertures) {
+        // A moved pupil or closing lid can divide the remaining white aperture.
+        // Measure all its antialiased fragments as one socket.
+        return [components.filter(p => p.x < 48), components.filter(p => p.x >= 48)].filter(group => group.length).map(group => {
+          const left = Math.min(...group.map(p => p.x - p.width / 2)), right = Math.max(...group.map(p => p.x + p.width / 2))
+          const top = Math.min(...group.map(p => p.y - p.height / 2)), bottom = Math.max(...group.map(p => p.y + p.height / 2))
+          return { x: (left + right) / 2, y: (top + bottom) / 2, width: right - left, height: bottom - top, area: group.reduce((sum, p) => sum + p.area, 0) }
+        })
       }
       return components.sort((a, b) => a.x - b.x)
     }
@@ -78,16 +87,21 @@ try {
       { shiftX: 0.55, lift: -1.3 }, { blush: 0.65 }, { browRight: -12, browLeft: 5 },
       { mouthOpen: 0.65 }, { handleLeft: 8, handleRight: 8 }, { handleLeft: -2, handleRight: 5 },
       { lidOpen: 1, mouthOpen: 0.65, handleLeft: 8, handleRight: 8 },
-      { bow: 18, tilt: 3, mouthOpen: 0.5, handleLeft: 5, handleRight: 5 }]
+      { bow: 18, tilt: 3, mouthOpen: 0.5, handleLeft: 5, handleRight: 5 },
+      { pupilX: -0.55, pupilY: -0.4 }, { pupilX: 0.55, pupilY: 0.4 },
+      { bow: 24, pupilY: 0.4 }, { tilt: -4, pupilX: -0.55 },
+      { blink: 0.3 }, { blink: 0.6, bow: 24 }, { blink: 0.3, tilt: 4, pupilX: 0.55 }]
     for (let frame = 0; frame < frames.length; frame++) for (const values of poses) {
       const pose = { ...POT_REST, ...values }
       render(pose, frame)
-      const pair = eyes()
+      const pair = eyes(Boolean(values.blink || values.pupilX || values.pupilY))
       if (pair.length !== 2) failures.push({ frame, values, reason: 'not exactly two eyes', pair })
       else {
         const [left, right] = pair
-        if (Math.abs(left.width - right.width) > 0.25 || Math.abs(left.height - right.height) > 0.25
-            || Math.abs(left.area - right.area) / Math.max(left.area, right.area) > 0.08) {
+        const edgeTolerance = values.blink ? 0.5 : 0.25
+        if (Math.abs(left.width - right.width) > edgeTolerance || Math.abs(left.height - right.height) > edgeTolerance
+            // A thin, thresholded aperture has more subpixel coverage variance.
+            || Math.abs(left.area - right.area) > Math.max(values.blink ? 8 : 0, Math.max(left.area, right.area) * (values.blink ? 0.12 : 0.08))) {
           failures.push({ frame, values, reason: 'eyes are unequal', pair })
         }
         for (let side = 0; side < 2; side++) {
@@ -104,6 +118,40 @@ try {
     const rollRange = Math.max(...tracked.map(t => t.angle)) - Math.min(...tracked.map(t => t.angle))
     const xRange = Math.max(...tracked.map(t => t.x)) - Math.min(...tracked.map(t => t.x))
     if (rollRange < 0.16 || xRange < 1.5) failures.push({ reason: 'eyes frozen while pot moves', rollRange, xRange })
+    const arcs = [], apertures = []
+    const prototype = CanvasRenderingContext2D.prototype
+    const arc = prototype.arc, ellipse = prototype.ellipse
+    try {
+      prototype.arc = function (...args) { arcs.push(args.slice(0, 3)); return arc.apply(this, args) }
+      prototype.ellipse = function (...args) { apertures.push(args.slice(0, 5)); return ellipse.apply(this, args) }
+      render({ ...POT_REST, blink: 0.6, pupilX: 0.55, pupilY: 0.4 })
+    } finally { prototype.arc = arc; prototype.ellipse = ellipse }
+    const sharedGeometry = JSON.stringify(arcs) === JSON.stringify([[0, 0, 2.8], [0.55, 0.4, 1.65], [0, 0, 2.8], [0.55, 0.4, 1.65]])
+      && apertures.length === 2 && JSON.stringify(apertures[0]) === JSON.stringify(apertures[1])
+    if (!sharedGeometry) failures.push({ reason: 'left and right socket, pupil, and eyelid geometry must match exactly', arcs, apertures })
+    let expressionChecks = 0
+    for (let frame = 0; frame < frames.length; frame++) {
+      render(POT_REST, frame)
+      const baseline = ctx.getImageData(0, 0, 384, 384).data
+      const mount = mounts[frame]
+      for (const values of [{ pupilX: -0.55 }, { pupilX: 0.55, pupilY: 0.4 }, { blink: 0.3 }, { blink: 0.6 }, { blink: 1 }]) {
+        render({ ...POT_REST, ...values }, frame)
+        const pixels = ctx.getImageData(0, 0, 384, 384).data
+        let changed = 0, outside = 0
+        const c = Math.cos(mount.angle), s = Math.sin(mount.angle)
+        for (let y = 0; y < 384; y++) for (let x = 0; x < 384; x++) {
+          const i = (y * 384 + x) * 4
+          if ([0, 1, 2, 3].every(channel => pixels[i + channel] === baseline[i + channel])) continue
+          changed++
+          const dx = (x + 0.5) / 4 - mount.x, dy = (y + 0.5) / 4 - mount.y
+          const u = 48.04 + dx * c + dy * s, v = 62.83 - dx * s + dy * c
+          if (Math.min(Math.hypot(u - 38.75, v - 57.2), Math.hypot(u - 57.25, v - 57.2)) > 3.2) outside++
+        }
+        if (!changed || outside) failures.push({ frame, values, reason: 'expression must only change pixels inside the fixed eye pair', changed, outside })
+        if (values.blink === 1 && eyes().length) failures.push({ frame, reason: 'blink leaves a ghost eye behind' })
+        expressionChecks++
+      }
+    }
     for (let frame = 0; frame < frames.length; frame++) {
       render(POT_REST, frame)
       const rest = ctx.getImageData(0, 0, 384, 384).data
@@ -140,6 +188,9 @@ try {
       ['Centered', 0, {}], ['Original sway left', 6, {}], ['Original sway right', 18, {}], ['Brows only', 6, { browRight: -12, browLeft: 5 }],
       ['Slight smile', 6, { mouthOpen: 0.5, mouthWidth: 1.12 }], ['Listening', 18, { handleRight: 5, handleLeft: 1 }],
       ['Handles lift', 6, { handleLeft: 8, handleRight: 8 }], ['Happy reaction', 6, { lidOpen: 1, mouthOpen: 0.65, handleLeft: 8, handleRight: 8 }],
+      ['Small pupil glance', 0, { pupilX: -0.55, pupilY: -0.4 }], ['Paired blink', 0, { blink: 1 }],
+      ['Thoughtful bow', 0, { bow: 24, pupilY: 0.4, handleLeft: -2, handleRight: -2 }],
+      ['Look up and smile', 0, { mouthOpen: 0.22, mouthWidth: 1.08, handleLeft: 4, handleRight: 4 }],
     ]) {
       render({ ...POT_REST, ...values }, frame)
       const item = document.createElement('div')
@@ -151,7 +202,7 @@ try {
       const caption = document.createElement('p'); caption.textContent = label; item.append(caption); document.body.append(item)
     }
     frames.forEach(frame => frame.close())
-    return { checked, rollRange, xRange, frozenEyesRegressionCaught, failures: failures.slice(0, 10), totalFailures: failures.length }
+    return { checked, expressionChecks, sharedGeometry, rollRange, xRange, frozenEyesRegressionCaught, failures: failures.slice(0, 10), totalFailures: failures.length }
   }, { renderer, artwork })
   await page.screenshot({ path: `${output}/rigid-eye-pair.png`, fullPage: true })
   console.log(JSON.stringify(result))

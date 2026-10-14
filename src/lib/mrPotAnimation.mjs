@@ -1,7 +1,8 @@
 export const POT_REST = Object.freeze({
   tilt: 0, lift: 0, shiftX: 0, steam: 0,
   browLeft: 0, browRight: 0, browLift: 0, mouthWidth: 1, mouthHeight: 1,
-  mouthOpen: 0, lidOpen: 0, blush: 0, bow: 0, handleLeft: 0, handleRight: 0,
+  mouthOpen: 0, lidOpen: 0, lidBounce: 0, blush: 0, bow: 0, handleLeft: 0, handleRight: 0,
+  pupilX: 0, pupilY: 0, blink: 0,
 })
 
 function surface(width, height) {
@@ -94,9 +95,12 @@ function faceLandmarks(source) {
   }
 }
 
-function drawEyes(context, mount) {
-  // One identical shape per eye, baked into the GIF frame rather than animated
-  // independently. Only the shared head transform can move or scale the eyes.
+function drawEyes(context, mount, pose = POT_REST) {
+  // Fixed, identical sockets share the GIF's face mount and the head transform.
+  // Only the pupils and one shared eyelid aperture can move within those sockets.
+  const blink = Math.max(0, Math.min(1, pose.blink || 0))
+  const pupilX = Math.max(-0.55, Math.min(0.55, pose.pupilX || 0))
+  const pupilY = Math.max(-0.4, Math.min(0.4, pose.pupilY || 0))
   context.save()
   context.translate(mount.x, mount.y)
   context.rotate(mount.angle)
@@ -104,16 +108,33 @@ function drawEyes(context, mount) {
   for (const x of [38.75, 57.25]) {
     context.save()
     context.translate(x, 57.2)
+    if (blink > 0) {
+      context.beginPath()
+      context.ellipse(0, 0, 2.8, Math.max(0.001, 2.8 * (1 - blink)), 0, 0, Math.PI * 2)
+      context.clip()
+    }
     context.beginPath()
     context.arc(0, 0, 2.8, 0, Math.PI * 2)
     context.fillStyle = '#fafaf7'
     context.fill()
     context.clip()
     context.beginPath()
-    context.arc(0, 0, 1.65, 0, Math.PI * 2)
+    context.arc(pupilX, pupilY, 1.65, 0, Math.PI * 2)
     context.fillStyle = '#383636'
     context.fill()
     context.restore()
+    if (blink > 0.75) {
+      context.save()
+      context.globalAlpha *= (blink - 0.75) * 4
+      context.beginPath()
+      context.moveTo(x - 2.2, 57.2)
+      context.quadraticCurveTo(x, 58, x + 2.2, 57.2)
+      context.strokeStyle = '#383636'
+      context.lineWidth = 0.7
+      context.lineCap = 'round'
+      context.stroke()
+      context.restore()
+    }
   }
   context.restore()
 }
@@ -146,6 +167,37 @@ function separateHandles(source, base, mount) {
     part.hinge = { x: mount.x + dx * c - dy * s, y: mount.y + dx * s + dy * c }
   })
   return { parts, bareSource }
+}
+
+function separateLid(head, bareHead, mount, width, height) {
+  // Follow the GIF's rolling rim rather than cutting every frame at screen y=45.
+  // Masks are rasterized at output resolution so the slanted seam is antialiased.
+  const layer = (source, top, bottom) => {
+    const part = surface(width, height)
+    part.context.save()
+    part.context.scale(width / 96, height / 96)
+    part.context.translate(mount.x, mount.y)
+    part.context.rotate(mount.angle)
+    part.context.translate(-48.04, -62.83)
+    part.context.beginPath()
+    part.context.rect(-96, top, 288, bottom - top)
+    part.context.restore()
+    part.context.clip()
+    part.context.drawImage(source.canvas, 0, 0)
+    return part
+  }
+  const dx = 48 - 48.04, dy = 45 - 62.83
+  const pivot = {
+    x: mount.x + dx * Math.cos(mount.angle) - dy * Math.sin(mount.angle),
+    y: mount.y + dx * Math.sin(mount.angle) + dy * Math.cos(mount.angle),
+    angle: mount.angle,
+  }
+  return {
+    lid: layer(head, 25.5, 45),
+    openHead: layer(head, 45, 192),
+    openBareHead: layer(bareHead, 45, 192),
+    pivot,
+  }
 }
 
 export async function decodePotFrames(src) {
@@ -182,13 +234,9 @@ function* prepareFrame(image, width, height) {
     clearOriginalEyes(source, base)
     const eyeMount = faceLandmarks(source)
     const head = refineOutline(base, width, height)
-    head.context.scale(width / 96, height / 96)
-    drawEyes(head.context, eyeMount)
     yield
     const handles = separateHandles(source, base, eyeMount)
     const bareHead = refineOutline(base, width, height)
-    bareHead.context.scale(width / 96, height / 96)
-    drawEyes(bareHead.context, eyeMount)
     yield
     const cheeks = surface(96, 96)
     const cheekPixels = source.context.getImageData(0, 0, 96, 96)
@@ -208,10 +256,8 @@ function* prepareFrame(image, width, height) {
     cheeks.context.globalCompositeOperation = 'source-over'
     handles.parts = handles.parts.map(part => ({ ...refineOutline(part, width, height), hinge: part.hinge }))
     yield
-    const lid = refineOutline(source, width, height)
-    yield
-    const bareLid = refineOutline(handles.bareSource, width, height)
-    return { source, head, bareHead, handles, lid, bareLid, leftBrow, rightBrow, mouth, cheeks, faceMount: eyeMount }
+    const split = separateLid(head, bareHead, eyeMount, width, height)
+    return { source, head, bareHead, handles, ...split, leftBrow, rightBrow, mouth, cheeks, faceMount: eyeMount }
 }
 
 export function createPotRenderer(canvas, images) {
@@ -287,6 +333,7 @@ function createPreparedRenderer(canvas, prepared) {
   context.imageSmoothingEnabled = true
   context.imageSmoothingQuality = "high"
   const { frames } = prepared
+  const eyes = surface(canvas.width, canvas.height)
   const frameCount = () => prepared.complete ? frames.length : 1
   let active
 
@@ -300,6 +347,7 @@ function createPreparedRenderer(canvas, prepared) {
   }
 
   function face(pose) {
+    context.drawImage(eyes.canvas, 0, 0, 96, 96)
     feature(active.leftBrow, 1, 1, pose.browLeft, pose.browLift)
     feature(active.rightBrow, 1, 1, pose.browRight, pose.browLift)
     const mouthOpen = Math.max(0, Math.min(1, pose.mouthOpen || 0))
@@ -351,6 +399,13 @@ function createPreparedRenderer(canvas, prepared) {
 
   function render(pose, frameIndex = 0) {
     active = frames[frameIndex % frameCount()]
+    // Rasterize the small facial layer separately so mouth clipping cannot
+    // change eye-edge antialiasing. Reuse the same surface for every frame.
+    eyes.context.clearRect(0, 0, canvas.width, canvas.height)
+    eyes.context.save()
+    eyes.context.scale(canvas.width / 96, canvas.height / 96)
+    drawEyes(eyes.context, active.faceMount, pose)
+    eyes.context.restore()
     context.setTransform(canvas.width / 96, 0, 0, canvas.height / 96, 0, 0)
     context.clearRect(0, 0, 96, 96)
     context.save()
@@ -358,9 +413,11 @@ function createPreparedRenderer(canvas, prepared) {
     context.rotate(pose.tilt * Math.PI / 180)
     context.translate(-48, -60)
     const lidOpen = Math.max(0, Math.min(1, pose.lidOpen || 0))
+    const lidBounce = pose.lidBounce > 0.0001 ? Math.min(1, pose.lidBounce) : 0
+    const lidRise = Math.max(lidOpen * 5, lidBounce * 9)
     const bow = Math.max(0, Math.min(28, pose.bow || 0)) * Math.PI / 180
     const articulated = Math.abs(pose.handleLeft || 0) + Math.abs(pose.handleRight || 0) > 0.01
-    if (!lidOpen && !bow) {
+    if (!lidRise && !bow) {
       if (articulated) drawHandles(pose)
       body(26, 70, articulated)
       face(pose)
@@ -369,32 +426,39 @@ function createPreparedRenderer(canvas, prepared) {
       // repeatedly resampling the face and contour through intermediate canvases.
       const frontScale = Math.cos(bow)
       const nod = Math.sin(bow) * 7
+      const pivot = active.pivot
       context.save()
+      // Preserve the existing head/eye bow exactly; only the lid's boundary changes.
       context.translate(0, 45 + nod)
       context.scale(1, frontScale)
       context.translate(0, -45)
       if (articulated) drawHandles(pose)
-      body(45, 51, articulated)
+      context.drawImage((articulated ? active.openBareHead : active.openHead).canvas, 0, 0, 96, 96)
       face(pose)
-      context.restore()
-      if (lidOpen) {
-        context.globalAlpha = Math.min(1, lidOpen * 3)
+      if (lidRise) {
+        context.save()
+        context.translate(pivot.x, pivot.y)
+        context.rotate(pivot.angle)
+        context.globalAlpha = Math.min(1, Math.max(lidOpen, lidBounce) * 3)
         context.fillStyle = '#555552'
         context.beginPath()
-        context.ellipse(48, 44.5 + nod, 22, 2.1, 0, 0, Math.PI * 2)
+        context.ellipse(0, -0.5, 22, 2.1, 0, 0, Math.PI * 2)
         context.fill()
-        context.globalAlpha = 1
+        context.restore()
       }
+      context.restore()
       context.save()
-      context.translate(48, 44 + nod - lidOpen * 5)
-      context.rotate(-lidOpen * 10 * Math.PI / 180)
+      context.translate(pivot.x, 45 + nod + (pivot.y - 45) * frontScale - lidRise)
+      context.rotate(Math.atan2(Math.sin(pivot.angle) * frontScale, Math.cos(pivot.angle)))
+      context.rotate((-lidOpen * 10 - lidBounce * 3) * Math.PI / 180)
       context.scale(1, 1 + Math.sin(bow) * 0.15)
-      const lid = articulated ? active.bareLid.canvas : active.lid.canvas
-      context.drawImage(lid, 0, 26 * lid.height / 96, lid.width, 19 * lid.height / 96, -48, -18, 96, 19)
+      context.rotate(-pivot.angle)
+      context.translate(-pivot.x, -pivot.y)
+      context.drawImage(active.lid.canvas, 0, 0, 96, 96)
       context.restore()
     }
     context.drawImage(active.source.canvas, 0, 0, 96, 26,
-      pose.steam * 0.4 - lidOpen, -Math.abs(pose.steam) - lidOpen * 3, 96, 26)
+      pose.steam * 0.4 - lidOpen, -Math.abs(pose.steam) - lidOpen * 3 - lidBounce * 4, 96, 26)
     context.restore()
   }
   Object.defineProperty(render, 'frameCount', { get: frameCount })

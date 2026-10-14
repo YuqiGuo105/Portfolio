@@ -70,8 +70,8 @@
 
   @media (min-width: 768px) {
     .bot-container {
-      width: 520px;
-      max-width: 520px;
+      width: 440px;
+      max-width: 440px;
     }
   }
   .bot-header {

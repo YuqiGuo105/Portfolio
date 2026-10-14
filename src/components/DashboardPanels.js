@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useServiceHoverDetails } from "./ServiceHoverDetails";
 const RotatingGlobe = dynamic(() => import("./RotatingGlobe"), { ssr: false });
 
 const MONITOR_SERVICE_VISIBLE_LIMIT = 8;
@@ -330,6 +331,7 @@ const DashboardPanels = () => {
   const [metrics, setMetrics] = useState(null);
   const [isMetricsLoading, setIsMetricsLoading] = useState(true);
   const [showAllMonitoredServices, setShowAllMonitoredServices] = useState(false);
+  const serviceDetails = useServiceHoverDetails(metrics?.services || [], metrics?.updatedAt);
 
   const hoursAgoLabel = (timestamp) => {
     const hours = getHoursSince(timestamp);
@@ -927,7 +929,7 @@ const DashboardPanels = () => {
         </div>
 
         {/* Live Grafana Dashboard */}
-        <div className="dashboard-card-5 grafana-card">
+        <div className="dashboard-card-5 grafana-card" id="platform-monitoring">
           <header>
             <h3>Platform Monitoring</h3>
             <span className="badge">live</span>
@@ -1006,7 +1008,7 @@ const DashboardPanels = () => {
           {/* Per-service grid */}
           <div className="monitor-grid">
             {visibleMonitoredServices.map((svc) => (
-              <div className={`monitor-service ${svc.up ? "is-up" : svc.noMetrics ? "is-idle" : "is-down"}`} key={svc.job}>
+              <div className={`monitor-service ${svc.up ? "is-up" : svc.noMetrics ? "is-idle" : "is-down"}`} key={svc.job} {...serviceDetails.getTriggerProps(svc)}>
                 <div className="monitor-service-head">
                   <span className={`status-dot ${svc.up ? "up" : svc.noMetrics ? "idle" : "down"}`} aria-hidden="true" />
                   <span className="monitor-service-name">{svc.name}</span>
@@ -1045,6 +1047,7 @@ const DashboardPanels = () => {
                 <div className="monitor-service skeleton" key={`sk-${i}`} />
               ))}
           </div>
+          {serviceDetails.popover}
           {hiddenMonitoredServiceCount > 0 && (
             <button
               className="monitor-disclosure"
@@ -1994,6 +1997,10 @@ const DashboardPanels = () => {
           transform: translateY(-2px);
           box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
         }
+
+        .monitor-service[role="button"] { cursor: pointer; }
+        .monitor-service[role="button"]:focus-visible { outline: 2px solid #6366f1; outline-offset: 3px; }
+        .monitor-service[aria-expanded="true"] { border-color: #818cf8; }
 
         .monitor-service.is-down {
           opacity: 0.72;
