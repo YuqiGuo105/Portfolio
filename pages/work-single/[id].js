@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import Layout from "../../src/layout/Layout";
-import ProjectExperience from "../../src/components/projects/ProjectExperience";
+import ProjectArchitectureOverview from "../../src/components/projects/ProjectArchitectureOverview";
+import { getProjectArchitecture } from "../../src/lib/projectArchitecture.mjs";
 import SeoHead, { absoluteUrl } from "../../src/components/SeoHead";
 import { sanitize } from "../../src/lib/sanitizeHtml";
 import { supabaseServer } from "../../src/supabase/supabaseServer";
@@ -45,7 +46,7 @@ function sanitizeWithMermaid(html) {
 
 export async function getServerSideProps({ params, res }) {
   const { id } = params;
-  const [projectResult, navigationResult, subsystemResult] = await Promise.all([
+  const [projectResult, navigationResult] = await Promise.all([
     supabaseServer
       .from("Projects")
       .select(PROJECT_FIELDS)
@@ -58,13 +59,6 @@ export async function getServerSideProps({ params, res }) {
       .eq("publication_status", "PUBLISHED")
       .order("num", { ascending: false })
       .order("published_at", { ascending: false }),
-    supabaseServer
-      .from("project_subsystems")
-      .select("id,project_id,linked_project_id,slug,title,eyebrow,summary,design_intent,maturity,sort_order,diagram_config,active")
-      .eq("project_id", id)
-      .eq("active", true)
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true }),
   ]);
 
   if (projectResult.error || !projectResult.data) {
@@ -75,43 +69,11 @@ export async function getServerSideProps({ params, res }) {
     throw navigationResult.error;
   }
 
-  if (subsystemResult.error) {
-    console.error("Project subsystem query failed", {
-      projectId: id,
-      message: subsystemResult.error.message,
-    });
-  }
-
   const project = projectResult.data;
   const projects = navigationResult.data || [];
-  const rawSubsystems = subsystemResult.data || [];
-  const linkedProjectIds = [...new Set(
-    rawSubsystems.map((system) => system.linked_project_id).filter(Boolean)
-  )];
-  let publishedLinkedProjectIds = new Set();
-
-  if (linkedProjectIds.length > 0) {
-    const linkedResult = await supabaseServer
-      .from("Projects")
-      .select("id")
-      .in("id", linkedProjectIds)
-      .eq("publication_status", "PUBLISHED");
-
-    if (!linkedResult.error) {
-      publishedLinkedProjectIds = new Set(
-        (linkedResult.data || []).map((linkedProject) => linkedProject.id)
-      );
-    }
-  }
 
   const currentIndex = projects.findIndex((item) => item.id === id);
   const nextProject = currentIndex >= 0 ? projects[currentIndex + 1] || null : null;
-  const subsystems = rawSubsystems.map((system) => ({
-    ...system,
-    linked_project_id: publishedLinkedProjectIds.has(system.linked_project_id)
-      ? system.linked_project_id
-      : null,
-  }));
 
   res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=600");
 
@@ -131,7 +93,7 @@ export async function getServerSideProps({ params, res }) {
         updatedAt: project.updated_at || null,
         createdAt: project.published_at || null,
       },
-      subsystems,
+      architecture: getProjectArchitecture(project.id),
       nextProject: nextProject
         ? { id: nextProject.id, title: nextProject.title || "" }
         : null,
@@ -139,7 +101,7 @@ export async function getServerSideProps({ params, res }) {
   };
 }
 
-export default function WorkSingle({ project, subsystems, nextProject }) {
+export default function WorkSingle({ project, architecture, nextProject }) {
   useEffect(() => {
     if (!document.querySelector("div.mermaid")) return undefined;
 
@@ -244,13 +206,10 @@ export default function WorkSingle({ project, subsystems, nextProject }) {
           </section>
         )}
 
-        {project.experienceVariant && subsystems.length > 0 && (
+        {architecture && (
           <section className="section section-inner project-architecture-section">
             <div className="container">
-              <ProjectExperience
-                variant={project.experienceVariant}
-                systems={subsystems}
-              />
+              <ProjectArchitectureOverview key={project.id} architecture={architecture} />
             </div>
           </section>
         )}

@@ -164,7 +164,7 @@ const Header = ({ onOpenSearch }) => {
             <NotificationBell onOpenSubscribe={() => setSubscribeOpen(true)} isDark={!day} />
             {/* subscribe button — only shown when NOT already subscribed (Bell handles that case) */}
             <SubscribeDialog open={subscribeOpen} onClose={() => setSubscribeOpen(false)} isDark={!day} />
-            <SubscriptionPrompt isDark={!day} />
+            {router.pathname === "/" && <SubscriptionPrompt isDark={!day} />}
             {/* switcher btn */}
             <a
               className={`switcher-btn ${day ? "active" : ""}`}

@@ -1,5 +1,4 @@
 export const SUBSCRIPTION_PROMPT_KEY = "portfolioSubscriptionPrompt:v1";
-export const SUBSCRIPTION_PROMPT_DELAY_MS = 15_000;
 export const SUBSCRIPTION_PROMPT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 export const SUBSCRIPTION_PROMPT_VISITOR_LEAD_PX = 96;
 const shownInWindow = new WeakMap();
@@ -10,7 +9,7 @@ export function subscriptionPromptPreviewMode(environment, preference) {
 
 export function isSubscriptionPromptPage(page) {
   const path = String(page || "").split(/[?#]/)[0];
-  return /^\/(?:$|blogs?\/?$|works(?:-list)?\/?$|(?:blog-single|work-single)(?:\/[^/]+)?\/?$)/.test(path);
+  return path === "/";
 }
 
 export function recordSubscriptionPrompt(win, now = Date.now()) {
@@ -50,20 +49,14 @@ export function startSubscriptionPrompt({ win, doc, page, hasSubscriber, onPromp
   let elapsed = 0;
   let lastTick = now();
   let readingTrigger = null;
-  const isHomepage = String(page).split(/[?#]/)[0] === "/";
   let available = !doc.hidden && !subscriptionPromptBlocked(doc);
 
   const checkReadingPoint = () => {
     if (doc.hidden || subscriptionPromptBlocked(doc)) return;
-    if (isHomepage) {
-      // Invite just before Visitor Insights enters view, never on a homepage timer.
-      const heading = doc.getElementById("visitor-insights")?.getBoundingClientRect();
-      readingTrigger = win.scrollY > 0 && heading?.height > 0 && heading.top <= win.innerHeight + SUBSCRIPTION_PROMPT_VISITOR_LEAD_PX
-        ? "visitor-insights" : null;
-      return;
-    }
-    const scrollable = doc.documentElement.scrollHeight - win.innerHeight;
-    if (!readingTrigger && scrollable > 0 && win.scrollY / scrollable >= 0.25) readingTrigger = "scroll-progress";
+    // Only the homepage's Visitor Insights can trigger an invitation.
+    const heading = doc.getElementById("visitor-insights")?.getBoundingClientRect();
+    readingTrigger = win.scrollY > 0 && heading?.height > 0 && heading.top <= win.innerHeight + SUBSCRIPTION_PROMPT_VISITOR_LEAD_PX
+      ? "visitor-insights" : null;
   };
   const onScroll = () => {
     checkReadingPoint();
@@ -89,13 +82,12 @@ export function startSubscriptionPrompt({ win, doc, page, hasSubscriber, onPromp
     // Images, restored scrolling and closing an overlay can change eligibility
     // without another scroll event.
     if (canRead) checkReadingPoint();
-    const ready = isHomepage ? Boolean(readingTrigger) : elapsed >= SUBSCRIPTION_PROMPT_DELAY_MS || Boolean(readingTrigger);
-    if (!canRead || !ready) return;
+    if (!canRead || !readingTrigger) return;
     stop();
     // The mounted dialog records cooldown, never a request that wasn't rendered.
     const scrollable = doc.documentElement.scrollHeight - win.innerHeight;
     onPrompt({
-      trigger: readingTrigger || "reading-time",
+      trigger: readingTrigger,
       elapsedMs: elapsed,
       progressPercent: scrollable > 0 ? Math.round(win.scrollY / scrollable * 1000) / 10 : 0,
     });

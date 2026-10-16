@@ -1,0 +1,106 @@
+.overview {
+  --ink: #243536;
+  --muted: #596b6d;
+  --line: #ccd9d7;
+  --surface: #fff;
+  --accent: #147d70;
+  --selected: #edf7f3;
+  --number: #9a582d;
+  color: var(--ink);
+  letter-spacing: 0;
+  padding: 28px 0 12px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+
+:global(body.dark-skin) .overview {
+  --ink: #edf4f1;
+  --muted: #adbfbd;
+  --line: #3c5251;
+  --surface: #1b292b;
+  --accent: #83d6bd;
+  --selected: #203b36;
+  --number: #edb57f;
+}
+
+.heading .eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.heading h2 { margin: 0 0 12px; color: var(--ink); font-size: 28px; line-height: 1.3; letter-spacing: 0; }
+.heading p { max-width: 760px; margin: 0; font-size: 16px; line-height: 1.6; color: var(--muted); }
+.flow { display: grid; grid-template-columns: repeat(var(--step-count), minmax(0, 1fr)); gap: 26px; margin: 28px 0 24px; }
+.node { position: relative; min-width: 0; display: flex; }
+
+/* Scope out the legacy theme's animated button overlay and fixed dimensions. */
+.overview button {
+  appearance: none;
+  position: relative;
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: none;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: none;
+  white-space: normal;
+  transform: none;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.overview button::before, .overview button::after { display: none; content: none; }
+.overview button:focus-visible, .detail:focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 4px; }
+:global(body) .overview button:hover { color: var(--ink); }
+.overview .step { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 100%; height: auto; min-height: 146px; padding: 16px; text-align: left; }
+.overview .step:hover { border-color: var(--accent); }
+.overview .step[aria-selected="true"] { border-color: var(--accent); background: var(--selected); box-shadow: inset 0 -3px var(--accent); }
+.stepTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: var(--accent); }
+.stepTop span { font: 12px/1.5 monospace; color: var(--number); }
+.step strong { color: var(--ink); font-size: 15px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
+.subtitle { color: var(--muted); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.connector { position: absolute; right: -21px; top: calc(50% - 8px); display: flex; color: var(--muted); pointer-events: none; }
+.vertical { display: none; }
+.detail { border-block: 1px solid var(--line); padding: 20px 0 24px; min-height: 204px; }
+.detailHeading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
+.detailHeading h3 { display: flex; align-items: center; gap: 10px; margin: 0; color: var(--ink); font-size: 18px; line-height: 1.4; letter-spacing: 0; }
+.detailHeading h3 svg { color: var(--accent); flex-shrink: 0; }
+.navigation { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.navigation span { margin-right: 6px; color: var(--muted); font: 12px/1.4 monospace; }
+.overview .navigation button { display: grid; place-items: center; padding: 0; width: 32px; height: 32px; min-height: 0; }
+.overview .navigation button:hover:not(:disabled) { border-color: var(--accent); background: var(--selected); }
+.overview .navigation button:disabled { cursor: default; opacity: .35; }
+.facts { display: grid; grid-template-columns: 1.15fr 1fr 1.15fr; gap: 28px; margin: 0; }
+.facts > div { min-width: 0; }
+.facts dt { margin: 0 0 8px; color: var(--muted); font-size: 12px; font-weight: 600; line-height: 1.4; }
+.facts dd { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+.outcome { display: flex; align-items: flex-start; gap: 9px; margin: 16px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.outcome svg { flex-shrink: 0; color: var(--accent); margin-top: 2px; }
+
+@media (max-width: 767px) {
+  .heading h2 { font-size: 23px; }
+  .flow { gap: 14px; grid-template-columns: 1fr; margin: 24px 0; }
+  .overview .step { min-height: 72px; display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 2px 12px; padding: 12px; }
+  .stepTop { grid-row: span 2; flex-direction: column; justify-content: center; gap: 2px; margin: 0; }
+  .step strong { align-self: end; }
+  .connector { top: auto; right: calc(50% - 8px); bottom: -15px; }
+  .horizontal { display: none; }
+  .vertical { display: block; }
+  .facts { grid-template-columns: 1fr; gap: 16px; }
+  .facts dt { margin-bottom: 4px; }
+  .detail { min-height: 0; }
+  .detailHeading { gap: 8px; }
+  .detailHeading h3 { font-size: 17px; }
+  .overview .navigation button { width: 36px; height: 36px; }
+}
+
+@media (prefers-reduced-motion: reduce) { .overview button { transition: none; } }
