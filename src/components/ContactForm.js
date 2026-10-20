@@ -1,4 +1,5 @@
 import { useState } from "react";
+import TalkNestContact from "./TalkNestContact";
 
 const ContactForm = () => {
   const [contactData, setContactData] = useState({
@@ -72,6 +73,7 @@ const ContactForm = () => {
             </div>
           </div>
           <div className="col-md-9 vertical-line contact-form-column">
+            <TalkNestContact />
             <div className="contacts-form">
               <form onSubmit={onSubmit}>
                 <label>
