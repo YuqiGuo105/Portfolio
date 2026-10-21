@@ -45,7 +45,8 @@ Rollback: set the database switch false first, then disable `VOICE_ENABLED` in
 Vercel/Cloud Run. Do not reset counters as part of a deployment or rollback.
 Run `npm run test:voice` for deterministic safety tests without paid API calls.
 
-Release checks (2026-10-21): 55 voice tests and 201 existing portfolio tests pass;
+Release checks (2026-10-21): 56 voice tests, 201 existing portfolio tests and 40
+security tests pass;
 production build passes with existing lint warnings. Fake-provider browser E2E
 passes at desktop, 390px and 320px, including canvas-pixel/movement checks,
 interruption, mute, bounded rendering and microphone/AudioContext cleanup.
@@ -54,6 +55,26 @@ table/RPC deny anonymous/authenticated access. Quota concurrency, replay, daily
 exhaustion and hard stop paths are tested with an isolated shared store, not by
 resetting production counters. Existing database advisories outside the new voice
 table remain outside this release's scope.
+
+Production homepage E2E passed with synthetic speech (no real microphone): one
+Google session returned 9.37 seconds of PCM, played in the browser, and correctly
+named Syracuse University and the University of Liverpool with both degrees.
+Hangup released microphone/AudioContext resources, disconnected the relay and
+cleared the concurrency lease. A simultaneous status read reported `busy`.
+An earlier empty test-audio file failed before connecting to Google but consumed
+an attempt as designed. Both attempts remain counted; no allowance was reset.
+The test now validates its audio fixture before reserving a call.
+
+`tests/voice.production.browser.mjs --approved-single-call` is opt-in and consumes
+the real daily allowance. Set `VOICE_TEST_WAV` to a verified synthetic WAV file
+and `VOICE_APPROVAL_MARKER` to a new approval-specific receipt path. Never rerun
+as an automatic retry. Human microphone/echo and Safari/iOS still need manual
+validation; synthetic Chromium coverage is not a substitute.
+
+Unrelated existing database notices include
+[public-table RLS configuration](https://supabase.com/docs/guides/database/database-linter?lint=0013_rls_disabled_in_public)
+and [security-definer views](https://supabase.com/docs/guides/database/database-linter?lint=0010_security_definer_view).
+The voice table is RLS-enabled, has no public policy, and its RPC is service-role-only.
 
 ## Flow
 

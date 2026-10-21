@@ -5,8 +5,9 @@ import { chromium } from '/Users/yuqiguo/.cache/codex-runtimes/codex-primary-run
 
 if (!process.argv.includes('--approved-single-call')) throw new Error('One paid verification call requires explicit approval. No automatic retry.');
 const origin = 'https://www.yuqi.site';
-const wav = await readFile('/tmp/mr-pot-production-input.wav');
-const marker = await open('/tmp/mr-pot-production-20261021-attempt', 'wx', 0o600);
+const wav = await readFile(process.env.VOICE_TEST_WAV || '/tmp/mr-pot-production-input.wav');
+assert.ok(wav.length > 48000, 'Synthetic speech must be nonempty before reserving a call');
+const marker = await open(process.env.VOICE_APPROVAL_MARKER || '/tmp/mr-pot-production-20261021-attempt', 'wx', 0o600);
 await marker.close();
 let browser, page, peer, socket, cutoff, attempts = 0, outputSeconds = 0, inputSeconds = 0;
 let userText = '', answer = '', complete = false, reason = '', setup = false;
