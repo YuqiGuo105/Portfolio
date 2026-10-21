@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createSessionHandler as createBaseSessionHandler, isLocalVoiceRequest } from '../src/lib/voice/sessionServer.mjs';
-import { createProfileLoader, publicProfileEvidence, PROFILE_UNAVAILABLE } from '../src/lib/voice/publicProfile.mjs';
+import { createProfileLoader, fetchPublicProfile, publicProfileEvidence, PROFILE_UNAVAILABLE } from '../src/lib/voice/publicProfile.mjs';
 import { cleanPageContext, wireSetup, liveConfig } from '../src/lib/voice/protocol.mjs';
 import { GoogleLiveSession } from '../src/lib/voice/googleLive.mjs';
 
@@ -151,6 +151,31 @@ test('production relay handshake sends only its ticket and never browser tool re
     h.session.handle({ type: 'relay.closed', reason: 'time_limit' });
     assert.equal(socket.readyState, 3); assert.equal(h.audio.closes, 1);
   } finally { h.session.close(); }
+});
+
+test('public MCP profile completion aborts the transport stream even with a caller deadline', async () => {
+  const original = globalThis.fetch;
+  let opened = false, aborted = false;
+  globalThis.fetch = async (_url, init) => {
+    if (init.method === 'GET') {
+      opened = true;
+      return new Promise((_resolve, reject) => {
+        const abort = () => { aborted = true; reject(new DOMException('closed', 'AbortError')); };
+        if (init.signal.aborted) abort(); else init.signal.addEventListener('abort', abort, { once: true });
+      });
+    }
+    const message = JSON.parse(init.body);
+    if (message.method === 'notifications/initialized') return new Response(null, { status: 202 });
+    const data = { status: 'EVIDENCE_FOUND', coverage: { profile: 'owner_reviewed_public_evidence' }, profileEvidence: [{ review: 'approved', sourceType: 'PROFILE', text: 'Approved education.' }] };
+    const result = message.method === 'initialize'
+      ? { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'fixture', version: '1' } }
+      : { content: [{ type: 'text', text: JSON.stringify(data) }] };
+    return Response.json({ jsonrpc: '2.0', id: message.id, result });
+  };
+  try {
+    const result = await fetchPublicProfile({ signal: new AbortController().signal });
+    assert.equal(result.status, 'EVIDENCE_FOUND'); assert.ok(opened); assert.ok(aborted);
+  } finally { globalThis.fetch = original; }
 });
 
 test('navigation is allowlisted, canceled on interruption, and cannot be replayed', async () => {

@@ -20,7 +20,10 @@ export function publicProfileEvidence(data) {
 export async function fetchPublicProfile({ signal } = {}) {
   const client = new Client({ name: 'mr-pot-local-voice', version: '1.0.0' }, { capabilities: {} });
   const transport = new StreamableHTTPClientTransport(new URL(ENDPOINT), {
-    fetch: (url, init) => fetch(url, { ...init, signal, redirect: 'error' }),
+    fetch: (url, init) => fetch(url, { ...init,
+      signal: signal && init?.signal ? AbortSignal.any([signal, init.signal]) : signal || init?.signal,
+      redirect: 'error',
+    }),
   });
   try {
     await client.connect(transport);
