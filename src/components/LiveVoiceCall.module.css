@@ -50,7 +50,6 @@
 .call .controls .hangup { --call-button-color: #fff; width: 62px; background: #be4d45; border-color: #be4d45; border-radius: 24px; }
 .call .controls .hangup:hover { background: #a33e37; }
 .call .secondary { background: #f7f9f5; }
-.disclosure { margin: 8px auto 0; color: #60736c; font-size: 10px; line-height: 1.4; }
 .error { margin: 0; color: #973e32; font-size: 11px; text-align: center; overflow-wrap: anywhere; overflow-y: auto; }
 .call .destination { padding: 4px 10px; min-height: 30px; font-size: 12px; background: #f9fbf8; }
 .transcript { position: absolute; z-index: 5; inset: 68px 0 108px; display: flex; flex-direction: column; background: #fcfdfb; }
@@ -75,7 +74,6 @@
 @media (max-height: 550px) {
   .call { grid-template-rows: 60px minmax(60px, 1fr) 80px 92px; }
   .transcript { inset: 60px 0 92px; }
-  .disclosure { font-size: 9px; }
 }
 @media (prefers-reduced-motion: reduce) { .call *, .call *::before { animation: none !important; transition: none !important; } }
 .provider {

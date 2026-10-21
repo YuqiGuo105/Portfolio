@@ -102,6 +102,7 @@ try {
   await page.getByRole('button', { name: 'Open live voice', exact: true }).click();
   assert.equal(tokenCalls, 0, 'opening consent is not a call');
   const room = page.getByRole('dialog', { name: 'Live voice call' });
+  assert.equal(await room.locator('footer p').count(), 0, 'ready call has no explanatory footer');
   assert.equal(await room.getAttribute('aria-modal'), 'false');
   const bounds = await room.boundingBox();
   assert.equal(bounds.width, 380); assert.equal(bounds.height, 580);
@@ -126,6 +127,7 @@ try {
   await page.screenshot({ path: '/tmp/mr-pot-call-ready.png' });
   await page.getByRole('button', { name: 'Start voice call', exact: true }).click();
   await page.getByRole('dialog', { name: 'Live voice call' }).getByText('Listening', { exact: true }).waitFor();
+  assert.equal(await room.locator('footer p').count(), 0, 'active call has no explanatory footer');
   await until(() => pcmFrames > 1, 'real AudioWorklet microphone packets');
   assert.ok(outbound[0].setup.generationConfig.responseModalities.includes('AUDIO'));
   assert.match(outbound[0].setup.systemInstruction.parts[0].text, /Syracuse University/);

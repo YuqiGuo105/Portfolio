@@ -35,7 +35,6 @@ export default function LiveVoiceCall({ onClose, onStateChange }) {
   const [collapsed, setCollapsed] = useState(false);
   const active = ['connecting', 'listening', 'thinking', 'speaking'].includes(state.status);
   const connected = ['listening', 'thinking', 'speaking'].includes(state.status);
-  const providerLabel = provider === 'qwen' ? 'Qwen' : 'Google';
 
   useEffect(() => {
     dialog.current.querySelector('[aria-label="Close voice"]').focus();
@@ -183,7 +182,6 @@ export default function LiveVoiceCall({ onClose, onStateChange }) {
           : <button type="button" className={styles.start} title="Start voice call" aria-label="Start voice call" disabled={!config?.configured} onClick={start}><Phone size={20} /><span>{elapsed ? 'Call again' : 'Start call'}</span></button>}
         <button type="button" className={styles.secondary} title="Show transcript" aria-label="Show transcript" aria-pressed={transcriptOpen} disabled={!turns.length} onClick={() => setTranscriptOpen(value => !value)}><MessageSquareText size={21} /></button>
       </div>
-      <p className={styles.disclosure}>{!active && !elapsed ? `Audio, public page text and approved profile facts are sent to ${providerLabel}${provider === 'qwen' ? ' (Singapore)' : ''}. No recordings are saved by this site.` : `${providerLabel} Live · Audio only`}{config?.maxSeconds ? ` · ${config.maxSeconds}s ${config.scope === 'platform' ? 'max' : 'local preview'}` : ''}{!active && Number.isInteger(config?.remainingCalls) ? ` · ${config.remainingCalls} ${config.scope === 'platform' ? 'shared calls left today' : 'calls left'}` : ''}</p>
     </footer>
   </section>, document.body);
 }
