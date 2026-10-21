@@ -1,0 +1,13 @@
+**
+!services/
+!services/voice/
+!services/voice/server.mjs
+!services/voice/relay.mjs
+!services/voice/Dockerfile
+!services/voice/package.json
+!services/voice/package-lock.json
+!src/
+!src/lib/
+!src/lib/voice/
+!src/lib/voice/protocol.mjs
+!src/lib/voice/publicProfile.mjs

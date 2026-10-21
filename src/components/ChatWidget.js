@@ -10,13 +10,14 @@ import LogInDialog from "../components/LogInDialog"
 import AnswerSources from "./AnswerSources"
 import VoiceInput from "./VoiceInput"
 import MrPotAvatar from "./MrPotAvatar"
-import { Mic, Plus, Upload } from "lucide-react"
+import { Mic, Plus, Upload, Phone } from "lucide-react"
 import { mergeEvidence } from "../lib/chatEvidence.mjs"
 import { postSSE } from "../lib/chatStream.mjs"
 import { applyWebGuidePlan, normalizeWebGuidePlan } from "../lib/webGuide"
 
 import dynamic from "next/dynamic"
 const ChatMarkdown = dynamic(() => import("./ChatMarkdown.mjs"))
+const LiveVoiceCall = dynamic(() => import("./LiveVoiceCall"), { ssr: false })
 /* ============================================================
    ChatWidget — POST SSE for /api/rag/answer/stream
    + Attachments (2 max, progress bar, chips in msg)
@@ -2330,6 +2331,15 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   const [fileDragActive, setFileDragActive] = useState(false)
   const fileDragDepthRef = useRef(0)
   const [voiceOpen, setVoiceOpen] = useState(false)
+  const [liveVoiceOpen, setLiveVoiceOpen] = useState(false)
+  const liveVoiceTriggerRef = useRef(null)
+  const liveVoiceWasOpen = useRef(false)
+  useEffect(() => {
+    if (liveVoiceWasOpen.current && !liveVoiceOpen) liveVoiceTriggerRef.current?.focus({ preventScroll: true })
+    liveVoiceWasOpen.current = liveVoiceOpen
+  }, [liveVoiceOpen])
+  const liveVoiceEnabled = (process.env.NEXT_PUBLIC_VOICE_ENABLED === "true" || (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_GEMINI_LIVE_PREVIEW === "true"))
+    && ["/", "/blogs", "/architecture", "/mcp-guide", "/terminal", "/work-single/[id]", "/blog-single/[id]", "/admin/mr-pot-voice"].includes(routerPathname)
   const pendingUploadsRef = useRef(new Map())
 
   useEffect(() => {
@@ -2443,6 +2453,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
 
     const endingSessionId = sessionId
     setVoiceOpen(false)
+    setLiveVoiceOpen(false)
     for (const entry of pendingUploadsRef.current.values()) {
       entry.discarded = true
       entry.done?.finally(() => entry.cleanup?.()).catch(() => {})
@@ -3884,6 +3895,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   return (
     <div
       className="bot-container relative mb-6 flex flex-col w-screen md:w-[440px] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 backdrop-blur dark:bg-gray-900 dark:ring-gray-700"
+      aria-hidden={liveVoiceOpen || undefined}
+      inert={liveVoiceOpen ? "" : undefined}
       onDragEnter={(event) => {
         if (!isFileTransfer(event.dataTransfer)) return
         event.preventDefault()
@@ -3904,16 +3917,17 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         if (!fileDragDepthRef.current) setFileDragActive(false)
       }}
       onDrop={handleFileDrop}
-      style={
-        desktopResizable
+      style={{
+        ...(desktopResizable
           ? {
             width: `${widgetSize.w}px`,
             height: `${widgetSize.h}px`,
             maxWidth: `${widgetSize.w}px`,
             maxHeight: "none",
           }
-          : undefined
-      }
+          : {}),
+        ...(liveVoiceOpen ? { visibility: "hidden", opacity: 0, pointerEvents: "none" } : {}),
+      }}
     >
       {fileDragActive && <div className="cw-file-drop" role="status" aria-live="polite">
         <Upload size={32} aria-hidden="true" />
@@ -4004,6 +4018,13 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           </div>
         </div>
 
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {liveVoiceEnabled && <button ref={liveVoiceTriggerRef} type="button" aria-label="Open live voice" title="Call Mr. Pot" aria-expanded={liveVoiceOpen}
+          disabled={loading || uploading} onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
+          onClick={() => { setVoiceOpen(false); setLiveVoiceOpen(true) }}
+          style={{ display: "grid", placeItems: "center", width: 40, height: 40, padding: 0, border: "1px solid var(--cw-input-border)", borderRadius: 8, color: "var(--cw-input-text)", background: "var(--cw-input-bg)", transition: "background-color 150ms, color 150ms, border-color 150ms" }}>
+          <Phone size={18} />
+        </button>}
         <button
           type="button"
           aria-label="Minimize chat"
@@ -4012,7 +4033,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         >
           <Minus className="h-4 w-4" />
         </button>
+        </div>
       </header>
+
+      {liveVoiceOpen && <LiveVoiceCall onClose={() => setLiveVoiceOpen(false)} />}
 
       {/* ✅ only this area scrolls */}
       <div ref={scrollRef} className="bot-messages flex-1 min-h-0 space-y-2 overflow-y-auto px-3 py-3">
@@ -4170,7 +4194,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
 
         <div
           style={{
-            display: voiceOpen ? "none" : "flex",
+            display: voiceOpen || liveVoiceOpen ? "none" : "flex",
             alignItems: "flex-end",
             gap: "12px",
             minHeight: "50px",

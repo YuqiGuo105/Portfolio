@@ -8,6 +8,8 @@
 .gitignore
 .env
 .next
+.next-voice-local*
+/services/voice/node_modules/
 
 # testing
 /coverage

@@ -63,10 +63,9 @@ export const stickyNav = () => {
 };
 
 export const animation = () => {
-  if (typeof window !== "undefined") {
-    window.WOW = require("wowjs");
-  }
-  new WOW.WOW().init();
+  if (typeof window === "undefined") return;
+  const { WOW } = require("wowjs");
+  new WOW().init();
 };
 
 // jarallax
