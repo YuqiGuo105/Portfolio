@@ -1,11 +1,12 @@
 export class BrowserVoiceAudio {
-  constructor({ onPcm, onPlayback, onLevel }) {
+  constructor({ onPcm, onPlayback, onLevel, activation }) {
+    if (activation?.error) throw activation.error;
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext || !window.AudioWorkletNode || !navigator.mediaDevices?.getUserMedia) {
       throw new Error('This browser does not support live voice. Try Chrome or Safari over localhost or HTTPS.');
     }
-    this.context = new AudioContext({ sampleRate: 16000 });
-    this.resumed = this.context.resume();
+    this.context = activation?.context || new AudioContext({ sampleRate: 16000 });
+    this.resumed = activation?.resumed || this.context.resume();
     this.resumed.catch(() => {});
     this.onPcm = onPcm;
     this.onPlayback = onPlayback;

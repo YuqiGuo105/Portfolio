@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import WebSocket, { WebSocketServer } from 'ws';
-import { cleanPageContext, LIVE_MODEL, liveConfig, VOICE_TARGETS, wireSetup } from '../../src/lib/voice/protocol.mjs';
+import { cleanPageContext, LIVE_MODEL, liveConfig, VOICE_TARGETS, wireSetup, voiceGreeting } from '../../src/lib/voice/protocol.mjs';
 import { createProfileLoader } from '../../src/lib/voice/publicProfile.mjs';
 
 const ENDPOINT = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
@@ -59,7 +59,7 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
       if (req.method === 'GET') {
         if (!cachedStatus || now() >= cachedUntil) { cachedStatus = await budget('status'); cachedUntil = now() + 3000; }
         return json(res, 200, { configured: cachedStatus.allowed, provider: 'Google', model: LIVE_MODEL, maxSeconds: 120,
-          remainingCalls: cachedStatus.remainingCalls, reason: cachedStatus.reason, resetAt: cachedStatus.resetAt, scope: 'platform', dailyLimit: 3 });
+          remainingCalls: cachedStatus.remainingCalls, reason: cachedStatus.reason, resetAt: cachedStatus.resetAt, scope: 'platform', dailyLimit: 5 });
       }
       let bytes = 0; const chunks = [];
       for await (const chunk of req) { bytes += chunk.length; if (bytes > 16384) return json(res, 413, { error: 'Request too large.' }); chunks.push(chunk); }
@@ -157,7 +157,10 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
                   estimatedUsd += Math.max(0, Number(event.usageMetadata.totalTokenCount) || 0) * 12 / 1e6;
                   if (estimatedUsd >= .20) { stop('usage_limit'); return; }
                 }
-                if (event.setupComplete) { ready = true; send({ setupComplete: {} }); }
+                if (event.setupComplete && !ready) {
+                  ready = true; send({ setupComplete: {} });
+                  upstream.send(JSON.stringify(voiceGreeting()));
+                }
                 if (event.serverContent) {
                   const content = event.serverContent;
                   for (const part of content.modelTurn?.parts || []) {

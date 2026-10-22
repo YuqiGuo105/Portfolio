@@ -123,7 +123,7 @@ try {
       if (usageUpper >= .08 || estimatedUpper() >= .08 || toolCalls > 2 || outputSeconds > 15) {
         providerError = 'Conservative paid-test budget cutoff'; stop(); return;
       }
-      if (content?.turnComplete && outputSeconds > 0) finished = true;
+      if (content?.turnComplete && outputSeconds > 0 && inputCaption.trim()) finished = true;
       ws.send(raw);
     });
     remote.onClose((code, reason) => { if (!finished) providerError ||= `Provider closed ${code}: ${String(reason).replaceAll(key, '[redacted]').slice(0, 200)}`; ws.close({ code, reason }); });
@@ -133,7 +133,6 @@ try {
   await page.waitForFunction(() => document.getElementById('__chat_widget_root'));
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('cw:chat:open')));
   await page.getByRole('button', { name: 'Open live voice', exact: true }).click();
-  await page.getByRole('button', { name: 'Start voice call', exact: true }).click();
   const start = Date.now();
   while (!finished && !providerError && Date.now() - start < 45000) {
     const status = await page.locator('[aria-label="Live voice call"]').getAttribute('data-status');

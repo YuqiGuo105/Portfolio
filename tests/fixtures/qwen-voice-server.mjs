@@ -9,6 +9,8 @@ process.env.NEXT_PUBLIC_GEMINI_LIVE_PREVIEW = 'true';
 process.env.GEMINI_LIVE_ENABLED = 'true';
 process.env.GEMINI_LIVE_API_KEY = '';
 process.env.GEMINI_LIVE_BILLING_ACK = '';
+process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://fixture.supabase.co';
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-only-public-key';
 const originalFetch = globalThis.fetch;
 globalThis.fetch = (url, options) => {
   if (/^http:\/\/(127\.0\.0\.1|localhost):/.test(String(url))) return originalFetch(url, options);

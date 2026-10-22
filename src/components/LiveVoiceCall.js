@@ -7,13 +7,15 @@ import { GoogleLiveSession } from '../lib/voice/googleLive.mjs';
 import { QwenLiveSession } from '../lib/voice/qwenLive.mjs';
 import { readVoicePage } from '../lib/voice/pageContext.mjs';
 import { VOICE_TARGETS } from '../lib/voice/protocol.mjs';
+import { BrowserVoiceAudio } from '../lib/voice/browserAudio.mjs';
+import { primeVoiceAudio, releaseVoiceAudio } from '../lib/voice/audioActivation.mjs';
 import styles from './LiveVoiceCall.module.css';
 
-const LABELS = { ready: 'Ready when you are', connecting: 'Connecting', listening: 'Listening', thinking: 'Thinking', speaking: 'Speaking', ended: 'Call ended', error: 'Voice unavailable' };
+const LABELS = { ready: 'Mr. Pot is getting ready...', connecting: 'Mr. Pot is connecting...', listening: 'Listening', thinking: 'Thinking', speaking: 'Speaking', ended: 'Call ended', error: 'Voice unavailable' };
 const END_LABELS = { interrupted: 'Interrupted', 'call-ended': 'Call ended before this reply finished' };
 const UNAVAILABLE = { daily_limit: 'Today\'s shared voice allowance is used up. Please return tomorrow.', monthly_limit: 'Voice is paused until next month to keep usage within budget.', busy: 'Mr. Pot is on another call. Please try shortly.', disabled: 'Voice is temporarily paused.', unavailable: 'Voice is temporarily unavailable. Please try later.', trial_ended: 'The approved local voice trial has ended.' };
 
-export default function LiveVoiceCall({ onClose, onStateChange }) {
+export default function LiveVoiceCall({ onClose, onStateChange, audioActivation }) {
   const router = useRouter();
   const session = useRef(null);
   const meter = useRef(null);
@@ -21,6 +23,10 @@ export default function LiveVoiceCall({ onClose, onStateChange }) {
   const dialog = useRef(null);
   const sceneLevel = useRef(null);
   const startedAt = useRef(0);
+  const autoStarted = useRef(false);
+  const activation = useRef(audioActivation);
+  const mounted = useRef(false);
+  const startRef = useRef(null);
   const callbacks = useRef({ onStateChange });
   callbacks.current = { onStateChange };
   const [state, setState] = useState({ status: 'ready', error: '' });
@@ -60,6 +66,7 @@ export default function LiveVoiceCall({ onClose, onStateChange }) {
   }, [provider, active]);
 
   useEffect(() => {
+    mounted.current = true;
     const pageChanged = () => session.current?.pageChanged();
     const pageHidden = () => {
       if (document.visibilityState === 'hidden') session.current?.close('Call ended when the page became hidden.');
@@ -69,9 +76,12 @@ export default function LiveVoiceCall({ onClose, onStateChange }) {
     document.addEventListener('visibilitychange', pageHidden);
     window.addEventListener('pagehide', pageExit);
     return () => {
+      mounted.current = false;
       const call = session.current;
       session.current = null;
       call?.close();
+      // React's development effect replay must not discard the click's audio activation.
+      queueMicrotask(() => { if (!mounted.current) releaseVoiceAudio(activation.current); });
       callbacks.current.onStateChange?.('idle');
       router.events.off('routeChangeComplete', pageChanged);
       document.removeEventListener('visibilitychange', pageHidden);
@@ -83,7 +93,8 @@ export default function LiveVoiceCall({ onClose, onStateChange }) {
     if (captions.current) captions.current.scrollTop = captions.current.scrollHeight;
   }, [history, partial]);
 
-  const start = () => {
+  const start = (preparedAudio) => {
+    if (session.current && !session.current.closed) return;
     session.current?.close();
     setMuted(false);
     startedAt.current = 0;
@@ -92,6 +103,7 @@ export default function LiveVoiceCall({ onClose, onStateChange }) {
     setPartial({ user: '', assistant: '' });
     const Session = provider === 'qwen' ? QwenLiveSession : GoogleLiveSession;
     const call = new Session({
+      audioFactory: options => new BrowserVoiceAudio({ ...options, activation: preparedAudio }),
       readPage: () => readVoicePage(),
       onState: next => {
         if (session.current !== call) return;
@@ -114,6 +126,17 @@ export default function LiveVoiceCall({ onClose, onStateChange }) {
     session.current = call;
     call.start();
   };
+  startRef.current = start;
+
+  useEffect(() => {
+    if (!config || autoStarted.current) return;
+    autoStarted.current = true;
+    if (config.configured) startRef.current(activation.current);
+    else {
+      releaseVoiceAudio(activation.current);
+      setState({ status: 'error', error: '' });
+    }
+  }, [config]);
 
   const navigate = async () => {
     if (!session.current?.isNavigationCurrent(navigation)) { setNavigation(null); return; }
@@ -138,6 +161,8 @@ export default function LiveVoiceCall({ onClose, onStateChange }) {
       <div className={styles.headerActions}>
         {active ? <span className={styles.timer}>{time}</span> : <select className={styles.provider} aria-label="Voice provider" value={provider} onChange={event => {
           session.current?.close(); session.current = null;
+          releaseVoiceAudio(activation.current);
+          activation.current = primeVoiceAudio(); autoStarted.current = false;
           setConfig(null); setProvider(event.target.value); setState({ status: 'ready', error: '' });
           setElapsed(0); startedAt.current = 0; setHistory([]); setPartial({ user: '', assistant: '' }); setNavigation(null);
         }}><option value="google">Google</option>{process.env.NODE_ENV === 'development' && <option value="qwen">Qwen</option>}</select>}
@@ -148,7 +173,7 @@ export default function LiveVoiceCall({ onClose, onStateChange }) {
     <VoiceCallStage status={state.status} level={sceneLevel} visible={!collapsed && !transcriptOpen} />
     <section className={styles.conversation}>
       <div className={styles.status} role="status">
-        {state.status === 'connecting' ? <Loader2 size={18} className={styles.spinner} /> : state.status === 'ended' ? <Check size={18} /> :
+        {state.status === 'connecting' || state.status === 'ready' ? <Loader2 size={18} className={styles.spinner} /> : state.status === 'ended' ? <Check size={18} /> :
           <span ref={meter} className={styles.meter} aria-hidden="true"><i /><i /><i /><i /><i /></span>}
         <span>{muted && active ? 'Mic muted' : LABELS[state.status]}</span>
       </div>
@@ -179,7 +204,7 @@ export default function LiveVoiceCall({ onClose, onStateChange }) {
           session.current?.mute(!muted); setMuted(!muted);
         }}>{muted ? <MicOff size={22} /> : <Mic size={22} />}</button>}
         {active ? <button type="button" className={styles.hangup} title="End call" aria-label="End call" onClick={() => session.current?.close()}><PhoneOff size={23} /></button>
-          : <button type="button" className={styles.start} title="Start voice call" aria-label="Start voice call" disabled={!config?.configured} onClick={start}><Phone size={20} /><span>{elapsed ? 'Call again' : 'Start call'}</span></button>}
+          : state.status !== 'ready' && <button type="button" className={styles.start} title="Call Mr. Pot again" aria-label="Call Mr. Pot again" disabled={!config?.configured} onClick={() => start()}><Phone size={20} /><span>Call again</span></button>}
         <button type="button" className={styles.secondary} title="Show transcript" aria-label="Show transcript" aria-pressed={transcriptOpen} disabled={!turns.length} onClick={() => setTranscriptOpen(value => !value)}><MessageSquareText size={21} /></button>
       </div>
     </footer>

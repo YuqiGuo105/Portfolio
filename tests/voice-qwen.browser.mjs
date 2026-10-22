@@ -42,11 +42,8 @@ try {
   await page.getByRole('button', { name: 'Open live voice', exact: true }).click();
   const room = page.getByRole('dialog', { name: 'Live voice call' });
   await page.getByRole('combobox', { name: 'Voice provider' }).selectOption('qwen');
-  await until(() => page.getByRole('button', { name: 'Start voice call' }).isEnabled(), 'Qwen configuration');
-  assert.equal((await metrics()).connections, 0);
   assert.equal((await room.boundingBox()).width, 380); assert.equal((await room.boundingBox()).height, 580);
-  await room.getByText(/sent to Qwen \(Singapore\)/).waitFor();
-  await page.getByRole('button', { name: 'Start voice call' }).click();
+  assert.equal(await room.getByRole('button', { name: 'Start voice call' }).count(), 0);
   await room.getByText('Speaking', { exact: true }).waitFor();
   await room.getByText(/master degree at Syracuse/).waitFor();
   await room.getByRole('button', { name: 'My Background' }).waitFor();
@@ -70,7 +67,7 @@ try {
   await page.waitForFunction(() => window.__voice.streams.every(s => s.getTracks().every(t => t.readyState === 'ended')) && window.__voice.contexts.every(c => c.state === 'closed'));
   await until(async () => (await metrics()).terminated === 1, 'upstream closed');
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.getByRole('button', { name: 'Start voice call' }).click();
+  await page.getByRole('button', { name: 'Call Mr. Pot again' }).click();
   await room.getByText('Listening', { exact: true }).waitFor();
   const bounds = await room.boundingBox(); assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 320 && bounds.y >= 0);
   await page.screenshot({ path: '/tmp/mr-pot-qwen-mobile.png' });
@@ -79,7 +76,7 @@ try {
   await page.getByRole('button', { name: 'Open live voice', exact: true }).click();
   await page.getByRole('combobox', { name: 'Voice provider' }).selectOption('qwen');
   await room.getByText('Qwen local trial has ended.', { exact: true }).waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Start voice call' }).isEnabled(), false);
+  assert.equal(await page.getByRole('button', { name: 'Call Mr. Pot again' }).isEnabled(), false);
   assert.equal((await metrics()).connections, 2);
   assert.deepEqual(errors, []);
   console.log('PASS: Qwen browser -> local relay -> fake provider; PCM, profile, tools, playback, interruption, mute, cleanup, mobile and quota. No real API calls.');

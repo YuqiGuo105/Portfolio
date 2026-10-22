@@ -16,7 +16,7 @@ revoke all on public.voice_budget from public, anon, authenticated;
 grant select, insert, update on public.voice_budget to service_role;
 insert into public.voice_budget (singleton) values (true);
 
-create function public.voice_allowance(p_action text, p_ticket_hash text default null)
+create or replace function public.voice_allowance(p_action text, p_ticket_hash text default null)
 returns jsonb language plpgsql security invoker set search_path = '' as $$
 declare
   b public.voice_budget%rowtype;
@@ -44,7 +44,7 @@ begin
     b.active_until := t + interval '120 seconds';
   else
     why := case when not b.enabled then 'disabled'
-      when b.daily_calls >= 3 then 'daily_limit'
+      when b.daily_calls >= 5 then 'daily_limit'
       when b.monthly_calls >= 40 then 'monthly_limit'
       when b.active_until > t then 'busy' else null end;
     if p_action = 'reserve' and why is null then
@@ -61,7 +61,7 @@ begin
     ticket_hash = b.ticket_hash, claim_by = b.claim_by, active_until = b.active_until, claimed = b.claimed
     where singleton;
   return jsonb_build_object('allowed', why is null, 'reason', why,
-    'remainingCalls', greatest(0, least(3 - b.daily_calls, 40 - b.monthly_calls)),
+    'remainingCalls', greatest(0, least(5 - b.daily_calls, 40 - b.monthly_calls)),
     'expiresAt', b.active_until,
     'resetAt', ((d + 1)::timestamp at time zone 'America/Denver'));
 end;

@@ -17,15 +17,15 @@ function store() {
   let calls = 0, active = null, claimed = false;
   return async (action, ticket) => {
     if (action === 'claim') {
-      if (ticket !== active || claimed) return { allowed: false, remainingCalls: 3 - calls };
+      if (ticket !== active || claimed) return { allowed: false, remainingCalls: 5 - calls };
       claimed = true;
     }
     if (action === 'release' && active === ticket) active = null;
     if (action === 'reserve') {
-      if (calls >= 3 || active) return { allowed: false, reason: calls >= 3 ? 'daily_limit' : 'busy', remainingCalls: 3 - calls };
+      if (calls >= 5 || active) return { allowed: false, reason: calls >= 5 ? 'daily_limit' : 'busy', remainingCalls: 5 - calls };
       active = ticket; calls++; claimed = false;
     }
-    return { allowed: true, remainingCalls: 3 - calls, expiresAt: new Date(Date.now() + 120000).toISOString() };
+    return { allowed: true, remainingCalls: 5 - calls, expiresAt: new Date(Date.now() + 120000).toISOString() };
   };
 }
 
@@ -84,12 +84,15 @@ test('two relay instances share an atomic allowance; status and refresh do not s
     assert.equal(JSON.stringify(first.data).includes('never-browser'), false);
     const { client, events } = await a.open(first.data.ticket);
     assert.ok(events.some(x => x.setupComplete)); client.close(); await once(client, 'close'); await pause(10);
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 4; i++) {
       const ticket = await b.reserve(); assert.equal(ticket.status, 200);
       const call = await b.open(ticket.data.ticket); call.client.close(); await once(call.client, 'close'); await pause(10);
     }
     assert.equal((await a.reserve()).status, 429);
     assert.equal((await b.reserve()).status, 429);
+    assert.equal(a.tokens() + b.tokens(), 5);
+    const status = await (await fetch(`${a.base}/session`, { headers: { Authorization: `Bearer ${secret}` } })).json();
+    assert.equal(status.dailyLimit, 5); assert.equal(status.remainingCalls, 0);
   } finally { await a.close(); await b.close(); }
 });
 
@@ -98,6 +101,10 @@ test('relay relays only PCM, supplies truthful tools server-side, blocks setup i
   try {
     const reservation = await f.reserve(); const { client, events } = await f.open(reservation.data.ticket);
     assert.ok(events.some(x => x.setupComplete));
+    assert.equal(f.providers[0].messages.filter(x => x.clientContent).length, 1);
+    assert.match(f.providers[0].messages.find(x => x.clientContent).clientContent.turns[0].parts[0].text, /Mr\. Pot/);
+    f.providers[0].emit('message', Buffer.from('{"setupComplete":{}}'));
+    assert.equal(f.providers[0].messages.filter(x => x.clientContent).length, 1, 'greeting is sent only once');
     client.send(JSON.stringify({ realtimeInput: { audio: { data: Buffer.alloc(3200).toString('base64'), mimeType: 'audio/pcm;rate=16000' } } }));
     await pause(10); assert.ok(f.providers[0].messages.some(x => x.realtimeInput));
     f.providers[0].emit('message', Buffer.from(JSON.stringify({ toolCall: { functionCalls: [{ id: 'p', name: 'get_profile', args: {} }] } })));

@@ -21,6 +21,7 @@ const pages = [];
 const outbound = [];
 let tokenCalls = 0;
 let pcmFrames = 0;
+let greetings = 0;
 
 async function until(check, label, attempts = 100) {
   for (let i = 0; i < attempts; i++) { if (await check()) return; await delay(150); }
@@ -65,6 +66,11 @@ async function preparePage(viewport = { width: 1440, height: 1000 }) {
       const message = JSON.parse(raw);
       outbound.push(message);
       if (message.setup) ws.send(JSON.stringify({ setupComplete: {} }));
+      if (message.clientContent?.turnComplete) {
+        greetings++;
+        assert.match(message.clientContent.turns[0].parts[0].text, /Mr\. Pot/);
+        ws.send(JSON.stringify({ serverContent: { outputTranscription: { text: "Hi, I'm Mr. Pot, Yuqi's AI portfolio guide. What would you like to explore?" }, modelTurn: { parts: [{ inlineData: { mimeType: 'audio/pcm;rate=24000', data: pcm(.2) } }] }, turnComplete: true } }));
+      }
       if (message.realtimeInput?.audio) pcmFrames++;
     });
   });
@@ -100,9 +106,12 @@ try {
   assert.equal(await page.locator('.bot-header [aria-label="Open live voice"]').count(), 1);
   assert.equal(await page.locator('[data-engine]').count(), 0, 'no 3D renderer until call opens');
   await page.getByRole('button', { name: 'Open live voice', exact: true }).click();
-  assert.equal(tokenCalls, 0, 'opening consent is not a call');
   const room = page.getByRole('dialog', { name: 'Live voice call' });
-  assert.equal(await room.locator('footer p').count(), 0, 'ready call has no explanatory footer');
+  await room.getByText('Listening', { exact: true }).waitFor();
+  assert.equal(tokenCalls, 1, 'one header click starts exactly one call');
+  assert.equal(greetings, 1, 'call greets once');
+  assert.equal(await room.getByRole('button', { name: 'Start voice call', exact: true }).count(), 0);
+  assert.equal(await room.locator('footer p').count(), 0, 'call has no explanatory footer');
   assert.equal(await room.getAttribute('aria-modal'), 'false');
   const bounds = await room.boundingBox();
   assert.equal(bounds.width, 380); assert.equal(bounds.height, 580);
@@ -117,15 +126,10 @@ try {
   const helloFrame = Number(await canvas.getAttribute('data-frames'));
   await delay(700);
   assert.ok(Number(await canvas.getAttribute('data-frames')) > helloFrame, 'finite welcome gesture before starting');
-  await delay(4900);
-  const staticFrame = Number(await canvas.getAttribute('data-frames'));
-  await delay(600);
-  assert.equal(Number(await canvas.getAttribute('data-frames')), staticFrame, 'ready scene has no continuous render loop');
   const screenshot = await canvas.screenshot();
   const stats = await sharp(screenshot).stats();
   assert.ok(stats.channels[0].min < 80 && stats.channels[0].max > 200 && stats.channels[0].stdev > 15, '3D canvas contains model pixels');
   await page.screenshot({ path: '/tmp/mr-pot-call-ready.png' });
-  await page.getByRole('button', { name: 'Start voice call', exact: true }).click();
   await page.getByRole('dialog', { name: 'Live voice call' }).getByText('Listening', { exact: true }).waitFor();
   assert.equal(await room.locator('footer p').count(), 0, 'active call has no explanatory footer');
   await until(() => pcmFrames > 1, 'real AudioWorklet microphone packets');
@@ -188,6 +192,8 @@ try {
   await page.evaluate(() => window.getSelection().removeAllRanges());
   await page.getByRole('button', { name: 'End call', exact: true }).click();
   await resourcesClosed(page);
+  await delay(500);
+  assert.equal(tokenCalls, 1, 'hangup never auto-redials');
   console.log('Desktop call verified', { tokenCalls, pcmFrames });
   await page.getByRole('button', { name: 'Show transcript', exact: true }).click();
   await page.getByRole('log').getByText(/这里是 Yuqi/).waitFor();
@@ -202,7 +208,6 @@ try {
 
   const mobile = await preparePage({ width: 390, height: 844 });
   await mobile.page.getByRole('button', { name: 'Open live voice', exact: true }).click();
-  await mobile.page.getByRole('button', { name: 'Start voice call', exact: true }).click();
   await mobile.page.getByRole('dialog', { name: 'Live voice call' }).getByText('Listening', { exact: true }).waitFor();
   server({ serverContent: { inputTranscription: { text: 'Tell me about the projects.' }, outputTranscription: { text: 'We can open Projects and review the public case studies together.' }, turnComplete: true } });
   await mobile.page.getByRole('dialog', { name: 'Live voice call' }).getByText(/public case studies/).waitFor();
@@ -232,14 +237,24 @@ try {
   const denied = await preparePage();
   await denied.page.evaluate(() => { navigator.mediaDevices.getUserMedia = async () => { throw new DOMException('Denied', 'NotAllowedError'); }; });
   await denied.page.getByRole('button', { name: 'Open live voice', exact: true }).click();
-  await denied.page.getByRole('button', { name: 'Start voice call', exact: true }).click();
   await denied.page.getByRole('alert').getByText(/permission was denied/).waitFor();
   await resourcesClosed(denied.page);
+  assert.equal(tokenCalls, 2, 'permission denial does not spend a call');
   await denied.context.close();
+  const exhausted = await preparePage();
+  await exhausted.page.route('**/api/voice/session', route => route.fulfill({ json: { configured: false, reason: 'daily_limit', remainingCalls: 0 } }));
+  await exhausted.page.getByRole('button', { name: 'Open live voice', exact: true }).click();
+  await exhausted.page.getByText(/shared voice allowance is used up/).waitFor();
+  await resourcesClosed(exhausted.page);
+  assert.equal(await exhausted.page.evaluate(() => window.__voiceTest.streams.length), 0);
+  assert.equal(tokenCalls, 2, 'exhausted allowance never starts a call');
+  await exhausted.context.close();
+  const lastAllowed = await fetch(`${origin}/api/voice/session`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify({ page: { path: '/', text: 'public' } }) });
+  assert.equal(lastAllowed.status, 200);
   const limited = await fetch(`${origin}/api/voice/session`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify({ page: { path: '/', text: 'public' } }) });
   assert.equal(limited.status, 429);
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ passed: true, tokenCalls, pcmFrames, checks: ['header entry', 'non-modal 380x580 floating call', 'lazy audio and 3D', 'finite welcome gesture', 'ready scene renders on demand', 'bounded live animation', 'minimize pauses rendering but preserves audio', 'nonblank desktop/mobile canvas pixels', 'public education in setup and tool response', 'real local token API with fake Google', 'AudioWorklet capture', 'PCM playback', 'Chinese and English captions', 'barge-in', 'mute', 'safe navigation offer', 'page evidence', 'private selection filtering', 'hangup cleanup and transcript', 'keyboard focus restoration', 'mobile 390px and 320px', 'reduced motion image fallback', 'disconnect cleanup', 'permission denial', 'quota'], screenshots: ['/tmp/mr-pot-call-ready.png', '/tmp/mr-pot-voice-desktop.png', '/tmp/mr-pot-voice-mobile.png', '/tmp/mr-pot-voice-mobile-dark.png', '/tmp/mr-pot-voice-small.png'] }));
+  console.log(JSON.stringify({ passed: true, tokenCalls, greetings, pcmFrames, checks: ['one-click call', 'one greeting per call', 'no automatic redial', 'non-modal 380x580 floating call', 'lazy audio and 3D', 'bounded live animation', 'minimize pauses rendering but preserves audio', 'nonblank desktop/mobile canvas pixels', 'public education in setup and tool response', 'real local token API with fake Google', 'AudioWorklet capture', 'PCM playback', 'Chinese and English captions', 'barge-in', 'mute', 'safe navigation offer', 'page evidence', 'private selection filtering', 'hangup cleanup and transcript', 'keyboard focus restoration', 'mobile 390px and 320px', 'reduced motion image fallback', 'disconnect cleanup', 'permission denial without reservation', 'quota preflight'], screenshots: ['/tmp/mr-pot-call-ready.png', '/tmp/mr-pot-voice-desktop.png', '/tmp/mr-pot-voice-mobile.png', '/tmp/mr-pot-voice-mobile-dark.png', '/tmp/mr-pot-voice-small.png'] }));
 } catch (error) {
   console.error('Browser errors:', errors);
   for (const page of pages.filter(p => !p.isClosed())) {

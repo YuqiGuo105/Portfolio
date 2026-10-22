@@ -121,6 +121,9 @@ test('full protocol: setup, duplex audio, transcripts, mute, interruption and cl
     await h.session.start(); h.socket.onopen();
     assert.ok(h.sent[0].setup); h.session.handle({ setupComplete: {} });
     assert.equal(h.events.at(-1).status, 'listening');
+    assert.equal(h.sent.filter(m => m.clientContent).length, 1);
+    h.session.handle({ setupComplete: {} });
+    assert.equal(h.sent.filter(m => m.clientContent).length, 1, 'repeated setup cannot repeat the greeting');
     h.audio.callbacks.onPcm(new Int16Array([100, -100]).buffer);
     assert.equal(h.sent.at(-1).realtimeInput.audio.mimeType, 'audio/pcm;rate=16000');
     h.session.handle({ serverContent: { inputTranscription: { text: '你好' }, outputTranscription: { text: '你好，我是 Mr. Pot。' }, modelTurn: { parts: [{ inlineData: { data: 'AAA=', mimeType: 'audio/pcm;rate=24000' } }] } } });
@@ -132,6 +135,24 @@ test('full protocol: setup, duplex audio, transcripts, mute, interruption and cl
     assert.equal(h.turns.at(-1).final, true); assert.match(h.turns.at(-1).assistant, /Mr. Pot/);
     h.session.close(); assert.equal(h.audio.closes, 1); assert.equal(h.socket.readyState, 3); assert.equal(h.session.ready, false);
   } finally { h.session.close(); }
+});
+
+test('microphone denial or closing during permission does not reserve a call', async () => {
+  for (const denied of [true, false]) {
+    let requests = 0, complete;
+    const h = harness({
+      fetchImpl: async () => { requests++; throw new Error('Must not reserve'); },
+      audioFactory: () => ({ close() {}, start: () => denied
+        ? Promise.reject(new DOMException('Denied', 'NotAllowedError'))
+        : new Promise(resolve => { complete = resolve; }) }),
+    });
+    const pending = h.session.start();
+    if (!denied) { h.session.close(); complete(); }
+    await pending;
+    assert.equal(requests, 0);
+    if (denied) assert.match(h.events.at(-1).error, /permission was denied/);
+    h.session.close();
+  }
 });
 
 test('production relay handshake sends only its ticket and never browser tool responses', async () => {
@@ -197,13 +218,15 @@ test('navigation is allowlisted, canceled on interruption, and cannot be replaye
   } finally { h.session.close(); }
 });
 
-test('late token response after hangup cannot open a socket or microphone', async () => {
+test('late token response after hangup cannot open a socket or restart the microphone', async () => {
   let resolve;
   const h = harness({ fetchImpl: () => new Promise(r => { resolve = r; }) });
-  const pending = h.session.start(); h.session.close();
+  const pending = h.session.start();
+  await Promise.resolve();
+  h.session.close();
   resolve({ ok: true, json: async () => ({ token: 'auth_tokens/late' }) });
   await pending;
-  assert.equal(h.audio.starts, 0); assert.equal(h.audio.closes, 1); assert.equal(h.socket, undefined);
+  assert.equal(h.audio.starts, 1); assert.equal(h.audio.closes, 1); assert.equal(h.socket, undefined);
 });
 
 test('page change and disconnection discard pending navigation', async () => {

@@ -10,7 +10,7 @@ assert.ok(wav.length > 48000, 'Synthetic speech must be nonempty before reservin
 const marker = await open(process.env.VOICE_APPROVAL_MARKER || '/tmp/mr-pot-production-20261021-attempt', 'wx', 0o600);
 await marker.close();
 let browser, page, peer, socket, cutoff, attempts = 0, outputSeconds = 0, inputSeconds = 0;
-let userText = '', answer = '', complete = false, reason = '', setup = false;
+let userText = '', answer = '', greeting = '', complete = false, reason = '', setup = false;
 const close = () => { try { socket?.close(); peer?.close(); } catch {} };
 try {
   browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -62,8 +62,9 @@ try {
       const c = m.serverContent;
       userText += c?.inputTranscription?.text || '';
       answer += c?.outputTranscription?.text || '';
+      if (!userText.trim()) greeting += c?.outputTranscription?.text || '';
       for (const p of c?.modelTurn?.parts || []) if (p.inlineData?.data) outputSeconds += Buffer.from(p.inlineData.data, 'base64').length / 48000;
-      if (c?.turnComplete && outputSeconds > 0) complete = true;
+      if (c?.turnComplete && outputSeconds > 0 && userText.trim()) complete = true;
       ws.send(raw);
       if (outputSeconds > 25) close();
     });
@@ -72,19 +73,19 @@ try {
   });
   await page.goto(`${origin}/?openChat=1&subscriptionPreview=0`, { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: 'Open live voice', exact: true }).click();
-  await page.getByRole('button', { name: 'Start voice call', exact: true }).click();
   for (let i = 0; i < 240 && !complete && !reason; i++) {
     if (await page.getByRole('dialog', { name: 'Live voice call' }).getAttribute('data-status') === 'error') break;
     await delay(200);
   }
   assert.ok(setup, 'Relay/Google session must become ready');
   assert.ok(complete, 'A real spoken response must complete');
+  assert.match(greeting, /Mr\.?\s*Pot/i, 'Mr. Pot greets before the visitor speaks');
   assert.ok(userText.trim()); assert.ok(answer.trim()); assert.ok(outputSeconds > 0);
   await page.waitForFunction(() => window.__voiceProof.maxLevel > 0);
   await page.screenshot({ path: '/tmp/mr-pot-production-voice.png' });
   await page.getByRole('button', { name: 'End call', exact: true }).click();
   await page.waitForFunction(() => window.__voiceProof.contexts.every(c => c.state === 'closed') && window.__voiceProof.streams.every(s => s.getTracks().every(t => t.readyState === 'ended')));
-  console.log(JSON.stringify({ passed: true, attempts, setup, inputSeconds, outputSeconds, userText, answer, educationGrounded: /Syracuse/i.test(answer) && /Liverpool/i.test(answer), screenshot: '/tmp/mr-pot-production-voice.png' }));
+  console.log(JSON.stringify({ passed: true, attempts, setup, greeting, inputSeconds, outputSeconds, userText, answer, educationGrounded: /Syracuse/i.test(answer) && /Liverpool/i.test(answer), screenshot: '/tmp/mr-pot-production-voice.png' }));
 } catch (error) {
   console.error(JSON.stringify({ passed: false, error: error.message, attempts, setup, reason, inputSeconds, outputSeconds, userText, answer, ui: await page?.getByRole('dialog', { name: 'Live voice call' }).textContent().catch(() => '') }));
   process.exitCode = 1;

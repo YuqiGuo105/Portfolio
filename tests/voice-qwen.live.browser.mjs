@@ -64,8 +64,6 @@ try {
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('cw:chat:open')));
   await page.getByRole('button', { name: 'Open live voice', exact: true }).click();
   await page.getByRole('combobox', { name: 'Voice provider' }).selectOption('qwen');
-  await until(() => page.getByRole('button', { name: 'Start voice call' }).isEnabled(), 'provider configuration');
-  await page.getByRole('button', { name: 'Start voice call' }).click();
   await until(async () => {
     result = await metrics();
     if (result.providerCode) throw new Error(`Qwen rejected test: ${result.providerCode}`);

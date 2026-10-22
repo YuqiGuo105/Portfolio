@@ -1,5 +1,5 @@
 import { BrowserVoiceAudio } from './browserAudio.mjs';
-import { VOICE_TARGETS, MAX_CALL_SECONDS, cleanPageContext, voiceError } from './protocol.mjs';
+import { VOICE_TARGETS, MAX_CALL_SECONDS, cleanPageContext, voiceError, voiceGreeting } from './protocol.mjs';
 
 const ENDPOINT = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
 
@@ -67,6 +67,9 @@ export class GoogleLiveSession {
         },
         onLevel: value => { if (current()) this.onLevel?.(value); },
       });
+      // Obtain microphone permission before reserving a paid call attempt.
+      await this.audio.start();
+      if (!current()) return;
       const response = await this.fetchImpl(this.sessionEndpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ page: cleanPageContext(this.readPage()) }), signal: this.controller.signal,
@@ -83,8 +86,6 @@ export class GoogleLiveSession {
       this.estimatedUsageUsd = 0;
       this.maxEstimatedUsd = Number(config.maxEstimatedUsd) > 0 ? Math.min(.25, Number(config.maxEstimatedUsd)) : null;
       const connection = this.connection(config);
-      await this.audio.start();
-      if (!current()) return;
       const maxSeconds = Math.min(MAX_CALL_SECONDS, Number(config.maxSeconds) || MAX_CALL_SECONDS);
       const expiresIn = config.expiresAt ? Date.parse(config.expiresAt) - Date.now() : maxSeconds * 1000;
       if (!Number.isFinite(expiresIn) || expiresIn <= 0) throw new Error('Voice authorization expired. Please start again.');
@@ -126,12 +127,13 @@ export class GoogleLiveSession {
       if (this.estimatedUsageUsd >= this.maxEstimatedUsd) { this.close('Local estimated usage limit reached.'); return; }
     }
     if (message.error) { this.fail('Google could not continue this voice session. Check the project quota and model access.'); return; }
-    if (message.setupComplete) {
+    if (message.setupComplete && !this.ready) {
       clearTimeout(this.connectTimer);
       this.ready = true;
       this.turnComplete = true;
       this.audio.enable();
       this.state('listening');
+      if (!this.relay) this.send(voiceGreeting());
     }
     if (message.goAway) { this.close('Voice session expired. Start a new call.'); return; }
     if (message.toolCallCancellation) {

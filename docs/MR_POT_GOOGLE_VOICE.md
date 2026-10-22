@@ -15,7 +15,7 @@ Homepage Phone -> /api/voice/session -> Cloud Run voice relay -> Google Live
                               private PostgreSQL allowance
 ```
 
-- 3 attempts per calendar day, shared by the entire platform; midnight America/Denver.
+- 5 attempts per calendar day, shared by the entire platform; midnight America/Denver.
 - 40 attempts per calendar month; one pending/active call at a time.
 - 120 seconds per call, at most 60 seconds of generated audio, 8 completed turns,
   6 tool calls and 512 output tokens per response. The server closes the provider
@@ -44,6 +44,17 @@ Enable the database switch only after readiness and access-control checks.
 Rollback: set the database switch false first, then disable `VOICE_ENABLED` in
 Vercel/Cloud Run. Do not reset counters as part of a deployment or rollback.
 Run `npm run test:voice` for deterministic safety tests without paid API calls.
+
+For an existing deployment, apply only the `create or replace function` and
+function grants from `db/voice-budget.sql`; do not recreate or seed the budget
+table. The five-call update preserves today's usage and the monthly allowance.
+
+The one-click revision passes 57 voice tests, 201 portfolio regressions and 40
+security checks. Mocked browser coverage verifies one click/one reservation,
+one greeting, no automatic redial, permission denial without reservation, and
+exhausted-quota preflight without microphone access. The greeting is a fixed
+server-side request within the existing session, subject to the same output,
+turn and duration limits.
 
 Release checks (2026-10-21): 56 voice tests, 201 existing portfolio tests and 40
 security tests pass;
@@ -79,7 +90,7 @@ The voice table is RLS-enabled, has no public policy, and its RPC is service-rol
 ## Flow
 
 ```text
-User clicks header Phone -> compact full-body call window -> clicks Start
+User clicks header Phone -> compact full-body call window -> connects automatically
   Local server -> public MCP get_profile (approved summaries, 60s cache)
   Browser -> POST /api/voice/session -> Google auth_tokens + profile grounding
   Browser <- single-use, model-constrained, expiring token
@@ -156,10 +167,10 @@ environment, never in `NEXT_PUBLIC_*`, source code, browser storage or chat.
 node scripts/dev-voice.mjs
 ```
 
-Open `http://127.0.0.1:3118/?openChat=1`, then Phone and Start.
+Open `http://127.0.0.1:3118/?openChat=1`, then click Phone once.
 The script enables the development flags and binds to loopback only. Without an
 explicit voice key and billing acknowledgement, the interface remains available
-but Start is disabled. HTTPS is required outside localhost; production is disabled
+but calls are disabled. HTTPS is required outside localhost; production is disabled
 even if these flags are accidentally set.
 
 Minimizing the call window preserves audio but pauses 3D rendering. Closing the
@@ -169,6 +180,14 @@ widget and end the call; continuous cross-page calling is not part of this step.
 
 ## Performance and Safety
 
+- The phone click primes audio playback synchronously before loading the call UI.
+  Availability is checked first; microphone permission is obtained before reserving
+  an attempt. The window connects once and never automatically retries on hangup,
+  provider errors, permission denial, or an unavailable allowance.
+- A short "Mr. Pot is connecting..." status accompanies setup. After setup, the
+  relay sends one fixed greeting prompt in the same Google session, with no extra
+  TTS service or browser-supplied prompt. Greeting audio counts against all existing
+  output/time/usage limits and can be interrupted normally.
 - Voice code loads only after opening the voice control; no idle microphone or connection.
 - Three.js/model code loads only inside the call window. The initial wave settles after about 3.4 seconds; ready/ended poses then render on demand. Active animation is capped at 24fps, DPR at 1.5. Minimized windows and covered transcript views pause the renderer. There are no shadow maps or postprocessing. Closing disposes geometry, renderer and context.
 - Reduced-motion, low-memory/save-data devices and WebGL failures retain the original full-body PNG. Hidden pages stop animation and end capture.

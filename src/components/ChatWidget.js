@@ -14,6 +14,7 @@ import { Mic, Plus, Upload, Phone } from "lucide-react"
 import { mergeEvidence } from "../lib/chatEvidence.mjs"
 import { postSSE } from "../lib/chatStream.mjs"
 import { applyWebGuidePlan, normalizeWebGuidePlan } from "../lib/webGuide"
+import { primeVoiceAudio, releaseVoiceAudio } from "../lib/voice/audioActivation.mjs"
 
 import dynamic from "next/dynamic"
 const ChatMarkdown = dynamic(() => import("./ChatMarkdown.mjs"))
@@ -2333,11 +2334,17 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [liveVoiceOpen, setLiveVoiceOpen] = useState(false)
   const liveVoiceTriggerRef = useRef(null)
+  const liveVoiceAudioRef = useRef(null)
   const liveVoiceWasOpen = useRef(false)
   useEffect(() => {
+    if (!liveVoiceOpen) {
+      releaseVoiceAudio(liveVoiceAudioRef.current)
+      liveVoiceAudioRef.current = null
+    }
     if (liveVoiceWasOpen.current && !liveVoiceOpen) liveVoiceTriggerRef.current?.focus({ preventScroll: true })
     liveVoiceWasOpen.current = liveVoiceOpen
   }, [liveVoiceOpen])
+  useEffect(() => () => releaseVoiceAudio(liveVoiceAudioRef.current), [])
   const liveVoiceEnabled = (process.env.NEXT_PUBLIC_VOICE_ENABLED === "true" || (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_GEMINI_LIVE_PREVIEW === "true"))
     && ["/", "/blogs", "/architecture", "/mcp-guide", "/terminal", "/work-single/[id]", "/blog-single/[id]", "/admin/mr-pot-voice"].includes(routerPathname)
   const pendingUploadsRef = useRef(new Map())
@@ -4021,7 +4028,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {liveVoiceEnabled && <button ref={liveVoiceTriggerRef} type="button" aria-label="Open live voice" title="Call Mr. Pot" aria-expanded={liveVoiceOpen}
           disabled={loading || uploading} onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
-          onClick={() => { setVoiceOpen(false); setLiveVoiceOpen(true) }}
+          onClick={() => {
+            if (liveVoiceAudioRef.current || liveVoiceOpen) return
+            liveVoiceAudioRef.current = primeVoiceAudio()
+            setVoiceOpen(false); setLiveVoiceOpen(true)
+          }}
           style={{ display: "grid", placeItems: "center", width: 40, height: 40, padding: 0, border: "1px solid var(--cw-input-border)", borderRadius: 8, color: "var(--cw-input-text)", background: "var(--cw-input-bg)", transition: "background-color 150ms, color 150ms, border-color 150ms" }}>
           <Phone size={18} />
         </button>}
@@ -4036,7 +4047,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         </div>
       </header>
 
-      {liveVoiceOpen && <LiveVoiceCall onClose={() => setLiveVoiceOpen(false)} />}
+      {liveVoiceOpen && <LiveVoiceCall audioActivation={liveVoiceAudioRef.current} onClose={() => setLiveVoiceOpen(false)} />}
 
       {/* ✅ only this area scrolls */}
       <div ref={scrollRef} className="bot-messages flex-1 min-h-0 space-y-2 overflow-y-auto px-3 py-3">

@@ -1,5 +1,8 @@
 export const LIVE_MODEL = 'gemini-3.8-live';
 export const MAX_CALL_SECONDS = 180;
+export function voiceGreeting() {
+  return { clientContent: { turns: [{ role: 'user', parts: [{ text: "The visitor just connected. Say only: Hi, I'm Mr. Pot, Yuqi's AI portfolio guide. What would you like to explore? Then wait for the visitor. Do not call tools." }] }], turnComplete: true } };
+}
 export const VOICE_TARGETS = Object.freeze({
   about: { href: '/#tour-about', label: 'About' },
   background: { href: '/#tour-background', label: 'My Background' },
