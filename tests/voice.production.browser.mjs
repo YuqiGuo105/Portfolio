@@ -10,7 +10,7 @@ assert.ok(wav.length > 48000, 'Synthetic speech must be nonempty before reservin
 const marker = await open(process.env.VOICE_APPROVAL_MARKER || '/tmp/mr-pot-production-20261021-attempt', 'wx', 0o600);
 await marker.close();
 let browser, page, peer, socket, cutoff, attempts = 0, outputSeconds = 0, inputSeconds = 0;
-let userText = '', answer = '', greeting = '', complete = false, reason = '', setup = false;
+let userText = '', answer = '', greeting = '', greetingEnded = false, complete = false, reason = '', setup = false;
 const close = () => { try { socket?.close(); peer?.close(); } catch {} };
 try {
   browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -64,7 +64,11 @@ try {
       answer += c?.outputTranscription?.text || '';
       if (!userText.trim()) greeting += c?.outputTranscription?.text || '';
       for (const p of c?.modelTurn?.parts || []) if (p.inlineData?.data) outputSeconds += Buffer.from(p.inlineData.data, 'base64').length / 48000;
-      if (c?.turnComplete && outputSeconds > 0 && userText.trim()) complete = true;
+      if (c?.turnComplete) {
+        if (greetingEnded && outputSeconds > 0 && userText.trim()) complete = true;
+        greetingEnded = true;
+      }
+      if (c?.interrupted) greetingEnded = true;
       ws.send(raw);
       if (outputSeconds > 25) close();
     });

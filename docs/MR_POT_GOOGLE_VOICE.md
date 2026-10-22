@@ -56,6 +56,14 @@ exhausted-quota preflight without microphone access. The greeting is a fixed
 server-side request within the existing session, subject to the same output,
 turn and duration limits.
 
+The one-click production smoke call verified automatic connection, the spoken
+Mr. Pot greeting, 5.12 seconds of audio, input transcription and hangup cleanup.
+It consumed one attempt; four of five daily attempts were then used, with the
+concurrency lease released. This smoke call did not verify a follow-up education
+answer: its test initially mistook greeting completion for answer completion.
+The opt-in script now requires a subsequent completed turn. No second paid test
+was made, and the earlier education verification below remains a separate run.
+
 Release checks (2026-10-21): 56 voice tests, 201 existing portfolio tests and 40
 security tests pass;
 production build passes with existing lint warnings. Fake-provider browser E2E
