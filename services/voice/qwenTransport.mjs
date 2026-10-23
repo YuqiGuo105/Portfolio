@@ -90,7 +90,9 @@ export function createQwenConnection({ env = process.env, page, profile,
     if (state.final || state.source !== source) return;
     const delta = final ? text.startsWith(state.text) ? text.slice(state.text.length) : '' : text;
     state.text += delta; state.final = final; captions.set(key, state);
-    if (delta) emit({ serverContent: { [field]: { text: delta } } });
+    if (field === 'inputTranscription') {
+      if (delta || final) emit({ serverContent: { inputTranscription: { text: delta, turnId: key, finished: final } } });
+    } else if (delta) emit({ serverContent: { [field]: { text: delta } } });
   };
 
   connection.send = raw => {
@@ -158,12 +160,12 @@ export function createQwenConnection({ env = process.env, page, profile,
         for (const response of responses.values()) {
           if (response === currentResponse || response.status === null || (response.calls.size && !response.continued)) response.interrupted = true;
         }
-        emit({ serverContent: { interrupted: true } });
+        emit({ serverContent: { interrupted: true, inputTranscription: { started: true, turnId: event.item_id || inputTurn } } });
         return;
       }
       if (event.type === 'conversation.item.input_audio_transcription.completed' || event.type === 'conversation.item.input_audio_transcription.delta') {
         const final = event.type.endsWith('.completed');
-        caption(inputCaptions, event.item_id || inputTurn, final ? event.transcript : event.delta, final, 'inputTranscription');
+        caption(inputCaptions, event.item_id || inputTurn, final ? event.transcript ?? '' : event.delta, final, 'inputTranscription');
         return;
       }
       if (typeof event.type !== 'string' || !event.type.startsWith('response.')) return;

@@ -112,7 +112,14 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
             if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify({ type: 'relay.closed', reason,
               ...(conversationId ? { conversationId } : {}) }));
           } finally {
-            client.terminate(); closers.delete(stop);
+            if (client.readyState === WebSocket.OPEN) {
+              // close() drains the queued receipt; terminate() can discard it.
+              client.close(1000);
+              const forceClose = setTimeout(() => client.terminate(), 1000);
+              forceClose.unref();
+              client.once('close', () => clearTimeout(forceClose));
+            } else client.terminate();
+            closers.delete(stop);
             if (call) console.log(JSON.stringify({ event: 'voice_closed', reason, provider, model,
               ...(conversationId ? { conversationId } : {}), inputSeconds: Math.round(inputBytes / 32000),
               outputSeconds: Math.round(outputBytes / 48000), estimatedUsd: Number(estimatedUsd.toFixed(4)) }));

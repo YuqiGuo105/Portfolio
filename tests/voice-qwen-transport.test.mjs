@@ -106,7 +106,7 @@ test('normalizes ASR, streamed captions, 24kHz audio, final-only captions and to
   h.done('r1', { usage: { total_tokens: 42, input_tokens: 20, output_tokens: 22, private: 'SECRET' } });
   h.done('r1', { usage: { total_tokens: 42 } });
   assert.deepEqual(h.events, [
-    { setupComplete: {} }, { serverContent: { inputTranscription: { text: 'Education?' } } },
+    { setupComplete: {} }, { serverContent: { inputTranscription: { text: 'Education?', turnId: 'input1', finished: true } } },
     { serverContent: { outputTranscription: { text: 'Public ' } } }, { serverContent: { outputTranscription: { text: 'profile.' } } },
     { serverContent: { modelTurn: { parts: [{ inlineData: { data: 'AAAA', mimeType: 'audio/pcm;rate=24000' } }] } } },
     { usageMetadata: { totalTokenCount: 42 } }, { serverContent: { turnComplete: true } },
@@ -125,8 +125,67 @@ test('incremental ASR and alternative text captions are not duplicated by their 
   h.receive({ type: 'response.text.delta', response_id: 'r1', item_id: 'a1', delta: 'Hi' });
   h.receive({ type: 'response.text.done', response_id: 'r1', item_id: 'a1', text: 'Hi' });
   h.receive({ type: 'response.audio_transcript.done', response_id: 'r1', item_id: 'a1', transcript: 'Hi' });
-  assert.deepEqual(h.events.slice(1), [{ serverContent: { inputTranscription: { text: 'Hello' } } },
-    { serverContent: { inputTranscription: { text: ' there' } } }, { serverContent: { outputTranscription: { text: 'Hi' } } }]);
+  assert.deepEqual(h.events.slice(1), [{ serverContent: { inputTranscription: { text: 'Hello', turnId: 'i1', finished: false } } },
+    { serverContent: { inputTranscription: { text: ' there', turnId: 'i1', finished: true } } }, { serverContent: { outputTranscription: { text: 'Hi' } } }]);
+});
+
+test('speech start reserves the user turn before a reply even when ASR completes after the answer', () => {
+  const h = harness(); h.ready(); h.created('greeting');
+  h.receive({ type: 'response.audio_transcript.delta', response_id: 'greeting', delta: 'Welcome.' }); h.done('greeting');
+  h.receive({ type: 'input_audio_buffer.speech_started', item_id: 'education-question' });
+  h.created('answer');
+  h.receive({ type: 'response.audio_transcript.delta', response_id: 'answer', delta: 'An education answer.' }); h.done('answer');
+  h.receive({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'education-question', transcript: 'Where did Yuqi study?' });
+  assert.deepEqual(h.events.slice(1), [
+    { serverContent: { outputTranscription: { text: 'Welcome.' } } }, { serverContent: { turnComplete: true } },
+    { serverContent: { interrupted: true, inputTranscription: { started: true, turnId: 'education-question' } } },
+    { serverContent: { outputTranscription: { text: 'An education answer.' } } }, { serverContent: { turnComplete: true } },
+    { serverContent: { inputTranscription: { text: 'Where did Yuqi study?', turnId: 'education-question', finished: true } } },
+  ]);
+});
+
+test('late ASR retains its original item ID after another user turn has started', () => {
+  const h = harness(); h.ready();
+  h.receive({ type: 'input_audio_buffer.speech_started', item_id: 'first-input' });
+  h.created('first-answer');
+  h.receive({ type: 'response.audio_transcript.delta', response_id: 'first-answer', delta: 'First answer.' }); h.done('first-answer');
+  h.receive({ type: 'input_audio_buffer.speech_started', item_id: 'second-input' });
+  h.created('second-answer');
+  h.receive({ type: 'response.audio_transcript.delta', response_id: 'second-answer', delta: 'Second answer.' }); h.done('second-answer');
+  h.receive({ type: 'conversation.item.input_audio_transcription.delta', item_id: 'first-input', delta: 'First question' });
+  h.receive({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'second-input', transcript: 'Second question?' });
+  h.receive({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'first-input', transcript: 'First question?' });
+  h.receive({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'first-input', transcript: 'First question?' });
+  assert.deepEqual(h.events.flatMap(event => event.serverContent?.inputTranscription ? [event.serverContent.inputTranscription] : []), [
+    { started: true, turnId: 'first-input' }, { started: true, turnId: 'second-input' },
+    { text: 'First question', turnId: 'first-input', finished: false },
+    { text: 'Second question?', turnId: 'second-input', finished: true },
+    { text: '?', turnId: 'first-input', finished: true },
+  ]);
+  assert.deepEqual(h.events.flatMap(event => event.serverContent?.outputTranscription ? [event.serverContent.outputTranscription] : []),
+    [{ text: 'First answer.' }, { text: 'Second answer.' }]);
+});
+
+test('ASR completion emits an empty suffix once and missing item IDs use the speech turn counter', () => {
+  const h = harness(); h.ready();
+  const started = { type: 'input_audio_buffer.speech_started', event_id: 'speech-1' };
+  h.receive(started); h.receive(started);
+  h.receive({ type: 'conversation.item.input_audio_transcription.delta', delta: 'Question?' });
+  h.created('answer');
+  h.receive({ type: 'response.audio_transcript.delta', response_id: 'answer', delta: 'Answer.' });
+  h.receive({ type: 'response.audio_transcript.done', response_id: 'answer', transcript: 'Answer.' }); h.done('answer');
+  h.receive({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'Question?' });
+  h.receive({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'Question?' });
+  h.receive({ type: 'input_audio_buffer.speech_started' });
+  h.receive({ type: 'conversation.item.input_audio_transcription.completed', transcript: '' });
+  h.receive({ type: 'input_audio_buffer.speech_started' });
+  h.receive({ type: 'conversation.item.input_audio_transcription.completed' });
+  assert.deepEqual(h.events.flatMap(event => event.serverContent?.inputTranscription ? [event.serverContent.inputTranscription] : []), [
+    { started: true, turnId: 1 }, { text: 'Question?', turnId: 1, finished: false }, { text: '', turnId: 1, finished: true },
+    { started: true, turnId: 2 }, { text: '', turnId: 2, finished: true },
+    { started: true, turnId: 3 }, { text: '', turnId: 3, finished: true },
+  ]);
+  assert.deepEqual(h.events.flatMap(event => event.serverContent?.outputTranscription ? [event.serverContent.outputTranscription] : []), [{ text: 'Answer.' }]);
 });
 
 for (const ordering of ['outputs-first', 'done-first', 'mixed']) {

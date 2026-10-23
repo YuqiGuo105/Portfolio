@@ -10,7 +10,7 @@ assert.ok(wav.length > 48000, 'Synthetic speech must be nonempty before reservin
 const marker = await open(process.env.VOICE_APPROVAL_MARKER || '/tmp/mr-pot-production-20261021-attempt', 'wx', 0o600);
 await marker.close();
 let browser, page, peer, socket, cutoff, attempts = 0, outputSeconds = 0, inputSeconds = 0;
-let userText = '', answer = '', greeting = '', greetingEnded = false, complete = false, reason = '', setup = false;
+let userText = '', answer = '', greeting = '', greetingEnded = false, answerComplete = false, complete = false, reason = '', setup = false, conversationId = '';
 const close = () => { try { socket?.close(); peer?.close(); } catch {} };
 try {
   browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -58,17 +58,18 @@ try {
     peer.onMessage(raw => {
       const m = JSON.parse(String(raw));
       if (m.setupComplete) setup = true;
-      if (m.type === 'relay.closed') reason = m.reason;
+      if (m.type === 'relay.closed') { reason = m.reason; conversationId = m.conversationId || ''; }
       const c = m.serverContent;
       userText += c?.inputTranscription?.text || '';
       answer += c?.outputTranscription?.text || '';
-      if (!userText.trim()) greeting += c?.outputTranscription?.text || '';
+      if (!greetingEnded) greeting += c?.outputTranscription?.text || '';
       for (const p of c?.modelTurn?.parts || []) if (p.inlineData?.data) outputSeconds += Buffer.from(p.inlineData.data, 'base64').length / 48000;
       if (c?.turnComplete) {
-        if (greetingEnded && outputSeconds > 0 && userText.trim()) complete = true;
+        if (greetingEnded) answerComplete = true;
         greetingEnded = true;
       }
       if (c?.interrupted) greetingEnded = true;
+      complete = answerComplete && outputSeconds > 0 && Boolean(userText.trim());
       ws.send(raw);
       if (outputSeconds > 25) close();
     });
@@ -81,7 +82,7 @@ try {
     if (await page.getByRole('dialog', { name: 'Live voice call' }).getAttribute('data-status') === 'error') break;
     await delay(200);
   }
-  assert.ok(setup, 'Relay/Google session must become ready');
+  assert.ok(setup, 'Relay/provider session must become ready');
   assert.ok(complete, 'A real spoken response must complete');
   assert.match(greeting, /Mr\.?\s*Pot/i, 'Mr. Pot greets before the visitor speaks');
   assert.ok(userText.trim()); assert.ok(answer.trim()); assert.ok(outputSeconds > 0);
@@ -89,7 +90,12 @@ try {
   await page.screenshot({ path: '/tmp/mr-pot-production-voice.png' });
   await page.getByRole('button', { name: 'End call', exact: true }).click();
   await page.waitForFunction(() => window.__voiceProof.contexts.every(c => c.state === 'closed') && window.__voiceProof.streams.every(s => s.getTracks().every(t => t.readyState === 'ended')));
-  console.log(JSON.stringify({ passed: true, attempts, setup, greeting, inputSeconds, outputSeconds, userText, answer, educationGrounded: /Syracuse/i.test(answer) && /Liverpool/i.test(answer), screenshot: '/tmp/mr-pot-production-voice.png' }));
+  for (let i = 0; i < 65 && !reason; i++) await delay(100);
+  assert.equal(reason, 'client_hangup', 'Relay acknowledges hangup after its final history write');
+  assert.match(conversationId, /^[a-f0-9-]{36}$/);
+  assert.match(answer, /Syracuse/i);
+  assert.match(answer, /Liverpool/i);
+  console.log(JSON.stringify({ passed: true, attempts, setup, greeting, inputSeconds, outputSeconds, userText, answer, conversationId, reason, educationGrounded: true, screenshot: '/tmp/mr-pot-production-voice.png' }));
 } catch (error) {
   console.error(JSON.stringify({ passed: false, error: error.message, attempts, setup, reason, inputSeconds, outputSeconds, userText, answer, ui: await page?.getByRole('dialog', { name: 'Live voice call' }).textContent().catch(() => '') }));
   process.exitCode = 1;

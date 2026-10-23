@@ -136,7 +136,7 @@ export function createQwenBridge({ env = process.env, now = Date.now, loadProfil
       let upstream, call, history, closed = false, ready = false, setupSent = false, count = 0, bytes = 0, windowAt = now();
       let failureCode = 'voice_unavailable';
       let responseActive = false, continuation = false, responseHasTools = false;
-      let responseId, interruptedResponse;
+      let responseId, interruptedResponse, inputTurn = 0;
       const pending = new Set();
       const seen = new Set();
       const timers = [];
@@ -212,9 +212,13 @@ export function createQwenBridge({ env = process.env, now = Date.now, loadProfil
                 if (message.type === 'input_audio_buffer.speech_started') { pending.clear(); continuation = false; responseHasTools = false; interruptedResponse = responseId; }
                 if (message.response_id && message.response_id === interruptedResponse) return;
                 if (message.type === 'response.done' && message.response?.id === interruptedResponse) return;
-                if (message.type === 'input_audio_buffer.speech_started') history?.observe({ serverContent: { interrupted: true } });
+                if (message.type === 'input_audio_buffer.speech_started') {
+                  inputTurn++;
+                  history?.observe({ serverContent: { interrupted: true,
+                    inputTranscription: { started: true, turnId: message.item_id || inputTurn } } });
+                }
                 if (message.type === 'conversation.item.input_audio_transcription.completed') {
-                  history?.observe({ serverContent: { inputTranscription: { text: message.transcript, finished: true } } });
+                  history?.observe({ serverContent: { inputTranscription: { text: message.transcript, finished: true, turnId: message.item_id || inputTurn } } });
                 }
                 if (message.type === 'response.audio_transcript.delta') {
                   history?.observe({ serverContent: { outputTranscription: { text: message.delta } } });

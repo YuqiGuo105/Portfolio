@@ -99,3 +99,34 @@ test('hangup during conversation creation cannot leave an active orphan', async 
   assert.equal(calls.at(-1).method, 'PATCH');
   assert.equal(calls.at(-1).body.status, 'interrupted');
 });
+
+test('late ASR keeps the user question before its answer without saving empty placeholders', async () => {
+  const { history, rows } = fixture();
+  await history.start();
+  observe(history, { outputTranscription: { text: 'Greeting' }, turnComplete: true });
+  observe(history, { interrupted: true, inputTranscription: { started: true, turnId: 'audio-1' } });
+  observe(history, { outputTranscription: { text: 'Grounded answer' }, turnComplete: true });
+  await history.flush();
+  assert.equal(rows.size, 2);
+  observe(history, { inputTranscription: { text: 'Question recognized later', finished: true, turnId: 'audio-1' } });
+  await history.close();
+  const ordered = [...rows.values()].sort((a, b) => a.metadata_json.sequence - b.metadata_json.sequence);
+  assert.deepEqual(ordered.map(row => [row.role, row.content]), [
+    ['assistant', 'Greeting'], ['user', 'Question recognized later'], ['assistant', 'Grounded answer'],
+  ]);
+});
+
+test('late ASR stays associated across interrupted turns and empty final deltas', async () => {
+  const { history, rows } = fixture(); await history.start();
+  observe(history, { interrupted: true, inputTranscription: { started: true, turnId: 'one' } });
+  observe(history, { outputTranscription: { text: 'First partial' } });
+  observe(history, { interrupted: true, inputTranscription: { started: true, turnId: 'two' } });
+  observe(history, { outputTranscription: { text: 'Second answer' }, turnComplete: true });
+  observe(history, { inputTranscription: { text: 'Question 2', turnId: 'two' } });
+  observe(history, { inputTranscription: { finished: true, turnId: 'two' } });
+  observe(history, { inputTranscription: { text: 'Question 1', finished: true, turnId: 'one' } });
+  await history.close();
+  const ordered = [...rows.values()].sort((a, b) => a.metadata_json.sequence - b.metadata_json.sequence);
+  assert.deepEqual(ordered.map(row => row.content), ['Question 1', 'First partial', 'Question 2', 'Second answer']);
+  assert.equal(ordered[1].metadata_json.completion, 'interrupted');
+});
