@@ -76,7 +76,7 @@
   .transcript { inset: 60px 0 92px; }
 }
 @media (prefers-reduced-motion: reduce) { .call *, .call *::before { animation: none !important; transition: none !important; } }
-.provider {
+.stateSelect {
   width: 88px;
   min-width: 0;
   height: 32px;

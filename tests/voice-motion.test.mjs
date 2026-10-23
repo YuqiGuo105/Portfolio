@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createCallAttention, IDLE_SECONDS, REACTION_SECONDS, sampleCallPose, stepCallAttention, WELCOME_SECONDS } from '../src/lib/voice/callMotion.mjs';
+import { createCallAttention, IDLE_SECONDS, REACTION_SECONDS, sampleCallPose, stepCallAttention, stepCallMouth, WELCOME_SECONDS } from '../src/lib/voice/callMotion.mjs';
 import * as THREE from 'three';
 import { createFullBodyPot, disposeFullBody, fullBodyStats, potFaceDepth } from '../src/lib/voice/fullBodyModel.mjs';
 import { createCallEyes } from '../src/lib/voice/callEyes.mjs';
@@ -45,6 +45,34 @@ test('each conversational state has distinct staged gestures, not a perpetual sw
   for (const status of ['ready', 'listening', 'thinking', 'ended', 'error']) {
     assert.equal(sampleCallPose({}, status, 2, 2, 1).mouth, 0, 'only audible output drives the mouth');
   }
+});
+
+test('successive replies alternate bounded gestures and never fake speech during silence', () => {
+  const variants = [0, 1, 2].map(variant => sampleCallPose({}, 'speaking', 1.7, 1.7, 0.3, Infinity, 0, variant));
+  assert.ok(variants[0].arm > variants[1].arm);
+  assert.ok(variants[1].otherArm < -0.13 && variants[1].otherArmPitch < -0.05);
+  assert.ok(variants[2].pitch > variants[0].pitch && variants[2].armPitch < variants[0].armPitch);
+  for (let variant = 0; variant < 3; variant++) for (let age = 0; age < 25; age += 0.04) {
+    const pose = sampleCallPose({}, 'speaking', age, age, 1, Infinity, 0, variant);
+    assert.ok(Math.abs(pose.arm) <= 0.30 && Math.abs(pose.otherArm) <= 0.17);
+    assert.ok(Math.abs(pose.bodyPitch) < 0.05 && Math.abs(pose.shoulderDrop) <= 0.004);
+    const silent = sampleCallPose({}, 'speaking', age, age, 0, Infinity, 0, variant);
+    assert.equal(silent.mouth, 0); assert.equal(Math.abs(silent.arm), 0); assert.equal(Math.abs(silent.otherArm), 0);
+  }
+});
+
+test('mouth envelope attacks quickly, releases smoothly, settles and is frame-rate independent', () => {
+  const attack = stepCallMouth(0, 0.3, 1 / 24);
+  assert.ok(attack > 0.5 && attack < 0.9);
+  const release = stepCallMouth(attack, 0, 1 / 24);
+  assert.ok(release > 0.2 && release < attack);
+  let slow = 0, fast = 0;
+  for (let i = 0; i < 12; i++) slow = stepCallMouth(slow, 0.2, 1 / 24);
+  for (let i = 0; i < 30; i++) fast = stepCallMouth(fast, 0.2, 1 / 60);
+  assert.ok(Math.abs(slow - fast) < 1e-10);
+  for (let i = 0; i < 24; i++) slow = stepCallMouth(slow, 0, 1 / 24);
+  assert.ok(slow < 0.00001);
+  assert.equal(stepCallMouth(0, NaN, 0.05), 0);
 });
 
 test('idle and tap reactions settle without changing proportions or restarting a call', () => {

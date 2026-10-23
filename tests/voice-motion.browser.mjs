@@ -145,8 +145,16 @@ try {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('[data-renderer="image"]').waitFor();
   assert.equal(await page.getByRole('button', { name: 'Animate Mr. Pot' }).count(), 0);
+  await page.waitForFunction(() => {
+    const image = document.querySelector('[aria-label="Full-body Mr. Pot"] img');
+    return image?.complete && image.naturalWidth > 0;
+  });
   assert.equal(await page.locator('[aria-label="Full-body Mr. Pot"] img').evaluate(element => element.complete && element.naturalWidth > 0), true);
   assert.equal(await page.evaluate(() => window.__motionMicAttempts), 0);
   assert.deepEqual(voiceRequests, []); assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, checks: ['five poses', 'bounded rendering', 'idle sleep and wake', 'lid interaction', 'pause and replay', 'large nonblank unclipped model', 'desktop and 390/320px layouts', 'both pupils visible at four gaze extremes', 'held pointer retains gaze without continuous rendering', 'reduced motion fallback', 'no microphone or voice API requests'] }));
+} catch (error) {
+  await page.screenshot({ path: '/tmp/mr-pot-motion-failure.png' }).catch(() => {});
+  console.error(JSON.stringify({ errors, voiceRequests, renderer: await page.locator('[data-renderer]').getAttribute('data-renderer').catch(() => 'missing') }));
+  throw error;
 } finally { await browser.close(); }

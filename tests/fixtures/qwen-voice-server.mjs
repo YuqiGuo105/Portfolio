@@ -6,6 +6,7 @@ import { createQwenBridge } from '../../src/lib/voice/qwenBridge.mjs';
 const require = createRequire(import.meta.url);
 process.env.NODE_ENV = 'development';
 process.env.NEXT_PUBLIC_GEMINI_LIVE_PREVIEW = 'true';
+process.env.NEXT_PUBLIC_VOICE_DEFAULT_PROVIDER = 'qwen';
 process.env.GEMINI_LIVE_ENABLED = 'true';
 process.env.GEMINI_LIVE_API_KEY = '';
 process.env.GEMINI_LIVE_BILLING_ACK = '';
@@ -17,13 +18,15 @@ globalThis.fetch = (url, options) => {
   throw new Error('External IO is disabled in this test.');
 };
 const port = Number(process.env.VOICE_E2E_PORT || 3121);
+const unlimitedLocal = process.env.VOICE_E2E_UNLIMITED_LOCAL === 'true';
 const metrics = { connections: 0, pcm: 0, tools: [], terminated: 0, grounded: false };
 const audio = Buffer.alloc(24000 * 2 * 4);
 for (let i = 0; i < audio.length / 2; i++) audio.writeInt16LE(Math.round(Math.sin(i * 2 * Math.PI * 240 / 24000) * 1600), i * 2);
 let provider;
 const emit = message => provider.emit('message', Buffer.from(JSON.stringify(message)));
 const qwen = createQwenBridge({ env: { NODE_ENV: 'development', QWEN_LIVE_ENABLED: 'true', QWEN_LIVE_TRIAL_ACK: 'true',
-  QWEN_LIVE_API_KEY: 'fake-qwen-only', QWEN_LIVE_WORKSPACE_ID: 'fixture', QWEN_LIVE_MAX_SECONDS: '60' },
+  QWEN_LIVE_API_KEY: 'fake-qwen-only', QWEN_LIVE_WORKSPACE_ID: 'fixture', QWEN_LIVE_MAX_SECONDS: unlimitedLocal ? '2' : '60',
+  QWEN_LIVE_UNLIMITED_LOCAL: String(unlimitedLocal) },
   loadProfile: async () => ({ status: 'EVIDENCE_FOUND', facts: ['Master of Computer Science from Syracuse University and Bachelor from University of Liverpool.'] }),
   connect: (url, options) => {
     if (options.headers.Authorization !== 'Bearer fake-qwen-only') throw new Error('Fake key required');

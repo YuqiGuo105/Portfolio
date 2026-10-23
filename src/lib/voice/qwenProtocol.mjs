@@ -14,8 +14,11 @@ function jsonSchema(value) {
 export function qwenSetup(page, profile) {
   const config = liveConfig(page, profile);
   return { type: 'session.update', session: {
-    modalities: ['text', 'audio'], voice: 'Tina',
-    input_audio_format: 'pcm', output_audio_format: 'pcm',
+    modalities: ['text', 'audio'],
+    audio: {
+      input: { format: { type: 'pcm', sample_rate: 16000, sample_format: 's16le', channels: 1, packing: 'interleaved', channel_layout: 'mono' } },
+      output: { voice: 'Tina', format: { type: 'pcm', sample_rate: 24000 } },
+    },
     input_audio_transcription: { model: 'qwen3-asr-flash-realtime' },
     instructions: config.systemInstruction.parts.map(part => part.text).join('\n'),
     turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: 600 },

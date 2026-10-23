@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
-import { Check, Copy, ExternalLink, RefreshCw, Search } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Copy, ExternalLink, Mic, RefreshCw, Search } from "lucide-react";
 import dynamic from "next/dynamic";
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { DataState, PageHeader, StatusPill, adminStyles as ui } from "../../src/components/admin/AdminUI";
 import { adminApi } from "../../src/lib/adminApi";
+import { mergeConversationActivity } from "../../src/lib/voice/historyView.mjs";
 
 const ChatMarkdown = dynamic(() => import("../../src/components/ChatMarkdown.mjs"));
 const answerComponents = {
@@ -17,8 +18,6 @@ const WINDOWS = [
   { label: "30d", value: 720 },
 ];
 
-const EMPTY_SUMMARY = { runs: 0, completed: 0, blocked: 0, averageLatencyMs: null };
-
 const KIBANA_DASHBOARD = process.env.NEXT_PUBLIC_KIBANA_DASHBOARD_URL ||
   "https://os-79250b0-yguo105-17e7.l.aivencloud.com/app/data-explorer/discover#?" +
   "_a=(discover:(columns:!(_source),isDirty:!f,sort:!()),metadata:(indexPattern:ai-all,view:discover))" +
@@ -29,36 +28,49 @@ export default function ConversationsPage() {
   const [items, setItems] = useState([]);
   const [query, setQuery] = useState("");
   const [hours, setHours] = useState(168);
-  const [summary, setSummary] = useState(EMPTY_SUMMARY);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [voiceError, setVoiceError] = useState("");
+  const [voiceScope, setVoiceScope] = useState(null);
+  const requestState = useRef({ id: 0 }).current;
 
   const load = useCallback(async () => {
+    const id = ++requestState.id;
     setLoading(true);
     setError("");
-    try {
-      const data = await adminApi.conversations.list({ query, hours, limit: 100 });
-      const nextItems = Array.isArray(data.items) ? data.items : [];
-      setItems(nextItems);
-      setSummary(data.summary || summarizeItems(nextItems));
-    } catch (err) {
-      setError(err.message || "Conversation activity could not be loaded.");
-    } finally {
-      setLoading(false);
-    }
-  }, [hours, query]);
+    setVoiceError("");
+    setVoiceScope(null);
+    setSummary(null);
+    const [agent, voice] = await Promise.allSettled([
+      adminApi.conversations.list({ query, hours, limit: 100 }),
+      adminApi.voiceConversations.list({ query, hours, limit: 100 }),
+    ]);
+    if (id !== requestState.id) return;
+    const agentItems = agent.status === "fulfilled" && Array.isArray(agent.value.items) ? agent.value.items : [];
+    const voiceItems = voice.status === "fulfilled" && Array.isArray(voice.value.items) ? voice.value.items : [];
+    if (agent.status === "fulfilled") setSummary(agent.value.summary || summarizeItems(agentItems));
+    else setError(agent.reason?.message || "Agent activity could not be loaded.");
+    if (voice.status === "fulfilled") setVoiceScope(voice.value.scope);
+    else setVoiceError(voice.reason?.message || "Voice call history could not be loaded.");
+    setItems(mergeConversationActivity(agentItems, voiceItems));
+    setLoading(false);
+  }, [hours, query, requestState]);
 
   useEffect(() => {
+    // Invalidate the previous filters immediately, including the debounce interval.
+    ++requestState.id;
+    setLoading(true);
     const timer = setTimeout(load, 250);
-    return () => clearTimeout(timer);
-  }, [load]);
+    return () => { clearTimeout(timer); ++requestState.id; };
+  }, [load, requestState]);
 
   return (
     <AdminLayout>
       <div className={ui.page}>
         <PageHeader
-          title="Agent conversations"
-          subtitle="Questions, final responses and execution records."
+          title="Conversations"
+          subtitle="Agent responses, execution records and voice transcripts."
           actions={(
             <>
               <button className={ui.buttonSecondary} type="button" onClick={load} disabled={loading}>
@@ -71,11 +83,11 @@ export default function ConversationsPage() {
           )}
         />
 
-        <section className={ui.metrics} aria-label="Conversation summary">
-          <Metric label="Runs" value={summary.runs ?? items.length} hint={`Within ${windowLabel(hours)}`} />
-          <Metric label="Completed" value={summary.completed} hint="Answered or tool completed" />
-          <Metric label="Blocked" value={summary.blocked} hint="Safety policy outcomes" />
-          <Metric label="Average latency" value={formatLatency(summary.averageLatencyMs)} hint="Completed runs with timing" />
+        <section className={ui.metrics} aria-label="Agent run summary">
+          <Metric label="Agent runs" value={summary?.runs ?? "—"} hint={`Within ${windowLabel(hours)}`} />
+          <Metric label="Completed" value={summary?.completed ?? "—"} hint="Answered or tool completed" />
+          <Metric label="Blocked" value={summary?.blocked ?? "—"} hint="Safety policy outcomes" />
+          <Metric label="Average latency" value={formatLatency(summary?.averageLatencyMs)} hint="Completed agent runs with timing" />
         </section>
 
         <section className={ui.panel}>
@@ -86,7 +98,7 @@ export default function ConversationsPage() {
                 className={ui.input}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search question, answer, session or run ID"
+                placeholder="Search transcript, answer or ID"
                 aria-label="Search conversations"
               />
             </div>
@@ -104,10 +116,16 @@ export default function ConversationsPage() {
             </div>
           </div>
 
-          <DataState loading={loading} error={error} empty={!loading && items.length === 0} onRetry={load}>
+          {!loading && error && <div className={ui.errorBanner} role="alert">Agent records unavailable: {error}</div>}
+          {!loading && voiceError && <div className={ui.errorBanner} role="alert">Voice records unavailable: {voiceError}</div>}
+          {!loading && voiceScope && <p className={ui.sectionMeta} style={{ margin: "12px 16px", lineHeight: 1.6 }}>
+            Voice scope: latest {voiceScope.callLimit} calls started within {windowLabel(voiceScope.hours)}; first {voiceScope.messageLimitPerCall} saved messages per call, including drafts.
+            {" "}Search matches call/message IDs or transcript text (case-insensitive). Local calls included.
+          </p>}
+          <DataState loading={loading} error={items.length === 0 ? error || voiceError : ""} empty={!loading && !error && !voiceError && items.length === 0} onRetry={load}>
             <div>
-              {items.map((item) => (
-                <article className={ui.conversation} key={item.runId}>
+              {items.map((item) => item.kind === "voice" ? <VoiceConversation item={item} key={`voice:${item.id}`} /> : (
+                <article className={ui.conversation} key={`agent:${item.runId}`}>
                   <div className={ui.conversationHeader}>
                     <div className={ui.conversationMeta}>
                       <StatusPill value={item.status || "running"} />
@@ -155,6 +173,59 @@ export default function ConversationsPage() {
       </div>
     </AdminLayout>
   );
+}
+
+function VoiceConversation({ item }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <article className={ui.conversation}>
+      <div className={ui.conversationHeader}>
+        <div className={ui.conversationMeta}>
+          <span className={`${ui.status} ${ui.statusArchived}`}><Mic size={12} aria-hidden="true" /> Voice{item.providers.length ? ` / ${item.providers.join(", ")}` : ""}</span>
+          <StatusPill value={item.status} />
+          {item.environment === "development" && <span className={`${ui.status} ${ui.statusDraft}`}>Local</span>}
+          <span>{formatDateTime(item.startedAt)}</span>
+          <span>{item.durationMs == null ? (item.status === "active" ? "Call duration pending" : "Call duration unavailable") : `Call duration ${formatCallDuration(item.durationMs)}`}</span>
+        </div>
+        <span className={ui.mono} title={item.id}>call {shortId(item.id)}</span>
+      </div>
+      <details onToggle={(event) => setExpanded(event.currentTarget.open)}>
+        <summary style={{ cursor: "pointer", color: "#6b7280", fontSize: "13px", fontWeight: 500 }}>
+          Transcript ({item.messages.length}{item.transcriptLimitReached ? "+" : ""} saved turns)
+        </summary>
+        {expanded && <div style={{ display: "grid", gap: "12px", marginTop: "12px", minWidth: 0 }}>
+          <p className={ui.sectionMeta} style={{ margin: 0 }}>Generated assistant text does not confirm audio playback or that the caller heard it.</p>
+          {item.transcriptLimitReached && <p className={ui.sectionMeta} style={{ margin: 0 }}>Transcript limit reached. Only the first 500 saved messages are available in this view and search.</p>}
+          {!item.messages.length && <p className={ui.answerMissing}>No transcript saved for this call.</p>}
+          {item.messages.map((message) => (
+            <div className={ui.messagePair} key={message.id} style={{ minWidth: 0 }}>
+              <div className={ui.messageRole}>{message.role === "user" ? "User" : "Assistant"}</div>
+              <div style={{ minWidth: 0 }}>
+                <div className={ui.conversationMeta} style={{ overflowWrap: "anywhere", marginBottom: "4px" }}>
+                  <span>{formatDateTime(message.createdAt)}</span>
+                  <span>{completionLabel(message.completion)}</span>
+                  {message.truncated && <span>Text truncated at capture</span>}
+                  {message.provider && <span>{message.provider}</span>}
+                  {message.model && <span>{message.model}</span>}
+                  {message.pagePath && <span>{message.pagePath}</span>}
+                </div>
+                <p className={ui.messageText} style={{ overflowWrap: "anywhere" }}>{message.content || (message.completion === "pending" ? "Transcript pending." : "No text saved for this turn.")}</p>
+              </div>
+            </div>
+          ))}
+        </div>}
+      </details>
+    </article>
+  );
+}
+
+function completionLabel(completion) {
+  return { transcribed: "Transcribed", generated: "Generated (playback unconfirmed)", interrupted: "Interrupted", "call-ended": "Call ended", pending: "Pending draft / streaming" }[completion] || "Completion unknown";
+}
+
+function formatCallDuration(value) {
+  const seconds = Math.floor(value / 1000);
+  return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
 }
 
 function FinalResponse({ item }) {

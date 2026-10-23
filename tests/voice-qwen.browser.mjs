@@ -5,6 +5,7 @@ import { chromium } from '/Users/yuqiguo/.cache/codex-runtimes/codex-primary-run
 import sharp from '/Users/yuqiguo/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/sharp/dist/index.cjs';
 
 const port = Number(process.env.VOICE_E2E_PORT || 3121);
+const unlimitedLocal = process.env.VOICE_E2E_UNLIMITED_LOCAL === 'true';
 const origin = `http://127.0.0.1:${port}`;
 const child = spawn(process.execPath, ['tests/fixtures/qwen-voice-server.mjs'], { env: { ...process.env, VOICE_E2E_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
 let log = '', browser;
@@ -21,10 +22,11 @@ try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 820 }, permissions: ['microphone'] });
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
-  const errors = [];
+  const errors = [], voiceEndpoints = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/*', route => {
     const url = new URL(route.request().url());
+    if (url.pathname.startsWith('/api/voice/')) voiceEndpoints.push(url.pathname);
     if (url.origin !== origin) return route.abort();
     if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/voice/')) return route.fulfill({ json: {} });
     return route.continue();
@@ -41,7 +43,7 @@ try {
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('cw:chat:open')));
   await page.getByRole('button', { name: 'Open live voice', exact: true }).click();
   const room = page.getByRole('dialog', { name: 'Live voice call' });
-  await page.getByRole('combobox', { name: 'Voice provider' }).selectOption('qwen');
+  assert.equal(await page.getByRole('combobox', { name: 'Voice provider' }).count(), 0);
   assert.equal((await room.boundingBox()).width, 380); assert.equal((await room.boundingBox()).height, 580);
   assert.equal(await room.getByRole('button', { name: 'Start voice call' }).count(), 0);
   await room.getByText('Speaking', { exact: true }).waitFor();
@@ -69,17 +71,32 @@ try {
   await page.setViewportSize({ width: 320, height: 700 });
   await page.getByRole('button', { name: 'Call Mr. Pot again' }).click();
   await room.getByText('Listening', { exact: true }).waitFor();
+  if (unlimitedLocal) {
+    await delay(3000);
+    assert.equal(await room.getByText('Listening', { exact: true }).count(), 1, 'no configured two-second cap in unlimited mode');
+  }
   const bounds = await room.boundingBox(); assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 320 && bounds.y >= 0);
   await page.screenshot({ path: '/tmp/mr-pot-qwen-mobile.png' });
   await page.getByRole('button', { name: 'End call' }).click();
   await page.getByRole('button', { name: 'Close voice' }).click();
   await page.getByRole('button', { name: 'Open live voice', exact: true }).click();
-  await page.getByRole('combobox', { name: 'Voice provider' }).selectOption('qwen');
-  await room.getByText('Qwen local trial has ended.', { exact: true }).waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Call Mr. Pot again' }).isEnabled(), false);
-  assert.equal((await metrics()).connections, 2);
+  assert.equal(await page.getByRole('combobox', { name: 'Voice provider' }).count(), 0);
+  if (unlimitedLocal) {
+    await room.getByText('Listening', { exact: true }).waitFor();
+    assert.equal((await metrics()).connections, 3, 'third call starts without resetting any allowance');
+    await page.getByRole('button', { name: 'End call' }).click();
+    await until(async () => (await metrics()).terminated === 3, 'all unlimited calls cleaned up');
+    await page.waitForFunction(() => window.__voice.streams.every(s => s.getTracks().every(t => t.readyState === 'ended')) && window.__voice.contexts.every(c => c.state === 'closed'));
+    const config = await (await fetch(`${origin}/api/voice/qwen/session`)).json();
+    assert.equal(config.configured, true); assert.equal(config.remainingCalls, null); assert.equal(config.maxSeconds, null);
+  } else {
+    await room.getByText('The approved local voice trial has ended.', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Call Mr. Pot again' }).isEnabled(), false);
+    assert.equal((await metrics()).connections, 2);
+  }
+  assert.ok(voiceEndpoints.length > 0 && voiceEndpoints.every(path => path.startsWith('/api/voice/qwen/')), 'the fixed provider never falls back to Google');
   assert.deepEqual(errors, []);
-  console.log('PASS: Qwen browser -> local relay -> fake provider; PCM, profile, tools, playback, interruption, mute, cleanup, mobile and quota. No real API calls.');
+  console.log(`PASS: Qwen browser -> local relay -> fake provider; PCM, profile, tools, playback, interruption, mute, cleanup, mobile and ${unlimitedLocal ? 'unlimited local calls' : 'quota'}. No real API calls.`);
 } catch (error) { console.error(log); throw error; }
 finally {
   await browser?.close(); child.kill('SIGTERM');

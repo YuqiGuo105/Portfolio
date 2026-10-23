@@ -4,12 +4,12 @@ import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from '/Users/yuqiguo/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs';
 
-if (!process.argv.includes('--approved-followup-call')) throw new Error('Explicit follow-up approval required; no automatic retries');
+if (!process.argv.includes('--approved-followup-call') || !/^[a-z0-9-]{8,80}$/.test(process.env.QWEN_APPROVED_SINGLE_TEST || '')) throw new Error('Explicit single-test approval ID required; no automatic retries');
 const wav = await readFile('/tmp/qwen-education.wav');
 assert.ok(wav.length > 32000);
-const origin = 'http://127.0.0.1:3123';
-const env = { ...process.env, QWEN_APPROVED_SINGLE_TEST: '2026-10-21-followup', NODE_OPTIONS: '' };
-const child = spawn(process.execPath, ['--env-file=.env.voice-qwen.local', 'tests/fixtures/qwen-live-server.mjs'], { env, stdio: ['ignore', 'ignore', 'ignore'] });
+const origin = `http://127.0.0.1:${process.env.VOICE_E2E_PORT || 3123}`;
+const env = { ...process.env, NODE_OPTIONS: '' };
+const child = spawn(process.execPath, [`--env-file=${process.env.QWEN_LOCAL_ENV_FILE || '.env.voice-qwen.local'}`, 'tests/fixtures/qwen-live-server.mjs'], { env, stdio: ['ignore', 'ignore', 'ignore'] });
 let browser, cutoff, result = {}, attempts = 0;
 const errors = [];
 const metrics = async () => (await fetch(`${origin}/__qwen-live-status`)).json();
@@ -45,13 +45,13 @@ try {
     navigator.mediaDevices.getUserMedia = async () => {
       const context = new window.AudioContext(); await context.resume();
       const speech = await context.decodeAudioData(await (await fetch('/__synthetic-education.wav')).arrayBuffer());
-      const buffer = context.createBuffer(1, context.sampleRate * 55, context.sampleRate);
-      buffer.getChannelData(0).set(speech.getChannelData(0).subarray(0, context.sampleRate * 10), context.sampleRate * 3);
-      const source = context.createBufferSource(); source.buffer = buffer;
-      const destination = context.createMediaStreamDestination(); source.connect(destination); source.start();
+      const source = context.createBufferSource(); source.buffer = speech;
+      const destination = context.createMediaStreamDestination(); source.connect(destination);
+      let started = false;
+      window.__qwenLive.speak = () => { started = true; source.start(context.currentTime + 0.5); };
       const stream = destination.stream; window.__qwenLive.streams.push(stream);
       const track = stream.getAudioTracks()[0], stop = track.stop.bind(track);
-      track.stop = () => { stop(); source.stop(); source.disconnect(); destination.disconnect(); context.close(); };
+      track.stop = () => { stop(); if (started) source.stop(); source.disconnect(); destination.disconnect(); context.close(); };
       return stream;
     };
     const observer = new MutationObserver(() => {
@@ -63,7 +63,13 @@ try {
   await page.waitForFunction(() => document.getElementById('__chat_widget_root'));
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('cw:chat:open')));
   await page.getByRole('button', { name: 'Open live voice', exact: true }).click();
-  await page.getByRole('combobox', { name: 'Voice provider' }).selectOption('qwen');
+  assert.equal(await page.getByRole('combobox', { name: 'Voice provider' }).count(), 0);
+  await until(async () => {
+    result = await metrics();
+    if (result.providerCode || result.closed) throw new Error(`Qwen setup failed: ${result.providerCode || result.closeCode}`);
+    return result.ready;
+  }, 'session ready', 25);
+  await page.evaluate(() => window.__qwenLive.speak());
   await until(async () => {
     result = await metrics();
     if (result.providerCode) throw new Error(`Qwen rejected test: ${result.providerCode}`);
@@ -81,6 +87,7 @@ try {
   await room.getByRole('button', { name: 'End call' }).click();
   await page.waitForFunction(() => window.__qwenLive.contexts.every(c => c.state === 'closed') && window.__qwenLive.streams.every(s => s.getTracks().every(t => t.readyState === 'ended')));
   await until(async () => (await metrics()).closed, 'upstream cleanup', 5);
+  result = await metrics();
   assert.equal((await (await fetch(`${origin}/api/voice/qwen/session`)).json()).remainingCalls, 0);
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, ...result, attempts, input: 'Synthetic speech only', screenshot: '/tmp/mr-pot-qwen-real-call.png' }));

@@ -123,6 +123,12 @@ export const adminApi = {
       return request(`/api/admin/chat-conversations?${params.toString()}`);
     },
   },
+  voiceConversations: {
+    list({ query = "", hours = 168, limit = 50 } = {}) {
+      const params = new URLSearchParams({ q: query, hours: String(hours), limit: String(limit) });
+      return request(`/api/admin/voice-conversations?${params.toString()}`, { cache: "no-store" });
+    },
+  },
   costGuardrail: {
     snapshot() {
       return request("/api/admin/cost-guardrail");

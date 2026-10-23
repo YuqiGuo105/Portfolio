@@ -6,6 +6,12 @@ const ENDPOINT = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativ
 export class GoogleLiveSession {
   get provider() { return 'Google'; }
   get sessionEndpoint() { return '/api/voice/session'; }
+  callDurationMs(config) {
+    const maxSeconds = Math.min(MAX_CALL_SECONDS, Number(config.maxSeconds) || MAX_CALL_SECONDS);
+    const expiresIn = config.expiresAt ? Date.parse(config.expiresAt) - Date.now() : maxSeconds * 1000;
+    if (!Number.isFinite(expiresIn) || expiresIn <= 0) throw new Error('Voice authorization expired. Please start again.');
+    return Math.min(maxSeconds * 1000, expiresIn);
+  }
   connection(config) {
     this.relay = config.transport === 'relay';
     if (this.relay) {
@@ -77,7 +83,7 @@ export class GoogleLiveSession {
       if (!current()) return;
       if (!response.ok) {
         const detail = await response.json().catch(() => ({}));
-        const reasons = { daily_limit: 'Today\'s shared voice allowance is used up.', monthly_limit: 'Voice is paused until next month.', busy: 'Mr. Pot is on another call. Please try shortly.', disabled: 'Voice is temporarily paused.' };
+        const reasons = { daily_limit: 'Today\'s shared voice allowance is used up.', monthly_limit: 'Voice is paused until next month.', busy: 'Mr. Pot is on another call. Please try shortly.', disabled: 'Voice is temporarily paused.', profile_unavailable: 'Portfolio facts could not be loaded. No call was started. Please retry shortly.' };
         throw new Error(reasons[detail.reason] || (response.status === 503 ? 'Voice is temporarily unavailable. Please try later.' : voiceError(response.status, this.provider)));
       }
       const config = await response.json();
@@ -86,10 +92,8 @@ export class GoogleLiveSession {
       this.estimatedUsageUsd = 0;
       this.maxEstimatedUsd = Number(config.maxEstimatedUsd) > 0 ? Math.min(.25, Number(config.maxEstimatedUsd)) : null;
       const connection = this.connection(config);
-      const maxSeconds = Math.min(MAX_CALL_SECONDS, Number(config.maxSeconds) || MAX_CALL_SECONDS);
-      const expiresIn = config.expiresAt ? Date.parse(config.expiresAt) - Date.now() : maxSeconds * 1000;
-      if (!Number.isFinite(expiresIn) || expiresIn <= 0) throw new Error('Voice authorization expired. Please start again.');
-      this.callTimer = setTimeout(() => this.close('Call time limit reached.'), Math.min(maxSeconds * 1000, expiresIn));
+      const durationMs = this.callDurationMs(config);
+      if (durationMs !== null) this.callTimer = setTimeout(() => this.close('Call time limit reached.'), durationMs);
       const socket = this.socketFactory(connection);
       this.socket = socket;
       socket.onopen = () => { if (current()) this.opened(config); };
@@ -230,6 +234,7 @@ export class GoogleLiveSession {
   }
 
   close(reason = '') {
+    const flushRemote = !this.closed && (this.relay || this.provider === 'Qwen');
     this.closed = true;
     this.epoch++;
     this.ready = false;
@@ -245,8 +250,17 @@ export class GoogleLiveSession {
     this.audio?.close();
     this.audio = null;
     if (this.socket) {
-      this.socket.onopen = this.socket.onmessage = this.socket.onerror = this.socket.onclose = null;
-      try { this.socket.close(); } catch {}
+      const socket = this.socket;
+      socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
+      if (flushRemote && socket.readyState === 1) {
+        // Audio stops immediately; keep only the relay socket alive to finish
+        // its final transcript write before request-scoped CPU is suspended.
+        try {
+          socket.send(JSON.stringify({ type: 'hangup' }));
+          const timeout = setTimeout(() => { try { socket.close(); } catch {} }, 6500);
+          socket.onclose = () => clearTimeout(timeout);
+        } catch { try { socket.close(); } catch {} }
+      } else { try { socket.close(); } catch {} }
       this.socket = null;
     }
     this.flushTranscript();

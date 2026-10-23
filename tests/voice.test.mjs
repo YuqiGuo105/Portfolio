@@ -155,24 +155,87 @@ test('microphone denial or closing during permission does not reserve a call', a
   }
 });
 
-test('production relay handshake sends only its ticket and never browser tool responses', async () => {
+function relayHarness() {
   let socket; const sent = [];
   const h = harness({
     fetchImpl: async () => ({ ok: true, json: async () => ({ transport: 'relay', ticket: 'signed-one-use-ticket', socketUrl: 'wss://relay.example/voice', maxSeconds: 120 }) }),
-    socketFactory: url => { assert.equal(url, 'wss://relay.example/voice'); socket = { readyState: 1, bufferedAmount: 0, send: raw => sent.push(JSON.parse(raw)), close() { this.readyState = 3; } }; return socket; },
+    socketFactory: url => {
+      assert.equal(url, 'wss://relay.example/voice');
+      socket = {
+        readyState: 1, bufferedAmount: 0, closeCalls: 0,
+        send: raw => sent.push(JSON.parse(raw)),
+        close() { this.closeCalls++; this.remoteClose(); },
+        remoteClose() { this.readyState = 3; this.onclose?.(); },
+      };
+      return socket;
+    },
   });
+  return { ...h, sent, get socket() { return socket; } };
+}
+
+test('production relay handshake sends only its ticket; remote closure stops audio before waiting for the socket', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = relayHarness();
   try {
-    await h.session.start(); socket.onopen();
-    assert.deepEqual(sent, [{ type: 'connect', ticket: 'signed-one-use-ticket' }]);
+    await h.session.start(); h.socket.onopen();
+    assert.deepEqual(h.sent, [{ type: 'connect', ticket: 'signed-one-use-ticket' }]);
     h.session.handle({ setupComplete: {} });
     h.session.handle({ toolCall: { functionCalls: [{ id: 'nav', name: 'navigate_section', args: { target: 'projects' } }] } });
-    assert.equal(sent.length, 1); assert.equal(h.actions.at(-1).href, '/#tour-projects');
+    assert.equal(h.sent.length, 1); assert.equal(h.actions.at(-1).href, '/#tour-projects');
     h.audio.callbacks.onPcm(new Int16Array([100]).buffer);
-    assert.ok(sent.at(-1).realtimeInput.audio);
+    assert.ok(h.sent.at(-1).realtimeInput.audio);
     h.session.handle({ type: 'relay.closed', reason: 'time_limit' });
-    assert.equal(socket.readyState, 3); assert.equal(h.audio.closes, 1);
-  } finally { h.session.close(); }
+    assert.equal(h.audio.closes, 1);
+    assert.deepEqual(h.sent.at(-1), { type: 'hangup' });
+    assert.equal(h.socket.readyState, 1, 'audio is stopped while the relay flushes');
+    assert.equal(h.session.ready, false); assert.equal(h.session.socket, null);
+    h.socket.remoteClose();
+    assert.equal(h.socket.readyState, 3);
+    t.mock.timers.tick(6500);
+    assert.equal(h.socket.closeCalls, 0, 'remote close cancels the fallback timer');
+  } finally { h.session.close(); h.socket?.remoteClose(); }
 });
+
+for (const finish of ['remote', 'timeout']) {
+  test(`relay hangup stops audio immediately, suppresses late traffic and closes via ${finish}`, async t => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const h = relayHarness();
+    try {
+      await h.session.start(); h.socket.onopen(); h.session.handle({ setupComplete: {} });
+      const receive = h.socket.onmessage;
+      const send = h.socket.send;
+      h.socket.send = raw => {
+        if (JSON.parse(raw).type === 'hangup') assert.equal(h.audio.closes, 1, 'audio closes before sending hangup');
+        send(raw);
+      };
+      h.session.close();
+      assert.equal(h.audio.closes, 1); assert.equal(h.session.closed, true);
+      assert.equal(h.session.ready, false); assert.equal(h.session.socket, null);
+      assert.equal(h.socket.readyState, 1);
+      assert.deepEqual(h.sent.at(-1), { type: 'hangup' });
+      for (const name of ['onopen', 'onmessage', 'onerror']) assert.equal(h.socket[name], null);
+      const sent = h.sent.length, turns = h.turns.length, states = h.events.length;
+      h.audio.callbacks.onPcm(new Int16Array([100]).buffer);
+      h.audio.callbacks.onPlayback(true);
+      h.session.send({ realtimeInput: { audio: { data: 'AAAA' } } });
+      const late = { serverContent: { outputTranscription: { text: 'late' }, modelTurn: { parts: [{ inlineData: { data: 'AAAA' } }] } } };
+      h.session.handle(late);
+      receive({ data: JSON.stringify(late) });
+      await Promise.resolve();
+      assert.equal(h.sent.length, sent, 'no provider-bound bytes follow hangup');
+      assert.equal(h.audio.plays, 0); assert.equal(h.turns.length, turns); assert.equal(h.events.length, states);
+      h.session.close();
+      assert.equal(h.sent.filter(event => event.type === 'hangup').length, 1);
+      assert.equal(h.audio.closes, 1);
+      t.mock.timers.tick(6499);
+      assert.equal(h.socket.readyState, 1); assert.equal(h.socket.closeCalls, 0);
+      if (finish === 'remote') h.socket.remoteClose();
+      t.mock.timers.tick(1);
+      assert.equal(h.socket.readyState, 3);
+      assert.equal(h.socket.closeCalls, finish === 'remote' ? 0 : 1);
+    } finally { h.session.close(); h.socket?.remoteClose(); }
+  });
+}
 
 test('public MCP profile completion aborts the transport stream even with a caller deadline', async () => {
   const original = globalThis.fetch;

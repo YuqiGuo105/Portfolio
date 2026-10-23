@@ -6,6 +6,12 @@ import { QWEN_SESSION_PATH, QWEN_SOCKET_PATH } from './qwenProtocol.mjs';
 export class QwenLiveSession extends GoogleLiveSession {
   get provider() { return 'Qwen'; }
   get sessionEndpoint() { return QWEN_SESSION_PATH; }
+  callDurationMs(config) {
+    if (process.env.NODE_ENV === 'development' && config.unlimitedLocal === true
+      && config.maxSeconds === null && config.expiresAt === null
+      && ['127.0.0.1', 'localhost', '[::1]'].includes(globalThis.location?.hostname)) return null;
+    return super.callDurationMs(config);
+  }
   connection(config) {
     if (!/^[a-f0-9]{64}$/.test(config.ticket || '') || config.socketPath !== QWEN_SOCKET_PATH) throw new Error('Invalid Qwen session configuration.');
     const origin = globalThis.location?.origin || 'http://127.0.0.1';
@@ -25,7 +31,13 @@ export class QwenLiveSession extends GoogleLiveSession {
   }
   handle(event) {
     if (this.closed) return;
-    if (event.type === 'error') { this.fail('Qwen voice could not continue. Check model access and free quota in Model Studio.'); return; }
+    if (event.type === 'error') {
+      const errors = {
+        model_not_activated: 'Alibaba Cloud Model Studio is not activated for this account. Complete activation in the Singapore console before trying again.',
+        free_quota_exhausted: 'Qwen free quota is unavailable or exhausted. Check the account quota before trying again.',
+      };
+      this.fail(errors[event.error?.code] || 'Qwen voice could not continue. Check model access and quota in Model Studio.'); return;
+    }
     if (event.type === 'session.updated') { super.handle({ setupComplete: {} }); return; }
     if (event.type === 'input_audio_buffer.speech_started') {
       this.interruptedResponse = this.responseId;

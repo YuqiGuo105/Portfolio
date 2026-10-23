@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createFullBodyPot, disposeFullBody } from './fullBodyModel.mjs';
 import { createCallEyes } from './callEyes.mjs';
-import { createCallAttention, IDLE_SECONDS, isLivePose, REACTION_SECONDS, sampleCallPose, stepCallAttention, WELCOME_SECONDS } from './callMotion.mjs';
+import { createCallAttention, IDLE_SECONDS, isLivePose, REACTION_SECONDS, sampleCallPose, stepCallAttention, stepCallMouth, WELCOME_SECONDS } from './callMotion.mjs';
 
 export function createCallScene(canvas, { onFailure = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power', failIfMajorPerformanceCaveat: true });
@@ -58,7 +58,8 @@ export function createCallScene(canvas, { onFailure = () => {} } = {}) {
   const steam = [0, 1].map(i => model.lid.getObjectByName(`Steam${i}`));
   const pose = sampleCallPose({}, 'ended', 0, 0, 0), target = { ...pose };
   const attention = createCallAttention();
-  let status = 'ready', level = 0, gestureLevel = 0, frame = 0, last = 0, stopped = false, rendered = 0, visible = true;
+  let status = 'ready', level = 0, gestureLevel = 0, mouthLevel = 0, frame = 0, last = 0, stopped = false, rendered = 0, visible = true;
+  let replyVariant = -1, lastSpeechAt = -Infinity, speechAt = 0;
   let stateAt = performance.now(), reactionAt = -Infinity, pointerAt = -Infinity;
   let pointerX = 0, pointerY = 0, idleTimer = null, idleCycle = false, idleVariant = 0;
   let bounds = null;
@@ -78,8 +79,9 @@ export function createCallScene(canvas, { onFailure = () => {} } = {}) {
       const smoothing = 1 - Math.exp(-dt * 12);
       last = time;
       gestureLevel += (level - gestureLevel) * (1 - Math.exp(-dt * 4));
-      sampleCallPose(target, idleCycle ? 'idle' : status, age, t, gestureLevel, (time - reactionAt) / 1000, idleVariant);
-      target.mouth = status === 'speaking' ? THREE.MathUtils.clamp(level * 3, 0, 1) : 0;
+      sampleCallPose(target, idleCycle ? 'idle' : status, age, t, gestureLevel, (time - reactionAt) / 1000, idleVariant, Math.max(0, replyVariant));
+      mouthLevel = stepCallMouth(mouthLevel, status === 'speaking' ? level : 0, dt);
+      target.mouth = mouthLevel;
       stepCallAttention(attention, pointerX, pointerY, dt);
       for (const key in pose) pose[key] += (target[key] - pose[key]) * (key === 'blink' ? 1 : smoothing);
       upperBody.rotation.set(pose.bodyPitch, pose.bodyYaw + attention.body.x * 0.035, pose.bodyLean);
@@ -89,8 +91,9 @@ export function createCallScene(canvas, { onFailure = () => {} } = {}) {
       model.rightArm.rotation.set(pose.armPitch, pose.armDepth, pose.arm);
       model.leftArm.rotation.z = pose.otherArm;
       model.leftArm.rotation.y = pose.otherArmDepth;
+      model.leftArm.rotation.x = pose.otherArmPitch;
       handles[0].rotation.z = -pose.handle; handles[1].rotation.z = pose.handle;
-      openMouth.visible = pose.mouth > 0.10;
+      openMouth.visible = pose.mouth > (openMouth.visible ? 0.08 : 0.14);
       smile.visible = !openMouth.visible;
       openMouth.scale.set(0.115 + pose.mouth * 0.02, 0.025 + pose.mouth * 0.065, 1);
       eyes.update(pose.gazeX + attention.eyes.x * 0.028, pose.gazeY + attention.eyes.y * 0.022, pose.blink);
@@ -129,7 +132,16 @@ export function createCallScene(canvas, { onFailure = () => {} } = {}) {
   resize();
   return {
     state(value) {
-      if (status !== value) { status = value; stateAt = performance.now(); idleCycle = false; clearTimeout(idleTimer); idleTimer = null; }
+      if (status !== value) {
+        const time = performance.now();
+        // Brief playback gaps must not restart the choreography on every chunk.
+        if (value === 'speaking' && time - lastSpeechAt > 1200) {
+          replyVariant = (replyVariant + 1) % 3; speechAt = time;
+        }
+        if (status === 'speaking') lastSpeechAt = time;
+        status = value; stateAt = value === 'speaking' ? speechAt : time;
+        idleCycle = false; clearTimeout(idleTimer); idleTimer = null;
+      }
       invalidate();
     },
     replay() { stateAt = performance.now(); idleCycle = false; clearTimeout(idleTimer); idleTimer = null; invalidate(); },

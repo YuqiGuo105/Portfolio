@@ -2,6 +2,8 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypt
 import WebSocket, { WebSocketServer } from 'ws';
 import { cleanPageContext, LIVE_MODEL, liveConfig, VOICE_TARGETS, wireSetup, voiceGreeting } from '../../src/lib/voice/protocol.mjs';
 import { createProfileLoader } from '../../src/lib/voice/publicProfile.mjs';
+import { createVoiceHistory } from '../../src/lib/voice/history.mjs';
+import { createQwenConnection, qwenConfiguration } from './qwenTransport.mjs';
 
 const ENDPOINT = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
 const ORIGINS = new Set(['https://www.yuqi.site', 'https://yuqi.site']);
@@ -42,7 +44,12 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
   budget = createBudgetStore(env, fetchImpl), loadProfile = createProfileLoader(),
   connect = (url, options) => new WebSocket(url, options) } = {}) {
   const secret = env.VOICE_GATEWAY_TOKEN;
-  const configured = env.VOICE_ENABLED === 'true' && secret?.length >= 32 && Boolean(env.GEMINI_API_KEY);
+  const selection = env.VOICE_PROVIDER || 'google';
+  const qwen = qwenConfiguration(env);
+  const provider = selection === 'qwen' ? 'Qwen' : 'Google';
+  const model = selection === 'qwen' ? qwen.model : LIVE_MODEL;
+  const configured = env.VOICE_ENABLED === 'true' && secret?.length >= 32
+    && (selection === 'qwen' ? qwen.configured : selection === 'google' && Boolean(env.GEMINI_API_KEY));
   const origins = new Set(ORIGINS);
   if (env.NODE_ENV !== 'production' && env.VOICE_LOCAL_ORIGIN) origins.add(env.VOICE_LOCAL_ORIGIN);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32768, perMessageDeflate: false });
@@ -58,7 +65,7 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
     try {
       if (req.method === 'GET') {
         if (!cachedStatus || now() >= cachedUntil) { cachedStatus = await budget('status'); cachedUntil = now() + 3000; }
-        return json(res, 200, { configured: cachedStatus.allowed, provider: 'Google', model: LIVE_MODEL, maxSeconds: 120,
+        return json(res, 200, { configured: cachedStatus.allowed, provider, model, maxSeconds: 120,
           remainingCalls: cachedStatus.remainingCalls, reason: cachedStatus.reason, resetAt: cachedStatus.resetAt, scope: 'platform', dailyLimit: 5 });
       }
       let bytes = 0; const chunks = [];
@@ -72,7 +79,7 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
       if (!allowance.allowed) return json(res, 429, { error: 'Voice allowance unavailable.', reason: allowance.reason, resetAt: allowance.resetAt });
       const ticket = signTicket({ nonce, page, origin: body.origin, exp: now() + 29000 }, secret);
       return json(res, 200, { transport: 'relay', ticket, socketUrl: `${env.VOICE_PUBLIC_URL.replace(/^http/, 'ws')}/voice`,
-        provider: 'Google', maxSeconds: 120, expiresAt: new Date(now() + 120000).toISOString() });
+        provider, model, maxSeconds: 120, expiresAt: new Date(now() + 120000).toISOString() });
     } catch { return json(res, 503, { configured: false, reason: 'unavailable', error: 'Voice is temporarily unavailable.' }); }
   }
 
@@ -80,20 +87,38 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
     if (!configured || req.url !== '/voice' || !origins.has(req.headers.origin) || wss.clients.size >= 4) { socket.destroy(); return; }
     wss.handleUpgrade(req, socket, head, client => {
       let closed = false, claiming = false, ready = false, upstream, ticketHash, call;
+      let history, historyStart, closePromise;
       let inputBytes = 0, outputBytes = 0, estimatedUsd = 0, turns = 0, toolCount = 0;
       let windowAt = now(), windowBytes = 0, windowMessages = 0;
       const seen = new Set(), timers = new Set();
       const controller = new AbortController();
       const send = message => { if (!closed && client.readyState === 1) client.send(JSON.stringify(message)); };
       const stop = (reason = 'ended') => {
-        if (closed) return;
-        send({ type: 'relay.closed', reason }); closed = true; controller.abort();
+        if (closed) return closePromise;
+        closed = true; controller.abort();
         for (const timer of timers) { clearTimeout(timer); clearInterval(timer); }
         if (upstream && upstream.readyState !== WebSocket.CLOSED) upstream.terminate();
-        client.terminate(); closers.delete(stop);
         if (ticketHash) budget('release', ticketHash).catch(() => {});
         cachedUntil = 0;
-        if (call) console.log(JSON.stringify({ event: 'voice_closed', reason, inputSeconds: Math.round(inputBytes / 32000), outputSeconds: Math.round(outputBytes / 48000), estimatedUsd: Number(estimatedUsd.toFixed(4)) }));
+        // Retain the request's socket while Cloud Run finishes the final writes.
+        // A hangup during start must close the row after its insert settles.
+        const flush = Promise.resolve(historyStart).catch(() => {}).then(() => history?.close(reason));
+        let flushTimer;
+        const deadline = new Promise(resolve => { flushTimer = setTimeout(resolve, 6000); });
+        closePromise = Promise.race([flush, deadline]).catch(() => {}).finally(() => {
+          clearTimeout(flushTimer);
+          const conversationId = history?.conversationId;
+          try {
+            if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify({ type: 'relay.closed', reason,
+              ...(conversationId ? { conversationId } : {}) }));
+          } finally {
+            client.terminate(); closers.delete(stop);
+            if (call) console.log(JSON.stringify({ event: 'voice_closed', reason, provider, model,
+              ...(conversationId ? { conversationId } : {}), inputSeconds: Math.round(inputBytes / 32000),
+              outputSeconds: Math.round(outputBytes / 48000), estimatedUsd: Number(estimatedUsd.toFixed(4)) }));
+          }
+        });
+        return closePromise;
       };
       closers.add(stop);
       timers.add(setTimeout(() => { if (!claiming) stop('unauthorized'); }, 3000));
@@ -131,17 +156,27 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
             if (closed) return;
             // Do not charge for a portfolio assistant unable to load its core facts.
             if (profile.status !== 'EVIDENCE_FOUND') { stop('profile_unavailable'); return; }
-            const setup = wireSetup(LIVE_MODEL, liveConfig(call.page, profile));
-            const tokenResponse = await fetchImpl('https://generativelanguage.googleapis.com/v1beta/auth_tokens', {
-              method: 'POST', signal: controller.signal, redirect: 'error',
-              headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
-              body: JSON.stringify({ uses: 1, expireTime: new Date(expires).toISOString(), newSessionExpireTime: new Date(Math.min(expires, now() + 30000)).toISOString(), bidiGenerateContentSetup: setup }),
-            });
-            if (!tokenResponse.ok) throw new Error('Provider unavailable');
-            const token = await tokenResponse.json();
+            try {
+              history = createVoiceHistory({ env, fetchImpl, now, provider, model, page: call.page,
+                onError: () => stop('history_unavailable') });
+              historyStart = history?.start();
+              await historyStart;
+            } catch { stop('history_unavailable'); return; }
             if (closed) return;
-            if (typeof token.name !== 'string' || !token.name.startsWith('auth_tokens/')) throw new Error('Invalid authorization');
-            upstream = connect(`${ENDPOINT}?access_token=${encodeURIComponent(token.name)}`, { handshakeTimeout: 10000, maxPayload: 1024 * 1024, followRedirects: false, perMessageDeflate: false });
+            const setup = wireSetup(LIVE_MODEL, liveConfig(call.page, profile));
+            if (selection === 'qwen') upstream = createQwenConnection({ env, page: call.page, profile, connect });
+            else {
+              const tokenResponse = await fetchImpl('https://generativelanguage.googleapis.com/v1beta/auth_tokens', {
+                method: 'POST', signal: controller.signal, redirect: 'error',
+                headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+                body: JSON.stringify({ uses: 1, expireTime: new Date(expires).toISOString(), newSessionExpireTime: new Date(Math.min(expires, now() + 30000)).toISOString(), bidiGenerateContentSetup: setup }),
+              });
+              if (!tokenResponse.ok) throw new Error('Provider unavailable');
+              const token = await tokenResponse.json();
+              if (closed) return;
+              if (typeof token.name !== 'string' || !token.name.startsWith('auth_tokens/')) throw new Error('Invalid authorization');
+              upstream = connect(`${ENDPOINT}?access_token=${encodeURIComponent(token.name)}`, { handshakeTimeout: 10000, maxPayload: 1024 * 1024, followRedirects: false, perMessageDeflate: false });
+            }
             upstream.on('error', () => stop('provider_error'));
             upstream.on('close', () => stop('provider_closed'));
             upstream.on('open', () => { if (!closed) upstream.send(JSON.stringify({ setup })); });
@@ -167,6 +202,7 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
                     if (part.inlineData?.data) outputBytes += Buffer.from(part.inlineData.data, 'base64').length;
                   }
                   if (outputBytes > 48000 * 60 || (content.turnComplete && ++turns > 8)) { stop('output_limit'); return; }
+                  history?.observe({ serverContent: content });
                   send({ serverContent: content });
                 }
                 if (event.toolCallCancellation) send({ toolCallCancellation: event.toolCallCancellation });
@@ -189,6 +225,7 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
             });
             return;
           }
+          if (message.type === 'hangup') { stop('client_hangup'); return; }
           if (!ready || upstream?.readyState !== 1 || upstream.bufferedAmount > 128000) throw new Error('Not ready');
           const input = message.realtimeInput;
           if (input?.audio) {
@@ -204,5 +241,9 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
       });
     });
   }
-  return { http, upgrade, close() { for (const stop of closers) stop('shutdown'); wss.close(); } };
+  return { http, upgrade, close() {
+    const pending = [...closers].map(stop => stop('shutdown'));
+    wss.close();
+    return Promise.allSettled(pending);
+  } };
 }

@@ -7,4 +7,6 @@ server.on('upgrade', relay.upgrade);
 server.requestTimeout = 15000;
 server.headersTimeout = 10000;
 server.listen(Number(process.env.PORT || 8080), '0.0.0.0');
-process.on('SIGTERM', () => { relay.close(); server.close(() => process.exit(0)); });
+process.once('SIGTERM', () => {
+  Promise.allSettled([relay.close(), new Promise(resolve => server.close(resolve))]).then(() => process.exit(0));
+});

@@ -30,6 +30,9 @@ if (process.argv.includes('--detach')) {
     conf: { ...config, distDir: `.next-voice-local-${port}` } });
   await app.prepare();
   const qwen = createQwenBridge();
+  if (process.env.QWEN_LIVE_ENABLED === 'true') {
+    console.log(`Qwen public profile: ${await qwen.prepare() ? 'ready' : 'temporarily unavailable'}`);
+  }
   const handle = app.getRequestHandler();
   const server = createServer(async (req, res) => {
     if (!await qwen.http(req, res)) handle(req, res);

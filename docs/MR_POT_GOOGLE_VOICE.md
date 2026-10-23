@@ -31,7 +31,8 @@ Homepage Phone -> /api/voice/session -> Cloud Run voice relay -> Google Live
   estimate, not an exact invoice cap; daily/monthly call and audio limits are the
   primary controls. Hosting/network costs are separate.
 - Cloud Run: scale to zero, maximum one instance, 256 MiB, request CPU allocation,
-  non-root Node 24. No transcript/audio storage or new always-on service.
+  non-root Node 24. No audio recording storage or new always-on service. The Qwen
+  release adds private text-transcript history; see [Qwen voice](MR_POT_QWEN_VOICE.md).
 
 `db/voice-budget.sql` creates the private allowance disabled by default. Deploy
 `services/voice/cloudbuild.yaml`, then bind the dedicated runtime identity to

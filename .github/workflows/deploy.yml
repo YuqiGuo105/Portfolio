@@ -45,6 +45,9 @@ jobs:
       - name: OAuth regression tests
         run: npm run test:oauth
 
+      - name: Voice and private-history regression tests
+        run: npm run test:voice
+
       - name: Production build
         run: npm run build
         env:

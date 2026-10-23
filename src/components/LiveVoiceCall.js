@@ -8,12 +8,15 @@ import { QwenLiveSession } from '../lib/voice/qwenLive.mjs';
 import { readVoicePage } from '../lib/voice/pageContext.mjs';
 import { VOICE_TARGETS } from '../lib/voice/protocol.mjs';
 import { BrowserVoiceAudio } from '../lib/voice/browserAudio.mjs';
-import { primeVoiceAudio, releaseVoiceAudio } from '../lib/voice/audioActivation.mjs';
+import { releaseVoiceAudio } from '../lib/voice/audioActivation.mjs';
 import styles from './LiveVoiceCall.module.css';
 
 const LABELS = { ready: 'Mr. Pot is getting ready...', connecting: 'Mr. Pot is connecting...', listening: 'Listening', thinking: 'Thinking', speaking: 'Speaking', ended: 'Call ended', error: 'Voice unavailable' };
 const END_LABELS = { interrupted: 'Interrupted', 'call-ended': 'Call ended before this reply finished' };
 const UNAVAILABLE = { daily_limit: 'Today\'s shared voice allowance is used up. Please return tomorrow.', monthly_limit: 'Voice is paused until next month to keep usage within budget.', busy: 'Mr. Pot is on another call. Please try shortly.', disabled: 'Voice is temporarily paused.', unavailable: 'Voice is temporarily unavailable. Please try later.', trial_ended: 'The approved local voice trial has ended.' };
+// Deployment configuration, never a visitor choice or an automatic fallback.
+const provider = process.env.NODE_ENV === 'development'
+  && process.env.NEXT_PUBLIC_VOICE_DEFAULT_PROVIDER === 'qwen' ? 'qwen' : 'google';
 
 export default function LiveVoiceCall({ onClose, onStateChange, audioActivation }) {
   const router = useRouter();
@@ -35,7 +38,6 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
   const [partial, setPartial] = useState({ user: '', assistant: '' });
   const [navigation, setNavigation] = useState(null);
   const [config, setConfig] = useState(null);
-  const [provider, setProvider] = useState('google');
   const [elapsed, setElapsed] = useState(0);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -63,10 +65,11 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
       if (!controller.signal.aborted) setConfig(value);
     }).catch(() => { if (!controller.signal.aborted) setConfig({ configured: false, reason: 'unavailable' }); });
     return () => controller.abort();
-  }, [provider, active]);
+  }, [active]);
 
   useEffect(() => {
     mounted.current = true;
+    const preparedAudio = activation.current;
     const pageChanged = () => session.current?.pageChanged();
     const pageHidden = () => {
       if (document.visibilityState === 'hidden') session.current?.close('Call ended when the page became hidden.');
@@ -81,7 +84,7 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
       session.current = null;
       call?.close();
       // React's development effect replay must not discard the click's audio activation.
-      queueMicrotask(() => { if (!mounted.current) releaseVoiceAudio(activation.current); });
+      queueMicrotask(() => { if (!mounted.current) releaseVoiceAudio(preparedAudio); });
       callbacks.current.onStateChange?.('idle');
       router.events.off('routeChangeComplete', pageChanged);
       document.removeEventListener('visibilitychange', pageHidden);
@@ -159,13 +162,7 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
     <header className={styles.header}>
       <div className={styles.identity}><h2>Mr. Pot<span>.</span></h2><span className={styles.kicker}>{collapsed ? LABELS[state.status] : 'VOICE CALL'}</span></div>
       <div className={styles.headerActions}>
-        {active ? <span className={styles.timer}>{time}</span> : <select className={styles.provider} aria-label="Voice provider" value={provider} onChange={event => {
-          session.current?.close(); session.current = null;
-          releaseVoiceAudio(activation.current);
-          activation.current = primeVoiceAudio(); autoStarted.current = false;
-          setConfig(null); setProvider(event.target.value); setState({ status: 'ready', error: '' });
-          setElapsed(0); startedAt.current = 0; setHistory([]); setPartial({ user: '', assistant: '' }); setNavigation(null);
-        }}><option value="google">Google</option>{process.env.NODE_ENV === 'development' && <option value="qwen">Qwen</option>}</select>}
+        {active && <span className={styles.timer}>{time}</span>}
         <button type="button" title={collapsed ? 'Expand call' : 'Minimize call'} aria-label={collapsed ? 'Expand call' : 'Minimize call'} onClick={() => setCollapsed(value => !value)}>{collapsed ? <Maximize2 size={17} /> : <Minus size={18} />}</button>
         <button type="button" title="Close voice" aria-label="Close voice" onClick={close}><X size={22} /></button>
       </div>
@@ -178,9 +175,7 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
         <span>{muted && active ? 'Mic muted' : LABELS[state.status]}</span>
       </div>
       {state.error && <p className={styles.error} role="alert">{state.error}</p>}
-      {config && !config.configured && <p className={styles.error}>{provider === 'qwen'
-        ? config.reason === 'trial_ended' ? 'Qwen local trial has ended.' : 'Qwen is not available in this local preview. Select Google to try voice.'
-        : UNAVAILABLE[config.reason] || 'Voice is temporarily unavailable. Please try later.'}</p>}
+      {config && !config.configured && <p className={styles.error}>{UNAVAILABLE[config.reason] || 'Voice is temporarily unavailable. Please try later.'}</p>}
       {turns.length > 0 && !transcriptOpen && <div className={styles.latest} aria-live="off">
         {turns.at(-1).user && <p className={styles.userCaption}>{turns.at(-1).user}</p>}
         {turns.at(-1).assistant && <p className={styles.assistantCaption}>{turns.at(-1).assistant}</p>}

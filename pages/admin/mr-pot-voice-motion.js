@@ -30,7 +30,7 @@ export default function VoiceMotionPreview() {
       <section className={`${styles.call} ${styles.study}`} aria-label="Voice animation preview">
         <header className={styles.header}>
           <div className={styles.identity}><h2>Mr. Pot<span>.</span></h2><span className={styles.kicker}>MOTION STUDY</span></div>
-          <select className={styles.provider} aria-label="Preview state" value={status} onChange={event => { setStatus(event.target.value); setPaused(false); }}>
+          <select className={styles.stateSelect} aria-label="Preview state" value={status} onChange={event => { setStatus(event.target.value); setPaused(false); }}>
             {Object.entries(STATES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </header>
