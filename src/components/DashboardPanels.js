@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServiceHoverDetails } from "./ServiceHoverDetails";
 const RotatingGlobe = dynamic(() => import("./RotatingGlobe"), { ssr: false });
 
@@ -198,7 +198,36 @@ const Sparkline = ({ data, title, color = "#6366f1", unit = "", height = 90 }) =
    Visitors performance helpers
    ============================================================ */
 
-const VISITOR_CACHE_KEY = "yuqi_visitors_cache_v4";
+const VISITOR_CACHE_KEY = "yuqi_visitors_cache_v5";
+
+const formatInteger = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("en-US") : "—";
+};
+
+const formatShare = (share) => {
+  if (!Number.isFinite(share) || share <= 0) return "0%";
+  return share < 0.01 ? "<1%" : `${Math.round(share * 100)}%`;
+};
+
+const regionNames = (() => {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" });
+  } catch {
+    return null;
+  }
+})();
+
+const countryLabel = (code) => {
+  const value = String(code || "").trim();
+  if (!value) return "Unknown";
+  if (!/^[A-Za-z]{2}$/.test(value)) return value;
+  try {
+    return regionNames?.of(value.toUpperCase()) || value.toUpperCase();
+  } catch {
+    return value.toUpperCase();
+  }
+};
 
 const safeParseJson = (s) => {
   try {
@@ -319,6 +348,8 @@ const DashboardPanels = () => {
   const [visitors, setVisitors] = useState({
     last30: 0,
     today: 0,
+    humanViews30: 0,
+    botShare: 0,
     unknownLocation: 0,
     pins: [],
     topSources: [],
@@ -326,6 +357,9 @@ const DashboardPanels = () => {
     fetchedAt: null,
   });
   const [isVisitorsLoading, setIsVisitorsLoading] = useState(true);
+  // The WebGL globe (three.js + texture) only mounts once its card nears the viewport.
+  const globeFrameRef = useRef(null);
+  const [globeInView, setGlobeInView] = useState(false);
 
   // Platform monitoring (Grafana Cloud / Prometheus)
   const [metrics, setMetrics] = useState(null);
@@ -566,14 +600,28 @@ const DashboardPanels = () => {
         const uniqueVisitorsToday = Number(
           summaryToday?.totals?.uniqueVisitors ?? summaryToday?.totals?.pageViews ?? 0
         );
+        // Every breakdown below uses the same 30-day window and the same unit
+        // (page views), so shares are comparable; bots are reported separately.
+        const deviceRows = (Array.isArray(summary30?.topDevices) ? summary30.topDevices : [])
+          .map((row) => ({ label: String(row.deviceType || "unknown"), count: Number(row.count || 0) }));
+        const botViews30 = deviceRows
+          .filter((row) => row.label.toLowerCase() === "bot")
+          .reduce((sum, row) => sum + row.count, 0);
+        const humanDevices = deviceRows.filter((row) => row.label.toLowerCase() !== "bot");
+        const humanViews30 = humanDevices.reduce((sum, row) => sum + row.count, 0);
+        const topDevices = humanDevices
+          .slice(0, 4)
+          .map((row) => ({ ...row, share: humanViews30 ? row.count / humanViews30 : 0 }));
+        const countryTotal = pageViews30 || 1;
         const topSources = (Array.isArray(summary30?.topCountries) ? summary30.topCountries : [])
           .slice(0, 5)
-          .map((row) => ({ label: row.country || "Unknown", count: Number(row.count || 0) }));
+          .map((row) => {
+            const count = Number(row.count || 0);
+            return { code: row.country || "Unknown", label: countryLabel(row.country), count, share: count / countryTotal };
+          });
         const located30 = topSources.reduce((sum, row) => sum + row.count, 0);
         const unknownLocation = Math.max(pageViews30 - located30, 0);
-        const topDevices = (Array.isArray(summary30?.topDevices) ? summary30.topDevices : [])
-          .slice(0, 4)
-          .map((row) => ({ label: row.deviceType || "Unknown", count: Number(row.count || 0) }));
+        const botShare = pageViews30 ? botViews30 / pageViews30 : 0;
 
         if (!mounted) return;
 
@@ -582,6 +630,8 @@ const DashboardPanels = () => {
             ...prev,
             last30: uniqueVisitors30,
             today: uniqueVisitorsToday,
+            humanViews30,
+            botShare,
             unknownLocation,
             topSources,
             topDevices,
@@ -606,6 +656,26 @@ const DashboardPanels = () => {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (globeInView) return undefined;
+    const node = globeFrameRef.current;
+    if (!node || typeof window === "undefined" || !("IntersectionObserver" in window)) {
+      setGlobeInView(true);
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setGlobeInView(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "400px 0px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [globeInView]);
 
   /* ============================================================
      Platform Monitoring (Grafana Cloud / Prometheus)
@@ -851,18 +921,22 @@ const DashboardPanels = () => {
         <div className="dashboard-card-4 visitors-card">
           <header>
             <h3 id="visitor-insights">Visitor Insights</h3>
-            <p className="card-subtitle">A quick snapshot of who’s dropping by.</p>
+            <p className="card-subtitle">First-party, privacy-bounded traffic for the last 30 days.</p>
           </header>
 
           <div className="visitors-body">
             <div className="visitors-globe-pane">
-              <div className="globe-frame">
-                <RotatingGlobe
-                  pins={visitors.pins}
-                  supabase={false}
-                  apiBase="/api/analytics"
-                  window="all"
-                />
+              <div className="globe-frame" ref={globeFrameRef}>
+                {globeInView ? (
+                  <RotatingGlobe
+                    pins={visitors.pins}
+                    supabase={false}
+                    apiBase="/api/analytics"
+                    window="all"
+                  />
+                ) : (
+                  <div className="globe-placeholder" aria-hidden="true" />
+                )}
                 <Link href="/analytics" passHref>
                   <a className="globe-more" aria-label="Open analytics details">
                     <span>More</span>
@@ -875,13 +949,18 @@ const DashboardPanels = () => {
 
               <div className="visitors-stats">
                 <div className="stat">
-                  <span className="stat-label">LAST 30 DAYS</span>
-                  <span className="stat-value">{visitors.last30}</span>
+                  <span className="stat-label">Visitors · 30d</span>
+                  <span className="stat-value">{formatInteger(visitors.last30)}</span>
                 </div>
 
                 <div className="stat">
-                  <span className="stat-label">TODAY</span>
-                  <span className="stat-value">{visitors.today}</span>
+                  <span className="stat-label">Page views · 30d</span>
+                  <span className="stat-value">{formatInteger(visitors.humanViews30)}</span>
+                </div>
+
+                <div className="stat">
+                  <span className="stat-label">Visitors today</span>
+                  <span className="stat-value">{formatInteger(visitors.today)}</span>
                 </div>
 
                 <div className="stat-sub">
@@ -899,12 +978,13 @@ const DashboardPanels = () => {
             </div>
 
             <aside className="visitors-side">
-              <div className="side-title">Top sources</div>
+              <div className="side-title">Page views by country</div>
               <div className="side-list">
                 {(visitors.topSources || []).map((s) => (
-                  <div className="side-item" key={s.label}>
+                  <div className="side-item" key={s.code || s.label} title={`${formatInteger(s.count)} page views`}>
                     <span className="side-label">{s.label}</span>
-                    <span className="side-count">{s.count}</span>
+                    <span className="side-count">{formatShare(s.share)}</span>
+                    <span className="side-bar" style={{ width: `${Math.max(2, Math.round((s.share || 0) * 100))}%` }} aria-hidden="true" />
                   </div>
                 ))}
                 {!visitors.topSources?.length && <div className="side-empty">No data yet</div>}
@@ -912,18 +992,22 @@ const DashboardPanels = () => {
 
               <div className="side-divider" aria-hidden="true" />
 
-              <div className="side-title">Top devices</div>
+              <div className="side-title">Devices · humans only</div>
               <div className="side-list">
                 {(visitors.topDevices || []).map((d) => (
-                  <div className="side-item" key={d.label}>
+                  <div className="side-item" key={d.label} title={`${formatInteger(d.count)} page views`}>
                     <span className="side-label">{d.label}</span>
-                    <span className="side-count">{d.count}</span>
+                    <span className="side-count">{formatShare(d.share)}</span>
+                    <span className="side-bar" style={{ width: `${Math.max(2, Math.round((d.share || 0) * 100))}%` }} aria-hidden="true" />
                   </div>
                 ))}
                 {!visitors.topDevices?.length && <div className="side-empty">No data yet</div>}
               </div>
 
-              <div className="side-footnote">MapReduce by Hadoop</div>
+              <div className="side-footnote">
+                {visitors.botShare > 0 ? `${formatShare(visitors.botShare)} bot traffic filtered · ` : ""}
+                Kafka → 30-day rollups
+              </div>
             </aside>
           </div>
         </div>
@@ -1714,11 +1798,41 @@ const DashboardPanels = () => {
         }
 
         .side-item {
+          position: relative;
           display: flex;
           justify-content: space-between;
           gap: 0.75rem;
+          padding-bottom: 7px;
           font-size: 0.9rem;
           color: var(--text-primary);
+        }
+
+        .side-item::after {
+          content: "";
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 3px;
+          border-radius: 2px;
+          background: var(--card-border);
+          opacity: 0.6;
+        }
+
+        .side-bar {
+          position: absolute;
+          left: 0;
+          bottom: 0;
+          height: 3px;
+          border-radius: 2px;
+          background: linear-gradient(90deg, #4f46e5, #22d3ee);
+          z-index: 1;
+        }
+
+        .globe-placeholder {
+          width: 100%;
+          height: 100%;
+          min-height: 280px;
         }
 
         .side-label {
@@ -1754,6 +1868,7 @@ const DashboardPanels = () => {
           letter-spacing: 0.03em;
           display: flex;
           justify-content: center;
+          text-align: center;
         }
 
         /* Grafana Monitoring */
