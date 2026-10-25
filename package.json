@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "docs:architecture": "node scripts/render-architecture-diagram.mjs docs/architecture/platform-system-flow.json && node scripts/render-architecture-views.mjs",
+    "docs:architecture:check": "node scripts/render-architecture-views.mjs --check",
     "test:voice": "node --test tests/voice*.test.mjs",
     "test:oauth": "node --test tests/oauth-consent.test.mjs tests/google-auth.test.mjs tests/admin-access-boundaries.test.mjs",
     "test:security": "node --test tests/admin-access-boundaries.test.mjs tests/admin-guard.integration.test.mjs tests/gemini-credentials.test.mjs",

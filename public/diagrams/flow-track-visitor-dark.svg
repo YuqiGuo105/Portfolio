@@ -1,0 +1,411 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1265" height="1715" viewBox="0 0 1265 1715" role="img" aria-labelledby="title desc">
+<title id="title">Workflow: Track Visitor</title>
+<desc id="desc">UML sequence diagram. A page event is rate-limited, scored and keyed at the gateway, then appended to Kafka; a batch consumer turns it into sessions and rollups exactly once in effect, and the read side serves cached aggregates with ETags. Messages: 1. POST /api/track; 2. 429 / 204, dropped; 3. geo-snap to city; 4. assess(token); 5. risk score; 6. eventId = UUIDv7; 7. produce raw event; 8. fallback: direct PostgreSQL insert; 9. 200 accepted; 10. poll batch ≤ 100; 11. dead-letter record; 12. SETNX eventId; 13. claim events in durable inbox; 14. upsert sessions + 5-min / daily rollups; 15. ack after commit; 16. GET /api/analytics/visits/summary; 17. GET /visits/summary; 18. 304 Not Modified; 19. read rollups; 20. 200 + weak ETag; 21. proxied response.</desc>
+<defs>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="135%">
+    <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" flood-color="#000000" flood-opacity="0.35"/>
+  </filter>
+  <marker id="arrow-request" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#c9d4de"/></marker>
+  <marker id="arrow-event" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></marker>
+  <marker id="arrow-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#38bdf8"/></marker>
+  <marker id="arrow-return" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#8b98a5" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></marker>
+</defs>
+<style>
+  text { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #e6edf3; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 1.6px; fill: #9da9b5; }
+  .h1 { font-size: 28px; font-weight: 750; }
+  .sub { font-size: 14px; fill: #9da9b5; }
+  .band-title { font-size: 12px; font-weight: 750; letter-spacing: 1.3px; }
+  .stereo { font-size: 9.5px; font-weight: 600; fill: #6e7b88; }
+  .chip { font-size: 11.5px; font-weight: 650; }
+  .card-title { font-size: 14.5px; font-weight: 700; }
+  .card-meta { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9.5px; font-weight: 600; letter-spacing: .3px; fill: #9da9b5; }
+  .card-detail { font-size: 11.5px; font-weight: 500; fill: #c5d0da; }
+  .port { font-size: 11px; font-weight: 650; fill: #9da9b5; }
+  .label { font-size: 11px; font-weight: 600; fill: #9da9b5; }
+  .legend { font-size: 11.5px; font-weight: 600; fill: #9da9b5; }
+  .foot { font-size: 11px; fill: #6e7b88; }
+  .note { font-size: 11.5px; fill: #e6edf3; }
+  .topic-in { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 600; fill: #e6edf3; }
+  .panel-title { font-size: 13px; font-weight: 750; }
+  .panel-sub { font-size: 8.5px; font-weight: 750; letter-spacing: 1px; fill: #9da9b5; }
+  .panel-note { font-size: 10.5px; font-weight: 550; fill: #c5d0da; }
+  .stat-num { font-size: 21px; font-weight: 750; }
+  .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 1px; fill: #9da9b5; }
+  .head-title { font-size: 12.5px; font-weight: 700; }
+  .head-meta { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9px; font-weight: 600; fill: #9da9b5; }
+  .msg { font-size: 12.5px; font-weight: 620; }
+  .msg-detail { font-size: 10.5px; font-weight: 500; fill: #9da9b5; }
+  .seq-num { font-size: 9.5px; font-weight: 750; fill: #0d1117; }
+  .frag-op { font-size: 11px; font-weight: 800; letter-spacing: .4px; }
+  .frag-guard { font-size: 11px; font-weight: 600; fill: #9da9b5; }
+  .frame { font-size: 13px; font-weight: 750; }
+  .tier-title { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; fill: #9da9b5; }
+  .tier-host { font-size: 8.5px; font-weight: 600; letter-spacing: .3px; fill: #6e7b88; }
+  .node-title { font-size: 13px; font-weight: 700; }
+  .node-meta { font-size: 8.8px; font-weight: 700; letter-spacing: .7px; fill: #9da9b5; }
+  .module { font-size: 10.5px; font-weight: 600; fill: #c5d0da; }
+  .tag { font-size: 7.8px; font-weight: 800; letter-spacing: .7px; }
+  .route { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 650; fill: #9da9b5; }
+  .topic { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9.5px; font-weight: 600; fill: #a78bfa; }
+  .edge-note { font-size: 10.5px; font-weight: 600; fill: #9da9b5; }
+  .store-title { font-size: 11.5px; font-weight: 700; }
+  .store-meta { font-size: 8.5px; font-weight: 700; letter-spacing: .7px; fill: #9da9b5; }
+  .bar-chip { font-size: 10.5px; font-weight: 600; fill: #c5d0da; }
+  .adr-title { font-size: 13px; font-weight: 750; }
+  .adr-key { font-size: 9px; font-weight: 800; letter-spacing: .9px; fill: #9da9b5; }
+  .adr-text { font-size: 11px; font-weight: 500; fill: #c5d0da; }
+  .lane-title { font-size: 15px; font-weight: 750; }
+  .lane-sub { font-size: 11px; font-weight: 500; fill: #9da9b5; }
+  .lane-num { font-size: 12px; font-weight: 800; fill: #0d1117; }
+</style>
+<rect width="1265" height="1715" fill="#0d1117"/>
+<text x="28" y="42" class="h1" style="font-size:24px">④  Track Visitor</text>
+<text x="28" y="68" class="sub">A page event is rate-limited, scored and keyed at the gateway, then appended to Kafka; a batch consumer turns it into sessions and rollups exactly once in effect, and the read side</text>
+<text x="28" y="87" class="sub">serves cached aggregates with ETags.</text>
+<rect x="20" y="116" width="1225" height="1501" rx="2" fill="none" stroke="#9da9b5" stroke-width="1.2"/>
+<path d="M 20 116 H 158.8 V 132 L 148.8 142 H 20 Z" fill="#1b222b" stroke="#9da9b5" stroke-width="1.2"/>
+<text x="30" y="134" class="frame">sd Track Visitor</text>
+<rect x="42" y="294" width="420.3" height="76" rx="3" fill="#fb7185" fill-opacity="0.036000000000000004" stroke="#fb7185" stroke-opacity=".75" stroke-width="1.2"/>
+<rect x="316.3" y="566" width="433.3" height="162" rx="3" fill="#60a5fa" fill-opacity="0.036000000000000004" stroke="#60a5fa" stroke-opacity=".75" stroke-width="1.2"/>
+<line x1="316.3" y1="646" x2="749.6" y2="646" stroke="#60a5fa" stroke-opacity=".75" stroke-width="1.1" stroke-dasharray="6 4"/>
+<rect x="641.6" y="824" width="445.1" height="208" rx="3" fill="#4ade80" fill-opacity="0.036000000000000004" stroke="#4ade80" stroke-opacity=".75" stroke-width="1.2"/>
+<rect x="648.6" y="854" width="431.1" height="160" rx="3" fill="#60a5fa" fill-opacity="0.036000000000000004" stroke="#60a5fa" stroke-opacity=".75" stroke-width="1.2"/>
+<line x1="648.6" y1="934" x2="1079.7" y2="934" stroke="#60a5fa" stroke-opacity=".75" stroke-width="1.1" stroke-dasharray="6 4"/>
+<rect x="790.8" y="1042" width="432.2" height="114" rx="3" fill="#fbbf6a" fill-opacity="0.036000000000000004" stroke="#fbbf6a" stroke-opacity=".75" stroke-width="1.2"/>
+<rect x="316.3" y="1371" width="906.8" height="178" rx="3" fill="#60a5fa" fill-opacity="0.036000000000000004" stroke="#60a5fa" stroke-opacity=".75" stroke-width="1.2"/>
+<line x1="316.3" y1="1441" x2="1223" y2="1441" stroke="#60a5fa" stroke-opacity=".75" stroke-width="1.1" stroke-dasharray="6 4"/>
+<line x1="115" y1="224" x2="115" y2="1603" stroke="#3a4552" stroke-width="1.3"/>
+<line x1="389.3" y1="224" x2="389.3" y2="1603" stroke="#3a4552" stroke-width="1.3"/>
+<line x1="575.6" y1="224" x2="575.6" y2="1603" stroke="#3a4552" stroke-width="1.3"/>
+<line x1="695.6" y1="224" x2="695.6" y2="1603" stroke="#3a4552" stroke-width="1.3"/>
+<line x1="863.8" y1="224" x2="863.8" y2="1603" stroke="#3a4552" stroke-width="1.3"/>
+<line x1="1024.5" y1="224" x2="1024.5" y2="1603" stroke="#3a4552" stroke-width="1.3"/>
+<line x1="1160.9" y1="224" x2="1160.9" y2="1603" stroke="#3a4552" stroke-width="1.3"/>
+<rect x="187" y="246" width="130.4" height="17" rx="3" fill="#0d1117"/>
+<rect x="205.7" y="272" width="92.9" height="14" rx="3" fill="#0d1117"/>
+<rect x="178.9" y="324" width="146.5" height="17" rx="3" fill="#0d1117"/>
+<rect x="425.3" y="383" width="126.7" height="17" rx="3" fill="#0d1117"/>
+<rect x="446.3" y="402" width="183" height="14" rx="3" fill="#0d1117"/>
+<rect x="424.7" y="430" width="115.5" height="17" rx="3" fill="#0d1117"/>
+<rect x="435" y="468" width="94.8" height="17" rx="3" fill="#0d1117"/>
+<rect x="430.1" y="494" width="104.7" height="14" rx="3" fill="#0d1117"/>
+<rect x="425.3" y="519" width="134.6" height="17" rx="3" fill="#0d1117"/>
+<rect x="446.3" y="538" width="173.6" height="14" rx="3" fill="#0d1117"/>
+<rect x="468.8" y="596" width="147.3" height="17" rx="3" fill="#0d1117"/>
+<rect x="506.2" y="622" width="72.4" height="14" rx="3" fill="#0d1117"/>
+<rect x="425.3" y="673" width="248.9" height="17" rx="3" fill="#0d1117"/>
+<rect x="446.3" y="692" width="155.7" height="14" rx="3" fill="#0d1117"/>
+<rect x="196.5" y="738" width="111.3" height="17" rx="3" fill="#0d1117"/>
+<rect x="713.3" y="776" width="132.7" height="17" rx="3" fill="#0d1117"/>
+<rect x="748.1" y="802" width="63.1" height="14" rx="3" fill="#0d1117"/>
+<rect x="706.6" y="884" width="146.3" height="17" rx="3" fill="#0d1117"/>
+<rect x="719.6" y="910" width="120.2" height="14" rx="3" fill="#0d1117"/>
+<rect x="883" y="958" width="122.4" height="17" rx="3" fill="#0d1117"/>
+<rect x="892.9" y="984" width="102.6" height="14" rx="3" fill="#0d1117"/>
+<rect x="904.5" y="1072" width="215.7" height="17" rx="3" fill="#0d1117"/>
+<rect x="874.8" y="1110" width="275" height="17" rx="3" fill="#0d1117"/>
+<rect x="711.6" y="1166" width="136.2" height="17" rx="3" fill="#0d1117"/>
+<rect x="717.6" y="1192" width="124.2" height="14" rx="3" fill="#0d1117"/>
+<rect x="126" y="1275" width="252.3" height="17" rx="3" fill="#0d1117"/>
+<rect x="207.1" y="1301" width="90" height="14" rx="3" fill="#0d1117"/>
+<rect x="544.4" y="1323" width="164.3" height="17" rx="3" fill="#0d1117"/>
+<rect x="588.3" y="1349" width="76.6" height="14" rx="3" fill="#0d1117"/>
+<rect x="559" y="1401" width="135.1" height="17" rx="3" fill="#0d1117"/>
+<rect x="958.8" y="1465" width="107" height="17" rx="3" fill="#0d1117"/>
+<rect x="558.4" y="1503" width="136.2" height="17" rx="3" fill="#0d1117"/>
+<rect x="182.4" y="1559" width="139.4" height="17" rx="3" fill="#0d1117"/>
+<rect x="384.3" y="260" width="10" height="94" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<rect x="384.3" y="390" width="10" height="378" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<rect x="384.3" y="1289" width="10" height="300" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<rect x="570.6" y="444" width="10" height="54" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<rect x="858.8" y="790" width="10" height="406" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<rect x="858.8" y="1337" width="10" height="94" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<rect x="858.8" y="1479" width="10" height="54" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<rect x="1019.5" y="972" width="10" height="22" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<rect x="1155.9" y="1086" width="10" height="54" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<rect x="1155.9" y="1479" width="10" height="22" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<rect x="389.3" y="402" width="10" height="16" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<rect x="389.3" y="538" width="10" height="16" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<rect x="389.3" y="692" width="10" height="16" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<g>
+    <path d="M 115 268 L 384.3 268" fill="none" stroke="#0d1117" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 115 268 L 384.3 268" fill="none" stroke="#c9d4de" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 384.3 346 L 115 346" fill="none" stroke="#0d1117" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 384.3 346 L 115 346" fill="none" stroke="#8b98a5" stroke-width="1.5999999999999999" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow-return)"/>
+    
+  </g>
+<g>
+    <path d="M 394.3 391 L 411.3 391 Q 420.3 391 420.3 400 L 420.3 401 Q 420.3 409 412.3 409 L 404.3 409" fill="none" stroke="#0d1117" stroke-width="5.7" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 394.3 391 L 411.3 391 Q 420.3 391 420.3 400 L 420.3 401 Q 420.3 409 412.3 409 L 404.3 409" fill="none" stroke="#c9d4de" stroke-width="1.7000000000000002"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 394.3 452 L 570.6 452" fill="none" stroke="#0d1117" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 394.3 452 L 570.6 452" fill="none" stroke="#c9d4de" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 570.6 490 L 394.3 490" fill="none" stroke="#0d1117" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 570.6 490 L 394.3 490" fill="none" stroke="#8b98a5" stroke-width="1.5999999999999999" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow-return)"/>
+    
+  </g>
+<g>
+    <path d="M 394.3 527 L 411.3 527 Q 420.3 527 420.3 536 L 420.3 537 Q 420.3 545 412.3 545 L 404.3 545" fill="none" stroke="#0d1117" stroke-width="5.7" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 394.3 527 L 411.3 527 Q 420.3 527 420.3 536 L 420.3 537 Q 420.3 545 412.3 545 L 404.3 545" fill="none" stroke="#c9d4de" stroke-width="1.7000000000000002"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 394.3 618 L 695.6 618" fill="none" stroke="#0d1117" stroke-width="5.9" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 394.3 618 L 695.6 618" fill="none" stroke="#a78bfa" stroke-width="1.9"  stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+    
+  </g>
+<g>
+    <path d="M 394.3 681 L 411.3 681 Q 420.3 681 420.3 690 L 420.3 691 Q 420.3 699 412.3 699 L 404.3 699" fill="none" stroke="#0d1117" stroke-width="5.7" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 394.3 681 L 411.3 681 Q 420.3 681 420.3 690 L 420.3 691 Q 420.3 699 412.3 699 L 404.3 699" fill="none" stroke="#c9d4de" stroke-width="1.7000000000000002"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 384.3 760 L 115 760" fill="none" stroke="#0d1117" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 384.3 760 L 115 760" fill="none" stroke="#8b98a5" stroke-width="1.5999999999999999" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow-return)"/>
+    
+  </g>
+<g>
+    <path d="M 695.6 798 L 858.8 798" fill="none" stroke="#0d1117" stroke-width="5.9" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 695.6 798 L 858.8 798" fill="none" stroke="#a78bfa" stroke-width="1.9"  stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+    
+  </g>
+<g>
+    <path d="M 858.8 906 L 695.6 906" fill="none" stroke="#0d1117" stroke-width="5.9" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 858.8 906 L 695.6 906" fill="none" stroke="#a78bfa" stroke-width="1.9"  stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+    
+  </g>
+<g>
+    <path d="M 868.8 980 L 1019.5 980" fill="none" stroke="#0d1117" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 868.8 980 L 1019.5 980" fill="none" stroke="#c9d4de" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 868.8 1094 L 1155.9 1094" fill="none" stroke="#0d1117" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 868.8 1094 L 1155.9 1094" fill="none" stroke="#c9d4de" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 868.8 1132 L 1155.9 1132" fill="none" stroke="#0d1117" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 868.8 1132 L 1155.9 1132" fill="none" stroke="#c9d4de" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 858.8 1188 L 695.6 1188" fill="none" stroke="#0d1117" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 858.8 1188 L 695.6 1188" fill="none" stroke="#c9d4de" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 115 1297 L 384.3 1297" fill="none" stroke="#0d1117" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 115 1297 L 384.3 1297" fill="none" stroke="#c9d4de" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 394.3 1345 L 858.8 1345" fill="none" stroke="#0d1117" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 394.3 1345 L 858.8 1345" fill="none" stroke="#c9d4de" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 858.8 1423 L 394.3 1423" fill="none" stroke="#0d1117" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 858.8 1423 L 394.3 1423" fill="none" stroke="#8b98a5" stroke-width="1.5999999999999999" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow-return)"/>
+    
+  </g>
+<g>
+    <path d="M 868.8 1487 L 1155.9 1487" fill="none" stroke="#0d1117" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 868.8 1487 L 1155.9 1487" fill="none" stroke="#c9d4de" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 858.8 1525 L 394.3 1525" fill="none" stroke="#0d1117" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 858.8 1525 L 394.3 1525" fill="none" stroke="#8b98a5" stroke-width="1.5999999999999999" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow-return)"/>
+    
+  </g>
+<g>
+    <path d="M 384.3 1581 L 115 1581" fill="none" stroke="#0d1117" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 384.3 1581 L 115 1581" fill="none" stroke="#8b98a5" stroke-width="1.5999999999999999" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow-return)"/>
+    
+  </g>
+<circle cx="198" cy="254.8" r="8" fill="#c9d4de"/><text x="198" y="258.2" text-anchor="middle" class="seq-num">1</text>
+<text x="211" y="259" class="msg">POST /api/track</text>
+<text x="252.1" y="282.5" text-anchor="middle" class="msg-detail">keepalive beacon</text>
+<circle cx="189.9" cy="332.8" r="8" fill="#8b98a5"/><text x="189.9" y="336.2" text-anchor="middle" class="seq-num">2</text>
+<text x="202.9" y="337" class="msg" style="fill:#9da9b5">429 / 204, dropped</text>
+<circle cx="436.3" cy="391.8" r="8" fill="#c9d4de"/><text x="436.3" y="395.2" text-anchor="middle" class="seq-num">3</text>
+<text x="449.3" y="396" class="msg">geo-snap to city</text>
+<text x="449.3" y="412.5" class="msg-detail">from edge headers · city-level only</text>
+<circle cx="435.7" cy="438.8" r="8" fill="#c9d4de"/><text x="435.7" y="442.2" text-anchor="middle" class="seq-num">4</text>
+<text x="448.7" y="443" class="msg">assess(token)</text>
+<circle cx="446" cy="476.8" r="8" fill="#8b98a5"/><text x="446" y="480.2" text-anchor="middle" class="seq-num">5</text>
+<text x="459" y="481" class="msg" style="fill:#9da9b5">risk score</text>
+<text x="482.4" y="504.5" text-anchor="middle" class="msg-detail">scored server-side</text>
+<circle cx="436.3" cy="527.8" r="8" fill="#c9d4de"/><text x="436.3" y="531.2" text-anchor="middle" class="seq-num">6</text>
+<text x="449.3" y="532" class="msg">eventId = UUIDv7</text>
+<text x="449.3" y="548.5" class="msg-detail">doubles as the de-duplication key</text>
+<circle cx="479.8" cy="604.8" r="8" fill="#a78bfa"/><text x="479.8" y="608.2" text-anchor="middle" class="seq-num">7</text>
+<text x="492.8" y="609" class="msg">produce raw event</text>
+<text x="542.4" y="632.5" text-anchor="middle" class="msg-detail">key = eventId</text>
+<circle cx="436.3" cy="681.8" r="8" fill="#c9d4de"/><text x="436.3" y="685.2" text-anchor="middle" class="seq-num">8</text>
+<text x="449.3" y="686" class="msg">fallback: direct PostgreSQL insert</text>
+<text x="449.3" y="702.5" class="msg-detail">degraded mode, same eventId</text>
+<circle cx="207.5" cy="746.8" r="8" fill="#8b98a5"/><text x="207.5" y="750.2" text-anchor="middle" class="seq-num">9</text>
+<text x="220.5" y="751" class="msg" style="fill:#9da9b5">200 accepted</text>
+<circle cx="724.3" cy="784.8" r="8" fill="#a78bfa"/><text x="724.3" y="788.2" text-anchor="middle" class="seq-num">10</text>
+<text x="737.3" y="789" class="msg">poll batch ≤ 100</text>
+<text x="779.7" y="812.5" text-anchor="middle" class="msg-detail">manual ack</text>
+<circle cx="717.6" cy="892.8" r="8" fill="#a78bfa"/><text x="717.6" y="896.2" text-anchor="middle" class="seq-num">11</text>
+<text x="730.6" y="897" class="msg">dead-letter record</text>
+<text x="779.7" y="920.5" text-anchor="middle" class="msg-detail">to analytics.events.dlq</text>
+<circle cx="894" cy="966.8" r="8" fill="#c9d4de"/><text x="894" y="970.2" text-anchor="middle" class="seq-num">12</text>
+<text x="907" y="971" class="msg">SETNX eventId</text>
+<text x="944.2" y="994.5" text-anchor="middle" class="msg-detail">duplicates dropped</text>
+<circle cx="915.5" cy="1080.8" r="8" fill="#c9d4de"/><text x="915.5" y="1084.2" text-anchor="middle" class="seq-num">13</text>
+<text x="928.5" y="1085" class="msg">claim events in durable inbox</text>
+<circle cx="885.8" cy="1118.8" r="8" fill="#c9d4de"/><text x="885.8" y="1122.2" text-anchor="middle" class="seq-num">14</text>
+<text x="898.8" y="1123" class="msg">upsert sessions + 5-min / daily rollups</text>
+<circle cx="722.6" cy="1174.8" r="8" fill="#c9d4de"/><text x="722.6" y="1178.2" text-anchor="middle" class="seq-num">15</text>
+<text x="735.6" y="1179" class="msg">ack after commit</text>
+<text x="779.7" y="1202.5" text-anchor="middle" class="msg-detail">on failure: seek + retry</text>
+<circle cx="137" cy="1283.8" r="8" fill="#c9d4de"/><text x="137" y="1287.2" text-anchor="middle" class="seq-num">16</text>
+<text x="150" y="1288" class="msg">GET /api/analytics/visits/summary</text>
+<text x="252.1" y="1311.5" text-anchor="middle" class="msg-detail">CDN caches 60 s</text>
+<circle cx="555.4" cy="1331.8" r="8" fill="#c9d4de"/><text x="555.4" y="1335.2" text-anchor="middle" class="seq-num">17</text>
+<text x="568.4" y="1336" class="msg">GET /visits/summary</text>
+<text x="626.5" y="1359.5" text-anchor="middle" class="msg-detail">If-None-Match</text>
+<circle cx="570" cy="1409.8" r="8" fill="#8b98a5"/><text x="570" y="1413.2" text-anchor="middle" class="seq-num">18</text>
+<text x="583" y="1414" class="msg" style="fill:#9da9b5">304 Not Modified</text>
+<circle cx="969.8" cy="1473.8" r="8" fill="#c9d4de"/><text x="969.8" y="1477.2" text-anchor="middle" class="seq-num">19</text>
+<text x="982.8" y="1478" class="msg">read rollups</text>
+<circle cx="569.4" cy="1511.8" r="8" fill="#8b98a5"/><text x="569.4" y="1515.2" text-anchor="middle" class="seq-num">20</text>
+<text x="582.4" y="1516" class="msg" style="fill:#9da9b5">200 + weak ETag</text>
+<circle cx="193.4" cy="1567.8" r="8" fill="#8b98a5"/><text x="193.4" y="1571.2" text-anchor="middle" class="seq-num">21</text>
+<text x="206.4" y="1572" class="msg" style="fill:#9da9b5">proxied response</text>
+<g><g fill="none" stroke="#e6edf3" stroke-width="1.6" stroke-linecap="round">
+    <circle cx="115" cy="163" r="6.5" fill="#151b23"/>
+    <path d="M 115 169.5 V 185 M 104 175 H 126 M 115 185 L 106 197 M 115 185 L 124 197"/>
+  </g><text x="115" y="213" text-anchor="middle" class="head-title">Browser</text></g>
+<g>
+    <rect x="317.3" y="154" width="144" height="70" rx="8" fill="#151b23" stroke="#384350" stroke-width="1.1" filter="url(#shadow)"/>
+    <rect x="317.9" y="154.6" width="142.8" height="3" rx="1.5" fill="#a3b1bf" fill-opacity=".8"/>
+    <text x="389.3" y="169" text-anchor="middle" class="stereo">«BFF · Vercel»</text>
+    <g transform="translate(380.3 173) scale(0.75)"><path fill="#e6edf3" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="389.3" y="210" text-anchor="middle" class="head-title">API Gateway</text>
+  </g>
+<g>
+    <rect x="522.6" y="154" width="106" height="70" rx="8" fill="#1b222b" stroke="#596574" stroke-width="1.1" filter="url(#shadow)"/>
+    
+    <text x="575.6" y="169" text-anchor="middle" class="stereo">«external»</text>
+    <g transform="translate(566.6 173) scale(0.75)" fill="none" stroke="#9da9b5" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.3 4.2 6.3 4.2 9S15 17.7 12 21M12 3C9 6.3 7.8 9.3 7.8 12S9 17.7 12 21"/></g>
+    <text x="575.6" y="210" text-anchor="middle" class="head-title">reCAPTCHA</text>
+  </g>
+<g>
+      <g>
+    <path d="M 650.6 160 H 740.6 A 8 14 0 0 1 740.6 188 H 650.6 A 8 14 0 0 1 650.6 160 Z" fill="#151b23"/>
+    <path d="M 650.6 160 H 740.6 A 8 14 0 0 1 740.6 188 H 650.6 A 8 14 0 0 1 650.6 160 Z" fill="#a78bfa" fill-opacity="0.18" stroke="#a78bfa" stroke-width="1.3"/>
+    <ellipse cx="740.6" cy="174" rx="8" ry="14" fill="#151b23" stroke="#a78bfa" stroke-width="1.3"/>
+    
+  </g>
+      <g transform="translate(686.6 165) scale(0.75)"><path fill="#e6edf3" d="M9.71 2.136a1.43 1.43 0 0 0-2.047 0h-.007a1.48 1.48 0 0 0-.421 1.042c0 .41.161.777.422 1.039l.007.007c.257.264.616.426 1.019.426.404 0 .766-.162 1.027-.426l.003-.007c.261-.262.421-.629.421-1.039 0-.408-.159-.777-.421-1.042H9.71zM8.683 22.295c.404 0 .766-.167 1.027-.429l.003-.008c.261-.261.421-.631.421-1.036 0-.41-.159-.778-.421-1.044H9.71a1.42 1.42 0 0 0-1.027-.432 1.4 1.4 0 0 0-1.02.432h-.007c-.26.266-.422.634-.422 1.044 0 .406.161.775.422 1.036l.007.008c.258.262.617.429 1.02.429zm7.89-4.462c.359-.096.683-.33.882-.684l.027-.052a1.47 1.47 0 0 0 .114-1.067 1.454 1.454 0 0 0-.675-.896l-.021-.014a1.425 1.425 0 0 0-1.078-.132c-.36.091-.684.335-.881.686-.2.349-.241.75-.146 1.119.099.363.33.691.675.896h.002c.346.203.737.239 1.101.144zm-6.405-7.342a2.083 2.083 0 0 0-1.485-.627c-.58 0-1.103.242-1.482.627-.378.385-.612.916-.612 1.507s.233 1.124.612 1.514a2.08 2.08 0 0 0 2.967 0c.379-.39.612-.923.612-1.514s-.233-1.122-.612-1.507zm-.835-2.51c.843.141 1.6.552 2.178 1.144h.004c.092.093.182.196.265.299l1.446-.851a3.176 3.176 0 0 1-.047-1.808 3.149 3.149 0 0 1 1.456-1.926l.025-.016a3.062 3.062 0 0 1 2.345-.306c.77.21 1.465.721 1.898 1.482v.002c.431.757.518 1.626.313 2.408a3.145 3.145 0 0 1-1.456 1.928l-.198.118h-.02a3.095 3.095 0 0 1-2.154.201 3.127 3.127 0 0 1-1.514-.944l-1.444.848a4.162 4.162 0 0 1 0 2.879l1.444.846c.413-.47.939-.789 1.514-.944a3.041 3.041 0 0 1 2.371.319l.048.023v.002a3.17 3.17 0 0 1 1.408 1.906 3.215 3.215 0 0 1-.313 2.405l-.026.053-.003-.005a3.147 3.147 0 0 1-1.867 1.436 3.096 3.096 0 0 1-2.371-.318v-.006a3.156 3.156 0 0 1-1.456-1.927 3.175 3.175 0 0 1 .047-1.805l-1.446-.848a3.905 3.905 0 0 1-.265.294l-.004.005a3.938 3.938 0 0 1-2.178 1.138v1.699a3.09 3.09 0 0 1 1.56.862l.002.004c.565.572.914 1.368.914 2.243 0 .873-.35 1.664-.914 2.239l-.002.009a3.1 3.1 0 0 1-2.21.931 3.1 3.1 0 0 1-2.206-.93h-.002v-.009a3.186 3.186 0 0 1-.916-2.239c0-.875.35-1.672.916-2.243v-.004h.002a3.1 3.1 0 0 1 1.558-.862v-1.699a3.926 3.926 0 0 1-2.176-1.138l-.006-.005a4.098 4.098 0 0 1-1.173-2.874c0-1.122.452-2.136 1.173-2.872h.006a3.947 3.947 0 0 1 2.176-1.144V6.289a3.137 3.137 0 0 1-1.558-.864h-.002v-.004a3.192 3.192 0 0 1-.916-2.243c0-.871.35-1.669.916-2.243l.002-.002A3.084 3.084 0 0 1 8.683 0c.861 0 1.641.355 2.21.932v.002h.002c.565.574.914 1.372.914 2.243 0 .876-.35 1.667-.914 2.243l-.002.005a3.142 3.142 0 0 1-1.56.864v1.692zm8.121-1.129l-.012-.019a1.452 1.452 0 0 0-.87-.668 1.43 1.43 0 0 0-1.103.146h.002c-.347.2-.58.529-.677.896-.095.365-.054.768.146 1.119l.007.009c.2.347.519.579.874.673.357.103.755.059 1.098-.144l.019-.009a1.47 1.47 0 0 0 .657-.885 1.493 1.493 0 0 0-.141-1.118"/></g>
+      <text x="695.6" y="205" text-anchor="middle" class="topic-in" style="font-size:10.5px">Kafka</text>
+      <text x="695.6" y="218" text-anchor="middle" class="head-meta">analytics.raw.events</text>
+    </g>
+<g>
+    <rect x="791.8" y="154" width="144" height="70" rx="8" fill="#151b23" stroke="#384350" stroke-width="1.1" filter="url(#shadow)"/>
+    <rect x="792.4" y="154.6" width="142.8" height="3" rx="1.5" fill="#a3b1bf" fill-opacity=".8"/>
+    <text x="863.8" y="169" text-anchor="middle" class="stereo">«service»</text>
+    <g transform="translate(854.8 173) scale(0.75)"><path fill="#e6edf3" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="863.8" y="210" text-anchor="middle" class="head-title">Visitor Analytics</text>
+  </g>
+<g>
+      <g>
+    <path d="M 1004.5 160 A 20 6 0 0 0 1044.5 160 V 190 A 20 6 0 0 1 1004.5 190 Z" fill="#151b23" filter="url(#shadow)"/>
+    <path d="M 1004.5 160 A 20 6 0 0 0 1044.5 160 V 190 A 20 6 0 0 1 1004.5 190 Z" fill="#ff7d72" fill-opacity="0.15" stroke="#ff7d72" stroke-width="1.3"/>
+    <path d="M 1004.5 170 A 20 6 0 0 0 1044.5 170" fill="none" stroke="#ff7d72" stroke-opacity=".55" stroke-width="1.1"/>
+    <ellipse cx="1024.5" cy="160" rx="20" ry="6" fill="#151b23"/>
+    <ellipse cx="1024.5" cy="160" rx="20" ry="6" fill="#ff7d72" fill-opacity="0.44" stroke="#ff7d72" stroke-width="1.3"/>
+    <g transform="translate(1016.1 175.6) scale(0.7)"><path fill="#ff7d72" d="M22.71 13.145c-1.66 2.092-3.452 4.483-7.038 4.483-3.203 0-4.397-2.825-4.48-5.12.701 1.484 2.073 2.685 4.214 2.63 4.117-.133 6.94-3.852 6.94-7.239 0-4.05-3.022-6.972-8.268-6.972-3.752 0-8.4 1.428-11.455 3.685C2.59 6.937 3.885 9.958 4.35 9.626c2.648-1.904 4.748-3.13 6.784-3.744C8.12 9.244.886 17.05 0 18.425c.1 1.261 1.66 4.648 2.424 4.648.232 0 .431-.133.664-.365a100.49 100.49 0 0 0 5.54-6.765c.222 3.104 1.748 6.898 6.014 6.898 3.819 0 7.604-2.756 9.33-8.965.2-.764-.73-1.361-1.261-.73zm-4.349-5.013c0 1.959-1.926 2.922-3.685 2.922-.941 0-1.664-.247-2.235-.568 1.051-1.592 2.092-3.225 3.21-4.973 1.972.334 2.71 1.43 2.71 2.619z"/></g>
+  </g>
+      <text x="1024.5" y="210" text-anchor="middle" class="head-title" style="font-size:12.5px">Redis</text>
+      <text x="1024.5" y="222" text-anchor="middle" class="store-meta" style="font-size:8.5px">DEDUP + LIMITS</text>
+    </g>
+<g>
+      <g>
+    <path d="M 1140.9 160 A 20 6 0 0 0 1180.9 160 V 190 A 20 6 0 0 1 1140.9 190 Z" fill="#151b23" filter="url(#shadow)"/>
+    <path d="M 1140.9 160 A 20 6 0 0 0 1180.9 160 V 190 A 20 6 0 0 1 1140.9 190 Z" fill="#82a8ff" fill-opacity="0.15" stroke="#82a8ff" stroke-width="1.3"/>
+    <path d="M 1140.9 170 A 20 6 0 0 0 1180.9 170" fill="none" stroke="#82a8ff" stroke-opacity=".55" stroke-width="1.1"/>
+    <ellipse cx="1160.9" cy="160" rx="20" ry="6" fill="#151b23"/>
+    <ellipse cx="1160.9" cy="160" rx="20" ry="6" fill="#82a8ff" fill-opacity="0.44" stroke="#82a8ff" stroke-width="1.3"/>
+    <g transform="translate(1152.5 175.6) scale(0.7)"><path fill="#82a8ff" d="M23.5594 14.7228a.5269.5269 0 0 0-.0563-.1191c-.139-.2632-.4768-.3418-1.0074-.2321-1.6533.3411-2.2935.1312-2.5256-.0191 1.342-2.0482 2.445-4.522 3.0411-6.8297.2714-1.0507.7982-3.5237.1222-4.7316a1.5641 1.5641 0 0 0-.1509-.235C21.6931.9086 19.8007.0248 17.5099.0005c-1.4947-.0158-2.7705.3461-3.1161.4794a9.449 9.449 0 0 0-.5159-.0816 8.044 8.044 0 0 0-1.3114-.1278c-1.1822-.0184-2.2038.2642-3.0498.8406-.8573-.3211-4.7888-1.645-7.2219.0788C.9359 2.1526.3086 3.8733.4302 6.3043c.0409.818.5069 3.334 1.2423 5.7436.4598 1.5065.9387 2.7019 1.4334 3.582.553.9942 1.1259 1.5933 1.7143 1.7895.4474.1491 1.1327.1441 1.8581-.7279.8012-.9635 1.5903-1.8258 1.9446-2.2069.4351.2355.9064.3625 1.39.3772a.0569.0569 0 0 0 .0004.0041 11.0312 11.0312 0 0 0-.2472.3054c-.3389.4302-.4094.5197-1.5002.7443-.3102.064-1.1344.2339-1.1464.8115-.0025.1224.0329.2309.0919.3268.2269.4231.9216.6097 1.015.6331 1.3345.3335 2.5044.092 3.3714-.6787-.017 2.231.0775 4.4174.3454 5.0874.2212.5529.7618 1.9045 2.4692 1.9043.2505 0 .5263-.0291.8296-.0941 1.7819-.3821 2.5557-1.1696 2.855-2.9059.1503-.8707.4016-2.8753.5388-4.1012.0169-.0703.0357-.1207.057-.1362.0007-.0005.0697-.0471.4272.0307a.3673.3673 0 0 0 .0443.0068l.2539.0223.0149.001c.8468.0384 1.9114-.1426 2.5312-.4308.6438-.2988 1.8057-1.0323 1.5951-1.6698zM2.371 11.8765c-.7435-2.4358-1.1779-4.8851-1.2123-5.5719-.1086-2.1714.4171-3.6829 1.5623-4.4927 1.8367-1.2986 4.8398-.5408 6.108-.13-.0032.0032-.0066.0061-.0098.0094-2.0238 2.044-1.9758 5.536-1.9708 5.7495-.0002.0823.0066.1989.0162.3593.0348.5873.0996 1.6804-.0735 2.9184-.1609 1.1504.1937 2.2764.9728 3.0892.0806.0841.1648.1631.2518.2374-.3468.3714-1.1004 1.1926-1.9025 2.1576-.5677.6825-.9597.5517-1.0886.5087-.3919-.1307-.813-.5871-1.2381-1.3223-.4796-.839-.9635-2.0317-1.4155-3.5126zm6.0072 5.0871c-.1711-.0428-.3271-.1132-.4322-.1772.0889-.0394.2374-.0902.4833-.1409 1.2833-.2641 1.4815-.4506 1.9143-1.0002.0992-.126.2116-.2687.3673-.4426a.3549.3549 0 0 0 .0737-.1298c.1708-.1513.2724-.1099.4369-.0417.156.0646.3078.26.3695.4752.0291.1016.0619.2945-.0452.4444-.9043 1.2658-2.2216 1.2494-3.1676 1.0128zm2.094-3.988-.0525.141c-.133.3566-.2567.6881-.3334 1.003-.6674-.0021-1.3168-.2872-1.8105-.8024-.6279-.6551-.9131-1.5664-.7825-2.5004.1828-1.3079.1153-2.4468.079-3.0586-.005-.0857-.0095-.1607-.0122-.2199.2957-.2621 1.6659-.9962 2.6429-.7724.4459.1022.7176.4057.8305.928.5846 2.7038.0774 3.8307-.3302 4.7363-.084.1866-.1633.3629-.2311.5454zm7.3637 4.5725c-.0169.1768-.0358.376-.0618.5959l-.146.4383a.3547.3547 0 0 0-.0182.1077c-.0059.4747-.054.6489-.115.8693-.0634.2292-.1353.4891-.1794 1.0575-.11 1.4143-.8782 2.2267-2.4172 2.5565-1.5155.3251-1.7843-.4968-2.0212-1.2217a6.5824 6.5824 0 0 0-.0769-.2266c-.2154-.5858-.1911-1.4119-.1574-2.5551.0165-.5612-.0249-1.9013-.3302-2.6462.0044-.2932.0106-.5909.019-.8918a.3529.3529 0 0 0-.0153-.1126 1.4927 1.4927 0 0 0-.0439-.208c-.1226-.4283-.4213-.7866-.7797-.9351-.1424-.059-.4038-.1672-.7178-.0869.067-.276.1831-.5875.309-.9249l.0529-.142c.0595-.16.134-.3257.213-.5012.4265-.9476 1.0106-2.2453.3766-5.1772-.2374-1.0981-1.0304-1.6343-2.2324-1.5098-.7207.0746-1.3799.3654-1.7088.5321a5.6716 5.6716 0 0 0-.1958.1041c.0918-1.1064.4386-3.1741 1.7357-4.4823a4.0306 4.0306 0 0 1 .3033-.276.3532.3532 0 0 0 .1447-.0644c.7524-.5706 1.6945-.8506 2.802-.8325.4091.0067.8017.0339 1.1742.081 1.939.3544 3.2439 1.4468 4.0359 2.3827.8143.9623 1.2552 1.9315 1.4312 2.4543-1.3232-.1346-2.2234.1268-2.6797.779-.9926 1.4189.543 4.1729 1.2811 5.4964.1353.2426.2522.4522.2889.5413.2403.5825.5515.9713.7787 1.2552.0696.087.1372.1714.1885.245-.4008.1155-1.1208.3825-1.0552 1.717-.0123.1563-.0423.4469-.0834.8148-.0461.2077-.0702.4603-.0994.7662zm.8905-1.6211c-.0405-.8316.2691-.9185.5967-1.0105a2.8566 2.8566 0 0 0 .135-.0406 1.202 1.202 0 0 0 .1342.103c.5703.3765 1.5823.4213 3.0068.1344-.2016.1769-.5189.3994-.9533.6011-.4098.1903-1.0957.333-1.7473.3636-.7197.0336-1.0859-.0807-1.1721-.151zm.5695-9.2712c-.0059.3508-.0542.6692-.1054 1.0017-.055.3576-.112.7274-.1264 1.1762-.0142.4368.0404.8909.0932 1.3301.1066.887.216 1.8003-.2075 2.7014a3.5272 3.5272 0 0 1-.1876-.3856c-.0527-.1276-.1669-.3326-.3251-.6162-.6156-1.1041-2.0574-3.6896-1.3193-4.7446.3795-.5427 1.3408-.5661 2.1781-.463zm.2284 7.0137a12.3762 12.3762 0 0 0-.0853-.1074l-.0355-.0444c.7262-1.1995.5842-2.3862.4578-3.4385-.0519-.4318-.1009-.8396-.0885-1.2226.0129-.4061.0666-.7543.1185-1.0911.0639-.415.1288-.8443.1109-1.3505.0134-.0531.0188-.1158.0118-.1902-.0457-.4855-.5999-1.938-1.7294-3.253-.6076-.7073-1.4896-1.4972-2.6889-2.0395.5251-.1066 1.2328-.2035 2.0244-.1859 2.0515.0456 3.6746.8135 4.8242 2.2824a.908.908 0 0 1 .0667.1002c.7231 1.3556-.2762 6.2751-2.9867 10.5405zm-8.8166-6.1162c-.025.1794-.3089.4225-.6211.4225a.5821.5821 0 0 1-.0809-.0056c-.1873-.026-.3765-.144-.5059-.3156-.0458-.0605-.1203-.178-.1055-.2844.0055-.0401.0261-.0985.0925-.1488.1182-.0894.3518-.1226.6096-.0867.3163.0441.6426.1938.6113.4186zm7.9305-.4114c.0111.0792-.049.201-.1531.3102-.0683.0717-.212.1961-.4079.2232a.5456.5456 0 0 1-.075.0052c-.2935 0-.5414-.2344-.5607-.3717-.024-.1765.2641-.3106.5611-.352.297-.0414.6111.0088.6356.1851z"/></g>
+  </g>
+      <text x="1160.9" y="210" text-anchor="middle" class="head-title" style="font-size:12.5px">Rollups</text>
+      <text x="1160.9" y="222" text-anchor="middle" class="store-meta" style="font-size:8.5px">POSTGRESQL</text>
+    </g>
+<g>
+    <path d="M 641.6 1216 H 1203.9 L 1214.9 1227 V 1263 H 641.6 Z" fill="#2a2614" stroke="#8a7a3c" stroke-width="1.2"/>
+    <path d="M 1203.9 1216 V 1227 H 1214.9" fill="none" stroke="#8a7a3c" stroke-width="1.2"/>
+  </g>
+<text x="653.6" y="1235" class="note">SETNX + inbox claim + ack-after-commit: redelivered batches never double-count</text>
+<text x="653.6" y="1250.5" class="note">(effectively-once processing on an at-least-once log).</text>
+<path d="M 42 294 H 98.6 V 307 L 90.6 314 H 42 Z" fill="#0d1117"/>
+<path d="M 42 294 H 98.6 V 307 L 90.6 314 H 42 Z" fill="#fb7185" fill-opacity="0.26" stroke="#fb7185" stroke-opacity=".75" stroke-width="1.2"/>
+<text x="50" y="308" class="frag-op" style="fill:#fb7185">break</text>
+<rect x="104.6" y="297" width="186.6" height="15" rx="3" fill="#0d1117"/>
+<text x="108.6" y="308.5" class="frag-guard">[rate limited or consent denied]</text>
+<path d="M 316.3 566 H 354.4 V 579 L 346.4 586 H 316.3 Z" fill="#0d1117"/>
+<path d="M 316.3 566 H 354.4 V 579 L 346.4 586 H 316.3 Z" fill="#60a5fa" fill-opacity="0.26" stroke="#60a5fa" stroke-opacity=".75" stroke-width="1.2"/>
+<text x="324.3" y="580" class="frag-op" style="fill:#60a5fa">alt</text>
+<rect x="360.4" y="569" width="94.8" height="15" rx="3" fill="#0d1117"/>
+<text x="364.4" y="580.5" class="frag-guard">[Kafka accepts]</text>
+<rect x="322.3" y="651" width="91" height="15" rx="3" fill="#0d1117"/>
+<text x="326.3" y="662.5" class="frag-guard">[produce fails]</text>
+<path d="M 641.6 824 H 689 V 837 L 681 844 H 641.6 Z" fill="#0d1117"/>
+<path d="M 641.6 824 H 689 V 837 L 681 844 H 641.6 Z" fill="#4ade80" fill-opacity="0.26" stroke="#4ade80" stroke-opacity=".75" stroke-width="1.2"/>
+<text x="649.6" y="838" class="frag-op" style="fill:#4ade80">loop</text>
+<rect x="695" y="827" width="85" height="15" rx="3" fill="#0d1117"/>
+<text x="699" y="838.5" class="frag-guard">[each record]</text>
+<path d="M 648.6 854 H 686.7 V 867 L 678.7 874 H 648.6 Z" fill="#0d1117"/>
+<path d="M 648.6 854 H 686.7 V 867 L 678.7 874 H 648.6 Z" fill="#60a5fa" fill-opacity="0.26" stroke="#60a5fa" stroke-opacity=".75" stroke-width="1.2"/>
+<text x="656.6" y="868" class="frag-op" style="fill:#60a5fa">alt</text>
+<rect x="692.7" y="857" width="85.9" height="15" rx="3" fill="#0d1117"/>
+<text x="696.7" y="868.5" class="frag-guard">[unparseable]</text>
+<rect x="654.6" y="939" width="55.6" height="15" rx="3" fill="#0d1117"/>
+<text x="658.6" y="950.5" class="frag-guard">[parsed]</text>
+<path d="M 790.8 1042 H 858.9 V 1055 L 850.9 1062 H 790.8 Z" fill="#0d1117"/>
+<path d="M 790.8 1042 H 858.9 V 1055 L 850.9 1062 H 790.8 Z" fill="#fbbf6a" fill-opacity="0.26" stroke="#fbbf6a" stroke-opacity=".75" stroke-width="1.2"/>
+<text x="798.8" y="1056" class="frag-op" style="fill:#fbbf6a">critical</text>
+<rect x="864.9" y="1045" width="175.9" height="15" rx="3" fill="#0d1117"/>
+<text x="868.9" y="1056.5" class="frag-guard">[one PostgreSQL transaction]</text>
+<path d="M 316.3 1371 H 354.4 V 1384 L 346.4 1391 H 316.3 Z" fill="#0d1117"/>
+<path d="M 316.3 1371 H 354.4 V 1384 L 346.4 1391 H 316.3 Z" fill="#60a5fa" fill-opacity="0.26" stroke="#60a5fa" stroke-opacity=".75" stroke-width="1.2"/>
+<text x="324.3" y="1385" class="frag-op" style="fill:#60a5fa">alt</text>
+<rect x="360.4" y="1374" width="95.7" height="15" rx="3" fill="#0d1117"/>
+<text x="364.4" y="1385.5" class="frag-guard">[ETag matches]</text>
+<rect x="322.3" y="1446" width="89.2" height="15" rx="3" fill="#0d1117"/>
+<text x="326.3" y="1457.5" class="frag-guard">[data changed]</text>
+<rect x="28" y="1631" width="699.7" height="32" rx="16" fill="#4ade80" fill-opacity="0.15" stroke="#4ade80" stroke-opacity=".45"/>
+<g transform="translate(38 1638) scale(0.75)" fill="none" stroke="#4ade80" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16.5 9"/></g>
+<text x="62" y="1651.5" class="chip" style="font-size:13px">Result: City-level event counted once in sessions and rollups, served through a cached read model</text>
+<line x1="28" y1="1689" x2="58" y2="1689" stroke="#c9d4de" stroke-width="1.8"  marker-end="url(#arrow-request)"/>
+<text x="66" y="1693" class="legend" style="font-size:11px">Synchronous call</text>
+<line x1="185.94400000000002" y1="1689" x2="215.94400000000002" y2="1689" stroke="#a78bfa" stroke-width="1.9"  marker-end="url(#arrow-event)"/>
+<text x="223.94400000000002" y="1693" class="legend" style="font-size:11px">Asynchronous message</text>
+<line x1="378.4016000000001" y1="1689" x2="408.4016000000001" y2="1689" stroke="#8b98a5" stroke-width="1.5999999999999999" stroke-dasharray="5 4" marker-end="url(#arrow-return)"/>
+<text x="416.4016000000001" y="1693" class="legend" style="font-size:11px">Reply</text>
+<rect x="470.1168000000001" y="1681" width="10" height="16" fill="#151b23" stroke="#9da9b5" stroke-width="1.1"/>
+<text x="488.1168000000001" y="1693" class="legend" style="font-size:11px">Execution</text>
+<rect x="565.6" y="1680" width="113" height="18" rx="3" fill="#60a5fa" fill-opacity="0.16" stroke="#60a5fa" stroke-opacity=".6"/>
+<text x="573.6" y="1693" class="legend" style="font-size:11px;fill:#60a5fa">alt = alternatives</text>
+<rect x="686.6" y="1680" width="89.7" height="18" rx="3" fill="#4ade80" fill-opacity="0.16" stroke="#4ade80" stroke-opacity=".6"/>
+<text x="694.6" y="1693" class="legend" style="font-size:11px;fill:#4ade80">loop = repeat</text>
+<rect x="784.3" y="1680" width="116.7" height="18" rx="3" fill="#fb7185" fill-opacity="0.16" stroke="#fb7185" stroke-opacity=".6"/>
+<text x="792.3" y="1693" class="legend" style="font-size:11px;fill:#fb7185">break = exit early</text>
+<rect x="909.1" y="1680" width="150.3" height="18" rx="3" fill="#fbbf6a" fill-opacity="0.16" stroke="#fbbf6a" stroke-opacity=".6"/>
+<text x="917.1" y="1693" class="legend" style="font-size:11px;fill:#fbbf6a">critical = atomic region</text>
+</svg>

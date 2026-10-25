@@ -27,18 +27,18 @@ const LIGHT_EDGE_STYLES = {
   primary: { color: "#24313c", width: 2, dash: "", marker: "arrow-primary" },
   sync: { color: "#657482", width: 1.65, dash: "", marker: "arrow-sync" },
   data: { color: "#1778a8", width: 1.7, dash: "", marker: "arrow-data" },
-  event: { color: "#7356a6", width: 1.8, dash: "7 6", marker: "arrow-event" },
-  recovery: { color: "#b84b53", width: 1.7, dash: "3 6", marker: "arrow-recovery" },
-  return: { color: "#16805e", width: 1.6, dash: "4 5", marker: "arrow-return" },
+  event: { color: "#7356a6", width: 1.8, dash: "", marker: "arrow-event", head: "open" },
+  recovery: { color: "#b84b53", width: 1.7, dash: "", marker: "arrow-recovery", head: "open" },
+  return: { color: "#16805e", width: 1.6, dash: "", marker: "arrow-return", head: "open" },
 };
 
 const DARK_EDGE_STYLES = {
   primary: { color: "#d5dee7", width: 2, dash: "", marker: "arrow-primary" },
   sync: { color: "#778794", width: 1.65, dash: "", marker: "arrow-sync" },
   data: { color: "#38bdf8", width: 1.7, dash: "", marker: "arrow-data" },
-  event: { color: "#a78bfa", width: 1.8, dash: "7 6", marker: "arrow-event" },
-  recovery: { color: "#fb7185", width: 1.7, dash: "3 6", marker: "arrow-recovery" },
-  return: { color: "#5eead4", width: 1.6, dash: "4 5", marker: "arrow-return" },
+  event: { color: "#a78bfa", width: 1.8, dash: "", marker: "arrow-event", head: "open" },
+  recovery: { color: "#fb7185", width: 1.7, dash: "", marker: "arrow-recovery", head: "open" },
+  return: { color: "#5eead4", width: 1.6, dash: "", marker: "arrow-return", head: "open" },
 };
 
 const PALETTES = {
@@ -426,7 +426,7 @@ function drawFabric(node, accent, configDir) {
   return `<g>
     <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8"
       fill="${PALETTE.nodeStrong}" fill-opacity=".98" stroke="${accent.strong}"
-      stroke-width="1.2" stroke-dasharray="7 5" filter="url(#node-shadow)"/>
+      stroke-width="1.2" filter="url(#node-shadow)"/>
     ${brandIcon(node, x + 18, y + (h - 30) / 2, 30, accent, configDir)}
     <text x="${x + 60}" y="${y + h / 2 + 5}" class="fabric-title">${escapeXml(node.title)}</text>
     ${node.meta ? `<text x="${x + w - 18}" y="${y + h / 2 + 4}" text-anchor="end" class="fabric-meta">${escapeXml(node.meta)}</text>` : ""}
@@ -506,7 +506,7 @@ function drawCallout(callout, configDir) {
   const node = { ...callout, brand: callout.brand, icon: callout.icon || "file" };
   return `<g>
     <rect x="${callout.x}" y="${callout.y}" width="${callout.w}" height="${callout.h}" fill="${PALETTE.node}"
-      stroke="${accent.strong}" stroke-width="1.1" stroke-dasharray="4 4"/>
+      stroke="${accent.strong}" stroke-width="1.1"/>
     ${brandIcon(node, callout.x + 16, callout.y + 15, 28, accent, configDir)}
     <text x="${callout.x + 56}" y="${callout.y + 31}" class="callout-title">${escapeXml(callout.title)}</text>
     ${lines(callout.lines).map((line, index) => `<text x="${callout.x + 18}" y="${callout.y + 57 + index * 18}" class="node-detail">${escapeXml(line)}</text>`).join("")}
@@ -550,7 +550,7 @@ function render(config, configDir) {
     <filter id="node-shadow" x="-12%" y="-12%" width="124%" height="130%">
       <feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="${PALETTE.shadow}" flood-opacity=".22"/>
     </filter>
-    ${Object.entries(ACTIVE_EDGE_STYLES).map(([name, value]) => `<marker id="arrow-${name}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="${value.color}"/></marker>`).join("")}
+    ${Object.entries(ACTIVE_EDGE_STYLES).map(([name, value]) => `<marker id="arrow-${name}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">${value.head === "open" ? `<path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="${value.color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>` : `<path d="M 0 1 L 9 5 L 0 9 z" fill="${value.color}"/>`}</marker>`).join("")}
   </defs>
   <style>
     text { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: ${PALETTE.text}; }
@@ -582,11 +582,11 @@ function render(config, configDir) {
   <text x="56" y="66" class="diagram-subtitle">${escapeXml(config.subtitle || "")}</text>
   ${config.summary ? `<text x="${width - 40}" y="28" text-anchor="end" class="diagram-summary">${escapeXml(config.summary)}</text>` : ""}
   <g transform="translate(${width - 420} 45)">
-    <line x1="0" y1="7" x2="30" y2="7" stroke="${ACTIVE_EDGE_STYLES.primary.color}" stroke-width="2"/>
+    <line x1="0" y1="7" x2="30" y2="7" stroke="${ACTIVE_EDGE_STYLES.primary.color}" stroke-width="2" marker-end="url(#arrow-primary)"/>
     <text x="38" y="11" class="legend">request</text>
-    <line x1="100" y1="7" x2="130" y2="7" stroke="${ACTIVE_EDGE_STYLES.event.color}" stroke-width="1.8" stroke-dasharray="7 6"/>
+    <line x1="100" y1="7" x2="130" y2="7" stroke="${ACTIVE_EDGE_STYLES.event.color}" stroke-width="1.8" marker-end="url(#arrow-event)"/>
     <text x="138" y="11" class="legend">Kafka event</text>
-    <line x1="222" y1="7" x2="252" y2="7" stroke="${ACTIVE_EDGE_STYLES.recovery.color}" stroke-width="1.7" stroke-dasharray="3 6"/>
+    <line x1="222" y1="7" x2="252" y2="7" stroke="${ACTIVE_EDGE_STYLES.recovery.color}" stroke-width="1.7" marker-end="url(#arrow-recovery)"/>
     <text x="260" y="11" class="legend">recovery / DLQ</text>
   </g>
   ${lanes}
@@ -607,7 +607,8 @@ function main() {
     const absolute = path.resolve(file);
     const config = JSON.parse(fs.readFileSync(absolute, "utf8"));
     const output = absolute.replace(/\.json$/i, ".svg");
-    fs.writeFileSync(output, render(config, path.dirname(absolute)));
+    // Strip trailing whitespace so re-rendering an unchanged topology produces no diff.
+    fs.writeFileSync(output, render(config, path.dirname(absolute)).replace(/[ \t]+$/gm, "").replace(/\n*$/, "\n"));
     console.log(`Rendered ${path.relative(process.cwd(), output)}`);
   }
 }

@@ -36,6 +36,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Architecture diagrams in sync
+        run: npm run docs:architecture:check
+
       - name: Test
         run: npm test
 

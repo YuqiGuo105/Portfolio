@@ -108,7 +108,7 @@
 
 .viewport {
   width: min(1800px, 100%);
-  height: calc(100vh - 190px);
+  height: calc(100vh - 250px);
   min-height: 520px;
   margin: 0 auto;
   overflow: auto;
@@ -143,8 +143,102 @@
   height: 32px;
 }
 
+/* ---- view tabs ---- */
+.tabs {
+  width: min(1800px, 100%);
+  margin: 0 auto 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tab,
+.tabActive {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  height: auto !important;
+  min-height: 64px;
+  padding: 12px 14px !important;
+  line-height: 1.3 !important;
+  text-align: left;
+  border: 1px solid #ccd5da !important;
+  border-radius: 0;
+  background: #fff !important;
+  color: #27343d !important;
+  cursor: pointer;
+  font: 400 13px/1.3 system-ui, sans-serif !important;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.tab strong,
+.tabActive strong {
+  font: 700 15px/1.2 system-ui, sans-serif;
+  color: #172027;
+}
+
+.tab span,
+.tabActive span {
+  color: #64727f;
+}
+
+.tab:hover {
+  border-color: #91c9c2 !important;
+  background: #f6fbfa !important;
+}
+
+.tabActive {
+  border-color: #0f766e !important;
+  background: #edf9f7 !important;
+  box-shadow: inset 0 -3px 0 #0f766e;
+}
+
+.tab:focus-visible,
+.tabActive:focus-visible,
+.flow:focus-visible,
+.flowActive:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+}
+
+/* ---- workflow picker ---- */
+.flowPicker {
+  width: min(1800px, 100%);
+  margin: 0 auto 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.flow,
+.flowActive {
+  appearance: none;
+  height: 34px !important;
+  padding: 0 14px !important;
+  line-height: 32px !important;
+  border: 1px solid #ccd5da !important;
+  border-radius: 999px;
+  background: #fff !important;
+  color: #27343d !important;
+  cursor: pointer;
+  font: 600 13px/32px system-ui, sans-serif !important;
+}
+
+.flow:hover {
+  border-color: #a78bfa !important;
+}
+
+.flowActive {
+  border-color: #7255a5 !important;
+  background: #f4f0fb !important;
+  color: #4c3a75 !important;
+}
+
 @media (max-width: 900px) {
   .page { padding: 18px; }
+  .tabs { grid-template-columns: 1fr; }
   .header { align-items: flex-start; flex-direction: column; }
   .controls { width: 100%; overflow-x: auto; }
   .viewport { height: 68vh; min-height: 460px; }
@@ -152,4 +246,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .canvas { transition: none; }
+  .tab, .tabActive { transition: none; }
 }

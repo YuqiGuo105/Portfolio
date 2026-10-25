@@ -1,0 +1,266 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="1091" viewBox="0 0 940 1091" role="img" aria-labelledby="title desc">
+<title id="title">Workflow: Execute MCP Tool</title>
+<desc id="desc">UML sequence diagram. An external AI client calls a typed tool; the edge hides the origin, the public server bounds the request and the gateway is the single policy point before any domain service is touched. Messages: 1. POST /mcp; 2. rewrite to Cloud Run; 3. validate envelope + bounds; 4. JSON-RPC error (429); 5. invoke(tool, args); 6. registry + RBAC + risk level; 7. confirmation required; 8. Idempotency-Key check; 9. typed, bounded read; 10. rows; 11. sanitize result; 12. typed result; 13. tool result.</desc>
+<defs>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="135%">
+    <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" flood-color="#1f2d38" flood-opacity="0.09"/>
+  </filter>
+  <marker id="arrow-request" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#33424e"/></marker>
+  <marker id="arrow-event" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#7356a6" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></marker>
+  <marker id="arrow-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1778a8"/></marker>
+  <marker id="arrow-return" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#6f7e8a" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></marker>
+</defs>
+<style>
+  text { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #17212a; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 1.6px; fill: #56656f; }
+  .h1 { font-size: 28px; font-weight: 750; }
+  .sub { font-size: 14px; fill: #56656f; }
+  .band-title { font-size: 12px; font-weight: 750; letter-spacing: 1.3px; }
+  .stereo { font-size: 9.5px; font-weight: 600; fill: #86939e; }
+  .chip { font-size: 11.5px; font-weight: 650; }
+  .card-title { font-size: 14.5px; font-weight: 700; }
+  .card-meta { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9.5px; font-weight: 600; letter-spacing: .3px; fill: #56656f; }
+  .card-detail { font-size: 11.5px; font-weight: 500; fill: #33424e; }
+  .port { font-size: 11px; font-weight: 650; fill: #56656f; }
+  .label { font-size: 11px; font-weight: 600; fill: #56656f; }
+  .legend { font-size: 11.5px; font-weight: 600; fill: #56656f; }
+  .foot { font-size: 11px; fill: #86939e; }
+  .note { font-size: 11.5px; fill: #17212a; }
+  .topic-in { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 600; fill: #17212a; }
+  .panel-title { font-size: 13px; font-weight: 750; }
+  .panel-sub { font-size: 8.5px; font-weight: 750; letter-spacing: 1px; fill: #56656f; }
+  .panel-note { font-size: 10.5px; font-weight: 550; fill: #33424e; }
+  .stat-num { font-size: 21px; font-weight: 750; }
+  .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 1px; fill: #56656f; }
+  .head-title { font-size: 12.5px; font-weight: 700; }
+  .head-meta { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9px; font-weight: 600; fill: #56656f; }
+  .msg { font-size: 12.5px; font-weight: 620; }
+  .msg-detail { font-size: 10.5px; font-weight: 500; fill: #56656f; }
+  .seq-num { font-size: 9.5px; font-weight: 750; fill: #ffffff; }
+  .frag-op { font-size: 11px; font-weight: 800; letter-spacing: .4px; }
+  .frag-guard { font-size: 11px; font-weight: 600; fill: #56656f; }
+  .frame { font-size: 13px; font-weight: 750; }
+  .tier-title { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; fill: #56656f; }
+  .tier-host { font-size: 8.5px; font-weight: 600; letter-spacing: .3px; fill: #86939e; }
+  .node-title { font-size: 13px; font-weight: 700; }
+  .node-meta { font-size: 8.8px; font-weight: 700; letter-spacing: .7px; fill: #56656f; }
+  .module { font-size: 10.5px; font-weight: 600; fill: #33424e; }
+  .tag { font-size: 7.8px; font-weight: 800; letter-spacing: .7px; }
+  .route { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 650; fill: #56656f; }
+  .topic { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9.5px; font-weight: 600; fill: #7356a6; }
+  .edge-note { font-size: 10.5px; font-weight: 600; fill: #56656f; }
+  .store-title { font-size: 11.5px; font-weight: 700; }
+  .store-meta { font-size: 8.5px; font-weight: 700; letter-spacing: .7px; fill: #56656f; }
+  .bar-chip { font-size: 10.5px; font-weight: 600; fill: #33424e; }
+  .adr-title { font-size: 13px; font-weight: 750; }
+  .adr-key { font-size: 9px; font-weight: 800; letter-spacing: .9px; fill: #56656f; }
+  .adr-text { font-size: 11px; font-weight: 500; fill: #33424e; }
+  .lane-title { font-size: 15px; font-weight: 750; }
+  .lane-sub { font-size: 11px; font-weight: 500; fill: #56656f; }
+  .lane-num { font-size: 12px; font-weight: 800; fill: #ffffff; }
+</style>
+<rect width="940" height="1091" fill="#ffffff"/>
+<text x="28" y="42" class="h1" style="font-size:24px">⑤  Execute MCP Tool</text>
+<text x="28" y="68" class="sub">An external AI client calls a typed tool; the edge hides the origin, the public server bounds the request and the gateway is the</text>
+<text x="28" y="87" class="sub">single policy point before any domain service is touched.</text>
+<rect x="20" y="116" width="900" height="876.5" rx="2" fill="none" stroke="#56656f" stroke-width="1.2"/>
+<path d="M 20 116 H 188.6 V 132 L 178.6 142 H 20 Z" fill="#f3f5f7" stroke="#56656f" stroke-width="1.2"/>
+<text x="30" y="134" class="frame">sd Execute MCP Tool</text>
+<rect x="77.4" y="386" width="446.6" height="76" rx="3" fill="#ba4a52" fill-opacity="0.02" stroke="#ba4a52" stroke-opacity=".75" stroke-width="1.2"/>
+<rect x="77.4" y="554" width="608.7" height="86" rx="3" fill="#087f95" fill-opacity="0.02" stroke="#087f95" stroke-opacity=".75" stroke-width="1.2"/>
+<line x1="136.9" y1="224" x2="136.9" y2="978.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<line x1="267.9" y1="224" x2="267.9" y2="978.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<line x1="451" y1="224" x2="451" y2="978.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<line x1="613.1" y1="224" x2="613.1" y2="978.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<line x1="789.6" y1="224" x2="789.6" y2="978.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<rect x="153.4" y="246" width="98" height="17" rx="3" fill="#ffffff"/>
+<rect x="146.9" y="272" width="111" height="14" rx="3" fill="#ffffff"/>
+<rect x="278.9" y="294" width="161.1" height="17" rx="3" fill="#ffffff"/>
+<rect x="307.7" y="320" width="103.4" height="14" rx="3" fill="#ffffff"/>
+<rect x="487" y="345" width="197.2" height="17" rx="3" fill="#ffffff"/>
+<rect x="207.6" y="416" width="172.8" height="17" rx="3" fill="#ffffff"/>
+<rect x="462" y="472" width="140.2" height="17" rx="3" fill="#ffffff"/>
+<rect x="649.1" y="513" width="208.3" height="17" rx="3" fill="#ffffff"/>
+<rect x="290" y="584" width="170.1" height="17" rx="3" fill="#ffffff"/>
+<rect x="265.8" y="610" width="218.5" height="14" rx="3" fill="#ffffff"/>
+<rect x="649.1" y="653" width="176" height="17" rx="3" fill="#ffffff"/>
+<rect x="624.1" y="694" width="154.5" height="17" rx="3" fill="#ffffff"/>
+<rect x="670.9" y="732" width="60.9" height="17" rx="3" fill="#ffffff"/>
+<rect x="649.1" y="773" width="120.3" height="17" rx="3" fill="#ffffff"/>
+<rect x="670.1" y="792" width="176.9" height="14" rx="3" fill="#ffffff"/>
+<rect x="479.9" y="820" width="104.4" height="17" rx="3" fill="#ffffff"/>
+<rect x="246.8" y="858" width="94.3" height="17" rx="3" fill="#ffffff"/>
+<rect x="131.9" y="260" width="10" height="628" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="262.9" y="260" width="10" height="64" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="446" y="308" width="10" height="138" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="446" y="486" width="10" height="402" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="608.1" y="486" width="10" height="128" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="608.1" y="660" width="10" height="190" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="784.6" y="708" width="10" height="54" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="451" y="364" width="10" height="16" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="613.1" y="532" width="10" height="16" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="613.1" y="672" width="10" height="16" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="613.1" y="792" width="10" height="16" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<g>
+    <path d="M 141.9 268 L 262.9 268" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 141.9 268 L 262.9 268" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 272.9 316 L 446 316" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 272.9 316 L 446 316" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 456 353 L 473 353 Q 482 353 482 362 L 482 363 Q 482 371 474 371 L 466 371" fill="none" stroke="#ffffff" stroke-width="5.7" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 456 353 L 473 353 Q 482 353 482 362 L 482 363 Q 482 371 474 371 L 466 371" fill="none" stroke="#33424e" stroke-width="1.7000000000000002"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 446 438 L 141.9 438" fill="none" stroke="#ffffff" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 446 438 L 141.9 438" fill="none" stroke="#6f7e8a" stroke-width="1.5999999999999999" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow-return)"/>
+    
+  </g>
+<g>
+    <path d="M 456 494 L 608.1 494" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 456 494 L 608.1 494" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 618.1 521 L 635.1 521 Q 644.1 521 644.1 530 L 644.1 531 Q 644.1 539 636.1 539 L 628.1 539" fill="none" stroke="#ffffff" stroke-width="5.7" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 618.1 521 L 635.1 521 Q 644.1 521 644.1 530 L 644.1 531 Q 644.1 539 636.1 539 L 628.1 539" fill="none" stroke="#33424e" stroke-width="1.7000000000000002"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 608.1 606 L 141.9 606" fill="none" stroke="#ffffff" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 608.1 606 L 141.9 606" fill="none" stroke="#6f7e8a" stroke-width="1.5999999999999999" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow-return)"/>
+    
+  </g>
+<g>
+    <path d="M 618.1 661 L 635.1 661 Q 644.1 661 644.1 670 L 644.1 671 Q 644.1 679 636.1 679 L 628.1 679" fill="none" stroke="#ffffff" stroke-width="5.7" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 618.1 661 L 635.1 661 Q 644.1 661 644.1 670 L 644.1 671 Q 644.1 679 636.1 679 L 628.1 679" fill="none" stroke="#33424e" stroke-width="1.7000000000000002"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 618.1 716 L 784.6 716" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 618.1 716 L 784.6 716" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 784.6 754 L 618.1 754" fill="none" stroke="#ffffff" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 784.6 754 L 618.1 754" fill="none" stroke="#6f7e8a" stroke-width="1.5999999999999999" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow-return)"/>
+    
+  </g>
+<g>
+    <path d="M 618.1 781 L 635.1 781 Q 644.1 781 644.1 790 L 644.1 791 Q 644.1 799 636.1 799 L 628.1 799" fill="none" stroke="#ffffff" stroke-width="5.7" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 618.1 781 L 635.1 781 Q 644.1 781 644.1 790 L 644.1 791 Q 644.1 799 636.1 799 L 628.1 799" fill="none" stroke="#33424e" stroke-width="1.7000000000000002"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 608.1 842 L 456 842" fill="none" stroke="#ffffff" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 608.1 842 L 456 842" fill="none" stroke="#6f7e8a" stroke-width="1.5999999999999999" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow-return)"/>
+    
+  </g>
+<g>
+    <path d="M 446 880 L 141.9 880" fill="none" stroke="#ffffff" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 446 880 L 141.9 880" fill="none" stroke="#6f7e8a" stroke-width="1.5999999999999999" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow-return)"/>
+    
+  </g>
+<circle cx="164.4" cy="254.8" r="8" fill="#33424e"/><text x="164.4" y="258.2" text-anchor="middle" class="seq-num">1</text>
+<text x="177.4" y="259" class="msg">POST /mcp</text>
+<text x="202.4" y="282.5" text-anchor="middle" class="msg-detail">JSON-RPC tools/call</text>
+<circle cx="289.9" cy="302.8" r="8" fill="#33424e"/><text x="289.9" y="306.2" text-anchor="middle" class="seq-num">2</text>
+<text x="302.9" y="307" class="msg">rewrite to Cloud Run</text>
+<text x="359.4" y="330.5" text-anchor="middle" class="msg-detail">origin stays hidden</text>
+<circle cx="498" cy="353.8" r="8" fill="#33424e"/><text x="498" y="357.2" text-anchor="middle" class="seq-num">3</text>
+<text x="511" y="358" class="msg">validate envelope + bounds</text>
+<circle cx="218.6" cy="424.8" r="8" fill="#6f7e8a"/><text x="218.6" y="428.2" text-anchor="middle" class="seq-num">4</text>
+<text x="231.6" y="429" class="msg" style="fill:#56656f">JSON-RPC error (429)</text>
+<circle cx="473" cy="480.8" r="8" fill="#33424e"/><text x="473" y="484.2" text-anchor="middle" class="seq-num">5</text>
+<text x="486" y="485" class="msg">invoke(tool, args)</text>
+<circle cx="660.1" cy="521.8" r="8" fill="#33424e"/><text x="660.1" y="525.2" text-anchor="middle" class="seq-num">6</text>
+<text x="673.1" y="526" class="msg">registry + RBAC + risk level</text>
+<circle cx="301" cy="592.8" r="8" fill="#6f7e8a"/><text x="301" y="596.2" text-anchor="middle" class="seq-num">7</text>
+<text x="314" y="597" class="msg" style="fill:#56656f">confirmation required</text>
+<text x="375" y="620.5" text-anchor="middle" class="msg-detail">OAuth admin role + explicit user approval</text>
+<circle cx="660.1" cy="661.8" r="8" fill="#33424e"/><text x="660.1" y="665.2" text-anchor="middle" class="seq-num">8</text>
+<text x="673.1" y="666" class="msg">Idempotency-Key check</text>
+<circle cx="635.1" cy="702.8" r="8" fill="#33424e"/><text x="635.1" y="706.2" text-anchor="middle" class="seq-num">9</text>
+<text x="648.1" y="707" class="msg">typed, bounded read</text>
+<circle cx="681.9" cy="740.8" r="8" fill="#6f7e8a"/><text x="681.9" y="744.2" text-anchor="middle" class="seq-num">10</text>
+<text x="694.9" y="745" class="msg" style="fill:#56656f">rows</text>
+<circle cx="660.1" cy="781.8" r="8" fill="#33424e"/><text x="660.1" y="785.2" text-anchor="middle" class="seq-num">11</text>
+<text x="673.1" y="786" class="msg">sanitize result</text>
+<text x="673.1" y="802.5" class="msg-detail">secrets + internal fields removed</text>
+<circle cx="490.9" cy="828.8" r="8" fill="#6f7e8a"/><text x="490.9" y="832.2" text-anchor="middle" class="seq-num">12</text>
+<text x="503.9" y="833" class="msg" style="fill:#56656f">typed result</text>
+<circle cx="257.8" cy="866.8" r="8" fill="#6f7e8a"/><text x="257.8" y="870.2" text-anchor="middle" class="seq-num">13</text>
+<text x="270.8" y="871" class="msg" style="fill:#56656f">tool result</text>
+<g>
+    <rect x="78.4" y="154" width="117" height="70" rx="8" fill="#f3f5f7" stroke="#a7b3be" stroke-width="1.1" filter="url(#shadow)"/>
+    
+    <text x="136.9" y="169" text-anchor="middle" class="stereo">«external»</text>
+    <g transform="translate(117.4 173) scale(0.75)"><path fill="#17212a" d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z"/></g><g transform="translate(138.4 173) scale(0.75)"><path fill="#17212a" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></g>
+    <text x="136.9" y="210" text-anchor="middle" class="head-title">MCP Client</text>
+  </g>
+<g>
+    <rect x="209.4" y="154" width="117" height="70" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.1" filter="url(#shadow)"/>
+    <rect x="210" y="154.6" width="115.8" height="3" rx="1.5" fill="#435363" fill-opacity=".8"/>
+    <text x="267.9" y="169" text-anchor="middle" class="stereo">«/mcp rewrite»</text>
+    <g transform="translate(258.9 173) scale(0.75)"><path fill="#17212a" d="M18.665 21.978C16.758 23.255 14.465 24 12 24 5.377 24 0 18.623 0 12S5.377 0 12 0s12 5.377 12 12c0 3.583-1.574 6.801-4.067 9.001L9.219 7.2H7.2v9.596h1.615V9.251l9.85 12.727Zm-3.332-8.533 1.6 2.061V7.2h-1.6v6.245Z"/></g>
+    <text x="267.9" y="210" text-anchor="middle" class="head-title">API Gateway</text>
+  </g>
+<g>
+    <rect x="379" y="154" width="144" height="70" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.1" filter="url(#shadow)"/>
+    <rect x="379.6" y="154.6" width="142.8" height="3" rx="1.5" fill="#435363" fill-opacity=".8"/>
+    <text x="451" y="169" text-anchor="middle" class="stereo">«public»</text>
+    <g transform="translate(442 173) scale(0.75)"><path fill="#17212a" d="M13.85 0a4.16 4.16 0 0 0-2.95 1.217L1.456 10.66a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l9.442-9.442a2.49 2.49 0 0 1 3.541 0 2.49 2.49 0 0 1 0 3.541L8.59 12.97l-.1.1a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l.1-.098 7.03-7.034a2.49 2.49 0 0 1 3.542 0l.049.05a2.49 2.49 0 0 1 0 3.54l-8.54 8.54a1.96 1.96 0 0 0 0 2.755l1.753 1.753a.835.835 0 0 0 1.18 0 .835.835 0 0 0 0-1.18l-1.753-1.753a.266.266 0 0 1 0-.394l8.54-8.54a4.185 4.185 0 0 0 0-5.9l-.05-.05a4.16 4.16 0 0 0-2.95-1.218c-.2 0-.401.02-.6.048a4.17 4.17 0 0 0-1.17-3.552A4.16 4.16 0 0 0 13.85 0m0 3.333a.84.84 0 0 0-.59.245L6.275 10.56a4.186 4.186 0 0 0 0 5.902 4.186 4.186 0 0 0 5.902 0L19.16 9.48a.835.835 0 0 0 0-1.18.835.835 0 0 0-1.18 0l-6.985 6.984a2.49 2.49 0 0 1-3.54 0 2.49 2.49 0 0 1 0-3.54l6.983-6.985a.835.835 0 0 0 0-1.18.84.84 0 0 0-.59-.245"/></g>
+    <text x="451" y="210" text-anchor="middle" class="head-title">MCP Server</text>
+  </g>
+<g>
+    <rect x="541.1" y="154" width="144" height="70" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.1" filter="url(#shadow)"/>
+    <rect x="541.7" y="154.6" width="142.8" height="3" rx="1.5" fill="#435363" fill-opacity=".8"/>
+    <text x="613.1" y="169" text-anchor="middle" class="stereo">«service»</text>
+    <g transform="translate(604.1 173) scale(0.75)"><path fill="#17212a" d="M13.85 0a4.16 4.16 0 0 0-2.95 1.217L1.456 10.66a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l9.442-9.442a2.49 2.49 0 0 1 3.541 0 2.49 2.49 0 0 1 0 3.541L8.59 12.97l-.1.1a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l.1-.098 7.03-7.034a2.49 2.49 0 0 1 3.542 0l.049.05a2.49 2.49 0 0 1 0 3.54l-8.54 8.54a1.96 1.96 0 0 0 0 2.755l1.753 1.753a.835.835 0 0 0 1.18 0 .835.835 0 0 0 0-1.18l-1.753-1.753a.266.266 0 0 1 0-.394l8.54-8.54a4.185 4.185 0 0 0 0-5.9l-.05-.05a4.16 4.16 0 0 0-2.95-1.218c-.2 0-.401.02-.6.048a4.17 4.17 0 0 0-1.17-3.552A4.16 4.16 0 0 0 13.85 0m0 3.333a.84.84 0 0 0-.59.245L6.275 10.56a4.186 4.186 0 0 0 0 5.902 4.186 4.186 0 0 0 5.902 0L19.16 9.48a.835.835 0 0 0 0-1.18.835.835 0 0 0-1.18 0l-6.985 6.984a2.49 2.49 0 0 1-3.54 0 2.49 2.49 0 0 1 0-3.54l6.983-6.985a.835.835 0 0 0 0-1.18.84.84 0 0 0-.59-.245"/></g>
+    <text x="613.1" y="210" text-anchor="middle" class="head-title">Tool Gateway</text>
+  </g>
+<g>
+    <rect x="717.6" y="154" width="144" height="70" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.1" filter="url(#shadow)"/>
+    <rect x="718.2" y="154.6" width="142.8" height="3" rx="1.5" fill="#435363" fill-opacity=".8"/>
+    <text x="789.6" y="169" text-anchor="middle" class="stereo">«service»</text>
+    <g transform="translate(780.6 173) scale(0.75)"><path fill="#17212a" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="789.6" y="210" text-anchor="middle" class="head-title">Content Service</text>
+  </g>
+<g>
+    <path d="M 397 898 H 832.6 L 843.6 909 V 960.5 H 397 Z" fill="#fff8dc" stroke="#d9c37a" stroke-width="1.2"/>
+    <path d="M 832.6 898 V 909 H 843.6" fill="none" stroke="#d9c37a" stroke-width="1.2"/>
+  </g>
+<text x="409" y="917" class="note">The gateway is the single policy enforcement point: every client — Claude,</text>
+<text x="409" y="932.5" class="note">Codex or the in-site agent — gets the same RBAC, risk policy, idempotency</text>
+<text x="409" y="948" class="note">and audit.</text>
+<path d="M 77.4 386 H 134 V 399 L 126 406 H 77.4 Z" fill="#ffffff"/>
+<path d="M 77.4 386 H 134 V 399 L 126 406 H 77.4 Z" fill="#ba4a52" fill-opacity="0.14300000000000002" stroke="#ba4a52" stroke-opacity=".75" stroke-width="1.2"/>
+<text x="85.4" y="400" class="frag-op" style="fill:#ba4a52">break</text>
+<rect x="140" y="389" width="126" height="15" rx="3" fill="#ffffff"/>
+<text x="144" y="400.5" class="frag-guard">[rate limit exceeded]</text>
+<path d="M 77.4 554 H 117.9 V 567 L 109.9 574 H 77.4 Z" fill="#ffffff"/>
+<path d="M 77.4 554 H 117.9 V 567 L 109.9 574 H 77.4 Z" fill="#087f95" fill-opacity="0.14300000000000002" stroke="#087f95" stroke-opacity=".75" stroke-width="1.2"/>
+<text x="85.4" y="568" class="frag-op" style="fill:#087f95">opt</text>
+<rect x="123.9" y="557" width="194.6" height="15" rx="3" fill="#ffffff"/>
+<text x="127.9" y="568.5" class="frag-guard">[mutating tool (/mcp/admin only)]</text>
+<rect x="28" y="1006.5" width="634.4" height="32" rx="16" fill="#14805e" fill-opacity="0.083" stroke="#14805e" stroke-opacity=".45"/>
+<g transform="translate(38 1013.5) scale(0.75)" fill="none" stroke="#14805e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16.5 9"/></g>
+<text x="62" y="1027" class="chip" style="font-size:13px">Result: Typed, sanitized tool result; writes need an admin role and explicit confirmation</text>
+<line x1="28" y1="1064.5" x2="58" y2="1064.5" stroke="#33424e" stroke-width="1.8"  marker-end="url(#arrow-request)"/>
+<text x="66" y="1068.5" class="legend" style="font-size:11px">Synchronous call</text>
+<line x1="185.94400000000002" y1="1064.5" x2="215.94400000000002" y2="1064.5" stroke="#7356a6" stroke-width="1.9"  marker-end="url(#arrow-event)"/>
+<text x="223.94400000000002" y="1068.5" class="legend" style="font-size:11px">Asynchronous message</text>
+<line x1="378.4016000000001" y1="1064.5" x2="408.4016000000001" y2="1064.5" stroke="#6f7e8a" stroke-width="1.5999999999999999" stroke-dasharray="5 4" marker-end="url(#arrow-return)"/>
+<text x="416.4016000000001" y="1068.5" class="legend" style="font-size:11px">Reply</text>
+<rect x="470.1168000000001" y="1056.5" width="10" height="16" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<text x="488.1168000000001" y="1068.5" class="legend" style="font-size:11px">Execution</text>
+<rect x="565.6" y="1055.5" width="91.6" height="18" rx="3" fill="#087f95" fill-opacity="0.08800000000000001" stroke="#087f95" stroke-opacity=".6"/>
+<text x="573.6" y="1068.5" class="legend" style="font-size:11px;fill:#087f95">opt = optional</text>
+<rect x="665.2" y="1055.5" width="116.7" height="18" rx="3" fill="#ba4a52" fill-opacity="0.08800000000000001" stroke="#ba4a52" stroke-opacity=".6"/>
+<text x="673.2" y="1068.5" class="legend" style="font-size:11px;fill:#ba4a52">break = exit early</text>
+</svg>

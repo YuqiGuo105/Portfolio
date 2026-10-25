@@ -1,0 +1,1029 @@
+{
+  "$comment": "UML 2 sequence diagrams for the README and /architecture. Participants reference topology nodes (`node`), resources owned by a node (`resource`), Kafka topics (`covers`) or declared externals. Steps support messages (sync / async / reply), self-calls, notes and the combined fragments alt, opt, par, loop, break and critical. Behaviour is taken from the service code (agent, knowledge, analytics-aggregator, notification, MCP gateway). Run `npm run docs:architecture` after editing.",
+  "sequences": [
+    {
+      "key": "ask-agent",
+      "title": "Ask AI Agent",
+      "summary": "A grounded answer streamed over SSE: the gateway authenticates and proxies, the agent reserves a daily budget and runs guardrails, retrieval searches the RAG chunks that publishing writes and degrades instead of failing, and run telemetry goes through an outbox so it never blocks the answer.",
+      "result": "Grounded answer with canonical sources, inside a daily cost budget",
+      "participants": [
+        {
+          "id": "visitor",
+          "node": "visitor",
+          "title": "Visitor"
+        },
+        {
+          "id": "gateway",
+          "node": "portfolio-edge",
+          "title": "API Gateway",
+          "stereotype": "BFF · Vercel"
+        },
+        {
+          "id": "agent",
+          "node": "agent-runtime",
+          "title": "Agent Runtime"
+        },
+        {
+          "id": "redis",
+          "kind": "database",
+          "resource": {
+            "node": "agent-runtime",
+            "title": "Conversation Memory"
+          },
+          "title": "Redis",
+          "meta": "MEMORY · BUDGET",
+          "brand": "redis"
+        },
+        {
+          "id": "knowledge",
+          "node": "knowledge-service",
+          "title": "Knowledge Service"
+        },
+        {
+          "id": "rag",
+          "kind": "database",
+          "resource": {
+            "node": "projection-workers",
+            "title": "RAG Chunks"
+          },
+          "title": "RAG Chunks",
+          "meta": "PGVECTOR · FROM ②",
+          "brand": "postgresql"
+        },
+        {
+          "id": "gemini",
+          "kind": "external",
+          "title": "Gemini API",
+          "meta": "GENERATION · SAFETY",
+          "brands": [
+            "googlegemini"
+          ]
+        },
+        {
+          "id": "outbox",
+          "kind": "database",
+          "resource": {
+            "node": "agent-projectors",
+            "title": "Run Audit"
+          },
+          "title": "Run Outbox",
+          "meta": "POSTGRESQL",
+          "brand": "postgresql"
+        }
+      ],
+      "steps": [
+        {
+          "from": "visitor",
+          "to": "gateway",
+          "label": "POST /api/agent/chat",
+          "detail": "opens an SSE stream"
+        },
+        {
+          "self": "gateway",
+          "label": "verify JWT session",
+          "detail": "anonymous allowed · identity injected"
+        },
+        {
+          "from": "gateway",
+          "to": "agent",
+          "label": "stream(query, identity)"
+        },
+        {
+          "from": "agent",
+          "to": "redis",
+          "label": "reserve daily budget",
+          "detail": "atomic Lua script"
+        },
+        {
+          "fragment": "break",
+          "guard": "daily budget exhausted",
+          "steps": [
+            {
+              "from": "agent",
+              "to": "gateway",
+              "label": "budget notice · run ends",
+              "reply": true
+            }
+          ]
+        },
+        {
+          "from": "agent",
+          "to": "redis",
+          "label": "load recent turns",
+          "detail": "30-min sliding TTL"
+        },
+        {
+          "from": "agent",
+          "to": "gemini",
+          "label": "input safety check",
+          "detail": "gemini-2.5-flash-lite"
+        },
+        {
+          "fragment": "break",
+          "guard": "unsafe input",
+          "steps": [
+            {
+              "from": "agent",
+              "to": "gateway",
+              "label": "safe refusal",
+              "reply": true
+            }
+          ]
+        },
+        {
+          "from": "agent",
+          "to": "gemini",
+          "label": "plan route (intent)",
+          "detail": "structured output"
+        },
+        {
+          "from": "agent",
+          "to": "knowledge",
+          "label": "search(query, top 6)",
+          "detail": "internal token · 10 s timeout"
+        },
+        {
+          "from": "knowledge",
+          "to": "gemini",
+          "label": "embed(query)",
+          "detail": "gemini-embedding-001 · 1536-d"
+        },
+        {
+          "fragment": "alt",
+          "operands": [
+            {
+              "guard": "embedding and store respond",
+              "steps": [
+                {
+                  "from": "knowledge",
+                  "to": "rag",
+                  "label": "match_current_knowledge_v2",
+                  "detail": "cosine · min similarity 0.35"
+                },
+                {
+                  "self": "knowledge",
+                  "label": "keep active, public evidence"
+                },
+                {
+                  "from": "knowledge",
+                  "to": "agent",
+                  "label": "evidence + canonical URLs",
+                  "reply": true
+                }
+              ]
+            },
+            {
+              "guard": "any step fails",
+              "steps": [
+                {
+                  "from": "knowledge",
+                  "to": "agent",
+                  "label": "error · no stale fallback",
+                  "reply": true
+                },
+                {
+                  "self": "agent",
+                  "label": "answer without evidence",
+                  "detail": "failure logged"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "fragment": "alt",
+          "operands": [
+            {
+              "guard": "deep route, budget allows",
+              "steps": [
+                {
+                  "from": "agent",
+                  "to": "gemini",
+                  "label": "grounded stream",
+                  "detail": "gemini-2.5-pro · 90 s timeout"
+                }
+              ]
+            },
+            {
+              "guard": "otherwise",
+              "steps": [
+                {
+                  "from": "agent",
+                  "to": "gemini",
+                  "label": "stream",
+                  "detail": "gemini-2.5-flash · 60 s timeout"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "fragment": "loop",
+          "guard": "each chunk",
+          "steps": [
+            {
+              "from": "gemini",
+              "to": "agent",
+              "label": "chunk",
+              "reply": true
+            },
+            {
+              "from": "agent",
+              "to": "gateway",
+              "label": "SSE answer event"
+            },
+            {
+              "from": "gateway",
+              "to": "visitor",
+              "label": "SSE event",
+              "reply": true
+            }
+          ]
+        },
+        {
+          "from": "agent",
+          "to": "outbox",
+          "label": "INSERT run events",
+          "detail": "outbox_event rows"
+        },
+        {
+          "note": "Telemetry never blocks the answer: a scheduled publisher bulk-indexes outbox rows into daily OpenSearch indexes every 5 s, and a failed telemetry write is logged instead of thrown.",
+          "over": [
+            "agent",
+            "outbox"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "publish-content",
+      "title": "Publish Article",
+      "summary": "One PostgreSQL transaction writes the new version, its outbox event and two indexing jobs; a relay publishes them to Kafka and wakes the scale-to-zero indexers, and independent consumers update search, RAG and subscribers at their own pace.",
+      "result": "Content searchable, retrievable and queued for subscribers without a dual write",
+      "participants": [
+        {
+          "id": "operator",
+          "node": "operator",
+          "title": "Operator"
+        },
+        {
+          "id": "content",
+          "node": "content-control",
+          "title": "Content Service",
+          "stereotype": "Writer API"
+        },
+        {
+          "id": "db",
+          "kind": "database",
+          "resource": {
+            "node": "content-control",
+            "title": "Content System of Record"
+          },
+          "title": "Content DB",
+          "meta": "POSTGRESQL",
+          "brand": "postgresql"
+        },
+        {
+          "id": "kafka",
+          "kind": "queue",
+          "covers": [
+            "search-topic",
+            "rag-topic",
+            "content-notification-topic"
+          ],
+          "title": "Kafka",
+          "meta": "content.* topics"
+        },
+        {
+          "id": "workers",
+          "node": "projection-workers",
+          "title": "Index Workers"
+        },
+        {
+          "id": "search",
+          "kind": "database",
+          "resource": {
+            "node": "projection-workers",
+            "title": "Content Search"
+          },
+          "title": "Search Index",
+          "meta": "OPENSEARCH",
+          "brand": "opensearch"
+        },
+        {
+          "id": "vectors",
+          "kind": "database",
+          "resource": {
+            "node": "projection-workers",
+            "title": "RAG Chunks"
+          },
+          "title": "RAG Vectors",
+          "meta": "PGVECTOR",
+          "brand": "postgresql"
+        },
+        {
+          "id": "notify",
+          "node": "notification-service",
+          "title": "Notifications"
+        }
+      ],
+      "steps": [
+        {
+          "from": "operator",
+          "to": "content",
+          "label": "publish(id, version)",
+          "detail": "JWT · owner role"
+        },
+        {
+          "fragment": "critical",
+          "guard": "one PostgreSQL transaction",
+          "steps": [
+            {
+              "from": "content",
+              "to": "db",
+              "label": "INSERT version snapshot"
+            },
+            {
+              "from": "content",
+              "to": "db",
+              "label": "INSERT outbox event"
+            },
+            {
+              "from": "content",
+              "to": "db",
+              "label": "INSERT search + RAG jobs"
+            },
+            {
+              "from": "content",
+              "to": "db",
+              "label": "INSERT audit row"
+            }
+          ]
+        },
+        {
+          "from": "content",
+          "to": "operator",
+          "label": "200 published",
+          "reply": true
+        },
+        {
+          "note": "Transactional outbox: the events exist if and only if the commit does, so there is never a dual write between PostgreSQL and Kafka.",
+          "over": [
+            "content",
+            "db"
+          ]
+        },
+        {
+          "fragment": "loop",
+          "guard": "relay every 10 s · leased jobs",
+          "steps": [
+            {
+              "from": "content",
+              "to": "kafka",
+              "label": "publish index event",
+              "detail": "key = type:id · idempotencyKey",
+              "async": true
+            },
+            {
+              "from": "content",
+              "to": "workers",
+              "label": "POST /drain/{jobId}",
+              "detail": "Cloud Run identity token · wakes the consumer"
+            }
+          ]
+        },
+        {
+          "fragment": "par",
+          "operands": [
+            {
+              "guard": "search projection",
+              "steps": [
+                {
+                  "from": "kafka",
+                  "to": "workers",
+                  "label": "content.search.index.v1",
+                  "async": true
+                },
+                {
+                  "from": "workers",
+                  "to": "search",
+                  "label": "idempotent upsert"
+                },
+                {
+                  "from": "workers",
+                  "to": "kafka",
+                  "label": "ack offset (manual)"
+                }
+              ]
+            },
+            {
+              "guard": "RAG projection",
+              "steps": [
+                {
+                  "from": "kafka",
+                  "to": "workers",
+                  "label": "content.rag.index.v1",
+                  "async": true
+                },
+                {
+                  "self": "workers",
+                  "label": "chunk + embed",
+                  "detail": "gemini-embedding-001 · 1536-d"
+                },
+                {
+                  "from": "workers",
+                  "to": "vectors",
+                  "label": "replace chunks"
+                }
+              ]
+            },
+            {
+              "guard": "subscriber fan-out",
+              "steps": [
+                {
+                  "from": "kafka",
+                  "to": "notify",
+                  "label": "content.notification.*",
+                  "async": true
+                },
+                {
+                  "ref": "③ Deliver Notification",
+                  "over": [
+                    "notify"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "note": "At-least-once delivery: consumers write idempotently and ack only after the write. If a wake call fails, the job stays leased and is replayed when the lease expires.",
+          "over": [
+            "kafka",
+            "notify"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "send-notification",
+      "title": "Deliver Notification",
+      "summary": "A durable notification intent is processed idempotently in one transaction and fanned out to recipient rows; dispatchers lease rows with FOR UPDATE SKIP LOCKED so workers scale out without double-sending.",
+      "result": "Each recipient is emailed at most once per idempotency key, with bounded retries",
+      "participants": [
+        {
+          "id": "content",
+          "node": "content-control",
+          "title": "Content Service"
+        },
+        {
+          "id": "kafka",
+          "kind": "queue",
+          "covers": [
+            "content-notification-topic"
+          ],
+          "title": "Kafka",
+          "meta": "content.notification.*"
+        },
+        {
+          "id": "notify",
+          "node": "notification-service",
+          "title": "Notifications"
+        },
+        {
+          "id": "ledger",
+          "kind": "database",
+          "resource": {
+            "node": "notification-service",
+            "title": "Delivery Ledger"
+          },
+          "title": "Delivery Ledger",
+          "meta": "POSTGRESQL",
+          "brand": "postgresql"
+        },
+        {
+          "id": "email",
+          "node": "email-provider",
+          "kind": "external",
+          "title": "Email (SMTP)",
+          "meta": "TRANSACTIONAL EMAIL",
+          "brands": [],
+          "icon": "mail"
+        }
+      ],
+      "steps": [
+        {
+          "from": "content",
+          "to": "kafka",
+          "async": true,
+          "label": "notification intent",
+          "detail": "emitted by the outbox relay"
+        },
+        {
+          "from": "kafka",
+          "to": "notify",
+          "async": true,
+          "label": "consume"
+        },
+        {
+          "fragment": "alt",
+          "operands": [
+            {
+              "guard": "unparseable or invalid",
+              "steps": [
+                {
+                  "from": "notify",
+                  "to": "kafka",
+                  "async": true,
+                  "label": "→ DLQ, commit offset"
+                }
+              ]
+            },
+            {
+              "guard": "idempotency key already DONE",
+              "steps": [
+                {
+                  "self": "notify",
+                  "label": "skip duplicate",
+                  "detail": "redelivery is a no-op"
+                }
+              ]
+            },
+            {
+              "guard": "new event",
+              "steps": [
+                {
+                  "fragment": "critical",
+                  "guard": "one PostgreSQL transaction",
+                  "steps": [
+                    {
+                      "from": "notify",
+                      "to": "ledger",
+                      "label": "INSERT audit row",
+                      "detail": "idempotency_key UNIQUE"
+                    },
+                    {
+                      "from": "notify",
+                      "to": "ledger",
+                      "label": "fan out recipient rows",
+                      "detail": "active subscribers + preferences"
+                    }
+                  ]
+                },
+                {
+                  "from": "notify",
+                  "to": "kafka",
+                  "label": "commit offset",
+                  "detail": "DB error → no commit, Kafka redelivers"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "fragment": "loop",
+          "guard": "dispatcher tick",
+          "steps": [
+            {
+              "from": "notify",
+              "to": "ledger",
+              "label": "claim ≤ 20 EMAIL rows",
+              "detail": "FOR UPDATE SKIP LOCKED · lease 10 min"
+            },
+            {
+              "fragment": "loop",
+              "guard": "each claimed recipient",
+              "steps": [
+                {
+                  "from": "notify",
+                  "to": "email",
+                  "label": "send",
+                  "detail": "Idempotency-Key"
+                },
+                {
+                  "fragment": "alt",
+                  "operands": [
+                    {
+                      "guard": "accepted",
+                      "steps": [
+                        {
+                          "from": "notify",
+                          "to": "ledger",
+                          "label": "status = SENT"
+                        }
+                      ]
+                    },
+                    {
+                      "guard": "provider error",
+                      "steps": [
+                        {
+                          "from": "notify",
+                          "to": "ledger",
+                          "label": "retry_count + 1",
+                          "detail": "rescheduled, max 5 attempts"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "note": "The lease is just next_retry_at: a crashed worker's rows become claimable again after 10 minutes, and SKIP LOCKED keeps concurrent dispatchers off each other's rows.",
+          "over": [
+            "notify",
+            "email"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "track-visitor",
+      "title": "Track Visitor",
+      "summary": "A page event is rate-limited, scored and keyed at the gateway, then appended to Kafka; a batch consumer turns it into sessions and rollups exactly once in effect, and the read side serves cached aggregates with ETags.",
+      "result": "City-level event counted once in sessions and rollups, served through a cached read model",
+      "participants": [
+        {
+          "id": "browser",
+          "node": "visitor",
+          "title": "Browser"
+        },
+        {
+          "id": "gateway",
+          "node": "tracking-api",
+          "title": "API Gateway",
+          "stereotype": "BFF · Vercel"
+        },
+        {
+          "id": "recaptcha",
+          "kind": "external",
+          "title": "reCAPTCHA",
+          "meta": "RISK SCORE"
+        },
+        {
+          "id": "kafka",
+          "kind": "queue",
+          "covers": [
+            "analytics-topic",
+            "analytics-dlq"
+          ],
+          "title": "Kafka",
+          "meta": "analytics.raw.events"
+        },
+        {
+          "id": "aggregator",
+          "node": "analytics-aggregator",
+          "title": "Visitor Analytics"
+        },
+        {
+          "id": "dedup",
+          "kind": "database",
+          "resource": {
+            "node": "analytics-aggregator",
+            "title": "Dedup + Limits"
+          },
+          "title": "Redis",
+          "meta": "DEDUP + LIMITS",
+          "brand": "redis"
+        },
+        {
+          "id": "store",
+          "kind": "database",
+          "resource": {
+            "node": "analytics-aggregator",
+            "title": "Analytics Store"
+          },
+          "title": "Rollups",
+          "meta": "POSTGRESQL",
+          "brand": "postgresql"
+        }
+      ],
+      "steps": [
+        {
+          "from": "browser",
+          "to": "gateway",
+          "label": "POST /api/track",
+          "detail": "keepalive beacon"
+        },
+        {
+          "fragment": "break",
+          "guard": "rate limited or consent denied",
+          "steps": [
+            {
+              "from": "gateway",
+              "to": "browser",
+              "label": "429 / 204, dropped",
+              "reply": true
+            }
+          ]
+        },
+        {
+          "self": "gateway",
+          "label": "geo-snap to city",
+          "detail": "from edge headers · city-level only"
+        },
+        {
+          "from": "gateway",
+          "to": "recaptcha",
+          "label": "assess(token)"
+        },
+        {
+          "from": "recaptcha",
+          "to": "gateway",
+          "label": "risk score",
+          "detail": "scored server-side",
+          "reply": true
+        },
+        {
+          "self": "gateway",
+          "label": "eventId = UUIDv7",
+          "detail": "doubles as the de-duplication key"
+        },
+        {
+          "fragment": "alt",
+          "operands": [
+            {
+              "guard": "Kafka accepts",
+              "steps": [
+                {
+                  "from": "gateway",
+                  "to": "kafka",
+                  "label": "produce raw event",
+                  "detail": "key = eventId",
+                  "async": true
+                }
+              ]
+            },
+            {
+              "guard": "produce fails",
+              "steps": [
+                {
+                  "self": "gateway",
+                  "label": "fallback: direct PostgreSQL insert",
+                  "detail": "degraded mode, same eventId"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "from": "gateway",
+          "to": "browser",
+          "label": "200 accepted",
+          "reply": true
+        },
+        {
+          "from": "kafka",
+          "to": "aggregator",
+          "label": "poll batch ≤ 100",
+          "detail": "manual ack",
+          "async": true
+        },
+        {
+          "fragment": "loop",
+          "guard": "each record",
+          "steps": [
+            {
+              "fragment": "alt",
+              "operands": [
+                {
+                  "guard": "unparseable",
+                  "steps": [
+                    {
+                      "from": "aggregator",
+                      "to": "kafka",
+                      "label": "dead-letter record",
+                      "detail": "to analytics.events.dlq",
+                      "async": true
+                    }
+                  ]
+                },
+                {
+                  "guard": "parsed",
+                  "steps": [
+                    {
+                      "from": "aggregator",
+                      "to": "dedup",
+                      "label": "SETNX eventId",
+                      "detail": "duplicates dropped"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "fragment": "critical",
+          "guard": "one PostgreSQL transaction",
+          "steps": [
+            {
+              "from": "aggregator",
+              "to": "store",
+              "label": "claim events in durable inbox"
+            },
+            {
+              "from": "aggregator",
+              "to": "store",
+              "label": "upsert sessions + 5-min / daily rollups"
+            }
+          ]
+        },
+        {
+          "from": "aggregator",
+          "to": "kafka",
+          "label": "ack after commit",
+          "detail": "on failure: seek + retry"
+        },
+        {
+          "note": "SETNX + inbox claim + ack-after-commit: redelivered batches never double-count (effectively-once processing on an at-least-once log).",
+          "over": [
+            "kafka",
+            "store"
+          ]
+        },
+        {
+          "from": "browser",
+          "to": "gateway",
+          "label": "GET /api/analytics/visits/summary",
+          "detail": "CDN caches 60 s"
+        },
+        {
+          "from": "gateway",
+          "to": "aggregator",
+          "label": "GET /visits/summary",
+          "detail": "If-None-Match"
+        },
+        {
+          "fragment": "alt",
+          "operands": [
+            {
+              "guard": "ETag matches",
+              "steps": [
+                {
+                  "from": "aggregator",
+                  "to": "gateway",
+                  "label": "304 Not Modified",
+                  "reply": true
+                }
+              ]
+            },
+            {
+              "guard": "data changed",
+              "steps": [
+                {
+                  "from": "aggregator",
+                  "to": "store",
+                  "label": "read rollups"
+                },
+                {
+                  "from": "aggregator",
+                  "to": "gateway",
+                  "label": "200 + weak ETag",
+                  "reply": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "from": "gateway",
+          "to": "browser",
+          "label": "proxied response",
+          "reply": true
+        }
+      ]
+    },
+    {
+      "key": "execute-mcp",
+      "title": "Execute MCP Tool",
+      "summary": "An external AI client calls a typed tool; the edge hides the origin, the public server bounds the request and the gateway is the single policy point before any domain service is touched.",
+      "result": "Typed, sanitized tool result; writes need an admin role and explicit confirmation",
+      "participants": [
+        {
+          "id": "client",
+          "node": "mcp-clients",
+          "kind": "external",
+          "title": "MCP Client",
+          "meta": "CLAUDE · CODEX"
+        },
+        {
+          "id": "edge",
+          "node": "portfolio-edge",
+          "stereotype": "/mcp rewrite",
+          "proxy": true,
+          "title": "API Gateway"
+        },
+        {
+          "id": "public",
+          "node": "public-mcp",
+          "title": "MCP Server",
+          "stereotype": "public"
+        },
+        {
+          "id": "gateway",
+          "node": "mcp-gateway",
+          "title": "Tool Gateway"
+        },
+        {
+          "id": "content",
+          "node": "content-control",
+          "title": "Content Service"
+        }
+      ],
+      "steps": [
+        {
+          "from": "client",
+          "to": "edge",
+          "label": "POST /mcp",
+          "detail": "JSON-RPC tools/call"
+        },
+        {
+          "from": "edge",
+          "to": "public",
+          "label": "rewrite to Cloud Run",
+          "detail": "origin stays hidden"
+        },
+        {
+          "self": "public",
+          "label": "validate envelope + bounds"
+        },
+        {
+          "fragment": "break",
+          "guard": "rate limit exceeded",
+          "steps": [
+            {
+              "from": "public",
+              "to": "client",
+              "reply": true,
+              "label": "JSON-RPC error (429)"
+            }
+          ]
+        },
+        {
+          "from": "public",
+          "to": "gateway",
+          "label": "invoke(tool, args)"
+        },
+        {
+          "self": "gateway",
+          "label": "registry + RBAC + risk level"
+        },
+        {
+          "fragment": "opt",
+          "guard": "mutating tool (/mcp/admin only)",
+          "steps": [
+            {
+              "from": "gateway",
+              "to": "client",
+              "reply": true,
+              "label": "confirmation required",
+              "detail": "OAuth admin role + explicit user approval"
+            }
+          ]
+        },
+        {
+          "self": "gateway",
+          "label": "Idempotency-Key check"
+        },
+        {
+          "from": "gateway",
+          "to": "content",
+          "label": "typed, bounded read"
+        },
+        {
+          "from": "content",
+          "to": "gateway",
+          "reply": true,
+          "label": "rows"
+        },
+        {
+          "self": "gateway",
+          "label": "sanitize result",
+          "detail": "secrets + internal fields removed"
+        },
+        {
+          "from": "gateway",
+          "to": "public",
+          "reply": true,
+          "label": "typed result"
+        },
+        {
+          "from": "public",
+          "to": "client",
+          "reply": true,
+          "label": "tool result"
+        },
+        {
+          "note": "The gateway is the single policy enforcement point: every client — Claude, Codex or the in-site agent — gets the same RBAC, risk policy, idempotency and audit.",
+          "over": [
+            "public",
+            "content"
+          ]
+        }
+      ]
+    }
+  ]
+}

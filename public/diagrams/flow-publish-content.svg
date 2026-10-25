@@ -1,0 +1,343 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1332" height="1360" viewBox="0 0 1332 1360" role="img" aria-labelledby="title desc">
+<title id="title">Workflow: Publish Article</title>
+<desc id="desc">UML sequence diagram. One PostgreSQL transaction writes the new version, its outbox event and two indexing jobs; a relay publishes them to Kafka and wakes the scale-to-zero indexers, and independent consumers update search, RAG and subscribers at their own pace. Messages: 1. publish(id, version); 2. INSERT version snapshot; 3. INSERT outbox event; 4. INSERT search + RAG jobs; 5. INSERT audit row; 6. 200 published; 7. publish index event; 8. POST /drain/{jobId}; 9. content.search.index.v1; 10. idempotent upsert; 11. ack offset (manual); 12. content.rag.index.v1; 13. chunk + embed; 14. replace chunks; 15. content.notification.*.</desc>
+<defs>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="135%">
+    <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" flood-color="#1f2d38" flood-opacity="0.09"/>
+  </filter>
+  <marker id="arrow-request" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#33424e"/></marker>
+  <marker id="arrow-event" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#7356a6" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></marker>
+  <marker id="arrow-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1778a8"/></marker>
+  <marker id="arrow-return" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#6f7e8a" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></marker>
+</defs>
+<style>
+  text { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #17212a; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 1.6px; fill: #56656f; }
+  .h1 { font-size: 28px; font-weight: 750; }
+  .sub { font-size: 14px; fill: #56656f; }
+  .band-title { font-size: 12px; font-weight: 750; letter-spacing: 1.3px; }
+  .stereo { font-size: 9.5px; font-weight: 600; fill: #86939e; }
+  .chip { font-size: 11.5px; font-weight: 650; }
+  .card-title { font-size: 14.5px; font-weight: 700; }
+  .card-meta { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9.5px; font-weight: 600; letter-spacing: .3px; fill: #56656f; }
+  .card-detail { font-size: 11.5px; font-weight: 500; fill: #33424e; }
+  .port { font-size: 11px; font-weight: 650; fill: #56656f; }
+  .label { font-size: 11px; font-weight: 600; fill: #56656f; }
+  .legend { font-size: 11.5px; font-weight: 600; fill: #56656f; }
+  .foot { font-size: 11px; fill: #86939e; }
+  .note { font-size: 11.5px; fill: #17212a; }
+  .topic-in { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 600; fill: #17212a; }
+  .panel-title { font-size: 13px; font-weight: 750; }
+  .panel-sub { font-size: 8.5px; font-weight: 750; letter-spacing: 1px; fill: #56656f; }
+  .panel-note { font-size: 10.5px; font-weight: 550; fill: #33424e; }
+  .stat-num { font-size: 21px; font-weight: 750; }
+  .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 1px; fill: #56656f; }
+  .head-title { font-size: 12.5px; font-weight: 700; }
+  .head-meta { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9px; font-weight: 600; fill: #56656f; }
+  .msg { font-size: 12.5px; font-weight: 620; }
+  .msg-detail { font-size: 10.5px; font-weight: 500; fill: #56656f; }
+  .seq-num { font-size: 9.5px; font-weight: 750; fill: #ffffff; }
+  .frag-op { font-size: 11px; font-weight: 800; letter-spacing: .4px; }
+  .frag-guard { font-size: 11px; font-weight: 600; fill: #56656f; }
+  .frame { font-size: 13px; font-weight: 750; }
+  .tier-title { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; fill: #56656f; }
+  .tier-host { font-size: 8.5px; font-weight: 600; letter-spacing: .3px; fill: #86939e; }
+  .node-title { font-size: 13px; font-weight: 700; }
+  .node-meta { font-size: 8.8px; font-weight: 700; letter-spacing: .7px; fill: #56656f; }
+  .module { font-size: 10.5px; font-weight: 600; fill: #33424e; }
+  .tag { font-size: 7.8px; font-weight: 800; letter-spacing: .7px; }
+  .route { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 650; fill: #56656f; }
+  .topic { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9.5px; font-weight: 600; fill: #7356a6; }
+  .edge-note { font-size: 10.5px; font-weight: 600; fill: #56656f; }
+  .store-title { font-size: 11.5px; font-weight: 700; }
+  .store-meta { font-size: 8.5px; font-weight: 700; letter-spacing: .7px; fill: #56656f; }
+  .bar-chip { font-size: 10.5px; font-weight: 600; fill: #33424e; }
+  .adr-title { font-size: 13px; font-weight: 750; }
+  .adr-key { font-size: 9px; font-weight: 800; letter-spacing: .9px; fill: #56656f; }
+  .adr-text { font-size: 11px; font-weight: 500; fill: #33424e; }
+  .lane-title { font-size: 15px; font-weight: 750; }
+  .lane-sub { font-size: 11px; font-weight: 500; fill: #56656f; }
+  .lane-num { font-size: 12px; font-weight: 800; fill: #ffffff; }
+</style>
+<rect width="1332" height="1360" fill="#ffffff"/>
+<text x="28" y="42" class="h1" style="font-size:24px">②  Publish Article</text>
+<text x="28" y="68" class="sub">One PostgreSQL transaction writes the new version, its outbox event and two indexing jobs; a relay publishes them to Kafka and wakes the scale-to-zero indexers, and independent</text>
+<text x="28" y="87" class="sub">consumers update search, RAG and subscribers at their own pace.</text>
+<rect x="20" y="116" width="1292" height="1145.5" rx="2" fill="none" stroke="#56656f" stroke-width="1.2"/>
+<path d="M 20 116 H 168.7 V 132 L 158.7 142 H 20 Z" fill="#f3f5f7" stroke="#56656f" stroke-width="1.2"/>
+<text x="30" y="134" class="frame">sd Publish Article</text>
+<rect x="216.3" y="294" width="346.7" height="190" rx="3" fill="#b56b13" fill-opacity="0.02" stroke="#b56b13" stroke-opacity=".75" stroke-width="1.2"/>
+<rect x="216.3" y="608.5" width="687.6" height="134" rx="3" fill="#14805e" fill-opacity="0.02" stroke="#14805e" stroke-opacity=".75" stroke-width="1.2"/>
+<rect x="575" y="752.5" width="725" height="418" rx="3" fill="#7255a5" fill-opacity="0.02" stroke="#7255a5" stroke-opacity=".75" stroke-width="1.2"/>
+<line x1="575" y1="898.5" x2="1300" y2="898.5" stroke="#7255a5" stroke-opacity=".75" stroke-width="1.1" stroke-dasharray="6 4"/>
+<line x1="575" y1="1050.5" x2="1300" y2="1050.5" stroke="#7255a5" stroke-opacity=".75" stroke-width="1.1" stroke-dasharray="6 4"/>
+<line x1="115" y1="224" x2="115" y2="1247.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<line x1="289.3" y1="224" x2="289.3" y2="1247.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<line x1="509" y1="224" x2="509" y2="1247.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<line x1="629" y1="224" x2="629" y2="1247.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<line x1="830.9" y1="224" x2="830.9" y2="1247.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<line x1="996" y1="224" x2="996" y2="1247.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<line x1="1116" y1="224" x2="1116" y2="1247.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<line x1="1236" y1="224" x2="1236" y2="1247.5" stroke="#c3ccd5" stroke-width="1.3"/>
+<rect x="126" y="246" width="152.3" height="17" rx="3" fill="#ffffff"/>
+<rect x="154.3" y="272" width="95.7" height="14" rx="3" fill="#ffffff"/>
+<rect x="304.1" y="324" width="190.2" height="17" rx="3" fill="#ffffff"/>
+<rect x="318.9" y="362" width="160.6" height="17" rx="3" fill="#ffffff"/>
+<rect x="300.3" y="400" width="197.7" height="17" rx="3" fill="#ffffff"/>
+<rect x="327.9" y="438" width="142.5" height="17" rx="3" fill="#ffffff"/>
+<rect x="144.2" y="494" width="116" height="17" rx="3" fill="#ffffff"/>
+<rect x="384.2" y="638.5" width="150" height="17" rx="3" fill="#ffffff"/>
+<rect x="378.5" y="664.5" width="161.4" height="14" rx="3" fill="#ffffff"/>
+<rect x="481.4" y="686.5" width="157.4" height="17" rx="3" fill="#ffffff"/>
+<rect x="439.2" y="712.5" width="241.8" height="14" rx="3" fill="#ffffff"/>
+<rect x="640" y="782.5" width="179.9" height="17" rx="3" fill="#ffffff"/>
+<rect x="841.9" y="820.5" width="143.1" height="17" rx="3" fill="#ffffff"/>
+<rect x="655.5" y="858.5" width="148.9" height="17" rx="3" fill="#ffffff"/>
+<rect x="651.1" y="922.5" width="157.6" height="17" rx="3" fill="#ffffff"/>
+<rect x="866.9" y="963.5" width="119.3" height="17" rx="3" fill="#ffffff"/>
+<rect x="887.9" y="982.5" width="165" height="14" rx="3" fill="#ffffff"/>
+<rect x="911.2" y="1010.5" width="124.5" height="17" rx="3" fill="#ffffff"/>
+<rect x="851.4" y="1074.5" width="162.2" height="17" rx="3" fill="#ffffff"/>
+<rect x="284.3" y="260" width="10" height="264" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="284.3" y="652.5" width="10" height="64" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="504" y="338" width="10" height="130" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="825.9" y="700.5" width="10" height="340" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="991" y="834.5" width="10" height="22" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="1111" y="1024.5" width="10" height="22" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="1231" y="1088.5" width="10" height="22" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<rect x="830.9" y="982.5" width="10" height="16" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<g>
+    <path d="M 115 268 L 284.3 268" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 115 268 L 284.3 268" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 294.3 346 L 504 346" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 294.3 346 L 504 346" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 294.3 384 L 504 384" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 294.3 384 L 504 384" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 294.3 422 L 504 422" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 294.3 422 L 504 422" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 294.3 460 L 504 460" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 294.3 460 L 504 460" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 284.3 516 L 115 516" fill="none" stroke="#ffffff" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 284.3 516 L 115 516" fill="none" stroke="#6f7e8a" stroke-width="1.5999999999999999" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow-return)"/>
+    
+  </g>
+<g>
+    <path d="M 294.3 660.5 L 629 660.5" fill="none" stroke="#ffffff" stroke-width="5.9" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 294.3 660.5 L 629 660.5" fill="none" stroke="#7356a6" stroke-width="1.9"  stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+    
+  </g>
+<g>
+    <path d="M 294.3 708.5 L 825.9 708.5" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 294.3 708.5 L 825.9 708.5" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 629 804.5 L 825.9 804.5" fill="none" stroke="#ffffff" stroke-width="5.9" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 629 804.5 L 825.9 804.5" fill="none" stroke="#7356a6" stroke-width="1.9"  stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+    
+  </g>
+<g>
+    <path d="M 835.9 842.5 L 991 842.5" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 835.9 842.5 L 991 842.5" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 825.9 880.5 L 629 880.5" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 825.9 880.5 L 629 880.5" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 629 944.5 L 825.9 944.5" fill="none" stroke="#ffffff" stroke-width="5.9" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 629 944.5 L 825.9 944.5" fill="none" stroke="#7356a6" stroke-width="1.9"  stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+    
+  </g>
+<g>
+    <path d="M 835.9 971.5 L 852.9 971.5 Q 861.9 971.5 861.9 980.5 L 861.9 981.5 Q 861.9 989.5 853.9 989.5 L 845.9 989.5" fill="none" stroke="#ffffff" stroke-width="5.7" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 835.9 971.5 L 852.9 971.5 Q 861.9 971.5 861.9 980.5 L 861.9 981.5 Q 861.9 989.5 853.9 989.5 L 845.9 989.5" fill="none" stroke="#33424e" stroke-width="1.7000000000000002"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 835.9 1032.5 L 1111 1032.5" fill="none" stroke="#ffffff" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 835.9 1032.5 L 1111 1032.5" fill="none" stroke="#33424e" stroke-width="1.8"  stroke-linejoin="round" marker-end="url(#arrow-request)"/>
+    
+  </g>
+<g>
+    <path d="M 629 1096.5 L 1231 1096.5" fill="none" stroke="#ffffff" stroke-width="5.9" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"/>
+    <path d="M 629 1096.5 L 1231 1096.5" fill="none" stroke="#7356a6" stroke-width="1.9"  stroke-linejoin="round" marker-end="url(#arrow-event)"/>
+    
+  </g>
+<circle cx="137" cy="254.8" r="8" fill="#33424e"/><text x="137" y="258.2" text-anchor="middle" class="seq-num">1</text>
+<text x="150" y="259" class="msg">publish(id, version)</text>
+<text x="202.2" y="282.5" text-anchor="middle" class="msg-detail">JWT · owner role</text>
+<circle cx="315.1" cy="332.8" r="8" fill="#33424e"/><text x="315.1" y="336.2" text-anchor="middle" class="seq-num">2</text>
+<text x="328.1" y="337" class="msg">INSERT version snapshot</text>
+<circle cx="329.9" cy="370.8" r="8" fill="#33424e"/><text x="329.9" y="374.2" text-anchor="middle" class="seq-num">3</text>
+<text x="342.9" y="375" class="msg">INSERT outbox event</text>
+<circle cx="311.3" cy="408.8" r="8" fill="#33424e"/><text x="311.3" y="412.2" text-anchor="middle" class="seq-num">4</text>
+<text x="324.3" y="413" class="msg">INSERT search + RAG jobs</text>
+<circle cx="338.9" cy="446.8" r="8" fill="#33424e"/><text x="338.9" y="450.2" text-anchor="middle" class="seq-num">5</text>
+<text x="351.9" y="451" class="msg">INSERT audit row</text>
+<circle cx="155.2" cy="502.8" r="8" fill="#6f7e8a"/><text x="155.2" y="506.2" text-anchor="middle" class="seq-num">6</text>
+<text x="168.2" y="507" class="msg" style="fill:#56656f">200 published</text>
+<circle cx="395.2" cy="647.3" r="8" fill="#7356a6"/><text x="395.2" y="650.7" text-anchor="middle" class="seq-num">7</text>
+<text x="408.2" y="651.5" class="msg">publish index event</text>
+<text x="459.2" y="675" text-anchor="middle" class="msg-detail">key = type:id · idempotencyKey</text>
+<circle cx="492.4" cy="695.3" r="8" fill="#33424e"/><text x="492.4" y="698.7" text-anchor="middle" class="seq-num">8</text>
+<text x="505.4" y="699.5" class="msg">POST /drain/{jobId}</text>
+<text x="560.1" y="723" text-anchor="middle" class="msg-detail">Cloud Run identity token · wakes the consumer</text>
+<circle cx="651" cy="791.3" r="8" fill="#7356a6"/><text x="651" y="794.7" text-anchor="middle" class="seq-num">9</text>
+<text x="664" y="795.5" class="msg">content.search.index.v1</text>
+<circle cx="852.9" cy="829.3" r="8" fill="#33424e"/><text x="852.9" y="832.7" text-anchor="middle" class="seq-num">10</text>
+<text x="865.9" y="833.5" class="msg">idempotent upsert</text>
+<circle cx="666.5" cy="867.3" r="8" fill="#33424e"/><text x="666.5" y="870.7" text-anchor="middle" class="seq-num">11</text>
+<text x="679.5" y="871.5" class="msg">ack offset (manual)</text>
+<circle cx="662.1" cy="931.3" r="8" fill="#7356a6"/><text x="662.1" y="934.7" text-anchor="middle" class="seq-num">12</text>
+<text x="675.1" y="935.5" class="msg">content.rag.index.v1</text>
+<circle cx="877.9" cy="972.3" r="8" fill="#33424e"/><text x="877.9" y="975.7" text-anchor="middle" class="seq-num">13</text>
+<text x="890.9" y="976.5" class="msg">chunk + embed</text>
+<text x="890.9" y="993" class="msg-detail">gemini-embedding-001 · 1536-d</text>
+<circle cx="922.2" cy="1019.3" r="8" fill="#33424e"/><text x="922.2" y="1022.7" text-anchor="middle" class="seq-num">14</text>
+<text x="935.2" y="1023.5" class="msg">replace chunks</text>
+<circle cx="862.4" cy="1083.3" r="8" fill="#7356a6"/><text x="862.4" y="1086.7" text-anchor="middle" class="seq-num">15</text>
+<text x="875.4" y="1087.5" class="msg">content.notification.*</text>
+<g><g fill="none" stroke="#17212a" stroke-width="1.6" stroke-linecap="round">
+    <circle cx="115" cy="163" r="6.5" fill="#ffffff"/>
+    <path d="M 115 169.5 V 185 M 104 175 H 126 M 115 185 L 106 197 M 115 185 L 124 197"/>
+  </g><text x="115" y="213" text-anchor="middle" class="head-title">Operator</text></g>
+<g>
+    <rect x="217.3" y="154" width="144" height="70" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.1" filter="url(#shadow)"/>
+    <rect x="217.9" y="154.6" width="142.8" height="3" rx="1.5" fill="#435363" fill-opacity=".8"/>
+    <text x="289.3" y="169" text-anchor="middle" class="stereo">«Writer API»</text>
+    <g transform="translate(280.3 173) scale(0.75)"><path fill="#17212a" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="289.3" y="210" text-anchor="middle" class="head-title">Content Service</text>
+  </g>
+<g>
+      <g>
+    <path d="M 489 160 A 20 6 0 0 0 529 160 V 190 A 20 6 0 0 1 489 190 Z" fill="#ffffff" filter="url(#shadow)"/>
+    <path d="M 489 160 A 20 6 0 0 0 529 160 V 190 A 20 6 0 0 1 489 190 Z" fill="#2f62c9" fill-opacity="0.083" stroke="#2f62c9" stroke-width="1.3"/>
+    <path d="M 489 170 A 20 6 0 0 0 529 170" fill="none" stroke="#2f62c9" stroke-opacity=".55" stroke-width="1.1"/>
+    <ellipse cx="509" cy="160" rx="20" ry="6" fill="#ffffff"/>
+    <ellipse cx="509" cy="160" rx="20" ry="6" fill="#2f62c9" fill-opacity="0.242" stroke="#2f62c9" stroke-width="1.3"/>
+    <g transform="translate(500.6 175.6) scale(0.7)"><path fill="#2f62c9" d="M23.5594 14.7228a.5269.5269 0 0 0-.0563-.1191c-.139-.2632-.4768-.3418-1.0074-.2321-1.6533.3411-2.2935.1312-2.5256-.0191 1.342-2.0482 2.445-4.522 3.0411-6.8297.2714-1.0507.7982-3.5237.1222-4.7316a1.5641 1.5641 0 0 0-.1509-.235C21.6931.9086 19.8007.0248 17.5099.0005c-1.4947-.0158-2.7705.3461-3.1161.4794a9.449 9.449 0 0 0-.5159-.0816 8.044 8.044 0 0 0-1.3114-.1278c-1.1822-.0184-2.2038.2642-3.0498.8406-.8573-.3211-4.7888-1.645-7.2219.0788C.9359 2.1526.3086 3.8733.4302 6.3043c.0409.818.5069 3.334 1.2423 5.7436.4598 1.5065.9387 2.7019 1.4334 3.582.553.9942 1.1259 1.5933 1.7143 1.7895.4474.1491 1.1327.1441 1.8581-.7279.8012-.9635 1.5903-1.8258 1.9446-2.2069.4351.2355.9064.3625 1.39.3772a.0569.0569 0 0 0 .0004.0041 11.0312 11.0312 0 0 0-.2472.3054c-.3389.4302-.4094.5197-1.5002.7443-.3102.064-1.1344.2339-1.1464.8115-.0025.1224.0329.2309.0919.3268.2269.4231.9216.6097 1.015.6331 1.3345.3335 2.5044.092 3.3714-.6787-.017 2.231.0775 4.4174.3454 5.0874.2212.5529.7618 1.9045 2.4692 1.9043.2505 0 .5263-.0291.8296-.0941 1.7819-.3821 2.5557-1.1696 2.855-2.9059.1503-.8707.4016-2.8753.5388-4.1012.0169-.0703.0357-.1207.057-.1362.0007-.0005.0697-.0471.4272.0307a.3673.3673 0 0 0 .0443.0068l.2539.0223.0149.001c.8468.0384 1.9114-.1426 2.5312-.4308.6438-.2988 1.8057-1.0323 1.5951-1.6698zM2.371 11.8765c-.7435-2.4358-1.1779-4.8851-1.2123-5.5719-.1086-2.1714.4171-3.6829 1.5623-4.4927 1.8367-1.2986 4.8398-.5408 6.108-.13-.0032.0032-.0066.0061-.0098.0094-2.0238 2.044-1.9758 5.536-1.9708 5.7495-.0002.0823.0066.1989.0162.3593.0348.5873.0996 1.6804-.0735 2.9184-.1609 1.1504.1937 2.2764.9728 3.0892.0806.0841.1648.1631.2518.2374-.3468.3714-1.1004 1.1926-1.9025 2.1576-.5677.6825-.9597.5517-1.0886.5087-.3919-.1307-.813-.5871-1.2381-1.3223-.4796-.839-.9635-2.0317-1.4155-3.5126zm6.0072 5.0871c-.1711-.0428-.3271-.1132-.4322-.1772.0889-.0394.2374-.0902.4833-.1409 1.2833-.2641 1.4815-.4506 1.9143-1.0002.0992-.126.2116-.2687.3673-.4426a.3549.3549 0 0 0 .0737-.1298c.1708-.1513.2724-.1099.4369-.0417.156.0646.3078.26.3695.4752.0291.1016.0619.2945-.0452.4444-.9043 1.2658-2.2216 1.2494-3.1676 1.0128zm2.094-3.988-.0525.141c-.133.3566-.2567.6881-.3334 1.003-.6674-.0021-1.3168-.2872-1.8105-.8024-.6279-.6551-.9131-1.5664-.7825-2.5004.1828-1.3079.1153-2.4468.079-3.0586-.005-.0857-.0095-.1607-.0122-.2199.2957-.2621 1.6659-.9962 2.6429-.7724.4459.1022.7176.4057.8305.928.5846 2.7038.0774 3.8307-.3302 4.7363-.084.1866-.1633.3629-.2311.5454zm7.3637 4.5725c-.0169.1768-.0358.376-.0618.5959l-.146.4383a.3547.3547 0 0 0-.0182.1077c-.0059.4747-.054.6489-.115.8693-.0634.2292-.1353.4891-.1794 1.0575-.11 1.4143-.8782 2.2267-2.4172 2.5565-1.5155.3251-1.7843-.4968-2.0212-1.2217a6.5824 6.5824 0 0 0-.0769-.2266c-.2154-.5858-.1911-1.4119-.1574-2.5551.0165-.5612-.0249-1.9013-.3302-2.6462.0044-.2932.0106-.5909.019-.8918a.3529.3529 0 0 0-.0153-.1126 1.4927 1.4927 0 0 0-.0439-.208c-.1226-.4283-.4213-.7866-.7797-.9351-.1424-.059-.4038-.1672-.7178-.0869.067-.276.1831-.5875.309-.9249l.0529-.142c.0595-.16.134-.3257.213-.5012.4265-.9476 1.0106-2.2453.3766-5.1772-.2374-1.0981-1.0304-1.6343-2.2324-1.5098-.7207.0746-1.3799.3654-1.7088.5321a5.6716 5.6716 0 0 0-.1958.1041c.0918-1.1064.4386-3.1741 1.7357-4.4823a4.0306 4.0306 0 0 1 .3033-.276.3532.3532 0 0 0 .1447-.0644c.7524-.5706 1.6945-.8506 2.802-.8325.4091.0067.8017.0339 1.1742.081 1.939.3544 3.2439 1.4468 4.0359 2.3827.8143.9623 1.2552 1.9315 1.4312 2.4543-1.3232-.1346-2.2234.1268-2.6797.779-.9926 1.4189.543 4.1729 1.2811 5.4964.1353.2426.2522.4522.2889.5413.2403.5825.5515.9713.7787 1.2552.0696.087.1372.1714.1885.245-.4008.1155-1.1208.3825-1.0552 1.717-.0123.1563-.0423.4469-.0834.8148-.0461.2077-.0702.4603-.0994.7662zm.8905-1.6211c-.0405-.8316.2691-.9185.5967-1.0105a2.8566 2.8566 0 0 0 .135-.0406 1.202 1.202 0 0 0 .1342.103c.5703.3765 1.5823.4213 3.0068.1344-.2016.1769-.5189.3994-.9533.6011-.4098.1903-1.0957.333-1.7473.3636-.7197.0336-1.0859-.0807-1.1721-.151zm.5695-9.2712c-.0059.3508-.0542.6692-.1054 1.0017-.055.3576-.112.7274-.1264 1.1762-.0142.4368.0404.8909.0932 1.3301.1066.887.216 1.8003-.2075 2.7014a3.5272 3.5272 0 0 1-.1876-.3856c-.0527-.1276-.1669-.3326-.3251-.6162-.6156-1.1041-2.0574-3.6896-1.3193-4.7446.3795-.5427 1.3408-.5661 2.1781-.463zm.2284 7.0137a12.3762 12.3762 0 0 0-.0853-.1074l-.0355-.0444c.7262-1.1995.5842-2.3862.4578-3.4385-.0519-.4318-.1009-.8396-.0885-1.2226.0129-.4061.0666-.7543.1185-1.0911.0639-.415.1288-.8443.1109-1.3505.0134-.0531.0188-.1158.0118-.1902-.0457-.4855-.5999-1.938-1.7294-3.253-.6076-.7073-1.4896-1.4972-2.6889-2.0395.5251-.1066 1.2328-.2035 2.0244-.1859 2.0515.0456 3.6746.8135 4.8242 2.2824a.908.908 0 0 1 .0667.1002c.7231 1.3556-.2762 6.2751-2.9867 10.5405zm-8.8166-6.1162c-.025.1794-.3089.4225-.6211.4225a.5821.5821 0 0 1-.0809-.0056c-.1873-.026-.3765-.144-.5059-.3156-.0458-.0605-.1203-.178-.1055-.2844.0055-.0401.0261-.0985.0925-.1488.1182-.0894.3518-.1226.6096-.0867.3163.0441.6426.1938.6113.4186zm7.9305-.4114c.0111.0792-.049.201-.1531.3102-.0683.0717-.212.1961-.4079.2232a.5456.5456 0 0 1-.075.0052c-.2935 0-.5414-.2344-.5607-.3717-.024-.1765.2641-.3106.5611-.352.297-.0414.6111.0088.6356.1851z"/></g>
+  </g>
+      <text x="509" y="210" text-anchor="middle" class="head-title" style="font-size:12.5px">Content DB</text>
+      <text x="509" y="222" text-anchor="middle" class="store-meta" style="font-size:8.5px">POSTGRESQL</text>
+    </g>
+<g>
+      <g>
+    <path d="M 584 160 H 674 A 8 14 0 0 1 674 188 H 584 A 8 14 0 0 1 584 160 Z" fill="#ffffff"/>
+    <path d="M 584 160 H 674 A 8 14 0 0 1 674 188 H 584 A 8 14 0 0 1 584 160 Z" fill="#7356a6" fill-opacity="0.099" stroke="#7356a6" stroke-width="1.3"/>
+    <ellipse cx="674" cy="174" rx="8" ry="14" fill="#ffffff" stroke="#7356a6" stroke-width="1.3"/>
+    
+  </g>
+      <g transform="translate(620 165) scale(0.75)"><path fill="#17212a" d="M9.71 2.136a1.43 1.43 0 0 0-2.047 0h-.007a1.48 1.48 0 0 0-.421 1.042c0 .41.161.777.422 1.039l.007.007c.257.264.616.426 1.019.426.404 0 .766-.162 1.027-.426l.003-.007c.261-.262.421-.629.421-1.039 0-.408-.159-.777-.421-1.042H9.71zM8.683 22.295c.404 0 .766-.167 1.027-.429l.003-.008c.261-.261.421-.631.421-1.036 0-.41-.159-.778-.421-1.044H9.71a1.42 1.42 0 0 0-1.027-.432 1.4 1.4 0 0 0-1.02.432h-.007c-.26.266-.422.634-.422 1.044 0 .406.161.775.422 1.036l.007.008c.258.262.617.429 1.02.429zm7.89-4.462c.359-.096.683-.33.882-.684l.027-.052a1.47 1.47 0 0 0 .114-1.067 1.454 1.454 0 0 0-.675-.896l-.021-.014a1.425 1.425 0 0 0-1.078-.132c-.36.091-.684.335-.881.686-.2.349-.241.75-.146 1.119.099.363.33.691.675.896h.002c.346.203.737.239 1.101.144zm-6.405-7.342a2.083 2.083 0 0 0-1.485-.627c-.58 0-1.103.242-1.482.627-.378.385-.612.916-.612 1.507s.233 1.124.612 1.514a2.08 2.08 0 0 0 2.967 0c.379-.39.612-.923.612-1.514s-.233-1.122-.612-1.507zm-.835-2.51c.843.141 1.6.552 2.178 1.144h.004c.092.093.182.196.265.299l1.446-.851a3.176 3.176 0 0 1-.047-1.808 3.149 3.149 0 0 1 1.456-1.926l.025-.016a3.062 3.062 0 0 1 2.345-.306c.77.21 1.465.721 1.898 1.482v.002c.431.757.518 1.626.313 2.408a3.145 3.145 0 0 1-1.456 1.928l-.198.118h-.02a3.095 3.095 0 0 1-2.154.201 3.127 3.127 0 0 1-1.514-.944l-1.444.848a4.162 4.162 0 0 1 0 2.879l1.444.846c.413-.47.939-.789 1.514-.944a3.041 3.041 0 0 1 2.371.319l.048.023v.002a3.17 3.17 0 0 1 1.408 1.906 3.215 3.215 0 0 1-.313 2.405l-.026.053-.003-.005a3.147 3.147 0 0 1-1.867 1.436 3.096 3.096 0 0 1-2.371-.318v-.006a3.156 3.156 0 0 1-1.456-1.927 3.175 3.175 0 0 1 .047-1.805l-1.446-.848a3.905 3.905 0 0 1-.265.294l-.004.005a3.938 3.938 0 0 1-2.178 1.138v1.699a3.09 3.09 0 0 1 1.56.862l.002.004c.565.572.914 1.368.914 2.243 0 .873-.35 1.664-.914 2.239l-.002.009a3.1 3.1 0 0 1-2.21.931 3.1 3.1 0 0 1-2.206-.93h-.002v-.009a3.186 3.186 0 0 1-.916-2.239c0-.875.35-1.672.916-2.243v-.004h.002a3.1 3.1 0 0 1 1.558-.862v-1.699a3.926 3.926 0 0 1-2.176-1.138l-.006-.005a4.098 4.098 0 0 1-1.173-2.874c0-1.122.452-2.136 1.173-2.872h.006a3.947 3.947 0 0 1 2.176-1.144V6.289a3.137 3.137 0 0 1-1.558-.864h-.002v-.004a3.192 3.192 0 0 1-.916-2.243c0-.871.35-1.669.916-2.243l.002-.002A3.084 3.084 0 0 1 8.683 0c.861 0 1.641.355 2.21.932v.002h.002c.565.574.914 1.372.914 2.243 0 .876-.35 1.667-.914 2.243l-.002.005a3.142 3.142 0 0 1-1.56.864v1.692zm8.121-1.129l-.012-.019a1.452 1.452 0 0 0-.87-.668 1.43 1.43 0 0 0-1.103.146h.002c-.347.2-.58.529-.677.896-.095.365-.054.768.146 1.119l.007.009c.2.347.519.579.874.673.357.103.755.059 1.098-.144l.019-.009a1.47 1.47 0 0 0 .657-.885 1.493 1.493 0 0 0-.141-1.118"/></g>
+      <text x="629" y="205" text-anchor="middle" class="topic-in" style="font-size:10.5px">Kafka</text>
+      <text x="629" y="218" text-anchor="middle" class="head-meta">content.* topics</text>
+    </g>
+<g>
+    <rect x="758.9" y="154" width="144" height="70" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.1" filter="url(#shadow)"/>
+    <rect x="759.5" y="154.6" width="142.8" height="3" rx="1.5" fill="#435363" fill-opacity=".8"/>
+    <text x="830.9" y="169" text-anchor="middle" class="stereo">«service»</text>
+    <g transform="translate(821.9 173) scale(0.75)"><path fill="#17212a" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="830.9" y="210" text-anchor="middle" class="head-title">Index Workers</text>
+  </g>
+<g>
+      <g>
+    <path d="M 976 160 A 20 6 0 0 0 1016 160 V 190 A 20 6 0 0 1 976 190 Z" fill="#ffffff" filter="url(#shadow)"/>
+    <path d="M 976 160 A 20 6 0 0 0 1016 160 V 190 A 20 6 0 0 1 976 190 Z" fill="#0a6bc4" fill-opacity="0.083" stroke="#0a6bc4" stroke-width="1.3"/>
+    <path d="M 976 170 A 20 6 0 0 0 1016 170" fill="none" stroke="#0a6bc4" stroke-opacity=".55" stroke-width="1.1"/>
+    <ellipse cx="996" cy="160" rx="20" ry="6" fill="#ffffff"/>
+    <ellipse cx="996" cy="160" rx="20" ry="6" fill="#0a6bc4" fill-opacity="0.242" stroke="#0a6bc4" stroke-width="1.3"/>
+    <g transform="translate(987.6 175.6) scale(0.7)"><path fill="#0a6bc4" d="M23.1515 8.8125a.8484.8484 0 0 0-.8484.8485c0 6.982-5.6601 12.6421-12.6421 12.6421a.8485.8485 0 0 0 0 1.6969C17.5802 24 24 17.5802 24 9.661a.8485.8485 0 0 0-.8485-.8485Zm-5.121 5.4375c.816-1.3311 1.6051-3.1058 1.4498-5.5905-.3216-5.1468-4.9832-9.0512-9.3851-8.6281C8.372.1971 6.6025 1.6017 6.7598 4.1177c.0683 1.0934.6034 1.7386 1.473 2.2348.8279.4722 1.8914.7713 3.097 1.1104 1.4563.4096 3.1455.8697 4.4438 1.8265 1.5561 1.1467 2.6198 2.4759 2.2569 4.9606Zm-16.561-9C.6535 6.581-.1355 8.3558.0197 10.8405c.3216 5.1468 4.9832 9.0512 9.385 8.6281 1.7233-.1657 3.4927-1.5703 3.3355-4.0863-.0683-1.0934-.6034-1.7386-1.4731-2.2348-.8278-.4722-1.8913-.7713-3.0969-1.1104-1.4563-.4096-3.1455-.8697-4.4438-1.8265-1.5561-1.1467-2.6198-2.476-2.257-4.9606Z"/></g>
+  </g>
+      <text x="996" y="210" text-anchor="middle" class="head-title" style="font-size:12.5px">Search Index</text>
+      <text x="996" y="222" text-anchor="middle" class="store-meta" style="font-size:8.5px">OPENSEARCH</text>
+    </g>
+<g>
+      <g>
+    <path d="M 1096 160 A 20 6 0 0 0 1136 160 V 190 A 20 6 0 0 1 1096 190 Z" fill="#ffffff" filter="url(#shadow)"/>
+    <path d="M 1096 160 A 20 6 0 0 0 1136 160 V 190 A 20 6 0 0 1 1096 190 Z" fill="#2f62c9" fill-opacity="0.083" stroke="#2f62c9" stroke-width="1.3"/>
+    <path d="M 1096 170 A 20 6 0 0 0 1136 170" fill="none" stroke="#2f62c9" stroke-opacity=".55" stroke-width="1.1"/>
+    <ellipse cx="1116" cy="160" rx="20" ry="6" fill="#ffffff"/>
+    <ellipse cx="1116" cy="160" rx="20" ry="6" fill="#2f62c9" fill-opacity="0.242" stroke="#2f62c9" stroke-width="1.3"/>
+    <g transform="translate(1107.6 175.6) scale(0.7)"><path fill="#2f62c9" d="M23.5594 14.7228a.5269.5269 0 0 0-.0563-.1191c-.139-.2632-.4768-.3418-1.0074-.2321-1.6533.3411-2.2935.1312-2.5256-.0191 1.342-2.0482 2.445-4.522 3.0411-6.8297.2714-1.0507.7982-3.5237.1222-4.7316a1.5641 1.5641 0 0 0-.1509-.235C21.6931.9086 19.8007.0248 17.5099.0005c-1.4947-.0158-2.7705.3461-3.1161.4794a9.449 9.449 0 0 0-.5159-.0816 8.044 8.044 0 0 0-1.3114-.1278c-1.1822-.0184-2.2038.2642-3.0498.8406-.8573-.3211-4.7888-1.645-7.2219.0788C.9359 2.1526.3086 3.8733.4302 6.3043c.0409.818.5069 3.334 1.2423 5.7436.4598 1.5065.9387 2.7019 1.4334 3.582.553.9942 1.1259 1.5933 1.7143 1.7895.4474.1491 1.1327.1441 1.8581-.7279.8012-.9635 1.5903-1.8258 1.9446-2.2069.4351.2355.9064.3625 1.39.3772a.0569.0569 0 0 0 .0004.0041 11.0312 11.0312 0 0 0-.2472.3054c-.3389.4302-.4094.5197-1.5002.7443-.3102.064-1.1344.2339-1.1464.8115-.0025.1224.0329.2309.0919.3268.2269.4231.9216.6097 1.015.6331 1.3345.3335 2.5044.092 3.3714-.6787-.017 2.231.0775 4.4174.3454 5.0874.2212.5529.7618 1.9045 2.4692 1.9043.2505 0 .5263-.0291.8296-.0941 1.7819-.3821 2.5557-1.1696 2.855-2.9059.1503-.8707.4016-2.8753.5388-4.1012.0169-.0703.0357-.1207.057-.1362.0007-.0005.0697-.0471.4272.0307a.3673.3673 0 0 0 .0443.0068l.2539.0223.0149.001c.8468.0384 1.9114-.1426 2.5312-.4308.6438-.2988 1.8057-1.0323 1.5951-1.6698zM2.371 11.8765c-.7435-2.4358-1.1779-4.8851-1.2123-5.5719-.1086-2.1714.4171-3.6829 1.5623-4.4927 1.8367-1.2986 4.8398-.5408 6.108-.13-.0032.0032-.0066.0061-.0098.0094-2.0238 2.044-1.9758 5.536-1.9708 5.7495-.0002.0823.0066.1989.0162.3593.0348.5873.0996 1.6804-.0735 2.9184-.1609 1.1504.1937 2.2764.9728 3.0892.0806.0841.1648.1631.2518.2374-.3468.3714-1.1004 1.1926-1.9025 2.1576-.5677.6825-.9597.5517-1.0886.5087-.3919-.1307-.813-.5871-1.2381-1.3223-.4796-.839-.9635-2.0317-1.4155-3.5126zm6.0072 5.0871c-.1711-.0428-.3271-.1132-.4322-.1772.0889-.0394.2374-.0902.4833-.1409 1.2833-.2641 1.4815-.4506 1.9143-1.0002.0992-.126.2116-.2687.3673-.4426a.3549.3549 0 0 0 .0737-.1298c.1708-.1513.2724-.1099.4369-.0417.156.0646.3078.26.3695.4752.0291.1016.0619.2945-.0452.4444-.9043 1.2658-2.2216 1.2494-3.1676 1.0128zm2.094-3.988-.0525.141c-.133.3566-.2567.6881-.3334 1.003-.6674-.0021-1.3168-.2872-1.8105-.8024-.6279-.6551-.9131-1.5664-.7825-2.5004.1828-1.3079.1153-2.4468.079-3.0586-.005-.0857-.0095-.1607-.0122-.2199.2957-.2621 1.6659-.9962 2.6429-.7724.4459.1022.7176.4057.8305.928.5846 2.7038.0774 3.8307-.3302 4.7363-.084.1866-.1633.3629-.2311.5454zm7.3637 4.5725c-.0169.1768-.0358.376-.0618.5959l-.146.4383a.3547.3547 0 0 0-.0182.1077c-.0059.4747-.054.6489-.115.8693-.0634.2292-.1353.4891-.1794 1.0575-.11 1.4143-.8782 2.2267-2.4172 2.5565-1.5155.3251-1.7843-.4968-2.0212-1.2217a6.5824 6.5824 0 0 0-.0769-.2266c-.2154-.5858-.1911-1.4119-.1574-2.5551.0165-.5612-.0249-1.9013-.3302-2.6462.0044-.2932.0106-.5909.019-.8918a.3529.3529 0 0 0-.0153-.1126 1.4927 1.4927 0 0 0-.0439-.208c-.1226-.4283-.4213-.7866-.7797-.9351-.1424-.059-.4038-.1672-.7178-.0869.067-.276.1831-.5875.309-.9249l.0529-.142c.0595-.16.134-.3257.213-.5012.4265-.9476 1.0106-2.2453.3766-5.1772-.2374-1.0981-1.0304-1.6343-2.2324-1.5098-.7207.0746-1.3799.3654-1.7088.5321a5.6716 5.6716 0 0 0-.1958.1041c.0918-1.1064.4386-3.1741 1.7357-4.4823a4.0306 4.0306 0 0 1 .3033-.276.3532.3532 0 0 0 .1447-.0644c.7524-.5706 1.6945-.8506 2.802-.8325.4091.0067.8017.0339 1.1742.081 1.939.3544 3.2439 1.4468 4.0359 2.3827.8143.9623 1.2552 1.9315 1.4312 2.4543-1.3232-.1346-2.2234.1268-2.6797.779-.9926 1.4189.543 4.1729 1.2811 5.4964.1353.2426.2522.4522.2889.5413.2403.5825.5515.9713.7787 1.2552.0696.087.1372.1714.1885.245-.4008.1155-1.1208.3825-1.0552 1.717-.0123.1563-.0423.4469-.0834.8148-.0461.2077-.0702.4603-.0994.7662zm.8905-1.6211c-.0405-.8316.2691-.9185.5967-1.0105a2.8566 2.8566 0 0 0 .135-.0406 1.202 1.202 0 0 0 .1342.103c.5703.3765 1.5823.4213 3.0068.1344-.2016.1769-.5189.3994-.9533.6011-.4098.1903-1.0957.333-1.7473.3636-.7197.0336-1.0859-.0807-1.1721-.151zm.5695-9.2712c-.0059.3508-.0542.6692-.1054 1.0017-.055.3576-.112.7274-.1264 1.1762-.0142.4368.0404.8909.0932 1.3301.1066.887.216 1.8003-.2075 2.7014a3.5272 3.5272 0 0 1-.1876-.3856c-.0527-.1276-.1669-.3326-.3251-.6162-.6156-1.1041-2.0574-3.6896-1.3193-4.7446.3795-.5427 1.3408-.5661 2.1781-.463zm.2284 7.0137a12.3762 12.3762 0 0 0-.0853-.1074l-.0355-.0444c.7262-1.1995.5842-2.3862.4578-3.4385-.0519-.4318-.1009-.8396-.0885-1.2226.0129-.4061.0666-.7543.1185-1.0911.0639-.415.1288-.8443.1109-1.3505.0134-.0531.0188-.1158.0118-.1902-.0457-.4855-.5999-1.938-1.7294-3.253-.6076-.7073-1.4896-1.4972-2.6889-2.0395.5251-.1066 1.2328-.2035 2.0244-.1859 2.0515.0456 3.6746.8135 4.8242 2.2824a.908.908 0 0 1 .0667.1002c.7231 1.3556-.2762 6.2751-2.9867 10.5405zm-8.8166-6.1162c-.025.1794-.3089.4225-.6211.4225a.5821.5821 0 0 1-.0809-.0056c-.1873-.026-.3765-.144-.5059-.3156-.0458-.0605-.1203-.178-.1055-.2844.0055-.0401.0261-.0985.0925-.1488.1182-.0894.3518-.1226.6096-.0867.3163.0441.6426.1938.6113.4186zm7.9305-.4114c.0111.0792-.049.201-.1531.3102-.0683.0717-.212.1961-.4079.2232a.5456.5456 0 0 1-.075.0052c-.2935 0-.5414-.2344-.5607-.3717-.024-.1765.2641-.3106.5611-.352.297-.0414.6111.0088.6356.1851z"/></g>
+  </g>
+      <text x="1116" y="210" text-anchor="middle" class="head-title" style="font-size:12.5px">RAG Vectors</text>
+      <text x="1116" y="222" text-anchor="middle" class="store-meta" style="font-size:8.5px">PGVECTOR</text>
+    </g>
+<g>
+    <rect x="1183" y="154" width="106" height="70" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.1" filter="url(#shadow)"/>
+    <rect x="1183.6" y="154.6" width="104.8" height="3" rx="1.5" fill="#435363" fill-opacity=".8"/>
+    <text x="1236" y="169" text-anchor="middle" class="stereo">«service»</text>
+    <g transform="translate(1227 173) scale(0.75)"><path fill="#17212a" d="m23.693 10.7058-4.73-8.1844c-.4094-.7106-1.4166-1.2942-2.2402-1.2942H7.2725c-.819 0-1.8308.5836-2.2402 1.2942L.307 10.7058c-.4095.7106-.4095 1.873 0 2.5837l4.7252 8.189c.4094.7107 1.4166 1.2943 2.2402 1.2943h9.455c.819 0 1.826-.5836 2.2402-1.2942l4.7252-8.189c.4095-.7107.4095-1.8732 0-2.5838zM10.9763 5.7547c0-.5365.4377-.9742.9742-.9742s.9742.4377.9742.9742v5.8217c0 .5366-.4377.9742-.9742.9742s-.9742-.4376-.9742-.9742zm.9742 12.4294c-3.6427 0-6.6077-2.965-6.6077-6.6077.0047-2.0896.993-4.0521 2.6685-5.304a.8657.8657 0 0 1 1.2142.1788.8657.8657 0 0 1-.1788 1.2143c-2.1602 1.6048-2.612 4.6592-1.0072 6.8194 1.6049 2.1603 4.6593 2.612 6.8195 1.0072 1.2378-.9177 1.9673-2.372 1.9673-3.9157a4.8972 4.8972 0 0 0-1.9861-3.925c-.386-.2824-.466-.8284-.1836-1.2143.2824-.386.8283-.466 1.2143-.1835 1.6895 1.2471 2.6826 3.2238 2.6873 5.3228 0 3.6474-2.965 6.6077-6.6077 6.6077z"/></g>
+    <text x="1236" y="210" text-anchor="middle" class="head-title">Notifications</text>
+  </g>
+<g>
+    <path d="M 235.3 534 H 552 L 563 545 V 596.5 H 235.3 Z" fill="#fff8dc" stroke="#d9c37a" stroke-width="1.2"/>
+    <path d="M 552 534 V 545 H 563" fill="none" stroke="#d9c37a" stroke-width="1.2"/>
+  </g>
+<text x="247.3" y="553" class="note">Transactional outbox: the events exist if and only if</text>
+<text x="247.3" y="568.5" class="note">the commit does, so there is never a dual write</text>
+<text x="247.3" y="584" class="note">between PostgreSQL and Kafka.</text>
+<rect x="1089.7" y="1116.5" width="202.3" height="34" rx="3" fill="#ffffff" stroke="#56656f" stroke-width="1.2"/>
+<path d="M 1089.7 1116.5 H 1127.7 V 1128.5 L 1119.7 1135.5 H 1089.7 Z" fill="#f3f5f7" stroke="#56656f" stroke-width="1.2"/>
+<text x="1097.7" y="1130" class="frag-op" style="fill:#56656f">ref</text>
+<text x="1202.9" y="1138.5" text-anchor="middle" class="msg">③ Deliver Notification</text>
+<g>
+    <path d="M 575 1182.5 H 1279 L 1290 1193.5 V 1229.5 H 575 Z" fill="#fff8dc" stroke="#d9c37a" stroke-width="1.2"/>
+    <path d="M 1279 1182.5 V 1193.5 H 1290" fill="none" stroke="#d9c37a" stroke-width="1.2"/>
+  </g>
+<text x="587" y="1201.5" class="note">At-least-once delivery: consumers write idempotently and ack only after the write. If a wake call fails, the job stays leased</text>
+<text x="587" y="1217" class="note">and is replayed when the lease expires.</text>
+<path d="M 216.3 294 H 284.5 V 307 L 276.5 314 H 216.3 Z" fill="#ffffff"/>
+<path d="M 216.3 294 H 284.5 V 307 L 276.5 314 H 216.3 Z" fill="#b56b13" fill-opacity="0.14300000000000002" stroke="#b56b13" stroke-opacity=".75" stroke-width="1.2"/>
+<text x="224.3" y="308" class="frag-op" style="fill:#b56b13">critical</text>
+<rect x="290.5" y="297" width="175.9" height="15" rx="3" fill="#ffffff"/>
+<text x="294.5" y="308.5" class="frag-guard">[one PostgreSQL transaction]</text>
+<path d="M 216.3 608.5 H 263.7 V 621.5 L 255.7 628.5 H 216.3 Z" fill="#ffffff"/>
+<path d="M 216.3 608.5 H 263.7 V 621.5 L 255.7 628.5 H 216.3 Z" fill="#14805e" fill-opacity="0.14300000000000002" stroke="#14805e" stroke-opacity=".75" stroke-width="1.2"/>
+<text x="224.3" y="622.5" class="frag-op" style="fill:#14805e">loop</text>
+<rect x="269.7" y="611.5" width="183.6" height="15" rx="3" fill="#ffffff"/>
+<text x="273.7" y="623" class="frag-guard">[relay every 10 s · leased jobs]</text>
+<path d="M 575 752.5 H 617.8 V 765.5 L 609.8 772.5 H 575 Z" fill="#ffffff"/>
+<path d="M 575 752.5 H 617.8 V 765.5 L 609.8 772.5 H 575 Z" fill="#7255a5" fill-opacity="0.14300000000000002" stroke="#7255a5" stroke-opacity=".75" stroke-width="1.2"/>
+<text x="583" y="766.5" class="frag-op" style="fill:#7255a5">par</text>
+<rect x="623.8" y="755.5" width="117.1" height="15" rx="3" fill="#ffffff"/>
+<text x="627.8" y="767" class="frag-guard">[search projection]</text>
+<rect x="581" y="903.5" width="101.7" height="15" rx="3" fill="#ffffff"/>
+<text x="585" y="915" class="frag-guard">[RAG projection]</text>
+<rect x="581" y="1055.5" width="121.3" height="15" rx="3" fill="#ffffff"/>
+<text x="585" y="1067" class="frag-guard">[subscriber fan-out]</text>
+<rect x="28" y="1275.5" width="635.8" height="32" rx="16" fill="#14805e" fill-opacity="0.083" stroke="#14805e" stroke-opacity=".45"/>
+<g transform="translate(38 1282.5) scale(0.75)" fill="none" stroke="#14805e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16.5 9"/></g>
+<text x="62" y="1296" class="chip" style="font-size:13px">Result: Content searchable, retrievable and queued for subscribers without a dual write</text>
+<line x1="28" y1="1333.5" x2="58" y2="1333.5" stroke="#33424e" stroke-width="1.8"  marker-end="url(#arrow-request)"/>
+<text x="66" y="1337.5" class="legend" style="font-size:11px">Synchronous call</text>
+<line x1="185.94400000000002" y1="1333.5" x2="215.94400000000002" y2="1333.5" stroke="#7356a6" stroke-width="1.9"  marker-end="url(#arrow-event)"/>
+<text x="223.94400000000002" y="1337.5" class="legend" style="font-size:11px">Asynchronous message</text>
+<line x1="378.4016000000001" y1="1333.5" x2="408.4016000000001" y2="1333.5" stroke="#6f7e8a" stroke-width="1.5999999999999999" stroke-dasharray="5 4" marker-end="url(#arrow-return)"/>
+<text x="416.4016000000001" y="1337.5" class="legend" style="font-size:11px">Reply</text>
+<rect x="470.1168000000001" y="1325.5" width="10" height="16" fill="#ffffff" stroke="#56656f" stroke-width="1.1"/>
+<text x="488.1168000000001" y="1337.5" class="legend" style="font-size:11px">Execution</text>
+<rect x="565.6" y="1324.5" width="89.7" height="18" rx="3" fill="#14805e" fill-opacity="0.08800000000000001" stroke="#14805e" stroke-opacity=".6"/>
+<text x="573.6" y="1337.5" class="legend" style="font-size:11px;fill:#14805e">loop = repeat</text>
+<rect x="663.3" y="1324.5" width="93.9" height="18" rx="3" fill="#7255a5" fill-opacity="0.08800000000000001" stroke="#7255a5" stroke-opacity=".6"/>
+<text x="671.3" y="1337.5" class="legend" style="font-size:11px;fill:#7255a5">par = parallel</text>
+<rect x="765.2" y="1324.5" width="150.3" height="18" rx="3" fill="#b56b13" fill-opacity="0.08800000000000001" stroke="#b56b13" stroke-opacity=".6"/>
+<text x="773.2" y="1337.5" class="legend" style="font-size:11px;fill:#b56b13">critical = atomic region</text>
+</svg>

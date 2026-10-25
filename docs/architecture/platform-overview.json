@@ -1,0 +1,1479 @@
+{
+  "$comment": "README system overview. A system map shows how the five systems connect (shared data, events, calls); below it each system is one lane (numbers match the UML sequence diagrams) across four zones: lane header, client UI (the Next.js app; the arrow names the Vercel API route it calls), the Google Cloud Run backend and third-party APIs. Lanes that depend on each other sit next to each other: `sharedStores` sit on the boundary of the lanes that share them, and `crossLinks` connect a lane's element to its neighbour's. `ref` cards stand for an element of a lane further away. Lane node and link y coordinates are relative to their lane, x is absolute; crossLinks give points as [x, laneId, y]. Every topology node is covered exactly once (`covers` / `resources`); every link maps to a topology edge, names its `edges`, or is marked `declarative` with the reason. Run `npm run docs:architecture` after editing.",
+  "eyebrow": "YUQI.SITE · SYSTEM ARCHITECTURE",
+  "title": "Portfolio Platform",
+  "subtitle": "The map shows how the five systems connect; each lane below shows how one of them works, from the Next.js UI to Cloud Run and the data it owns.",
+  "description": "System design overview of yuqi.site. A system map shows how Ask AI, content publishing, notifications, visitor analytics and the MCP tools connect, and the lanes below repeat those links in place: the pgvector RAG store sits on the boundary between Ask AI, which reads it, and publishing, which writes it; publishing writes the article and its outbox in one PostgreSQL transaction and an outbox relay hands content.notification.* to the notifications Kafka; analytics alerts call the notification service directly. Each lane shows its Next.js UI and the Vercel API route it calls, its Google Cloud Run services next to the PostgreSQL, Redis and OpenSearch stores they own, its Kafka topics and third-party APIs, followed by the Kubernetes exit-path decision record and platform concerns.",
+  "canvas": {
+    "width": 1312
+  },
+  "layout": {
+    "zoneTop": 290,
+    "zoneH": 42,
+    "lanesTop": 342,
+    "laneGap": 12,
+    "headerW": 154
+  },
+  "systemMap": {
+    "title": "HOW THE SYSTEMS CONNECT",
+    "y": 118,
+    "h": 164,
+    "nodes": [
+      {
+        "lane": "ask-ai",
+        "x": 41,
+        "y": 192,
+        "w": 160,
+        "h": 44,
+        "meta": "AGENT · KNOWLEDGE"
+      },
+      {
+        "lane": "publish",
+        "x": 331,
+        "y": 192,
+        "w": 160,
+        "h": 44,
+        "meta": "WRITER · INDEXERS"
+      },
+      {
+        "lane": "notifications",
+        "x": 631,
+        "y": 192,
+        "w": 160,
+        "h": 44,
+        "meta": "FAN-OUT · EMAIL"
+      },
+      {
+        "lane": "analytics",
+        "x": 921,
+        "y": 192,
+        "w": 160,
+        "h": 44,
+        "meta": "INGEST · ALERTS"
+      },
+      {
+        "lane": "mcp",
+        "x": 1111,
+        "y": 192,
+        "w": 160,
+        "h": 44,
+        "meta": "TOOLS · CAREER"
+      }
+    ],
+    "links": [
+      {
+        "from": "ask-ai",
+        "to": "mcp",
+        "kind": "request",
+        "points": [
+          [
+            121,
+            192
+          ],
+          [
+            121,
+            160
+          ],
+          [
+            1191,
+            160
+          ],
+          [
+            1191,
+            192
+          ]
+        ],
+        "label": {
+          "text": "tool calls",
+          "x": 1046,
+          "y": 155,
+          "anchor": "middle"
+        }
+      },
+      {
+        "from": "publish",
+        "to": "ask-ai",
+        "kind": "data",
+        "shared": "rag-vectors",
+        "points": [
+          [
+            331,
+            214
+          ],
+          [
+            201,
+            214
+          ]
+        ],
+        "label": {
+          "text": "shared pgvector",
+          "x": 266,
+          "y": 197,
+          "anchor": "middle"
+        }
+      },
+      {
+        "from": "publish",
+        "to": "notifications",
+        "kind": "event",
+        "points": [
+          [
+            491,
+            214
+          ],
+          [
+            631,
+            214
+          ]
+        ],
+        "label": {
+          "text": "content.notification.*",
+          "x": 561,
+          "y": 207,
+          "anchor": "middle"
+        }
+      },
+      {
+        "from": "analytics",
+        "to": "notifications",
+        "kind": "request",
+        "points": [
+          [
+            921,
+            214
+          ],
+          [
+            791,
+            214
+          ]
+        ],
+        "label": {
+          "text": "alert · HTTP + retry",
+          "x": 856,
+          "y": 207,
+          "anchor": "middle"
+        }
+      },
+      {
+        "from": "mcp",
+        "to": "ask-ai",
+        "kind": "request",
+        "points": [
+          [
+            1191,
+            236
+          ],
+          [
+            1191,
+            260
+          ],
+          [
+            121,
+            260
+          ],
+          [
+            121,
+            236
+          ]
+        ],
+        "label": {
+          "text": "run diagnostics",
+          "x": 127,
+          "y": 252
+        }
+      },
+      {
+        "from": "mcp",
+        "to": "publish",
+        "kind": "request",
+        "points": [
+          [
+            1191,
+            236
+          ],
+          [
+            1191,
+            260
+          ],
+          [
+            411,
+            260
+          ],
+          [
+            411,
+            236
+          ]
+        ],
+        "label": {
+          "text": "admin tools",
+          "x": 417,
+          "y": 252
+        }
+      },
+      {
+        "from": "mcp",
+        "to": "notifications",
+        "kind": "request",
+        "points": [
+          [
+            1191,
+            236
+          ],
+          [
+            1191,
+            260
+          ],
+          [
+            711,
+            260
+          ],
+          [
+            711,
+            236
+          ]
+        ],
+        "label": {
+          "text": "delivery status",
+          "x": 717,
+          "y": 252
+        }
+      },
+      {
+        "from": "mcp",
+        "to": "analytics",
+        "kind": "request",
+        "points": [
+          [
+            1191,
+            236
+          ],
+          [
+            1191,
+            260
+          ],
+          [
+            1001,
+            260
+          ],
+          [
+            1001,
+            236
+          ]
+        ],
+        "label": {
+          "text": "analytics · alert rules",
+          "x": 1007,
+          "y": 252
+        }
+      }
+    ]
+  },
+  "zones": [
+    {
+      "id": "system",
+      "x": 16,
+      "w": 154,
+      "title": "SYSTEM",
+      "align": "start"
+    },
+    {
+      "id": "clients",
+      "x": 170,
+      "w": 296,
+      "title": "CLIENTS · UI",
+      "meta": "Next.js + API routes on Vercel",
+      "align": "start",
+      "covers": [
+        "portfolio-edge",
+        "tracking-api"
+      ]
+    },
+    {
+      "id": "backend",
+      "x": 466,
+      "w": 674,
+      "runtime": {
+        "brand": "googlecloud",
+        "title": "Google Cloud Run",
+        "meta": "KNATIVE · MIN 0–1 · MAX 1–2 INSTANCES · CPU PER REQUEST"
+      },
+      "badge": {
+        "brand": "kubernetes",
+        "title": "Kubernetes exit path",
+        "meta": "ADR-001 BELOW"
+      }
+    },
+    {
+      "id": "external",
+      "x": 1140,
+      "w": 156,
+      "title": "EXTERNAL"
+    }
+  ],
+  "lanes": [
+    {
+      "id": "ask-ai",
+      "number": 1,
+      "sequence": "ask-agent",
+      "title": "Ask AI",
+      "accent": "green",
+      "summary": "Streams answers grounded in the RAG chunks from ②, with chat memory and a daily budget.",
+      "h": 180,
+      "nodes": [
+        {
+          "id": "visitor",
+          "kind": "client",
+          "x": 188,
+          "y": 26,
+          "w": 152,
+          "h": 44,
+          "title": "Chat widget",
+          "meta": "VISITOR",
+          "covers": [
+            "visitor"
+          ],
+          "icon": "chat"
+        },
+        {
+          "id": "agent",
+          "kind": "service",
+          "x": 488,
+          "y": 22,
+          "w": 150,
+          "h": 52,
+          "title": "Agent Runtime",
+          "meta": "SPRING BOOT · SSE",
+          "icon": "bot",
+          "tags": [
+            "BUDGET"
+          ],
+          "covers": [
+            "agent-runtime",
+            "model-gateway"
+          ]
+        },
+        {
+          "id": "agent-memory",
+          "kind": "store",
+          "x": 492,
+          "y": 96,
+          "w": 44,
+          "h": 46,
+          "title": "Redis",
+          "meta": "MEMORY · BUDGET",
+          "brand": "redis",
+          "resources": [
+            {
+              "node": "agent-runtime",
+              "title": "Conversation Memory"
+            }
+          ]
+        },
+        {
+          "id": "agent-runs",
+          "kind": "store",
+          "x": 588,
+          "y": 96,
+          "w": 44,
+          "h": 46,
+          "title": "PostgreSQL",
+          "meta": "RUN LOG",
+          "brand": "postgresql",
+          "resources": [
+            {
+              "node": "agent-projectors",
+              "title": "Run Audit"
+            }
+          ]
+        },
+        {
+          "id": "knowledge",
+          "kind": "service",
+          "x": 708,
+          "y": 94,
+          "w": 150,
+          "h": 52,
+          "title": "Knowledge",
+          "meta": "SEMANTIC SEARCH",
+          "icon": "search",
+          "tags": [
+            "RAG"
+          ],
+          "covers": [
+            "knowledge-service"
+          ]
+        },
+        {
+          "id": "gemini",
+          "kind": "external",
+          "x": 1148,
+          "y": 26,
+          "w": 140,
+          "h": 44,
+          "title": "Gemini API",
+          "meta": "LLM · EMBEDDINGS",
+          "brands": [
+            "googlegemini"
+          ]
+        }
+      ],
+      "links": [
+        {
+          "from": "visitor",
+          "to": "agent",
+          "kind": "request",
+          "y": 48,
+          "edges": [
+            "visitor->portfolio-edge",
+            "portfolio-edge->agent-runtime"
+          ],
+          "label": {
+            "text": "/api/agent/chat",
+            "x": 403,
+            "y": 41,
+            "anchor": "middle",
+            "style": "route"
+          }
+        },
+        {
+          "from": "agent",
+          "to": "gemini",
+          "kind": "request",
+          "y": 36,
+          "label": {
+            "text": "generate · safety · plan",
+            "x": 894,
+            "y": 29,
+            "anchor": "middle"
+          }
+        },
+        {
+          "from": "agent",
+          "to": "knowledge",
+          "kind": "request",
+          "via": [
+            [
+              733,
+              62
+            ]
+          ],
+          "label": {
+            "text": "query",
+            "x": 739,
+            "y": 84
+          }
+        },
+        {
+          "from": "agent",
+          "to": "agent-memory",
+          "kind": "data",
+          "x": 514
+        },
+        {
+          "from": "agent",
+          "to": "agent-runs",
+          "kind": "data",
+          "x": 610,
+          "declarative": "Run events go to the agent's own PostgreSQL outbox and are bulk-indexed into OpenSearch; the detailed topology still models this path as the ai-topic stream."
+        }
+      ]
+    },
+    {
+      "id": "publish",
+      "number": 2,
+      "sequence": "publish-content",
+      "title": "Publish content",
+      "accent": "orange",
+      "summary": "One transaction writes the article and its outbox; a relay feeds Kafka for search, the shared pgvector and ③.",
+      "h": 180,
+      "nodes": [
+        {
+          "id": "operator",
+          "kind": "client",
+          "x": 188,
+          "y": 26,
+          "w": 152,
+          "h": 44,
+          "title": "Admin console",
+          "meta": "OPERATOR",
+          "covers": [
+            "operator"
+          ],
+          "icon": "edit"
+        },
+        {
+          "id": "content",
+          "kind": "service",
+          "x": 488,
+          "y": 22,
+          "w": 150,
+          "h": 52,
+          "title": "Content Service",
+          "meta": "WRITER API",
+          "icon": "file",
+          "covers": [
+            "content-control"
+          ]
+        },
+        {
+          "id": "content-db",
+          "kind": "store",
+          "x": 541,
+          "y": 96,
+          "w": 44,
+          "h": 46,
+          "title": "PostgreSQL",
+          "meta": "CONTENT + OUTBOX",
+          "brand": "postgresql",
+          "resources": [
+            {
+              "node": "content-control",
+              "title": "Content System of Record"
+            }
+          ]
+        },
+        {
+          "id": "kafka-content",
+          "kind": "kafka",
+          "x": 708,
+          "y": 22,
+          "w": 160,
+          "h": 52,
+          "title": "Kafka",
+          "topics": [
+            "content.search.index",
+            "content.rag.index"
+          ],
+          "covers": [
+            "search-topic",
+            "rag-topic"
+          ]
+        },
+        {
+          "id": "indexers",
+          "kind": "service",
+          "x": 928,
+          "y": 22,
+          "w": 150,
+          "h": 52,
+          "title": "Index Workers",
+          "meta": "SEARCH + RAG",
+          "icon": "layers",
+          "tags": [
+            "IDEMPOTENT"
+          ],
+          "covers": [
+            "projection-workers"
+          ],
+          "tagX": 936
+        },
+        {
+          "id": "search-index",
+          "kind": "store",
+          "x": 940,
+          "y": 96,
+          "w": 44,
+          "h": 46,
+          "title": "OpenSearch",
+          "meta": "CONTENT INDEX",
+          "brand": "opensearch",
+          "resources": [
+            {
+              "node": "projection-workers",
+              "title": "Content Search"
+            }
+          ]
+        }
+      ],
+      "links": [
+        {
+          "from": "operator",
+          "to": "content",
+          "kind": "request",
+          "y": 48,
+          "label": {
+            "text": "Writer API · JWT",
+            "x": 403,
+            "y": 41,
+            "anchor": "middle"
+          }
+        },
+        {
+          "from": "content",
+          "to": "content-db",
+          "kind": "data",
+          "x": 563,
+          "label": {
+            "text": "one tx",
+            "x": 569,
+            "y": 89
+          }
+        },
+        {
+          "from": "content-db",
+          "to": "kafka-content",
+          "kind": "event",
+          "via": [
+            [
+              676,
+              119
+            ],
+            [
+              676,
+              48
+            ]
+          ],
+          "label": {
+            "text": "outbox relay",
+            "x": 631,
+            "y": 112,
+            "anchor": "middle"
+          }
+        },
+        {
+          "from": "kafka-content",
+          "to": "indexers",
+          "kind": "event",
+          "y": 48
+        },
+        {
+          "from": "indexers",
+          "to": "search-index",
+          "kind": "data",
+          "x": 962
+        }
+      ]
+    },
+    {
+      "id": "notifications",
+      "number": 3,
+      "sequence": "send-notification",
+      "title": "Notifications",
+      "accent": "red",
+      "summary": "Emails ② publish updates and ④ analytics alerts; double opt-in, at most once per recipient.",
+      "h": 180,
+      "nodes": [
+        {
+          "id": "kafka-notify",
+          "kind": "kafka",
+          "x": 708,
+          "y": 22,
+          "w": 160,
+          "h": 52,
+          "title": "Kafka",
+          "topics": [
+            "content.notification.*"
+          ],
+          "covers": [
+            "content-notification-topic"
+          ]
+        },
+        {
+          "id": "notifications",
+          "kind": "service",
+          "x": 928,
+          "y": 22,
+          "w": 150,
+          "h": 52,
+          "title": "Notifications",
+          "meta": "FAN-OUT · EMAIL",
+          "icon": "bell",
+          "tags": [
+            "LEASE"
+          ],
+          "covers": [
+            "notification-service"
+          ]
+        },
+        {
+          "id": "ledger",
+          "kind": "store",
+          "x": 1018,
+          "y": 96,
+          "w": 44,
+          "h": 46,
+          "title": "PostgreSQL",
+          "meta": "DELIVERY LEDGER",
+          "brand": "postgresql",
+          "resources": [
+            {
+              "node": "notification-service",
+              "title": "Delivery Ledger"
+            }
+          ]
+        },
+        {
+          "id": "email",
+          "kind": "external",
+          "x": 1148,
+          "y": 26,
+          "w": 140,
+          "h": 44,
+          "title": "Email (SMTP)",
+          "meta": "TRANSACTIONAL",
+          "icon": "mail",
+          "covers": [
+            "email-provider"
+          ]
+        },
+        {
+          "id": "subscribe-form",
+          "kind": "client",
+          "x": 188,
+          "y": 98,
+          "w": 152,
+          "h": 44,
+          "title": "Subscribe form",
+          "meta": "SUBSCRIBER",
+          "same": "visitor",
+          "icon": "mail"
+        }
+      ],
+      "links": [
+        {
+          "from": "kafka-notify",
+          "to": "notifications",
+          "kind": "event",
+          "y": 48
+        },
+        {
+          "from": "notifications",
+          "to": "ledger",
+          "kind": "data",
+          "x": 1040
+        },
+        {
+          "from": "notifications",
+          "to": "email",
+          "kind": "request",
+          "y": 48
+        },
+        {
+          "from": "subscribe-form",
+          "to": "notifications",
+          "kind": "request",
+          "via": [
+            [
+              900,
+              120
+            ],
+            [
+              900,
+              62
+            ]
+          ],
+          "label": {
+            "text": "/api/subscriptions",
+            "x": 403,
+            "y": 113,
+            "anchor": "middle",
+            "style": "route"
+          },
+          "labels": [
+            {
+              "text": "subscribe · confirm · unsubscribe",
+              "x": 683,
+              "y": 113,
+              "anchor": "middle"
+            }
+          ],
+          "declarative": "The Next.js API route proxies subscription calls to the notification service (NOTIFICATION_SERVICE_URL); the detailed topology does not model this path."
+        }
+      ]
+    },
+    {
+      "id": "analytics",
+      "number": 4,
+      "sequence": "track-visitor",
+      "title": "Visitor analytics",
+      "accent": "cyan",
+      "summary": "Page events flow through Kafka into rollups for the dashboard; alert rules notify ③ over HTTP.",
+      "h": 180,
+      "nodes": [
+        {
+          "id": "visitor-browser",
+          "kind": "client",
+          "x": 188,
+          "y": 26,
+          "w": 152,
+          "h": 44,
+          "title": "Site tracker",
+          "meta": "VISITOR · BEACON",
+          "same": "visitor",
+          "icon": "pulse"
+        },
+        {
+          "id": "dashboard",
+          "kind": "client",
+          "x": 188,
+          "y": 98,
+          "w": 152,
+          "h": 44,
+          "title": "Dashboard",
+          "meta": "PUBLIC STATS",
+          "same": "visitor",
+          "icon": "chart"
+        },
+        {
+          "id": "kafka-analytics",
+          "kind": "kafka",
+          "x": 488,
+          "y": 22,
+          "w": 160,
+          "h": 52,
+          "title": "Kafka",
+          "topics": [
+            "analytics.raw.events"
+          ],
+          "covers": [
+            "analytics-topic",
+            "analytics-dlq"
+          ]
+        },
+        {
+          "id": "visitor-analytics",
+          "kind": "service",
+          "x": 708,
+          "y": 22,
+          "w": 160,
+          "h": 52,
+          "title": "Visitor Analytics",
+          "meta": "INGEST + READ API",
+          "icon": "chart",
+          "tags": [
+            "DEDUP"
+          ],
+          "covers": [
+            "analytics-aggregator",
+            "visits-api"
+          ]
+        },
+        {
+          "id": "dedup",
+          "kind": "store",
+          "x": 714,
+          "y": 96,
+          "w": 44,
+          "h": 46,
+          "title": "Redis",
+          "meta": "DEDUP · LIMITS",
+          "brand": "redis",
+          "resources": [
+            {
+              "node": "analytics-aggregator",
+              "title": "Dedup + Limits"
+            }
+          ]
+        },
+        {
+          "id": "rollups",
+          "kind": "store",
+          "x": 814,
+          "y": 96,
+          "w": 44,
+          "h": 46,
+          "title": "PostgreSQL",
+          "meta": "EVENTS · ROLLUPS",
+          "brand": "postgresql",
+          "resources": [
+            {
+              "node": "analytics-aggregator",
+              "title": "Analytics Store"
+            }
+          ]
+        },
+        {
+          "id": "alerts",
+          "kind": "service",
+          "x": 928,
+          "y": 22,
+          "w": 150,
+          "h": 52,
+          "title": "Alert Evaluator",
+          "meta": "VERSIONED RULES",
+          "icon": "alert",
+          "covers": [
+            "alert-evaluator",
+            "alert-topic"
+          ]
+        }
+      ],
+      "links": [
+        {
+          "from": "visitor-browser",
+          "to": "kafka-analytics",
+          "kind": "event",
+          "y": 48,
+          "edges": [
+            "visitor->portfolio-edge",
+            "portfolio-edge->tracking-api",
+            "tracking-api->analytics-topic"
+          ],
+          "label": {
+            "text": "/api/track",
+            "x": 403,
+            "y": 41,
+            "anchor": "middle",
+            "style": "route"
+          }
+        },
+        {
+          "from": "dashboard",
+          "to": "visitor-analytics",
+          "kind": "request",
+          "via": [
+            [
+              688,
+              120
+            ],
+            [
+              688,
+              66
+            ]
+          ],
+          "edges": [
+            "visitor->portfolio-edge",
+            "portfolio-edge->visits-api"
+          ],
+          "label": {
+            "text": "/api/analytics",
+            "x": 403,
+            "y": 113,
+            "anchor": "middle",
+            "style": "route"
+          },
+          "labels": [
+            {
+              "text": "cached read · ETag",
+              "x": 577,
+              "y": 113,
+              "anchor": "middle"
+            }
+          ]
+        },
+        {
+          "from": "kafka-analytics",
+          "to": "visitor-analytics",
+          "kind": "event",
+          "y": 48
+        },
+        {
+          "from": "visitor-analytics",
+          "to": "dedup",
+          "kind": "data",
+          "x": 736
+        },
+        {
+          "from": "visitor-analytics",
+          "to": "rollups",
+          "kind": "data",
+          "x": 836
+        },
+        {
+          "from": "alerts",
+          "to": "rollups",
+          "kind": "data",
+          "via": [
+            [
+              948,
+              119
+            ]
+          ],
+          "edges": [
+            "analytics-aggregator->alert-evaluator"
+          ],
+          "label": {
+            "text": "poll",
+            "x": 903,
+            "y": 113,
+            "anchor": "middle"
+          }
+        }
+      ]
+    },
+    {
+      "id": "mcp",
+      "number": 5,
+      "sequence": "execute-mcp",
+      "title": "MCP & Career",
+      "accent": "purple",
+      "summary": "AI clients and the career copilot call typed tools; writes need RBAC and a confirmation.",
+      "h": 180,
+      "nodes": [
+        {
+          "id": "mcp-clients",
+          "kind": "client",
+          "x": 188,
+          "y": 26,
+          "w": 152,
+          "h": 44,
+          "title": "MCP clients",
+          "meta": "CLAUDE · CODEX",
+          "icon": "bot",
+          "covers": [
+            "mcp-clients"
+          ]
+        },
+        {
+          "id": "applicant",
+          "kind": "client",
+          "x": 188,
+          "y": 98,
+          "w": 152,
+          "h": 44,
+          "title": "Chrome copilot",
+          "meta": "APPLICANT",
+          "icon": "browser",
+          "covers": [
+            "app-owner",
+            "application-copilot",
+            "local-codex",
+            "ats-page"
+          ]
+        },
+        {
+          "id": "public-mcp",
+          "kind": "service",
+          "x": 488,
+          "y": 22,
+          "w": 150,
+          "h": 52,
+          "title": "MCP Server",
+          "meta": "STREAMABLE HTTP",
+          "brand": "modelcontextprotocol",
+          "tags": [
+            "RATE LIMIT"
+          ],
+          "covers": [
+            "public-mcp",
+            "admin-mcp-path"
+          ]
+        },
+        {
+          "id": "tool-gateway",
+          "kind": "service",
+          "x": 708,
+          "y": 22,
+          "w": 150,
+          "h": 52,
+          "title": "Tool Gateway",
+          "meta": "TYPED MCP TOOLS",
+          "icon": "tool",
+          "tags": [
+            "RBAC"
+          ],
+          "covers": [
+            "mcp-gateway"
+          ]
+        },
+        {
+          "id": "career",
+          "kind": "service",
+          "x": 928,
+          "y": 22,
+          "w": 150,
+          "h": 52,
+          "title": "Career Service",
+          "meta": "JAVA 21",
+          "icon": "briefcase",
+          "tags": [
+            "AES-GCM"
+          ],
+          "covers": [
+            "career-service"
+          ]
+        },
+        {
+          "id": "career-vault",
+          "kind": "store",
+          "x": 940,
+          "y": 96,
+          "w": 44,
+          "h": 46,
+          "title": "PostgreSQL",
+          "meta": "CAREER VAULT",
+          "brand": "postgresql",
+          "resources": [
+            {
+              "node": "career-service",
+              "title": "Career Vault"
+            }
+          ]
+        },
+        {
+          "id": "resumes",
+          "kind": "store",
+          "x": 1030,
+          "y": 96,
+          "w": 44,
+          "h": 46,
+          "title": "Object storage",
+          "meta": "RESUME PDFS",
+          "icon": "bucket",
+          "accent": "green",
+          "covers": [
+            "resume-storage"
+          ]
+        },
+        {
+          "id": "ref-agent",
+          "kind": "ref",
+          "x": 488,
+          "y": 100,
+          "w": 150,
+          "h": 40,
+          "ref": "agent"
+        },
+        {
+          "id": "ref-content-tools",
+          "kind": "ref",
+          "x": 708,
+          "y": 100,
+          "w": 150,
+          "h": 40,
+          "ref": "content"
+        }
+      ],
+      "links": [
+        {
+          "from": "mcp-clients",
+          "to": "public-mcp",
+          "kind": "request",
+          "y": 48,
+          "edges": [
+            "mcp-clients->public-mcp"
+          ],
+          "label": {
+            "text": "/mcp",
+            "x": 403,
+            "y": 41,
+            "anchor": "middle",
+            "style": "route"
+          }
+        },
+        {
+          "from": "applicant",
+          "to": "public-mcp",
+          "kind": "request",
+          "via": [
+            [
+              452,
+              120
+            ],
+            [
+              452,
+              64
+            ]
+          ],
+          "edges": [
+            "application-copilot->admin-mcp-path"
+          ],
+          "label": {
+            "text": "/mcp/admin",
+            "x": 396,
+            "y": 113,
+            "anchor": "middle",
+            "style": "route"
+          }
+        },
+        {
+          "from": "public-mcp",
+          "to": "tool-gateway",
+          "kind": "request",
+          "y": 48
+        },
+        {
+          "from": "tool-gateway",
+          "to": "career",
+          "kind": "request",
+          "y": 48,
+          "edges": [
+            "admin-mcp-path->career-service"
+          ],
+          "label": {
+            "text": "career tools",
+            "x": 893,
+            "y": 41,
+            "anchor": "middle"
+          }
+        },
+        {
+          "from": "tool-gateway",
+          "to": "ref-content-tools",
+          "kind": "request",
+          "x": 783,
+          "label": {
+            "text": "admin tools",
+            "x": 789,
+            "y": 91
+          }
+        },
+        {
+          "from": "ref-agent",
+          "to": "tool-gateway",
+          "kind": "request",
+          "via": [
+            [
+              678,
+              120
+            ],
+            [
+              678,
+              62
+            ]
+          ],
+          "label": {
+            "text": "tool calls",
+            "x": 672,
+            "y": 91,
+            "anchor": "end"
+          }
+        },
+        {
+          "from": "career",
+          "to": "career-vault",
+          "kind": "data",
+          "x": 962
+        },
+        {
+          "from": "career",
+          "to": "resumes",
+          "kind": "data",
+          "x": 1052
+        }
+      ]
+    }
+  ],
+  "sharedStores": [
+    {
+      "id": "rag-vectors",
+      "kind": "store",
+      "x": 1080,
+      "w": 44,
+      "h": 52,
+      "between": [
+        "ask-ai",
+        "publish"
+      ],
+      "title": "pgvector",
+      "meta": "SHARED RAG CHUNKS",
+      "brand": "postgresql",
+      "resources": [
+        {
+          "node": "projection-workers",
+          "title": "RAG Chunks"
+        }
+      ]
+    }
+  ],
+  "crossLinks": [
+    {
+      "from": "knowledge",
+      "to": "rag-vectors",
+      "kind": "data",
+      "points": [
+        [
+          858,
+          "ask-ai",
+          120
+        ],
+        [
+          1102,
+          "ask-ai",
+          120
+        ],
+        [
+          1102,
+          "ask-ai",
+          160
+        ]
+      ],
+      "label": {
+        "text": "reads",
+        "x": 980,
+        "lane": "ask-ai",
+        "y": 113,
+        "anchor": "middle"
+      }
+    },
+    {
+      "from": "indexers",
+      "to": "rag-vectors",
+      "kind": "data",
+      "points": [
+        [
+          1078,
+          "publish",
+          48
+        ],
+        [
+          1102,
+          "publish",
+          48
+        ],
+        [
+          1102,
+          "publish",
+          20
+        ]
+      ],
+      "label": {
+        "text": "writes",
+        "x": 1108,
+        "lane": "publish",
+        "y": 44
+      }
+    },
+    {
+      "from": "content-db",
+      "to": "kafka-notify",
+      "kind": "event",
+      "points": [
+        [
+          585,
+          "publish",
+          119
+        ],
+        [
+          676,
+          "publish",
+          119
+        ],
+        [
+          676,
+          "notifications",
+          48
+        ],
+        [
+          708,
+          "notifications",
+          48
+        ]
+      ]
+    },
+    {
+      "from": "alerts",
+      "to": "notifications",
+      "kind": "request",
+      "points": [
+        [
+          970,
+          "analytics",
+          22
+        ],
+        [
+          970,
+          "notifications",
+          74
+        ]
+      ],
+      "label": {
+        "text": "alert · HTTP, retried",
+        "x": 964,
+        "lane": "notifications",
+        "y": 162,
+        "anchor": "end"
+      }
+    }
+  ],
+  "adr": {
+    "id": "ADR-001",
+    "title": "Cloud Run today, Kubernetes as the exit path",
+    "status": "ACCEPTED · GKE DEFERRED FOR COST",
+    "rows": [
+      [
+        "Why",
+        "Spiky, low traffic and one maintainer: scale-to-zero and per-request billing beat an always-on cluster."
+      ]
+    ],
+    "columns": [
+      {
+        "brand": "googlecloud",
+        "title": "TODAY · CLOUD RUN"
+      },
+      {
+        "brand": "kubernetes",
+        "title": "EXIT PATH · KUBERNETES (GKE)"
+      }
+    ],
+    "mapping": [
+      [
+        "OCI image per service, run as a Knative Service",
+        "Deployment + Service (or Knative on GKE)"
+      ],
+      [
+        "Request autoscaling · min 0–1, max 1–2",
+        "HPA · KEDA for scale-to-zero"
+      ],
+      [
+        "A drain call wakes the Kafka consumers",
+        "KEDA Kafka scaler on consumer lag"
+      ],
+      [
+        "Spring Boot /actuator/health",
+        "Liveness + readiness probes"
+      ],
+      [
+        "Secret Manager · per-service identities",
+        "External Secrets · Workload Identity"
+      ]
+    ],
+    "revisit": "Steady traffic or always-on consumers make a small cluster cheaper."
+  },
+  "platform": {
+    "title": "Platform",
+    "items": [
+      {
+        "id": "identity",
+        "title": "Identity",
+        "meta": "JWT sessions · owner RBAC · confirm before writes",
+        "icon": "key",
+        "covers": [
+          "platform-security"
+        ]
+      },
+      {
+        "id": "security",
+        "title": "Security",
+        "meta": "CSP headers · reCAPTCHA · rate limits · signed URLs",
+        "icon": "shield"
+      },
+      {
+        "id": "observability",
+        "title": "Observability",
+        "meta": "Prometheus + Loki → Grafana · run traces in OpenSearch",
+        "icon": "chart",
+        "covers": [
+          "platform-observability",
+          "ai-topic",
+          "agent-projectors",
+          "kibana"
+        ]
+      },
+      {
+        "id": "delivery",
+        "title": "Delivery",
+        "meta": "GitHub Actions (OIDC) → Cloud Build → Cloud Run",
+        "icon": "pipeline"
+      },
+      {
+        "id": "reliability",
+        "title": "Reliability",
+        "meta": "Idempotency keys · outbox · DLQ replay · rebuilds",
+        "icon": "refresh",
+        "covers": [
+          "platform-recovery"
+        ]
+      },
+      {
+        "id": "cost",
+        "title": "Cost",
+        "meta": "Scale-to-zero · instance caps · daily AI budget",
+        "icon": "coin",
+        "covers": [
+          "platform-cost"
+        ]
+      }
+    ]
+  }
+}

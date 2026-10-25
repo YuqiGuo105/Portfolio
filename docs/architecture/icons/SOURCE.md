@@ -13,7 +13,7 @@ To update them:
 1. Review the upstream Simple Icons release and brand guidelines.
 2. Replace only the required SVG files.
 3. Update each diagram's `brand` and `brandColor` fields if needed.
-4. Regenerate the SVG with `scripts/render-architecture-diagram.mjs`.
+4. Regenerate every architecture SVG with `npm run docs:architecture`.
 5. Inspect the rendered README at desktop and narrow widths.
 
 Simple Icons project: <https://simpleicons.org/>
