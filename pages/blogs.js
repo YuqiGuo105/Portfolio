@@ -234,11 +234,20 @@ const Blogs = () => {
     router.push('/blogs', undefined, { shallow: true });
   };
 
-  if (loading) return <div className="loading-container"><div>Loading...</div></div>;
+  const seo = (
+    <SeoHead
+      title="Blog — Engineering & Life Notes"
+      description="Engineering write-ups by Yuqi Guo on distributed systems, backend platforms, system design and AI infrastructure, plus life notes."
+      url="/blogs"
+    />
+  );
+
+  // Render the SEO head before data loads so the server HTML carries the real title.
+  if (loading) return <>{seo}<div className="loading-container"><div>Loading...</div></div></>;
 
   return (
     <>
-      <SeoHead title="All Blogs" description="Browse all technical and life blogs" />
+      {seo}
       <Layout>
         <section className="section section-inner started-heading">
           <div className="container">
@@ -847,5 +856,7 @@ const Blogs = () => {
     </>
   );
 };
+
+Blogs.hasCustomSeo = true;
 
 export default Blogs;

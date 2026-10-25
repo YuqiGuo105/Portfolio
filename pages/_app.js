@@ -11,6 +11,7 @@ import "../styles/carousel.css";
 import "../styles/chatWidget.css";
 
 const SITE_URL = "https://www.yuqi.site";
+const HOME_KEYWORDS = "Yuqi Guo, 郭育奇, software engineer, backend engineer, distributed systems, system design, AI platform, portfolio";
 const PROFILE_IMAGE_PATH = "/assets/images/yuqi-guo-profile-512.png";
 const PROFILE_IMAGE_URL = `${SITE_URL}${PROFILE_IMAGE_PATH}`;
 const PROFILE_IMAGE = {
@@ -138,36 +139,21 @@ function MyApp({ Component, pageProps }) {
   return (
     <Fragment>
       {loadRecaptcha && (
+        // reCAPTCHA only scores analytics events for bot filtering, so it loads
+        // after the page is idle instead of competing with first paint.
         <Script
           id="recaptcha-enterprise"
-          strategy="afterInteractive"
+          strategy="lazyOnload"
           src={`https://www.google.com/recaptcha/enterprise.js?render=${encodeURIComponent(recaptchaSiteKey)}`}
         />
       )}
       <Head>
         <link rel="manifest" href="/manifest.webmanifest" />
+        <link rel="alternate" type="application/rss+xml" title="Yuqi Guo — Technical Blog" href="/rss.xml" />
+        {/* Title, description and Open Graph tags come from <SeoHead> only, so
+            the homepage no longer emits two og:type / og:image sets. */}
         {isHomePage && (
           <>
-            <title>Yuqi Guo | Software Engineer Portfolio</title>
-            <meta
-              name="description"
-              content="Explore Yuqi Guo's software engineering portfolio: distributed systems, backend platforms, AI infrastructure, production projects, and technical writing."
-            />
-            <meta
-              name="keywords"
-              content="Yuqi Guo, 郭育奇, software engineer, backend engineer, distributed systems, AI platform, portfolio"
-            />
-            <meta name="author" content="Yuqi Guo (郭育奇)" />
-            <meta property="og:type" content="profile" />
-            <meta property="og:site_name" content="Yuqi Guo Portfolio" />
-            <meta property="og:image" content={PROFILE_IMAGE_URL} />
-            <meta property="og:image:secure_url" content={PROFILE_IMAGE_URL} />
-            <meta property="og:image:type" content="image/png" />
-            <meta property="og:image:width" content="512" />
-            <meta property="og:image:height" content="512" />
-            <meta property="og:image:alt" content="Yuqi Guo profile portrait" />
-            <meta name="twitter:card" content="summary" />
-            <meta name="twitter:image" content={PROFILE_IMAGE_URL} />
             {SITE_PROFILE_JSON_LD.map((entry) => (
               <script
                 key={entry["@type"]}
@@ -239,7 +225,12 @@ function MyApp({ Component, pageProps }) {
         <link rel="shortcut icon" href="/favicon.ico?v=20260818" type="image/x-icon" />
         <link rel="icon" href="/favicon.ico?v=20260818" type="image/x-icon" />
       </Head>
-      {!Component.hasCustomSeo && <SeoHead />}
+      {!Component.hasCustomSeo && (
+        <SeoHead
+          type={isHomePage ? "profile" : "website"}
+          keywords={isHomePage ? HOME_KEYWORDS : undefined}
+        />
+      )}
       <MobilePullToRefresh />
       <Component {...pageProps} />{" "}
     </Fragment>

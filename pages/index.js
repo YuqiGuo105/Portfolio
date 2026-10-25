@@ -813,18 +813,26 @@ const Index = () => {
                       }}
                     />}
 
-                  <img
-                    src="/assets/images/profile.png"
-                    alt="avatar"
-                    style={{
-                      width: "100%",
-                      borderRadius: "380px",
-                      position: "relative",
-                      zIndex: 1,
-                      border: stories.length ? "5px solid white" : "0",
-                      boxSizing: "border-box",
-                    }}
-                  />
+                  {/* WebP is ~20x smaller than the PNG master; the PNG stays as a fallback. */}
+                  <picture>
+                    <source srcSet="/assets/images/profile-640.webp 640w, /assets/images/profile-1024.webp 1024w" sizes="(max-width: 767px) 90vw, 680px" type="image/webp" />
+                    <img
+                      src="/assets/images/profile.png"
+                      alt="Yuqi Guo illustrated portrait on a beach at sunset"
+                      width={1024}
+                      height={1536}
+                      fetchpriority="high"
+                      decoding="async"
+                      style={{
+                        width: "100%",
+                        borderRadius: "380px",
+                        position: "relative",
+                        zIndex: 1,
+                        border: stories.length ? "5px solid white" : "0",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </picture>
                 </div>
 
                 {/* 隐藏原有circle元素但保留在DOM中 */}
@@ -837,7 +845,7 @@ const Index = () => {
               <div className="content">
                 <div className="titles">
                   <div className="subtitle">Software Engineer · Backend &amp; AI Systems</div>
-                  <h2 className="title">Yuqi Guo</h2>
+                  <h1 className="title">Yuqi Guo</h1>
                 </div>
                 <div className="description">
                   <p>

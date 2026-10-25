@@ -50,7 +50,9 @@ const SeoHead = ({
   const router = useRouter();
 
   const siteTitle = "Yuqi Guo | Software Engineer Portfolio";
-  const metaTitle = title ? `${title} | Yuqi Guo` : siteTitle;
+  const metaTitle = title
+    ? (/\|\s*Yuqi Guo\s*$/.test(title) || /^Yuqi Guo\b/.test(title) ? title : `${title} | Yuqi Guo`)
+    : siteTitle;
 
   // Prefer the caller-supplied canonical; otherwise derive one from the
   // current path so every page has a self-referencing canonical instead
@@ -71,31 +73,31 @@ const SeoHead = ({
 
   return (
     <Head>
-      <title>{metaTitle}</title>
-      <meta name="description" content={description} />
-      <meta name="keywords" content={keywords} />
-      <meta name="robots" content={robots} />
-      <meta name="googlebot" content={robots} />
-      <meta name="author" content="Yuqi Guo (郭育奇)" />
-      <link rel="canonical" href={metaUrl} />
+      <title key="title">{metaTitle}</title>
+      <meta key="description" name="description" content={description} />
+      <meta key="keywords" name="keywords" content={keywords} />
+      <meta key="robots" name="robots" content={robots} />
+      <meta key="googlebot" name="googlebot" content={robots} />
+      <meta key="author" name="author" content="Yuqi Guo (郭育奇)" />
+      <link key="canonical" rel="canonical" href={metaUrl} />
       {/* Open Graph / Facebook */}
-      <meta property="og:type" content={type} />
-      <meta property="og:site_name" content="Yuqi Guo Portfolio" />
-      <meta property="og:url" content={metaUrl} />
-      <meta property="og:title" content={metaTitle} />
-      <meta property="og:description" content={description} />
-      <meta property="og:image" content={metaImage} />
-      <meta property="og:image:secure_url" content={metaImage} />
-      {usesProfileImage && <meta property="og:image:type" content="image/png" />}
-      {usesProfileImage && <meta property="og:image:width" content="512" />}
-      {usesProfileImage && <meta property="og:image:height" content="512" />}
-      <meta property="og:image:alt" content={title ? `${title} preview` : 'Yuqi Guo profile portrait'} />
+      <meta key="og:type" property="og:type" content={type} />
+      <meta key="og:site_name" property="og:site_name" content="Yuqi Guo Portfolio" />
+      <meta key="og:url" property="og:url" content={metaUrl} />
+      <meta key="og:title" property="og:title" content={metaTitle} />
+      <meta key="og:description" property="og:description" content={description} />
+      <meta key="og:image" property="og:image" content={metaImage} />
+      <meta key="og:image:secure_url" property="og:image:secure_url" content={metaImage} />
+      {usesProfileImage && <meta key="og:image:type" property="og:image:type" content="image/png" />}
+      {usesProfileImage && <meta key="og:image:width" property="og:image:width" content="512" />}
+      {usesProfileImage && <meta key="og:image:height" property="og:image:height" content="512" />}
+      <meta key="og:image:alt" property="og:image:alt" content={title ? `${title} preview` : 'Yuqi Guo profile portrait'} />
       {/* Twitter */}
-      <meta name="twitter:card" content={usesProfileImage ? 'summary' : 'summary_large_image'} />
-      <meta property="twitter:url" content={metaUrl} />
-      <meta name="twitter:title" content={metaTitle} />
-      <meta name="twitter:description" content={description} />
-      <meta name="twitter:image" content={metaImage} />
+      <meta key="twitter:card" name="twitter:card" content={usesProfileImage ? 'summary' : 'summary_large_image'} />
+      <meta key="twitter:url" property="twitter:url" content={metaUrl} />
+      <meta key="twitter:title" name="twitter:title" content={metaTitle} />
+      <meta key="twitter:description" name="twitter:description" content={description} />
+      <meta key="twitter:image" name="twitter:image" content={metaImage} />
       {/* JSON-LD structured data. Google reads this to build rich results
           (article cards, sitelinks, author bylines, etc.). Rendered as
           raw HTML because next/head refuses to render children into

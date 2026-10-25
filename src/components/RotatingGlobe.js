@@ -18,6 +18,15 @@ const log = (...a) => {
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
+// The globe renders at roughly 300–600 CSS px. A 2K equirectangular texture
+// covers that on standard screens; high-DPI desktops get 4K. (The old 8K
+// source was 4.4 MB and exceeds the max texture size of many mobile GPUs.)
+const pickGlobeTexture = () => {
+  if (typeof window === "undefined") return "/textures/earth_day_2k.jpg";
+  const devicePixels = Math.min(window.innerWidth, 1200) * (window.devicePixelRatio || 1);
+  return devicePixels > 1400 ? "/textures/earth_day_4k.jpg" : "/textures/earth_day_2k.jpg";
+};
+
 const isFiniteNumber = (n) => Number.isFinite(n) && !Number.isNaN(n);
 
 const normalizeLng = (lng) => {
@@ -315,6 +324,7 @@ const RotatingGlobe = ({
   const containerRef = useRef(null);
   const elCacheRef = useRef(new Map());
   const [size, setSize] = useState({ w: 1, h: 1 });
+  const [globeTexture] = useState(pickGlobeTexture);
 
   // zoom tracking
   const [stableZoomLevel, setStableZoomLevel] = useState("world");
@@ -1503,8 +1513,7 @@ const RotatingGlobe = ({
         width={size.w}
         height={size.h}
         backgroundColor="rgba(0,0,0,0)"
-        globeImageUrl="/textures/earth_day_8k.jpg"
-        bumpImageUrl="/textures/earth_bump_8k.png"
+        globeImageUrl={globeTexture}
         htmlElementsData={displayPins}
         htmlLat={(d) => d.lat}
         htmlLng={(d) => d.lng}

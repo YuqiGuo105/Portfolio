@@ -609,7 +609,7 @@ export default function CVPage() {
   return (
     <Layout extraWrapClass="cv-page-wrap">
       <SeoHead
-        title="Yuqi Guo | Software Engineer Resume"
+        title="Software Engineer Résumé"
         description="Yuqi Guo is a software engineer specializing in backend systems, distributed platforms, and AI infrastructure."
       />
 

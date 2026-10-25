@@ -8,6 +8,16 @@ const nextConfig = {
     defaultLocale: "en",
   },
 
+  // Retire the template demo pages that shipped with the original theme.
+  async redirects() {
+    return [
+      { source: "/works", destination: "/works-list", permanent: true },
+      { source: "/work-single", destination: "/works-list", permanent: true },
+      { source: "/blog", destination: "/blogs", permanent: true },
+      { source: "/blog-single", destination: "/blogs", permanent: true },
+    ];
+  },
+
   async rewrites() {
     const mcpBase = process.env.MCP_SERVER_URL || "https://portfolio-mcp-server-702193211434.us-central1.run.app";
     return [

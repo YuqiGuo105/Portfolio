@@ -1,5 +1,6 @@
 import dynamic from "next/dynamic";
 import Layout from "../src/layout/Layout";
+import SeoHead from "../src/components/SeoHead";
 
 const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
   ssr: false,
@@ -7,6 +8,11 @@ const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
 const WorksList = () => {
   return (
     <Layout>
+      <SeoHead
+        title="Projects — Distributed Systems & AI Platforms"
+        description="Project archive by Yuqi Guo: event-driven microservices, AI agent and RAG platforms, MCP integrations, analytics pipelines and open-source reliability work."
+        url="/works-list"
+      />
       {/* Section Started Heading */}
       <section className="section section-inner started-heading">
         <div className="container">
@@ -52,4 +58,6 @@ const WorksList = () => {
     </Layout>
   );
 };
+WorksList.hasCustomSeo = true;
+
 export default WorksList;

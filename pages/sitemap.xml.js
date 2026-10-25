@@ -16,10 +16,9 @@ import { SITE_URL } from '../src/components/SeoHead';
 // attach per-URL <priority> / <changefreq> hints below.
 const STATIC_ROUTES = [
   { path: '/',            priority: '1.0', changefreq: 'weekly'  },
-  { path: '/blog',        priority: '0.8', changefreq: 'daily'   },
-  { path: '/works',       priority: '0.8', changefreq: 'weekly'  },
-  { path: '/blogs',       priority: '0.6', changefreq: 'weekly'  },
-  { path: '/works-list',  priority: '0.6', changefreq: 'weekly'  },
+  { path: '/blogs',       priority: '0.8', changefreq: 'daily'   },
+  { path: '/works-list',  priority: '0.8', changefreq: 'weekly'  },
+  { path: '/architecture', priority: '0.7', changefreq: 'monthly' },
   { path: '/cv',          priority: '0.5', changefreq: 'monthly' },
   { path: '/mcp-guide',   priority: '0.6', changefreq: 'monthly' },
   { path: '/content-usage', priority: '0.3', changefreq: 'yearly' },
@@ -81,6 +80,7 @@ export async function getServerSideProps({ res }) {
       supabaseServer
         .from('Projects')
         .select('id,updated_at,published_at')
+        .eq('publication_status', 'PUBLISHED')
         .order('id', { ascending: false })
         .limit(5000),
     ]);
