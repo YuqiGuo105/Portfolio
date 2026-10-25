@@ -11,6 +11,12 @@
   -webkit-mask: url('/assets/icons/leetcode.svg') center / contain no-repeat;
   mask: url('/assets/icons/leetcode.svg') center / contain no-repeat;
 }
+/* Rounded-corner badge; Font Awesome's square fa-linkedin looked boxy next to the other icons. */
+.linkedin {
+  width: 23px; height: 23px; display: block; background-color: currentColor;
+  -webkit-mask: url('/assets/icons/linkedin-rounded.svg') center / contain no-repeat;
+  mask: url('/assets/icons/linkedin-rounded.svg') center / contain no-repeat;
+}
 .links.links a:hover { color: #f5a623; background: rgba(148, 163, 184, 0.12); }
 .links.links a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 .tooltip {
