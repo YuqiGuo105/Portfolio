@@ -9,12 +9,18 @@ import { useEffect, useRef, useState } from "react";
 // Everything is CSS transforms on two images — no WebGL; the loop only runs while the view moves.
 
 const MAX_TILT_DEG = 6; // turn of the whole oval
-const SKEW_DEG = 3.5; // background shear: zero at his feet, growing towards the horizon and sky
+const SKEW_DEG = 2.5; // background shear: zero at his feet, growing towards the horizon and sky
 const LIFT = 0.03; // vertical stretch of the background about his feet (horizon rises / falls)
-const SCALE = 1.1; // headroom so the sheared background never shows an edge
-// Where his boots touch the sand, in % of the frame (the person layer ends at 93% of the 2:3 image,
-// which the theme's ~0.73 hero slot crops to about 97%). Both layers pivot here.
-const GROUND = "50% 96.5%";
+// Background-only headroom so the sheared background never shows an edge. The figure is not scaled:
+// it does not move, and scaling it about his feet would push his head out of the top of the oval.
+const SCALE = 1.08;
+// The theme's hero slot (~0.73 wide:tall) is squatter than the 2:3 art, so the art is cropped. Crop
+// only the sky (anchor the bottom), or his boots end up on the oval's lower edge with no sand under
+// him and he seems to float.
+const CROP = "50% 100%";
+// Where his boots touch the sand, in % of the frame: the person layer ends at 93% of the art, which
+// that bottom-anchored crop puts at about 92.5% of the slot. Both layers pivot here.
+const GROUND = "50% 92%";
 const TILT_RANGE = 18; // degrees of phone tilt for a full swing
 const EASE = 0.12; // share of the remaining distance covered per frame
 
@@ -178,6 +184,7 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
     width: "100%",
     height: "100%",
     objectFit: "cover",
+    objectPosition: CROP,
     willChange: "transform",
     transformOrigin: GROUND,
     pointerEvents: "none",
@@ -227,7 +234,7 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
         width={1024}
         height={1536}
         decoding="async"
-        style={{ ...layer, transform: `scale(${SCALE})` }}
+        style={layer}
       />
       {needsMotionPermission && !motionOn && (
         <button
