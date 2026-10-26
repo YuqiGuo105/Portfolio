@@ -99,20 +99,35 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
     };
     window.addEventListener("deviceorientation", onOrientation, { passive: true });
     window.addEventListener("deviceorientation", onFirstOrientation, { passive: true, once: true });
-    const askTimer = setTimeout(() => {
-      const touch = window.matchMedia?.("(pointer: coarse)").matches;
-      if (touch && !gotReading && DOE && typeof DOE.requestPermission === "function") setNeedsMotionPermission(true);
-    }, 1200);
-    frame.__enableMotion = async () => {
+    const touch = window.matchMedia?.("(pointer: coarse)").matches;
+    const mustAsk = touch && DOE && typeof DOE.requestPermission === "function";
+    let asking = false;
+    let answered = false;
+    const ask = async () => {
+      if (asking || answered || gotReading) return;
+      asking = true;
       try {
-        await DOE.requestPermission();
-      } catch {}
-      setNeedsMotionPermission(false);
+        await DOE.requestPermission(); // resolves "granted" or "denied" once the visitor answers
+        answered = true;
+        document.removeEventListener("touchend", ask);
+        setNeedsMotionPermission(false);
+      } catch {
+        // Not counted as a gesture (e.g. the touch was a scroll): the next tap asks again.
+      }
+      asking = false;
     };
+    const askTimer = setTimeout(() => {
+      if (mustAsk && !gotReading) setNeedsMotionPermission(true);
+    }, 1200);
+    // iOS (Safari and Chrome alike) only grants motion access from a user gesture: a tap anywhere on
+    // the page asks until the visitor answers; the button is the visible way to do the same.
+    if (mustAsk) document.addEventListener("touchend", ask, { passive: true });
+    frame.__enableMotion = ask;
 
     return () => {
       cancelAnimationFrame(raf);
       clearTimeout(askTimer);
+      document.removeEventListener("touchend", ask);
       window.removeEventListener("deviceorientation", onFirstOrientation);
       io?.disconnect();
       frame.removeEventListener("pointermove", onPointerMove);
@@ -140,7 +155,8 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
         position: "relative",
         zIndex: 1,
         width: "100%",
-        aspectRatio: "2 / 3",
+        // Fill the hero slot like the old single image did (the theme sizes .slide; object-fit crops).
+        height: "100%",
         borderRadius: `${radius}px`,
         overflow: "hidden",
         border,
@@ -189,15 +205,17 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
             left: "50%",
             bottom: "7%",
             transform: "translateX(-50%)",
-            zIndex: 2,
+            // Above the image layers: the theme gives every .hero-started .slide img z-index 10.
+            zIndex: 20,
             height: "auto",
             lineHeight: 1.2,
-            padding: "7px 14px",
+            // The theme scales the hero to 0.5–0.75 on phones and tablets, so these read about half size.
+            padding: "14px 26px",
             borderRadius: 999,
-            border: "1px solid rgba(255,255,255,0.6)",
+            border: "2px solid rgba(255,255,255,0.7)",
             background: "rgba(15,23,42,0.45)",
             color: "#fff",
-            fontSize: 12,
+            fontSize: 24,
             fontWeight: 600,
             backdropFilter: "blur(6px)",
             WebkitBackdropFilter: "blur(6px)",
