@@ -25,8 +25,22 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return undefined;
+    // With "Reduce Motion" on, the view still follows the visitor's own tilt (it never moves by
+    // itself), at half strength — the visitor's hand drives it, so nothing animates unasked.
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) return undefined;
+    const amp = reduce ? 0.5 : 1;
+
+    // ?tiltdebug shows what the browser reports, to diagnose phones we cannot test on.
+    const debugBox = /[?&]tiltdebug\b/.test(window.location.search) ? document.createElement("pre") : null;
+    const dbg = { reduce: !!reduce, permission: "-", events: 0, beta: null, gamma: null };
+    const showDebug = () => {
+      if (!debugBox) return;
+      debugBox.textContent = Object.entries(dbg).map(([k, v]) => `${k}: ${typeof v === "number" ? Math.round(v * 10) / 10 : v}`).join("\n");
+    };
+    if (debugBox) {
+      Object.assign(debugBox.style, { position: "fixed", left: "8px", top: "8px", zIndex: 99999, margin: 0, padding: "8px 10px", font: "12px/1.4 ui-monospace,monospace", color: "#fff", background: "rgba(0,0,0,0.75)", borderRadius: "8px", pointerEvents: "none" });
+      document.body.appendChild(debugBox);
+    }
 
     const target = { x: 0, y: 0 };
     const current = { x: 0, y: 0 };
@@ -35,7 +49,8 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
     let baseline = null;
 
     const apply = () => {
-      const { x, y } = current;
+      const x = current.x * amp;
+      const y = current.y * amp;
       frame.style.transform = `perspective(1100px) rotateY(${(x * MAX_TILT_DEG).toFixed(2)}deg) rotateX(${(-y * MAX_TILT_DEG).toFixed(2)}deg)`;
       if (bgRef.current) bgRef.current.style.transform = `translate3d(${(-x * BG_SHIFT).toFixed(3)}%, ${(-y * BG_SHIFT).toFixed(3)}%, 0) scale(1.08)`;
       if (fgRef.current) fgRef.current.style.transform = `translate3d(${(x * FG_SHIFT).toFixed(3)}%, ${(y * FG_SHIFT * 0.5).toFixed(3)}%, 0) scale(1.08)`;
@@ -69,6 +84,10 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
     // Phone tilt: relative to how the phone was held when the page started listening, with the
     // reference drifting slowly so any comfortable holding angle becomes the neutral view.
     const onOrientation = (e) => {
+      dbg.events += 1;
+      dbg.beta = e.beta;
+      dbg.gamma = e.gamma;
+      showDebug();
       if (e.beta == null || e.gamma == null) return;
       if (!baseline) baseline = { beta: e.beta, gamma: e.gamma };
       baseline.beta += (e.beta - baseline.beta) * 0.01;
@@ -101,19 +120,25 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
     window.addEventListener("deviceorientation", onFirstOrientation, { passive: true, once: true });
     const touch = window.matchMedia?.("(pointer: coarse)").matches;
     const mustAsk = touch && DOE && typeof DOE.requestPermission === "function";
+    Object.assign(dbg, { coarse: !!touch, hasDOE: !!DOE, needsPermission: !!mustAsk, secure: window.isSecureContext });
+    showDebug();
     let asking = false;
     let answered = false;
     const ask = async () => {
       if (asking || answered || gotReading) return;
       asking = true;
       try {
-        await DOE.requestPermission(); // resolves "granted" or "denied" once the visitor answers
+        // Resolves "granted" or "denied" once the visitor answers.
+        dbg.permission = await DOE.requestPermission();
         answered = true;
         document.removeEventListener("touchend", ask);
+        document.removeEventListener("click", ask);
         setNeedsMotionPermission(false);
-      } catch {
+      } catch (err) {
         // Not counted as a gesture (e.g. the touch was a scroll): the next tap asks again.
+        dbg.permission = `error: ${err?.name || err}`;
       }
+      showDebug();
       asking = false;
     };
     const askTimer = setTimeout(() => {
@@ -121,13 +146,18 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
     }, 1200);
     // iOS (Safari and Chrome alike) only grants motion access from a user gesture: a tap anywhere on
     // the page asks until the visitor answers; the button is the visible way to do the same.
-    if (mustAsk) document.addEventListener("touchend", ask, { passive: true });
+    if (mustAsk) {
+      document.addEventListener("touchend", ask, { passive: true });
+      document.addEventListener("click", ask, { passive: true });
+    }
     frame.__enableMotion = ask;
 
     return () => {
       cancelAnimationFrame(raf);
       clearTimeout(askTimer);
       document.removeEventListener("touchend", ask);
+      document.removeEventListener("click", ask);
+      debugBox?.remove();
       window.removeEventListener("deviceorientation", onFirstOrientation);
       io?.disconnect();
       frame.removeEventListener("pointermove", onPointerMove);
