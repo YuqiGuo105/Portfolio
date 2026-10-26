@@ -4,12 +4,17 @@ import { useEffect, useRef, useState } from "react";
 
 // The hero portrait as a 2.5D scene: the beach/sky background and the figure are separate layers
 // (public/assets/images/profile-bg-*, profile-person-*), so tilting the phone or moving the pointer
-// shifts them by different amounts and turns the oval slightly, like looking past him at the sea.
+// turns the oval slightly and slides the far beach and sky behind him, like looking past him at the sea.
+// The scene pivots on the line where his boots meet the sand, so he always stays standing on it.
 // Everything is CSS transforms on two images — no WebGL; the loop only runs while the view moves.
 
 const MAX_TILT_DEG = 6; // turn of the whole oval
-const BG_SHIFT = 2.2; // % of the frame: background moves against the motion
-const FG_SHIFT = 3.0; // % of the frame: the figure moves with it
+const SKEW_DEG = 3.5; // background shear: zero at his feet, growing towards the horizon and sky
+const LIFT = 0.03; // vertical stretch of the background about his feet (horizon rises / falls)
+const SCALE = 1.1; // headroom so the sheared background never shows an edge
+// Where his boots touch the sand, in % of the frame (the person layer ends at 93% of the 2:3 image,
+// which the theme's ~0.73 hero slot crops to about 97%). Both layers pivot here.
+const GROUND = "50% 96.5%";
 const TILT_RANGE = 18; // degrees of phone tilt for a full swing
 const EASE = 0.12; // share of the remaining distance covered per frame
 
@@ -52,8 +57,8 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
       const x = current.x * amp;
       const y = current.y * amp;
       frame.style.transform = `perspective(1100px) rotateY(${(x * MAX_TILT_DEG).toFixed(2)}deg) rotateX(${(-y * MAX_TILT_DEG).toFixed(2)}deg)`;
-      if (bgRef.current) bgRef.current.style.transform = `translate3d(${(-x * BG_SHIFT).toFixed(3)}%, ${(-y * BG_SHIFT).toFixed(3)}%, 0) scale(1.08)`;
-      if (fgRef.current) fgRef.current.style.transform = `translate3d(${(x * FG_SHIFT).toFixed(3)}%, ${(y * FG_SHIFT * 0.5).toFixed(3)}%, 0) scale(1.08)`;
+      // Shear about the ground line: the sand under his boots stays put, the horizon and sky slide.
+      if (bgRef.current) bgRef.current.style.transform = `skewX(${(x * SKEW_DEG).toFixed(3)}deg) scale(${SCALE}, ${(SCALE * (1 + y * LIFT)).toFixed(4)})`;
     };
 
     const step = () => {
@@ -174,6 +179,7 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
     height: "100%",
     objectFit: "cover",
     willChange: "transform",
+    transformOrigin: GROUND,
     pointerEvents: "none",
     userSelect: "none",
   };
@@ -208,7 +214,7 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
           height={1536}
           fetchpriority="high"
           decoding="async"
-          style={{ ...layer, transform: "scale(1.08)" }}
+          style={{ ...layer, transform: `scale(${SCALE})` }}
         />
       </picture>
       <img
@@ -221,7 +227,7 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
         width={1024}
         height={1536}
         decoding="async"
-        style={{ ...layer, transform: "scale(1.08)" }}
+        style={{ ...layer, transform: `scale(${SCALE})` }}
       />
       {needsMotionPermission && !motionOn && (
         <button
