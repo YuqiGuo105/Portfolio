@@ -17,6 +17,8 @@
 .counter span { color: #93a49c; }
 .dock .iconButton, .map .iconButton { display: inline-flex; justify-content: center; align-items: center; height: 34px; width: 34px; flex-shrink: 0; padding: 0; border: none; border-radius: 4px; background: transparent; color: inherit; }
 .dock .iconButton:hover, .map .iconButton:hover { background: #ffffff16; }
+.dock .language { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 30px; padding: 0 9px; border: 1px solid #ffffff2e; border-radius: 4px; background: transparent; color: #eef8f2; font-size: 12px; line-height: 1; white-space: nowrap; }
+.dock .language:hover { background: #ffffff16; border-color: #ffffff52; }
 .main { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 36px; padding: 20px 0; }
 .story { display: flex; align-items: flex-start; gap: 20px; min-width: 0; animation: storyEnter 350ms ease both; }
 .chapterNumber { color: #8ee3b7; font: 300 62px/1 ui-sans-serif, sans-serif; min-width: 70px; font-variant-numeric: tabular-nums; }

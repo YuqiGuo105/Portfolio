@@ -5,47 +5,15 @@ import { consumePendingWebGuide } from "../lib/webGuide"
 import TourDock from "./tour/TourDock"
 import TourArrival from "./tour/TourArrival"
 import usePetPerformance from "./tour/usePetPerformance"
+import useTourNarration from "./tour/useTourNarration"
 import petPerformanceStyles from "./tour/PetPerformance.module.css"
-import { tourNarrative } from "../lib/tourNarrative.mjs"
+import { localizeTourStep, narrationAudio, narrationText, readingTime, tourNarrative } from "../lib/tourNarrative.mjs"
 import { collectTourDiscoveries, frameTourTarget, tourPetDimensions } from "../lib/tourScene.mjs"
 
 const DEFAULT_CONTROLS = { previous: "Prev", next: "Next", done: "Done", close: "Close" }
 const CHINESE_NAME_AUDIO = "/assets/audio/tour/v3/chinese-name.wav"
-const HIGH_QUALITY_VOICE_HINT = /enhanced|premium|neural|natural|siri|online/i
-const LOW_QUALITY_VOICE_HINT = /compact|espeak|festival|novelty/i
-
-function selectNaturalVoice(voices, locale) {
-    if (!Array.isArray(voices) || voices.length === 0) return null
-    const target = String(locale || "en-US").toLowerCase()
-    const language = target.split("-")[0]
-
-    return voices
-        .map((voice, index) => {
-            const voiceLocale = String(voice.lang || "").toLowerCase()
-            const searchable = `${voice.name || ""} ${voice.voiceURI || ""}`
-            let score = 0
-            if (voiceLocale === target) score += 120
-            else if (voiceLocale.split("-")[0] === language) score += 80
-            if (HIGH_QUALITY_VOICE_HINT.test(searchable)) score += 45
-            if (voice.localService) score += 18
-            if (voice.default) score += 12
-            if (LOW_QUALITY_VOICE_HINT.test(searchable)) score -= 80
-            return { voice, index, score }
-        })
-        .filter(({ voice }) => String(voice.lang || "").toLowerCase().split("-")[0] === language)
-        .sort((left, right) => right.score - left.score || left.index - right.index)[0]?.voice || null
-}
-
-function createNaturalUtterance(text, locale, voices) {
-    const utterance = new SpeechSynthesisUtterance(text)
-    const selectedVoice = selectNaturalVoice(voices, locale)
-    utterance.lang = locale
-    utterance.voice = selectedVoice
-    utterance.rate = locale.toLowerCase().startsWith("zh") ? 0.84 : 0.9
-    utterance.pitch = 1.02
-    utterance.volume = 1
-    return utterance
-}
+// After a chapter's narration ends, autoplay lingers this long before walking on.
+const AFTER_NARRATION_MS = 1200
 
 function getRect(el) {
     const r = el.getBoundingClientRect()
@@ -131,7 +99,6 @@ export default function SiteTour() {
                 content: "Full-stack, backend, and mobile engineer building production-minded distributed systems, AI platforms, and polished user experiences.",
                 meta: "Software engineering · Microservices · Distributed systems",
                 pronunciation: true,
-                narration: "/assets/audio/tour/v1/hero.mp3",
             },
             {
                 id: "about",
@@ -140,7 +107,6 @@ export default function SiteTour() {
                 title: "About Me",
                 content: "Start with a quick snapshot of who I am, what I love building, and how to pronounce my name.",
                 meta: "Profile · Engineering focus · Current role",
-                narration: "/assets/audio/tour/v1/about.mp3",
             },
             {
                 id: "background",
@@ -150,7 +116,6 @@ export default function SiteTour() {
                 content: "See where I've studied, the teams I've contributed to, and the technical domains I've focused on.",
                 meta: "Experience · Education · Technical foundation",
                 action: { href: "/cv", label: "View CV" },
-                narration: "/assets/audio/tour/v1/background.mp3",
             },
             {
                 id: "projects",
@@ -160,7 +125,6 @@ export default function SiteTour() {
                 content: "Browse the flagship projects I've shipped, the problems they solve, and the stacks I used to build them.",
                 meta: "Distributed systems · AI platform · Production operations",
                 action: { href: "/works-list", label: "Explore all projects" },
-                narration: "/assets/audio/tour/v1/projects.mp3",
             },
             {
                 id: "techblogs",
@@ -170,7 +134,6 @@ export default function SiteTour() {
                 content: "Explore deep dives, system design notes, and hands-on write-ups that showcase how I approach new challenges.",
                 meta: "System design · Backend · Infrastructure",
                 action: { href: "/blogs?type=technical", label: "Read technical writing" },
-                narration: "/assets/audio/tour/v1/tech-blogs.mp3",
             },
             {
                 id: "life",
@@ -180,7 +143,6 @@ export default function SiteTour() {
                 content: "Get a glimpse of my hobbies, travels, and the moments outside of code that keep me inspired.",
                 meta: "Travel · Photography · Life outside code",
                 action: { href: "/blogs?type=life", label: "Explore life stories" },
-                narration: "/assets/audio/tour/v1/life.mp3",
             },
             {
                 id: "realtime",
@@ -190,7 +152,6 @@ export default function SiteTour() {
                 content: "See live market moves, quick currency conversions, and a snapshot of the weather I'm tracking right now.",
                 meta: "Live services · Visitor intelligence · Observability",
                 action: { href: "/analytics", label: "Open analytics" },
-                narration: "/assets/audio/tour/v1/dashboard.mp3",
             },
             {
                 id: "contact",
@@ -199,7 +160,6 @@ export default function SiteTour() {
                 title: "Contact Me",
                 content: "Wrap up with the best ways to reach me, whether you want to collaborate, hire, or just say hello.",
                 meta: "Recruiting · Collaboration · Direct contact",
-                narration: "/assets/audio/tour/v1/contact.mp3",
             },
         ].map(step => ({ ...step, editorial: true })),
         []
@@ -210,13 +170,23 @@ export default function SiteTour() {
     const [controls, setControls] = useState(DEFAULT_CONTROLS)
     const stepsRef = useRef(null)            // always mirrors current effective steps
 
-    const effectiveSteps = steps || STATIC_STEPS
+    const [guideLanguage, setGuideLanguage] = useState("en")
+    // Editorial chapters carry Chinese titles and notes; AI-generated plans arrive already in their language.
+    const effectiveSteps = useMemo(
+        () => (steps || STATIC_STEPS).map(step => localizeTourStep(step, guideLanguage)),
+        [steps, STATIC_STEPS, guideLanguage]
+    )
     // Keep ref in sync so go() always reads latest without stale closures
     stepsRef.current = effectiveSteps
 
+    const { speaking: petSpeaking, play: playNarration, stop: stopNarration, unlock: unlockAudio } = useTourNarration()
+
     const [open, setOpen] = useState(false)
     const [arriving, setArriving] = useState(false)
-    const enterGuide = useCallback(() => setArriving(false), [])
+    const enterGuide = useCallback(() => {
+        unlockAudio()
+        setArriving(false)
+    }, [unlockAudio])
     const [idx, setIdx] = useState(0)
     const [anchorRect, setAnchorRect] = useState(null)
     const [discoveries, setDiscoveries] = useState([])
@@ -224,6 +194,7 @@ export default function SiteTour() {
     const [selectedDiscovery, setSelectedDiscovery] = useState(null)
     const travelFrameRef = useRef(0)
     const travelVersionRef = useRef(0)
+    const readyStepRef = useRef(-1)
     const openerRef = useRef(null)
     const popRef = useRef(null)
     const activeElRef = useRef(null)
@@ -232,8 +203,8 @@ export default function SiteTour() {
     const [mapOpen, setMapOpen] = useState(false)
     const [autoPlay, setAutoPlay] = useState(false)
     const [collapsed, setCollapsed] = useState(false)
-    const [guideLanguage, setGuideLanguage] = useState("en")
-    const [petSpeaking, setPetSpeaking] = useState(false)
+    // Autoplay narrates each chapter; "Stop audio" during autoplay keeps it going silently.
+    const [muted, setMuted] = useState(false)
     const [petFacing, setPetFacing] = useState(1)
     const [petWalking, setPetWalking] = useState(false)
     const [petDragging, setPetDragging] = useState(false)
@@ -245,10 +216,8 @@ export default function SiteTour() {
     })
     const petPerformingRef = useRef(false)
     petPerformingRef.current = petGesture !== "rest" || petSpeaking
-    const [availableVoices, setAvailableVoices] = useState([])
     const [petTransform, setPetTransform] = useState("translate3d(-120px, 120px, 0)")
     const petPositionRef = useRef({ x: -120, y: 120 })
-    const narrationAudioRef = useRef(null)
     const petBaseRef = useRef({ x: -120, y: 120 })
     const petMoveTimerRef = useRef(0)
     const petPatrolTimerRef = useRef(0)
@@ -292,8 +261,9 @@ export default function SiteTour() {
         setVisited([])
         setSelectedDiscovery(null)
         setAutoPlay(false)
+        setMuted(false)
         setCollapsed(false)
-        setPetSpeaking(false)
+        stopNarration()
         setPetReady(false)
         setPetHidden(false)
         setPetWalking(false)
@@ -303,16 +273,13 @@ export default function SiteTour() {
         petDragRef.current.moved = false
         activeElRef.current = null
         if (typeof window !== "undefined") {
-            narrationAudioRef.current?.pause()
-            narrationAudioRef.current = null
-            window.speechSynthesis?.cancel()
             window.clearTimeout(petMoveTimerRef.current)
             window.clearInterval(petPatrolTimerRef.current)
             petPositionRef.current = { x: -120, y: 120 }
             setPetTransform("translate3d(-120px, 120px, 0)")
             window.dispatchEvent(new CustomEvent("cw:site-tour:end"))
         }
-    }, [])
+    }, [stopNarration])
     const go = useCallback(
         (nextIdx, focusFirst = true) => {
             const step = stepsRef.current[nextIdx]
@@ -320,6 +287,7 @@ export default function SiteTour() {
             const el = document.getElementById(step.targetId)
             if (!el) return
             const version = ++travelVersionRef.current
+            readyStepRef.current = -1
             cancelAnimationFrame(travelFrameRef.current)
             // Switching chapters also activates their real tab, rather than
             // describing life stories while the technical blog panel remains open.
@@ -350,6 +318,7 @@ export default function SiteTour() {
                     }
                     setAnchorRect(getRect(activeElRef.current))
                     setVisited(previous => previous.includes(nextIdx) ? previous : [...previous, nextIdx])
+                    readyStepRef.current = nextIdx
                     setUiReady(true)
                     return
                 }
@@ -373,20 +342,14 @@ export default function SiteTour() {
     }
 
     useEffect(() => {
-        if (typeof window === "undefined" || !("speechSynthesis" in window)) return undefined
-        const synth = window.speechSynthesis
-        const refreshVoices = () => setAvailableVoices(synth.getVoices())
-        refreshVoices()
-        synth.addEventListener?.("voiceschanged", refreshVoices)
-        return () => synth.removeEventListener?.("voiceschanged", refreshVoices)
-    }, [])
-
-    useEffect(() => {
         const onStart = (e) => {
+            unlockAudio()
             openerRef.current = document.activeElement
+            // The page is always <html lang="en">; the browser language is what the chat widget's
+            // "Start web guide" button was labelled in, so the tour follows it too.
             const requestedLanguage = e?.detail?.language
-                || document.documentElement.lang
                 || navigator.language
+                || document.documentElement.lang
             setGuideLanguage(String(requestedLanguage).toLowerCase().startsWith("zh") ? "zh" : "en")
             // Allow dynamic steps to be passed directly with the start event
             if (e?.detail?.steps?.length > 0) {
@@ -446,7 +409,7 @@ export default function SiteTour() {
             window.removeEventListener("cw:site-tour:start", onStart)
             window.removeEventListener("cw:site-tour:dynamic", onDynamic)
         }
-    }, [go])
+    }, [go, unlockAudio])
 
     useEffect(() => {
         if (typeof window === "undefined") return
@@ -464,22 +427,19 @@ export default function SiteTour() {
     useEffect(() => {
         if (!open || arriving) return
         go(idx)
-        narrationAudioRef.current?.pause()
-        narrationAudioRef.current = null
-        window.speechSynthesis?.cancel()
-        setPetSpeaking(false)
+        stopNarration()
         const travelVersion = travelVersionRef
         return () => {
             travelVersion.current++
             cancelAnimationFrame(travelFrameRef.current)
         }
-    }, [open, arriving, idx, go, effectiveSteps])
+    }, [open, arriving, idx, go, effectiveSteps, stopNarration])
 
     useEffect(() => {
         if (!open || typeof window === "undefined") return undefined
 
-        const currentNarration = effectiveSteps[idx]?.narration
-        const nextNarration = effectiveSteps[idx + 1]?.narration
+        const currentNarration = narrationAudio(effectiveSteps[idx], guideLanguage)
+        const nextNarration = narrationAudio(effectiveSteps[idx + 1], guideLanguage)
         const controller = new AbortController()
         let idleHandle = null
         let timeoutHandle = null
@@ -507,7 +467,7 @@ export default function SiteTour() {
             if (idleHandle !== null) window.cancelIdleCallback?.(idleHandle)
             if (timeoutHandle !== null) window.clearTimeout(timeoutHandle)
         }
-    }, [effectiveSteps, idx, open])
+    }, [effectiveSteps, guideLanguage, idx, open])
 
     useEffect(() => {
         if (!open) return
@@ -515,35 +475,58 @@ export default function SiteTour() {
             if (event.target?.closest?.("input, textarea, select, [contenteditable=true]")) return
             if (event.key === "Escape") { if (mapOpen) setMapOpen(false); else close(); return }
             if (event.target?.closest?.("button, a") || mapOpen || arriving) return
-            if (event.key === "ArrowLeft" && idx > 0) { event.preventDefault(); setIdx((value) => value - 1) }
+            if (event.key === "ArrowLeft" && idx > 0) { event.preventDefault(); unlockAudio(); setIdx((value) => value - 1) }
             if (event.key === "ArrowRight") {
                 event.preventDefault()
+                unlockAudio()
                 if (idx >= effectiveSteps.length - 1) close()
                 else setIdx((value) => value + 1)
             }
         }
         window.addEventListener("keydown", onKeyDown)
         return () => window.removeEventListener("keydown", onKeyDown)
-    }, [close, effectiveSteps.length, idx, open, mapOpen, arriving])
+    }, [close, effectiveSteps.length, idx, open, mapOpen, arriving, unlockAudio])
 
+    // Autoplay is paced by the narration: each chapter is read aloud, then the tour walks on. Muted (or when
+    // the audio cannot play) it waits for a reading time based on the chapter's text instead.
     useEffect(() => {
-        if (!open || arriving || !autoPlay || !uiReady || petSpeaking || petDragging || mapOpen) return
-        const timer = window.setTimeout(() => {
-            if (idx >= effectiveSteps.length - 1) setAutoPlay(false)
-            else setIdx((value) => value + 1)
-        }, 8000)
-        return () => window.clearTimeout(timer)
-    }, [autoPlay, effectiveSteps.length, idx, open, arriving, uiReady, petSpeaking, petDragging, mapOpen])
-
-    useEffect(() => {
-        const pauseWhenHidden = () => { if (document.hidden) setAutoPlay(false) }
-        document.addEventListener('visibilitychange', pauseWhenHidden)
-        return () => {
-            document.removeEventListener('visibilitychange', pauseWhenHidden)
-            narrationAudioRef.current?.pause()
-            window.speechSynthesis?.cancel()
+        if (!open || arriving || !autoPlay || !uiReady || mapOpen || readyStepRef.current !== idx) return undefined
+        const step = effectiveSteps[idx]
+        let cancelled = false
+        let timer = 0
+        const walkOn = (delay) => {
+            timer = window.setTimeout(() => {
+                if (cancelled) return
+                if (idx >= effectiveSteps.length - 1) setAutoPlay(false)
+                else setIdx((value) => value + 1)
+            }, delay)
         }
-    }, [])
+        if (muted) {
+            walkOn(readingTime(step, guideLanguage))
+        } else {
+            playNarration({
+                src: narrationAudio(step, guideLanguage),
+                text: narrationText(step, guideLanguage),
+                locale: guideLanguage === "zh" ? "zh-CN" : "en-US",
+                onDone: (played) => { if (!cancelled) walkOn(played ? AFTER_NARRATION_MS : readingTime(step, guideLanguage)) },
+            })
+        }
+        return () => {
+            cancelled = true
+            window.clearTimeout(timer)
+            if (!muted) stopNarration()
+        }
+    }, [autoPlay, effectiveSteps, guideLanguage, idx, open, arriving, uiReady, mapOpen, muted, playNarration, stopNarration])
+
+    useEffect(() => {
+        const pauseWhenHidden = () => {
+            if (!document.hidden) return
+            setAutoPlay(false)
+            stopNarration()
+        }
+        document.addEventListener('visibilitychange', pauseWhenHidden)
+        return () => document.removeEventListener('visibilitychange', pauseWhenHidden)
+    }, [stopNarration])
 
     useEffect(() => {
         if (!open) return
@@ -727,86 +710,32 @@ export default function SiteTour() {
         scheduleUpdateRect()
     }
 
-    const speakWithBrowserFallback = (text, locale, rate = 0.94) => {
-        if (!("speechSynthesis" in window)) {
-            setPetSpeaking(false)
-            return
-        }
-        const utterance = createNaturalUtterance(text, locale, availableVoices)
-        utterance.rate = rate
-        utterance.onend = () => setPetSpeaking(false)
-        utterance.onerror = () => setPetSpeaking(false)
-        setPetSpeaking(true)
-        window.speechSynthesis.speak(utterance)
-    }
-
     const pronounceName = () => {
-        if (petSpeaking) {
-            narrationAudioRef.current?.pause()
-            narrationAudioRef.current = null
-            window.speechSynthesis?.cancel()
-            setPetSpeaking(false)
-            return
-        }
-        narrationAudioRef.current?.pause()
-        window.speechSynthesis?.cancel()
-        const audio = new Audio(CHINESE_NAME_AUDIO)
-        audio.preload = "auto"
-        narrationAudioRef.current = audio
-        let fallbackStarted = false
-        const fallback = () => {
-            if (fallbackStarted) return
-            fallbackStarted = true
-            narrationAudioRef.current = null
-            speakWithBrowserFallback("郭育奇", "zh-CN", 0.76)
-        }
-        audio.onended = () => {
-            narrationAudioRef.current = null
-            setPetSpeaking(false)
-        }
-        audio.onerror = fallback
-        setPetSpeaking(true)
-        audio.load()
-        audio.play().catch(fallback)
+        setAutoPlay(false)
+        if (petSpeaking) { stopNarration(); return }
+        playNarration({ src: CHINESE_NAME_AUDIO, text: "郭育奇", locale: "zh-CN", rate: 0.76 })
     }
 
+    // Listen / Stop audio, and clicking Mr. Pot. During autoplay this mutes or unmutes the narration, and the
+    // autoplay effect follows; otherwise it reads the current chapter once.
     const speakCurrentStep = () => {
         if (!current) return
-        if (petSpeaking) {
-            narrationAudioRef.current?.pause()
-            narrationAudioRef.current = null
-            window.speechSynthesis?.cancel()
-            setPetSpeaking(false)
+        if (autoPlay) {
+            setMuted(value => !value)
             return
         }
+        if (petSpeaking) { stopNarration(); return }
+        playNarration({
+            src: narrationAudio(current, guideLanguage),
+            text: narrationText(current, guideLanguage),
+            locale: guideLanguage === "zh" ? "zh-CN" : "en-US",
+        })
+    }
 
-        if (current.narration) {
-            window.speechSynthesis?.cancel()
-            const audio = new Audio(current.narration)
-            narrationAudioRef.current = audio
-            let fallbackStarted = false
-            const fallback = () => {
-                if (fallbackStarted) return
-                fallbackStarted = true
-                narrationAudioRef.current = null
-                speakWithBrowserFallback(
-                    `${current.title}. ${current.content}`,
-                    guideLanguage === "zh" ? "zh-CN" : "en-US"
-                )
-            }
-            audio.onended = () => {
-                narrationAudioRef.current = null
-                setPetSpeaking(false)
-            }
-            audio.onerror = fallback
-            setPetSpeaking(true)
-            audio.play().catch(fallback)
-            return
-        }
-
-        window.speechSynthesis?.cancel()
-        const locale = guideLanguage === "zh" ? "zh-CN" : "en-US"
-        speakWithBrowserFallback(`${current.title}. ${current.content}`, locale)
+    const toggleAutoPlay = () => {
+        unlockAudio()
+        setMuted(false)
+        setAutoPlay(value => !value)
     }
 
     const askMrPot = (suggestion) => {
@@ -935,11 +864,9 @@ export default function SiteTour() {
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
                         event.stopPropagation()
-                        narrationAudioRef.current?.pause()
-                        narrationAudioRef.current = null
-                        window.speechSynthesis?.cancel()
+                        stopNarration()
+                        setAutoPlay(false)
                         window.clearInterval(petPatrolTimerRef.current)
-                        setPetSpeaking(false)
                         setPetWalking(false)
                         setPetHidden(true)
                     }}
@@ -976,9 +903,11 @@ export default function SiteTour() {
                 onJump={(position) => { setIdx(position); setMapOpen(false); setAutoPlay(false); if (position === idx) go(position) }}
                 onClose={close} onCollapse={() => setCollapsed(value => !value)}
                 onMap={() => { setMapOpen(value => !value); setAutoPlay(false) }}
-                onAutoPlay={() => setAutoPlay(value => !value)} onSpeak={speakCurrentStep}
+                onLanguage={steps ? undefined : () => { stopNarration(); setGuideLanguage(value => value === "zh" ? "en" : "zh") }}
+                onAutoPlay={toggleAutoPlay} onSpeak={speakCurrentStep} listening={autoPlay ? !muted : petSpeaking}
+                timedMs={autoPlay && muted && uiReady && !mapOpen ? readingTime(current, guideLanguage) : 0}
                 onAsk={askMrPot} onPronounce={pronounceName} onShowPet={() => setPetHidden(false)}
-                onPrev={prev} onNext={next} />}
+                onPrev={() => { unlockAudio(); prev() }} onNext={() => { unlockAudio(); next() }} />}
 
             <style jsx global>{`
                 .st-scene-frame { position: fixed; z-index: 9999; pointer-events: none; border: 1px solid rgba(22, 127, 108, .22); border-radius: 5px; box-shadow: 0 0 0 100vmax rgba(21, 35, 30, .12); transition: top 200ms ease, left 200ms ease, width 200ms ease, height 200ms ease; }

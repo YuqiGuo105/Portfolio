@@ -1,3 +1,7 @@
+// Recorded narration for the editorial chapters. Re-record (scripts/generate-tour-narration.py) and bump the
+// version whenever the copy above changes; tests/tour-narrative.test.mjs fails while a recording is stale.
+export const NARRATION_VERSION = "v4"
+
 const chapters = {
     hero: ["Meet the person.", "Every system starts with a person. This one starts with Yuqi. I'll show you the work, the thinking, and the life around it.", "What connects Yuqi's projects and engineering interests?", "认识一个人。", "每个系统背后都有一个人。这里是育奇的世界：作品、思考，以及代码以外的生活。", "育奇的项目和工程兴趣之间有什么联系？", "mint"],
     about: ["Beyond the headline.", "A title is a starting point, not the whole story. Here is the person behind the projects.", "How does Yuqi describe his engineering focus? Cite his public profile.", "不止一个头衔。", "头衔只是起点。看看这些项目背后的人，以及他关注什么。", "育奇的工程方向是什么？请引用他的公开资料。", "peach"],
@@ -15,4 +19,55 @@ export function tourNarrative(step, language = "en") {
     if (!entry || !step?.editorial) return { title: step?.title || "", line: step?.content || "", question: "", tone: "mint" }
     const offset = language === "zh" ? 3 : 0
     return { title: entry[offset], line: entry[offset + 1], question: entry[offset + 2], tone: entry[6] }
+}
+
+const zhSteps = {
+    hero: { title: "郭育奇", meta: "软件工程 · 微服务 · 分布式系统" },
+    about: { title: "关于我", meta: "个人简介 · 工程方向 · 当前职位" },
+    background: { title: "我的经历", meta: "工作经历 · 教育背景 · 技术基础", action: "查看简历" },
+    projects: { title: "我的项目", meta: "分布式系统 · AI 平台 · 生产运维", action: "浏览全部项目" },
+    techblogs: { title: "技术博客", meta: "系统设计 · 后端 · 基础设施", action: "阅读技术文章" },
+    life: { title: "我的生活", meta: "旅行 · 摄影 · 代码之外", action: "看看生活故事" },
+    realtime: { title: "实时数据", meta: "实时服务 · 访客洞察 · 可观测性", action: "打开数据分析" },
+    contact: { title: "联系我", meta: "招聘 · 合作 · 直接联系" },
+}
+
+/** Chinese chapter titles, notes and links for the editorial tour; other steps are returned unchanged. */
+export function localizeTourStep(step, language = "en") {
+    const zh = language === "zh" && step?.editorial ? zhSteps[step.id] : null
+    if (!zh) return step
+    return {
+        ...step,
+        title: zh.title,
+        meta: zh.meta,
+        action: step.action && zh.action ? { ...step.action, label: zh.action } : step.action,
+    }
+}
+
+/** What Mr. Pot says for a step: the same headline and line the dock shows. */
+export function narrationText(step, language = "en") {
+    const story = tourNarrative(step, language)
+    if (!story.title && !story.line) return ""
+    if (language === "zh") return `${story.title}${story.line}`
+    return [story.title, story.line].filter(Boolean).join(story.title.endsWith(".") ? " " : ". ")
+}
+
+/** The recorded narration for an editorial chapter, or null (AI-generated steps use the browser voice). */
+export function narrationAudio(step, language = "en") {
+    if (!step?.editorial || !chapters[step.id]) return null
+    return `/assets/audio/tour/${NARRATION_VERSION}/${language === "zh" ? "zh" : "en"}/${step.id}.mp3`
+}
+
+/** How long autoplay lingers on a step when it is not narrated: long enough to read it, at least 6.5 s. */
+export function readingTime(step, language = "en") {
+    const text = narrationText(step, language)
+    const perCharacter = language === "zh" ? 190 : 55
+    return Math.max(6500, Math.round(text.length * perCharacter) + 1500)
+}
+
+/** Every recorded line, by language and chapter: the input of scripts/generate-tour-narration.py. */
+export function narrationScript() {
+    return Object.fromEntries(["en", "zh"].map(language => [language, Object.fromEntries(
+        Object.keys(chapters).map(id => [id, narrationText({ id, editorial: true }, language)])
+    )]))
 }

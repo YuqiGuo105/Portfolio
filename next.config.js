@@ -50,7 +50,8 @@ const nextConfig = {
         ],
       })),
       {
-        source: "/assets/audio/tour/v1/:path*",
+        // Narration lives in versioned folders (v3/chinese-name.wav, v4/en, v4/zh), so each file is immutable.
+        source: "/assets/audio/tour/:version/:path*",
         headers: [
           ...securityHeaders,
           { key: "Cache-Control", value: "public, max-age=31536000, immutable" },

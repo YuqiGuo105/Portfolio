@@ -1,0 +1,77 @@
+{
+  "chapters": {
+    "en": {
+      "hero": {
+        "text": "Meet the person. Every system starts with a person. This one starts with Yuqi. I'll show you the work, the thinking, and the life around it.",
+        "seconds": 8.31
+      },
+      "about": {
+        "text": "Beyond the headline. A title is a starting point, not the whole story. Here is the person behind the projects.",
+        "seconds": 6.67
+      },
+      "background": {
+        "text": "The path here. Experience gives the work its context. Follow the roles and education, then open the CV for the full picture.",
+        "seconds": 7.89
+      },
+      "projects": {
+        "text": "Don't take my word for it. The work is right here. Pick something that catches your eye; let's get closer to what it actually does.",
+        "seconds": 7.44
+      },
+      "techblogs": {
+        "text": "Inside the thinking. Code shows the result. Writing opens up the reasoning. Follow a question into the article behind it.",
+        "seconds": 7.39
+      },
+      "life": {
+        "text": "A life outside the editor. A different side of the same person. These are the stories beyond systems and software.",
+        "seconds": 6.88
+      },
+      "realtime": {
+        "text": "A site that stays awake. This isn't just a collection of screenshots. Here, the page connects to live services. Look at the data, then follow it to the dashboard.",
+        "seconds": 9.49
+      },
+      "contact": {
+        "text": "The next part is a conversation. You've seen the work and met the person. A collaboration, a question, or simply hello: this is where the next chapter starts.",
+        "seconds": 9.23
+      }
+    },
+    "zh": {
+      "hero": {
+        "text": "认识一个人。每个系统背后都有一个人。这里是育奇的世界：作品、思考，以及代码以外的生活。",
+        "seconds": 10.55
+      },
+      "about": {
+        "text": "不止一个头衔。头衔只是起点。看看这些项目背后的人，以及他关注什么。",
+        "seconds": 9.64
+      },
+      "background": {
+        "text": "走到这里的路。经历让作品有了上下文。从工作与教育背景出发，再到简历里看完整的脉络。",
+        "seconds": 11.24
+      },
+      "projects": {
+        "text": "让作品自己说话。作品就在这里。选一个让你好奇的，我们一起看看它真正解决了什么问题。",
+        "seconds": 10.93
+      },
+      "techblogs": {
+        "text": "走进思考过程。代码呈现结果，文字展开推理。带着一个问题，走进文章里的设计取舍。",
+        "seconds": 11.66
+      },
+      "life": {
+        "text": "编辑器之外。同一个人的另一面。这些故事发生在系统与软件之外。",
+        "seconds": 8.2
+      },
+      "realtime": {
+        "text": "一个仍在运行的网站。这里不只是截图。页面连接着实时服务，从眼前的数据继续走进仪表盘。",
+        "seconds": 11.43
+      },
+      "contact": {
+        "text": "下一章，从对话开始。看过作品，也认识了这个人。合作、问题，或者简单的一声你好，下一章从这里开始。",
+        "seconds": 11.65
+      }
+    }
+  },
+  "voices": {
+    "en": "Kokoro 82M (kokoro-multi-lang-v1_0) af_heart, speed 0.92",
+    "zh": "Kokoro 82M (kokoro-multi-lang-v1_1) zf_039, speed 0.98"
+  },
+  "version": "v4"
+}
