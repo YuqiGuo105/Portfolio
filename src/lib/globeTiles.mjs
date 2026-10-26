@@ -44,6 +44,16 @@ export function zoomThresholds(scale, latitude = 0, maxZoom = GLOBE_TILE_MAX_ZOO
   return Array.from({ length: maxZoom + 1 }, (_, z) => s / 2 ** (z + 0.5));
 }
 
+// The level to show, with hysteresis: keep the current level until the ideal one is 0.75 levels away.
+// Without it, panning north or south (latitude shifts the ideal level) or the last frames of a zoom
+// flipped the whole layer between two levels, and every flip down threw away the finer tiles.
+export function pickTileLevel({ scale, altitude, latitude = 0, current = null, minLevel = 0, maxLevel = GLOBE_TILE_MAX_ZOOM }) {
+  const ideal = idealZoom(scale, altitude, latitude);
+  if (!Number.isFinite(ideal)) return minLevel;
+  const keep = Number.isInteger(current) && current >= minLevel && current <= maxLevel && Math.abs(ideal - current) < 0.75;
+  return keep ? current : clamp(Math.round(ideal), minLevel, maxLevel);
+}
+
 // The coarsest tile level worth loading: twice the base texture's detail.
 export function minTileZoom(baseZoom) {
   return clamp(Math.ceil(baseZoom) + 1, 0, GLOBE_TILE_MAX_ZOOM);

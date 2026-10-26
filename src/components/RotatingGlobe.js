@@ -347,6 +347,7 @@ const RotatingGlobe = ({
   // close-up imagery tiles (see src/lib/globeTileLayer.mjs)
   const tileLayerRef = useRef(null);
   const lastTileSyncRef = useRef(0);
+  const baseTextureRef = useRef(null);
   const tileSyncTimerRef = useRef(null);
   // How close the camera may go; relaxes once tiles can keep the close-up sharp.
   const minAltitudeRef = useRef(DEFAULT_MIN_ALTITUDE);
@@ -1169,12 +1170,26 @@ const RotatingGlobe = ({
     } catch {}
     if (!camera || !canvas) return;
 
+    // three-globe's own globe mesh (in the group tagged "globe") carries the base texture once loaded.
+    let baseTexture = baseTextureRef.current;
+    if (!baseTexture) {
+      try {
+        g.scene().traverse((obj) => {
+          if (baseTexture || obj.__globeObjType !== "globe") return;
+          baseTexture = obj.children.find((child) => child.isMesh && child.material?.map?.image)?.material.map || null;
+        });
+      } catch {}
+      baseTextureRef.current = baseTexture;
+    }
+
     const pov = getCurrentPOV();
     const next = layer.sync({
       camera,
       altitude: pov.altitude,
       latitude: pov.lat,
       viewportHeight: canvas.height,
+      // Tiles take their colours from the base texture, so they never change the globe's look.
+      baseTexture,
     });
 
     const controls = getControls(g);

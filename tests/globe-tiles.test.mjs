@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { PerspectiveCamera, Scene, ShaderLib } from 'three';
+import { PerspectiveCamera, Scene, ShaderLib, Texture } from 'three';
 import * as tiles from '../src/lib/globeTiles.mjs';
 import { createGlobeTileLayer } from '../src/lib/globeTileLayer.mjs';
 
 const {
-  DEFAULT_MIN_ALTITUDE, GLOBE_TILE_MAX_ZOOM, idealZoom, minSharpAltitude, minTileZoom, parseTileRequest,
+  DEFAULT_MIN_ALTITUDE, GLOBE_TILE_MAX_ZOOM, idealZoom, minSharpAltitude, minTileZoom, parseTileRequest, pickTileLevel,
   textureZoom, tilePath, tileScale, tileShellScale, tilesWanted, upstreamTileUrl, zoomThresholds,
 } = tiles;
 
@@ -166,14 +166,24 @@ test('the layer loads the tiles in view at the right level and cleans up after i
   requests.forEach((request) => request.arrive());
   const shown = engine.children.filter((child) => child.material?.userData?.globeTile);
   assert.equal(shown.length, requested.length);
-  assert.ok(shown.every((tile) => tile.material.map.anisotropy === 8 && tile.material.customProgramCacheKey() === 'globe-tile-grade-v1'));
+  assert.ok(shown.every((tile) => tile.material.type === 'MeshPhongMaterial' && tile.material.map.anisotropy === 8
+    && tile.material.customProgramCacheKey() === 'globe-tile-grade-v2' && tile.renderOrder === 1 + level));
   assert.deepEqual(sync(altitude), { active: true, minAltitude: minSharpAltitude(PHONE) });
 
-  // The colour grade hooks into three's Lambert shader at the texture sample.
-  const shader = { fragmentShader: ShaderLib.lambert.fragmentShader };
+  // Tiles render like the base globe (Phong) and take their colours from the base texture: the shader
+  // replaces three's texture sample with graded fine detail rescaled to the base texture's low frequencies.
+  const base = new Texture({ width: 2048, height: 1024 });
+  sync(altitude);
+  layer.sync({ camera: cameraAt(BEIJING, altitude), altitude, latitude: BEIJING.lat, viewportHeight: 840, baseTexture: base });
+  const shader = { uniforms: {}, vertexShader: ShaderLib.phong.vertexShader, fragmentShader: ShaderLib.phong.fragmentShader };
   shown[0].material.onBeforeCompile(shader);
-  assert.equal(shader.fragmentShader.split('#include <map_fragment>').length, 2);
-  assert.match(shader.fragmentShader, /#include <map_fragment>\s*\{[^}]*pow\(texel, vec3\(0\.58\)\)/);
+  assert.equal(shader.fragmentShader.includes('#include <map_fragment>'), false);
+  assert.match(shader.fragmentShader, /pow\(texel, vec3\(0\.58\)\)/);
+  assert.match(shader.fragmentShader, /texture2D\(uBaseMap, baseUv\)/);
+  assert.match(shader.vertexShader, /vGlobePos = position;/);
+  assert.equal(shader.uniforms.uBaseMap.value, base);
+  assert.equal(shader.uniforms.uBaseReady.value, 1);
+  assert.equal(shader.uniforms.uLowBias.value, level - 3);
 
   // Zooming back out drops the tiles and frees their GPU resources.
   let disposed = 0;
@@ -208,15 +218,16 @@ test('the layer loads the tiles in view at the right level and cleans up after i
   delete globalThis.document;
 });
 
-test('a long session never keeps more than a bounded set of tiles in GPU memory', () => {
+test('tiles that turn out of view give their GPU memory back and return without reloading', () => {
   const pending = [];
+  let requested = 0;
   globalThis.document = {
     createElementNS: () => {
       const listeners = {};
       const image = {
         addEventListener: (type, listener) => { listeners[type] = listener; },
         removeEventListener: () => {},
-        set src(url) { pending.push(() => listeners.load?.call(image)); },
+        set src(url) { requested += 1; pending.push(() => listeners.load?.call(image)); },
       };
       return image;
     },
@@ -224,21 +235,73 @@ test('a long session never keeps more than a bounded set of tiles in GPU memory'
   const scene = new Scene();
   const layer = createGlobeTileLayer({ scene, renderer: null, baseTextureWidth: 2048 });
   const engine = scene.children[0];
-  const loaded = () => engine.children.filter((child) => child.material?.userData?.globeTile).length;
-  let most = 0;
-  let restarts = 0;
-  // Pan east along the 40th parallel at a fixed close-up altitude, letting every tile arrive.
-  for (let lng = 40; lng <= 240; lng += 2) {
-    const before = loaded();
-    const camera = cameraAt({ lat: 40, lng }, 0.3);
-    layer.sync({ camera, altitude: 0.3, latitude: 40, viewportHeight: 840 });
-    if (loaded() < before) restarts += 1;
+  const tiles = () => engine.children.filter((child) => child.material?.userData?.globeTile);
+  const sync = (lng) => {
+    layer.sync({ camera: cameraAt({ lat: 40, lng }, 0.3), altitude: 0.3, latitude: 40, viewportHeight: 840 });
     pending.splice(0).forEach((arrive) => arrive());
-    most = Math.max(most, loaded());
+  };
+  let freed = 0;
+  let mostVisible = 0;
+  const watched = new Set();
+  // Auto-rotation along the 40th parallel at a close-up altitude, once round the visible half and back.
+  const path = [];
+  for (let lng = 60; lng <= 200; lng += 2) path.push(lng);
+  for (let lng = 200; lng >= 60; lng -= 2) path.push(lng);
+  let restarts = 0;
+  for (const lng of path) {
+    const before = tiles().length;
+    sync(lng);
+    if (tiles().length < before) restarts += 1;
+    tiles().forEach((tile) => {
+      if (watched.has(tile)) return;
+      watched.add(tile);
+      tile.material.map.addEventListener('dispose', () => { freed += 1; });
+    });
+    mostVisible = Math.max(mostVisible, tiles().filter((tile) => tile.visible).length);
   }
-  assert.ok(restarts >= 1, 'the cap kicked in');
-  assert.ok(most <= 120 + 40, `peak ${most} tiles`);
-  assert.ok(loaded() > 0, 'the current view reloads after a restart');
+  assert.equal(restarts, 0, 'no flash: the layer never starts over');
+  assert.ok(freed > 50, `${freed} textures freed`);
+  assert.ok(mostVisible <= 80, `at most ${mostVisible} tiles resident`);
+  const fetchedOnce = requested;
+  sync(60);
+  assert.equal(requested, fetchedOnce, 'returning tiles come back from memory, not the network');
+  assert.ok(tiles().some((tile) => tile.visible));
+  layer.dispose();
+  delete globalThis.document;
+});
+
+test('the shown level only changes once the ideal level is clearly elsewhere', () => {
+  const at = (zoom, latitude = 0) => (PHONE * Math.cos((latitude * Math.PI) / 180)) / 2 ** zoom; // altitude where ideal = zoom
+  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(6.4), minLevel: 4 }), 6);
+  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(6.6), current: 6, minLevel: 4 }), 6, 'stays');
+  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(5.4), current: 6, minLevel: 4 }), 6, 'stays');
+  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(6.8), current: 6, minLevel: 4 }), 7, 'moves up');
+  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(5.2), current: 6, minLevel: 4 }), 5, 'moves down');
+  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(9.5), current: 8, minLevel: 4 }), 8);
+});
+
+test('panning north and south at a fixed zoom never throws tiles away', () => {
+  const pending = [];
+  globalThis.document = {
+    createElementNS: () => {
+      const listeners = {};
+      const image = { addEventListener: (t, l) => { listeners[t] = l; }, removeEventListener: () => {}, set src(u) { pending.push(() => listeners.load?.call(image)); } };
+      return image;
+    },
+  };
+  const scene = new Scene();
+  const layer = createGlobeTileLayer({ scene, renderer: null, baseTextureWidth: 2048 });
+  const engine = scene.children[0];
+  let removed = 0;
+  const remove = engine.remove;
+  engine.remove = (...objects) => { removed += objects.filter((o) => o.material?.userData?.globeTile).length; return remove(...objects); };
+  // An altitude where the ideal level crosses a boundary between 30°N and 45°N.
+  const altitude = (PHONE * Math.cos((37.5 * Math.PI) / 180)) / 2 ** 6.5;
+  for (const lat of [30, 33, 36, 39, 42, 45, 42, 39, 36, 33, 30, 33, 36, 39, 42, 45]) {
+    layer.sync({ camera: cameraAt({ lat, lng: 116 }, altitude), altitude, latitude: lat, viewportHeight: 840 });
+    pending.splice(0).forEach((arrive) => arrive());
+  }
+  assert.equal(removed, 0);
   layer.dispose();
   delete globalThis.document;
 });
