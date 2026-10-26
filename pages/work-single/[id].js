@@ -3,8 +3,6 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Layout from "../../src/layout/Layout";
-import ProjectArchitectureOverview from "../../src/components/projects/ProjectArchitectureOverview";
-import { getProjectArchitecture } from "../../src/lib/projectArchitecture.mjs";
 import { readTimeMachineFigure, timeMachineSteps } from "../../src/lib/architectureEvolution.mjs";
 import evolutionData from "../../docs/architecture/platform-evolution.json";
 import SeoHead, { absoluteUrl } from "../../src/components/SeoHead";
@@ -101,7 +99,6 @@ export async function getServerSideProps({ params, res }) {
         updatedAt: project.updated_at || null,
         createdAt: project.published_at || null,
       },
-      architecture: getProjectArchitecture(project.id),
       // The time machine data is sent only when the article embeds it.
       evolution: timeMachineSteps(content, evolutionData).length ? evolutionData : null,
       nextProject: nextProject
@@ -111,7 +108,7 @@ export async function getServerSideProps({ params, res }) {
   };
 }
 
-export default function WorkSingle({ project, architecture, evolution, nextProject }) {
+export default function WorkSingle({ project, evolution, nextProject }) {
   const articleRef = useRef(null);
   const [timeMachines, setTimeMachines] = useState([]);
 
@@ -245,14 +242,6 @@ export default function WorkSingle({ project, architecture, evolution, nextProje
                 className="img js-parallax"
                 style={{ backgroundImage: `url(${project.image})` }}
               />
-            </div>
-          </section>
-        )}
-
-        {architecture && (
-          <section className="section section-inner project-architecture-section">
-            <div className="container">
-              <ProjectArchitectureOverview key={project.id} architecture={architecture} />
             </div>
           </section>
         )}

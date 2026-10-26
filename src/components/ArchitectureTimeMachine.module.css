@@ -717,6 +717,7 @@
 /* ---- embedded in a project page ---- */
 .embedded {
   width: 100%;
+  margin-bottom: 64px;
   padding-top: 28px;
   border-top: 1px solid var(--tm-line);
   text-align: left;
