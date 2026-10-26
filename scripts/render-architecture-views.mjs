@@ -6,10 +6,13 @@
  *   docs/architecture/platform-system-flow.json   detailed topology (nodes + edges)
  *   docs/architecture/platform-overview.json      container view; each element `covers` topology nodes
  *   docs/architecture/platform-sequences.json     UML 2 sequence diagrams (messages, notes, combined fragments)
+ *   docs/architecture/platform-evolution.json     architecture time machine (milestones, nodes and links over time)
  *
  * Outputs (served by the site from /diagrams/ and embedded in the README):
  *   public/diagrams/overview{,-dark}.svg          container view with the Kafka event backbone
  *   public/diagrams/flow-<key>{,-dark}.svg        one UML sequence diagram per workflow
+ *   public/diagrams/time-machine/<step>.svg       the time machine at every step (articles link these as a fallback)
+ *   public/diagrams/time-machine/<step>-dark.svg  the featured step in the dark theme, for the README
  *   README.md block between <!-- architecture:start --> and <!-- architecture:end -->
  *
  * Notation (all connectors are solid; the arrowhead carries the meaning):
@@ -28,6 +31,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { evolutionBoxes, evolutionScene, formatMilestoneDate, validateEvolution } from "../src/lib/architectureEvolution.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ARCH_DIR = path.join(ROOT, "docs", "architecture");
@@ -39,6 +43,7 @@ const SOURCES = {
   topology: path.join(ARCH_DIR, "platform-system-flow.json"),
   overview: path.join(ARCH_DIR, "platform-overview.json"),
   sequences: path.join(ARCH_DIR, "platform-sequences.json"),
+  evolution: path.join(ARCH_DIR, "platform-evolution.json"),
 };
 const README_START = "<!-- architecture:start -->";
 const README_END = "<!-- architecture:end -->";
@@ -1905,6 +1910,147 @@ function renderSequence(sequence, index, topo, externals, theme) {
   return svgDocument({ width, height, title: `Workflow: ${sequence.title}`, desc, theme, body: parts.join("\n") });
 }
 
+/* ---------------------------------------------------------- time machine */
+
+const TM_TYPE = { decision: "Decision", incident: "Incident", milestone: "Milestone" };
+
+/**
+ * The architecture time machine at one step, as a static card: the step's headline, the diagram exactly as the
+ * interactive view draws it (changed links strong and labelled, the rest faint) and the timeline underneath.
+ */
+function renderTimeMachine(evolution, milestoneId, theme) {
+  const { layout, milestones } = evolution;
+  const index = milestones.findIndex((milestone) => milestone.id === milestoneId);
+  const boxes = evolutionBoxes(evolution);
+  const scene = evolutionScene(evolution, index, boxes);
+  const { milestone } = scene.state;
+  const width = layout.width;
+  const accent = theme.accents.green;
+  const typeColor = { decision: accent, incident: theme.accents.red, milestone: theme.accents.slate };
+  const bandAccent = { clients: theme.accents.slate, edge: theme.text, services: accent, events: theme.edges.event, data: theme.edges.data };
+  const parts = [];
+  parts.push(`<style>
+  .tm-eyebrow { font-size: 11px; font-weight: 750; letter-spacing: 1.4px; fill: ${accent}; }
+  .tm-title { font-size: 24px; font-weight: 750; }
+  .tm-meta { font-family: ${MONO}; font-size: 11px; font-weight: 600; fill: ${theme.muted}; }
+  .tm-badge { font-family: ${MONO}; font-size: 10px; font-weight: 800; letter-spacing: .6px; }
+  .tm-summary { font-size: 13.5px; font-weight: 500; fill: ${theme.detail}; }
+  .tm-band { font-family: ${MONO}; font-size: 9.5px; font-weight: 800; letter-spacing: .8px; fill: ${theme.muted}; }
+  .tm-band-sub { font-size: 9.5px; font-weight: 600; fill: ${theme.faint}; }
+  .tm-node { font-size: 13px; font-weight: 700; }
+  .tm-node-sub { font-size: 10px; font-weight: 600; fill: ${theme.muted}; }
+  .tm-new { font-family: ${MONO}; font-size: 9px; font-weight: 800; letter-spacing: .5px; fill: ${accent}; }
+  .tm-label { font-size: 10.5px; font-weight: 700; paint-order: stroke; stroke: ${theme.canvas}; stroke-width: 4px; stroke-linejoin: round; }
+  .tm-phase { font-family: ${MONO}; font-size: 9.5px; font-weight: 700; letter-spacing: .5px; fill: ${theme.faint}; }
+  .tm-date { font-family: ${MONO}; font-size: 9.5px; font-weight: 600; fill: ${theme.faint}; }
+  .tm-legend { font-size: 11px; font-weight: 600; fill: ${theme.muted}; }
+</style>`);
+
+  // Headline: where in the story this card is.
+  const left = 24;
+  parts.push(`<text x="${left}" y="34" class="tm-eyebrow">${esc(`ARCHITECTURE TIME MACHINE · STEP ${index + 1} OF ${milestones.length}`)}</text>`);
+  parts.push(`<text x="${left}" y="66" class="tm-title">${esc(milestone.title)}</text>`);
+  const badge = TM_TYPE[milestone.type].toUpperCase();
+  const badgeW = textWidth(badge, 10, { mono: true }) + 16;
+  const tone = typeColor[milestone.type];
+  parts.push(`<rect x="${left}" y="80" width="${round(badgeW)}" height="19" rx="9.5" fill="${tone}" fill-opacity="${tintOpacity(theme, 1.3)}"/>`);
+  parts.push(`<text x="${round(left + badgeW / 2)}" y="93.5" text-anchor="middle" class="tm-badge" style="fill:${tone}">${esc(badge)}</text>`);
+  parts.push(`<text x="${round(left + badgeW + 10)}" y="94" class="tm-meta">${esc(`${formatMilestoneDate(milestone.date)} · ${milestone.phase}`)}</text>`);
+  const summary = wrapText(milestone.summary, 13.5, width - 2 * left);
+  summary.forEach((line, i) => parts.push(`<text x="${left}" y="${122 + i * 19}" class="tm-summary">${esc(line)}</text>`));
+  const top = 122 + summary.length * 19 + 4;
+
+  // Diagram, in the interactive view's coordinates.
+  const diagram = [];
+  layout.bands.forEach((band, i) => {
+    const prev = layout.bands[i - 1];
+    const next = layout.bands[i + 1];
+    const y0 = prev ? (prev.y + band.y) / 2 : 0;
+    const y1 = next ? (band.y + next.y) / 2 : layout.height;
+    diagram.push(`<rect x="0" y="${round(y0)}" width="${width}" height="${round(y1 - y0)}" fill="${i % 2 ? theme.tierFill : theme.tierAlt}"/>`);
+    diagram.push(`<text x="16" y="${band.sub ? band.y - 1 : band.y + 4}" class="tm-band">${esc(band.label)}</text>`);
+    if (band.sub) diagram.push(`<text x="16" y="${band.y + 12}" class="tm-band-sub">${esc(band.sub)}</text>`);
+  });
+  const stroke = { active: 1.4, retired: 1.4, focus: 2.2, new: 2.4 };
+  const opacity = { active: 0.32, retired: 0.5, focus: 1, new: 1 };
+  for (const role of ["active", "retired", "focus", "new"]) {
+    for (const link of scene.links.filter((item) => item.role === role)) {
+      const color = theme.edges[link.kind];
+      const dash = link.dashed || role === "retired" ? ` stroke-dasharray="6 5"` : "";
+      diagram.push(`<g opacity="${opacity[role]}"><path d="${link.geometry.d}" fill="none" stroke="${theme.canvas}" stroke-width="6" stroke-opacity=".85"/><path d="${link.geometry.d}" fill="none" stroke="${color}" stroke-width="${stroke[role]}"${dash} marker-end="url(#arrow-${link.kind})"/></g>`);
+    }
+  }
+  for (const node of scene.state.nodes) {
+    const box = boxes.get(node.id);
+    const focused = scene.focus.nodes.has(node.id);
+    const incident = focused && milestone.type === "incident";
+    const edge = incident ? theme.accents.red : node.status === "new" || focused ? accent : theme.border;
+    const strokeWidth = incident || focused ? 2.4 : node.status === "new" ? 2 : 1.2;
+    const fade = node.status === "retired" ? ` opacity=".45"` : "";
+    const dash = node.status === "retired" ? ` stroke-dasharray="5 4"` : "";
+    diagram.push(`<g${fade}><rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="8" fill="${theme.node}" stroke="${edge}" stroke-width="${strokeWidth}"${dash}/>`
+      + `<rect x="${box.x}" y="${box.y + 6}" width="3.5" height="${box.h - 12}" rx="1.75" fill="${bandAccent[node.band]}"/>`
+      + `<text x="${box.cx}" y="${box.cy - 3}" text-anchor="middle" class="tm-node">${esc(node.label)}</text>`
+      + `<text x="${box.cx}" y="${box.cy + 12}" text-anchor="middle" class="tm-node-sub">${esc(node.sub)}</text></g>`);
+    const tag = scene.tags.get(node.id);
+    if (tag) diagram.push(`<text x="${tag.x}" y="${tag.y}" text-anchor="${tag.anchor}" class="tm-new">NEW</text>`);
+  }
+  for (const link of scene.links) {
+    const spot = scene.labels.get(link.id);
+    if (!spot) continue;
+    const color = link.kind === "request" ? theme.text : theme.edges[link.kind];
+    diagram.push(`<text x="${spot.x}" y="${spot.y}" text-anchor="${spot.anchor}" class="tm-label" style="fill:${color}">${esc(link.label)}</text>`);
+  }
+  parts.push(`<g transform="translate(0 ${top})">\n${diagram.join("\n")}\n</g>`);
+
+  // Timeline: phases, one dot per step, the current step ringed.
+  const lineY = top + layout.height + 52;
+  const x0 = 60;
+  const x1 = width - 60;
+  const at = (i) => x0 + ((x1 - x0) * i) / (milestones.length - 1);
+  let run = 0;
+  milestones.forEach((item, i) => {
+    if (i < milestones.length - 1 && milestones[i + 1].phase === item.phase) return;
+    const current = index >= run && index <= i;
+    parts.push(`<line x1="${round(at(run) - 4)}" y1="${lineY - 24}" x2="${round(Math.max(at(i), at(run) + 2) + 4)}" y2="${lineY - 24}" stroke="${current ? accent : theme.divider}" stroke-width="2"/>`);
+    parts.push(`<text x="${round(at(run) - 4)}" y="${lineY - 12}" class="tm-phase"${current ? ` style="fill:${accent}"` : ""}>${esc(item.phase.toUpperCase())}</text>`);
+    run = i + 1;
+  });
+  parts.push(`<line x1="${x0}" y1="${lineY}" x2="${x1}" y2="${lineY}" stroke="${theme.divider}" stroke-width="4" stroke-linecap="round"/>`);
+  parts.push(`<line x1="${x0}" y1="${lineY}" x2="${round(at(index))}" y2="${lineY}" stroke="${accent}" stroke-width="4" stroke-linecap="round"/>`);
+  milestones.forEach((item, i) => {
+    const color = typeColor[item.type];
+    const fill = i < index ? color : theme.canvas;
+    if (i === index) parts.push(`<circle cx="${round(at(i))}" cy="${lineY}" r="13" fill="${color}" fill-opacity="${tintOpacity(theme, 1.4)}"/>`);
+    parts.push(`<circle cx="${round(at(i))}" cy="${lineY}" r="${i === index ? 9 : 7}" fill="${fill}" stroke="${color}" stroke-width="2"/>`);
+    if (i === 0 || i === milestones.length - 1 || i === index) {
+      const label = formatMilestoneDate(item.date, { short: i !== 0 && i !== milestones.length - 1 });
+      parts.push(`<text x="${round(at(i))}" y="${lineY + 27}" text-anchor="middle" class="tm-date"${i === index ? ` style="fill:${theme.text};font-weight:800"` : ""}>${esc(label)}</text>`);
+    }
+  });
+
+  // Legend.
+  const legendY = lineY + 58;
+  let cursor = left;
+  const legend = [];
+  for (const [type, color] of Object.entries(typeColor)) {
+    legend.push(`<circle cx="${cursor + 5}" cy="${legendY - 4}" r="5" fill="${color}"/><text x="${cursor + 15}" y="${legendY}" class="tm-legend">${TM_TYPE[type]}</text>`);
+    cursor += 15 + textWidth(TM_TYPE[type], 11, { bold: true }) + 18;
+  }
+  for (const kind of ["request", "event", "data"]) {
+    legend.push(`<line x1="${cursor}" y1="${legendY - 4}" x2="${cursor + 18}" y2="${legendY - 4}" stroke="${theme.edges[kind]}" stroke-width="2"/><text x="${cursor + 24}" y="${legendY}" class="tm-legend">${kind}</text>`);
+    cursor += 24 + textWidth(kind, 11, { bold: true }) + 18;
+  }
+  legend.push(`<text x="${cursor}" y="${legendY}" class="tm-legend" style="fill:${accent}">NEW · added in this step</text>`);
+  cursor += textWidth("NEW · added in this step", 11, { bold: true }) + 18;
+  legend.push(`<text x="${cursor}" y="${legendY}" class="tm-legend">faint · unchanged</text>`);
+  parts.push(legend.join("\n"));
+
+  const height = Math.round(legendY + 22);
+  const desc = `Architecture time machine, step ${index + 1} of ${milestones.length} (${formatMilestoneDate(milestone.date)}): ${milestone.title}. ${milestone.summary}`;
+  return svgDocument({ width, height, title: `Architecture time machine: ${milestone.title}`, desc, theme, body: parts.join("\n") });
+}
+
 /* ------------------------------------------------------------------- README */
 
 function picture(base, alt, indent = "  ") {
@@ -1922,7 +2068,34 @@ function markdownCell(value) {
 
 const KIND_LABEL = { request: "sync", event: "async", return: "reply", self: "self" };
 
-function renderReadmeBlock(catalog, topo, externals) {
+/** "How it evolved": the featured time machine step as an image, then every step linked to the live view. */
+function renderEvolutionReadme(evolution) {
+  const { milestones } = evolution;
+  const index = milestones.findIndex((milestone) => milestone.id === evolution.featured);
+  const featured = milestones[index];
+  const live = (id) => `${SITE_URL}/architecture#evolution/${id}`;
+  const alt = `Architecture time machine at step ${index + 1} of ${milestones.length}, ${formatMilestoneDate(featured.date)}: ${featured.title}. ${featured.summary}`;
+  const lines = [];
+  lines.push("### How it evolved");
+  lines.push("");
+  lines.push(`<p align="center">\n  <a href="${live(featured.id)}">\n${picture(`time-machine/${featured.id}`, alt, "    ")}\n  </a>\n</p>`);
+  lines.push("");
+  lines.push(`The [architecture time machine](${SITE_URL}/architecture#evolution) replays how the platform grew from one Next.js app into services, Kafka and a transactional outbox: ${milestones.length} steps, each a decision, an incident or a milestone with the commits behind it. Every step below opens in the live view.`);
+  lines.push("");
+  lines.push(`<details>\n<summary><b>All ${milestones.length} steps</b> — from ${formatMilestoneDate(milestones[0].date).replace(/ \d+,/, "")} to ${formatMilestoneDate(milestones.at(-1).date).replace(/ \d+,/, "")}</summary>`);
+  lines.push("");
+  lines.push("| Date | Step | Type | What changed |");
+  lines.push("| --- | --- | :-: | --- |");
+  for (const milestone of milestones) {
+    lines.push(`| ${formatMilestoneDate(milestone.date)} | [${markdownCell(milestone.title)}](${live(milestone.id)}) | ${TM_TYPE[milestone.type]} | ${markdownCell(milestone.summary)} |`);
+  }
+  lines.push("");
+  lines.push("</details>");
+  lines.push("");
+  return lines;
+}
+
+function renderReadmeBlock(catalog, topo, externals, evolution) {
   const lines = [];
   lines.push(README_START);
   lines.push("<!-- Generated by scripts/render-architecture-views.mjs. Edit the JSON sources in docs/architecture/, then run `npm run docs:architecture`. -->");
@@ -1931,6 +2104,7 @@ function renderReadmeBlock(catalog, topo, externals) {
   lines.push("");
   lines.push(`<p align="center"><a href="${SITE_URL}/architecture"><b>Interactive explorer</b></a> · <a href="${OUT_URL}/overview.svg">Full-size architecture</a> · <a href="docs/architecture/platform-system-flow.svg">Detailed service topology</a></p>`);
   lines.push("");
+  lines.push(...renderEvolutionReadme(evolution));
   lines.push("### Data flows");
   lines.push("");
   lines.push("Each workflow is a UML 2 sequence diagram with combined fragments for the paths that matter in production: rate-limit exits (`break`), degraded modes (`alt`), atomic writes (`critical`), retries and batches (`loop`) and fan-out (`par`).");
@@ -1966,7 +2140,7 @@ function renderReadmeBlock(catalog, topo, externals) {
   lines.push("");
   lines.push("</details>");
   lines.push("");
-  lines.push("> **Maintain these diagrams:** edit the JSON sources in [`docs/architecture/`](docs/architecture/) — topology in `platform-system-flow.json`, system overview in `platform-overview.json`, sequence diagrams in `platform-sequences.json` — then run `npm run docs:architecture`. `npm run docs:architecture:check` fails when a service is missing from the overview, a message references an unknown participant, or the generated files are stale.");
+  lines.push("> **Maintain these diagrams:** edit the JSON sources in [`docs/architecture/`](docs/architecture/) — topology in `platform-system-flow.json`, system overview in `platform-overview.json`, sequence diagrams in `platform-sequences.json`, the time machine in `platform-evolution.json` — then run `npm run docs:architecture`. `npm run docs:architecture:check` fails when a service is missing from the overview, a message references an unknown participant, or the generated files are stale.");
   lines.push(README_END);
   return lines.join("\n");
 }
@@ -1993,6 +2167,7 @@ function main() {
   const topology = readJson(SOURCES.topology);
   const overview = readJson(SOURCES.overview);
   const catalog = readJson(SOURCES.sequences);
+  const evolution = readJson(SOURCES.evolution);
   const topo = indexTopology(topology);
 
   const problems = [];
@@ -2001,6 +2176,10 @@ function main() {
   // Port and layout checks resolve link endpoints, so they only run on an otherwise valid overview.
   if (!problems.length) validateKafkaPorts(overview, problems);
   validateSequences(catalog, topo, problems, warnings);
+  problems.push(...validateEvolution(evolution).map((problem) => `platform-evolution.json: ${problem}`));
+  if (!evolution.milestones.some((milestone) => milestone.id === evolution.featured)) {
+    problems.push(`platform-evolution.json: featured step "${evolution.featured}" is not a milestone`);
+  }
   if (!problems.length) overlapWarnings(overview, warnings);
   warnings.forEach((warning) => console.warn(`warn  ${warning}`));
   if (problems.length) {
@@ -2018,13 +2197,17 @@ function main() {
       outputs.set(path.join(OUT_DIR, `flow-${sequence.key}${suffix}.svg`), renderSequence(sequence, index, topo, externals, theme));
     });
   }
+  // Every step in the light theme (articles embed these), plus the README's featured step in the dark theme.
+  for (const milestone of evolution.milestones) {
+    outputs.set(path.join(OUT_DIR, "time-machine", `${milestone.id}.svg`), renderTimeMachine(evolution, milestone.id, THEMES.light));
+  }
+  outputs.set(path.join(OUT_DIR, "time-machine", `${evolution.featured}-dark.svg`), renderTimeMachine(evolution, evolution.featured, THEMES.dark));
   const readme = fs.readFileSync(README_PATH, "utf8");
-  outputs.set(README_PATH, updateReadme(readme, renderReadmeBlock(catalog, topo, externals)));
+  outputs.set(README_PATH, updateReadme(readme, renderReadmeBlock(catalog, topo, externals, evolution)));
 
   const expected = new Set([...outputs.keys()].filter((file) => file.startsWith(OUT_DIR)));
-  const orphans = fs.existsSync(OUT_DIR)
-    ? fs.readdirSync(OUT_DIR).map((name) => path.join(OUT_DIR, name)).filter((file) => file.endsWith(".svg") && !expected.has(file))
-    : [];
+  const svgsIn = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).map((name) => path.join(dir, name)).filter((file) => file.endsWith(".svg")) : []);
+  const orphans = [...svgsIn(OUT_DIR), ...svgsIn(path.join(OUT_DIR, "time-machine"))].filter((file) => !expected.has(file));
 
   if (check) {
     const stale = [...outputs.entries()]
@@ -2035,11 +2218,11 @@ function main() {
       console.error(`Architecture views are stale. Run \`npm run docs:architecture\`.\n  ${stale.join("\n  ")}`);
       process.exit(1);
     }
-    console.log(`Architecture views are up to date (${coverage.covered}/${coverage.total} topology nodes, ${catalog.sequences.length} sequence diagrams).`);
+    console.log(`Architecture views are up to date (${coverage.covered}/${coverage.total} topology nodes, ${catalog.sequences.length} sequence diagrams, ${evolution.milestones.length} time machine steps).`);
     return;
   }
 
-  fs.mkdirSync(OUT_DIR, { recursive: true });
+  fs.mkdirSync(path.join(OUT_DIR, "time-machine"), { recursive: true });
   for (const [file, content] of outputs) {
     if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== content) {
       fs.writeFileSync(file, content);

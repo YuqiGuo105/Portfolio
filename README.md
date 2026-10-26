@@ -24,6 +24,43 @@ A modern Next.js portfolio application for showcasing projects, blogs, CV, visit
 
 <p align="center"><a href="https://www.yuqi.site/architecture"><b>Interactive explorer</b></a> · <a href="public/diagrams/overview.svg">Full-size architecture</a> · <a href="docs/architecture/platform-system-flow.svg">Detailed service topology</a></p>
 
+### How it evolved
+
+<p align="center">
+  <a href="https://www.yuqi.site/architecture#evolution/outbox">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="public/diagrams/time-machine/outbox-dark.svg">
+      <img src="public/diagrams/time-machine/outbox.svg" alt="Architecture time machine at step 13 of 16, Jul 19, 2026: Transactional outbox with relays. Events committed with a publish can no longer get lost: relays replay outbox rows and indexing jobs until Kafka acknowledges them." width="100%" />
+    </picture>
+  </a>
+</p>
+
+The [architecture time machine](https://www.yuqi.site/architecture#evolution) replays how the platform grew from one Next.js app into services, Kafka and a transactional outbox: 16 steps, each a decision, an incident or a milestone with the commits behind it. Every step below opens in the live view.
+
+<details>
+<summary><b>All 16 steps</b> — from Jan 2024 to Oct 2026</summary>
+
+| Date | Step | Type | What changed |
+| --- | --- | :-: | --- |
+| Jan 30, 2024 | [One Next.js app on Vercel](https://www.yuqi.site/architecture#evolution/monolith) | Milestone | The portfolio starts as a single Next.js app: pages, API routes and a managed PostgreSQL database behind one deploy. |
+| Jun 13, 2025 | [Chat and visitor tracking, still one app](https://www.yuqi.site/architecture#evolution/chat) | Milestone | A chat widget and page-view tracking arrive without new services: API routes write chat history and visitor logs to the same database. |
+| Jun 20, 2026 | [Services split out to Cloud Run](https://www.yuqi.site/architecture#evolution/services) | Decision | Content, notifications and the AI agent move into their own Java services on Cloud Run; the Next.js app becomes the front end and a thin proxy. |
+| Jun 21, 2026 | [Incident: the migration that never ran](https://www.yuqi.site/architecture#evolution/flyway) | Incident | Every content API call returned 500 — relation "content_versions" does not exist — while Flyway reported the schema as up to date. |
+| Jun 23, 2026 | [Visitor analytics on exactly two topics](https://www.yuqi.site/architecture#evolution/two-topics) | Decision | The analytics platform launches with two Kafka topics, raw events and a dead-letter queue, because the managed Kafka plan allowed only two. |
+| Jun 24, 2026 | [Page views reach Kafka as a shadow write](https://www.yuqi.site/architecture#evolution/dual-write) | Decision | /api/track keeps inserting into PostgreSQL and also produces each page view to Kafka, best effort. |
+| Jul 1, 2026 | [Kafka becomes the primary path](https://www.yuqi.site/architecture#evolution/kafka-primary) | Decision | The order flips: /api/track produces to Kafka first and writes PostgreSQL directly only when Kafka is unavailable. |
+| Jul 2, 2026 | [Incident: events dropped by a throttled consumer](https://www.yuqi.site/architecture#evolution/cpu-throttle) | Incident | New subscribers received no publication emails: every content.notification event was being silently dropped. |
+| Jul 6, 2026 | [The agent gets memory, RAG and its own outbox](https://www.yuqi.site/architecture#evolution/agent-outbox) | Decision | The agent service takes over routing, memory and run telemetry, and the chat widget talks to it directly from July 7. |
+| Jul 13, 2026 | [A public MCP server](https://www.yuqi.site/architecture#evolution/mcp) | Milestone | AI clients such as Claude and Codex can query the portfolio through six read-only tools at yuqi.site/mcp. |
+| Jul 17, 2026 | [Scale to zero, capped instances](https://www.yuqi.site/architecture#evolution/scale-to-zero) | Decision | Cloud Run services get instance caps and idle ones scale to zero; Kubernetes stays the documented exit path (ADR-001). |
+| Jul 18, 2026 | [Visitor alerts as durable incidents](https://www.yuqi.site/architecture#evolution/alerts) | Decision | Alert rules are evaluated on request, and every alert becomes an incident row that is delivered to the notification service over HTTP. |
+| Jul 19, 2026 | [Transactional outbox with relays](https://www.yuqi.site/architecture#evolution/outbox) | Decision | Events committed with a publish can no longer get lost: relays replay outbox rows and indexing jobs until Kafka acknowledges them. |
+| Aug 18, 2026 | [Fenced outbox claims](https://www.yuqi.site/architecture#evolution/fencing) | Decision | Relays claim rows with FOR UPDATE SKIP LOCKED and a lease, and every claim bumps a version, so a relay that outlived its lease cannot overwrite a newer claim. |
+| Aug 31, 2026 | [A career copilot over the admin MCP](https://www.yuqi.site/architecture#evolution/copilot) | Milestone | A Chrome extension helps fill job applications from a private career vault, through the authenticated MCP endpoint. |
+| Oct 21, 2026 | [Voice calls with hard quotas](https://www.yuqi.site/architecture#evolution/voice) | Decision | Visitors can call Mr. Pot from the homepage; a Cloud Run relay holds the provider keys, and a database allowance caps the whole platform at five calls a day. |
+
+</details>
+
 ### Data flows
 
 Each workflow is a UML 2 sequence diagram with combined fragments for the paths that matter in production: rate-limit exits (`break`), degraded modes (`alt`), atomic writes (`critical`), retries and batches (`loop`) and fan-out (`par`).
@@ -209,7 +246,7 @@ Each workflow is a UML 2 sequence diagram with combined fragments for the paths 
 
 </details>
 
-> **Maintain these diagrams:** edit the JSON sources in [`docs/architecture/`](docs/architecture/) — topology in `platform-system-flow.json`, system overview in `platform-overview.json`, sequence diagrams in `platform-sequences.json` — then run `npm run docs:architecture`. `npm run docs:architecture:check` fails when a service is missing from the overview, a message references an unknown participant, or the generated files are stale.
+> **Maintain these diagrams:** edit the JSON sources in [`docs/architecture/`](docs/architecture/) — topology in `platform-system-flow.json`, system overview in `platform-overview.json`, sequence diagrams in `platform-sequences.json`, the time machine in `platform-evolution.json` — then run `npm run docs:architecture`. `npm run docs:architecture:check` fails when a service is missing from the overview, a message references an unknown participant, or the generated files are stale.
 <!-- architecture:end -->
 
 ---

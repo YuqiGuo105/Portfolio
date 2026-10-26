@@ -1,11 +1,18 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import Layout from "../../src/layout/Layout";
 import ProjectArchitectureOverview from "../../src/components/projects/ProjectArchitectureOverview";
 import { getProjectArchitecture } from "../../src/lib/projectArchitecture.mjs";
+import { readTimeMachineFigure, timeMachineSteps } from "../../src/lib/architectureEvolution.mjs";
+import evolutionData from "../../docs/architecture/platform-evolution.json";
 import SeoHead, { absoluteUrl } from "../../src/components/SeoHead";
 import { sanitize } from "../../src/lib/sanitizeHtml";
 import { supabaseServer } from "../../src/supabase/supabaseServer";
+
+// Loaded only when the article contains a time machine figure.
+const ArchitectureTimeMachine = dynamic(() => import("../../src/components/ArchitectureTimeMachine"));
 
 const PROJECT_FIELDS = [
   "id",
@@ -71,6 +78,7 @@ export async function getServerSideProps({ params, res }) {
 
   const project = projectResult.data;
   const projects = navigationResult.data || [];
+  const content = sanitizeWithMermaid(project.content);
 
   const currentIndex = projects.findIndex((item) => item.id === id);
   const nextProject = currentIndex >= 0 ? projects[currentIndex + 1] || null : null;
@@ -85,7 +93,7 @@ export async function getServerSideProps({ params, res }) {
         year: project.year || "",
         technology: project.technology || "",
         URL: project.URL || "",
-        content: sanitizeWithMermaid(project.content),
+        content,
         description: project.summary || "",
         image: project.image_url || null,
         coverVariant: project.cover_variant || "IMAGE",
@@ -94,6 +102,8 @@ export async function getServerSideProps({ params, res }) {
         createdAt: project.published_at || null,
       },
       architecture: getProjectArchitecture(project.id),
+      // The time machine data is sent only when the article embeds it.
+      evolution: timeMachineSteps(content, evolutionData).length ? evolutionData : null,
       nextProject: nextProject
         ? { id: nextProject.id, title: nextProject.title || "" }
         : null,
@@ -101,7 +111,40 @@ export async function getServerSideProps({ params, res }) {
   };
 }
 
-export default function WorkSingle({ project, architecture, nextProject }) {
+export default function WorkSingle({ project, architecture, evolution, nextProject }) {
+  const articleRef = useRef(null);
+  const [timeMachines, setTimeMachines] = useState([]);
+
+  // An article opts into the interactive time machine with <figure class="time-machine"> linking to a step of
+  // /architecture#evolution. The figure (image, link, caption) stays in the article; here it is swapped for the
+  // live view, headed by the figure's caption.
+  useEffect(() => {
+    const root = articleRef.current;
+    if (!evolution || !root) return undefined;
+    const mounted = [];
+    root.querySelectorAll("figure.time-machine").forEach((figure, index) => {
+      const embed = readTimeMachineFigure({
+        href: figure.querySelector('a[href*="#evolution/"]')?.getAttribute("href"),
+        lead: figure.querySelector("figcaption strong, figcaption b")?.textContent,
+        caption: figure.querySelector("figcaption")?.textContent,
+      }, evolution);
+      if (!embed) return;
+      const container = document.createElement("div");
+      container.className = "time-machine-embed";
+      figure.after(container);
+      figure.hidden = true;
+      mounted.push({ ...embed, index, figure, container });
+    });
+    setTimeMachines(mounted);
+    return () => {
+      mounted.forEach(({ figure, container }) => {
+        container.remove();
+        figure.hidden = false;
+      });
+      setTimeMachines([]);
+    };
+  }, [evolution, project.content]);
+
   useEffect(() => {
     if (!document.querySelector("div.mermaid")) return undefined;
 
@@ -221,8 +264,14 @@ export default function WorkSingle({ project, architecture, nextProject }) {
                 <div className="p-title">Project</div>
                 <div
                   className="text"
+                  ref={articleRef}
                   dangerouslySetInnerHTML={{ __html: project.content }}
                 />
+                {timeMachines.map((item) => createPortal(
+                  <ArchitectureTimeMachine variant="embedded" data={evolution} initialId={item.step} heading={item.heading} />,
+                  item.container,
+                  `${project.id}-${item.index}`,
+                ))}
               </div>
             </div>
           </div>

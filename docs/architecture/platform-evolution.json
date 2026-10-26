@@ -1,0 +1,1097 @@
+{
+  "$comment": "Architecture time machine on /architecture#evolution. Every node and link names the milestone that added it (`since`) and, if it was retired, the milestone that replaced it (`until`). Nodes sit in a band (row) and span slots (columns; a half slot ends a node short of the next column). Links between bands run straight where boxes overlap; `route` (corridor, side, above, below), `x` and `ports` [startX, endX] steer the rest. A milestone's `focus` lists node ids and links as \"from>to\". `featured` is the step the README shows. Articles embed a step with a `<figure class=\"time-machine\">` that links to /architecture#evolution/<step>. Milestones are in date order; each cites the commits it is based on (all repositories are public under github.com/YuqiGuo105). Validated by tests/architecture-evolution.test.mjs.",
+  "title": "Architecture time machine",
+  "owner": "YuqiGuo105",
+  "featured": "outbox",
+  "layout": {
+    "width": 1160,
+    "height": 470,
+    "gutter": 124,
+    "slot": 128,
+    "nodeWidth": 112,
+    "nodeHeight": 46,
+    "bands": [
+      {
+        "id": "clients",
+        "label": "CLIENTS",
+        "y": 52
+      },
+      {
+        "id": "edge",
+        "label": "EDGE",
+        "y": 140,
+        "sub": "Vercel"
+      },
+      {
+        "id": "services",
+        "label": "SERVICES",
+        "y": 236,
+        "sub": "Cloud Run"
+      },
+      {
+        "id": "events",
+        "label": "EVENTS",
+        "y": 328
+      },
+      {
+        "id": "data",
+        "label": "DATA",
+        "y": 420
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "visitors",
+      "band": "clients",
+      "slots": [
+        1,
+        1
+      ],
+      "label": "Visitors",
+      "sub": "Browser",
+      "since": "monolith"
+    },
+    {
+      "id": "ai-clients",
+      "band": "clients",
+      "slots": [
+        6,
+        6
+      ],
+      "label": "AI clients",
+      "sub": "Claude · Codex",
+      "since": "mcp"
+    },
+    {
+      "id": "copilot",
+      "band": "clients",
+      "slots": [
+        7,
+        7
+      ],
+      "label": "Chrome copilot",
+      "sub": "Applicants",
+      "since": "copilot"
+    },
+    {
+      "id": "next",
+      "band": "edge",
+      "slots": [
+        0,
+        3
+      ],
+      "label": "Next.js app",
+      "sub": "Pages + API routes",
+      "since": "monolith"
+    },
+    {
+      "id": "content",
+      "band": "services",
+      "slots": [
+        0,
+        0
+      ],
+      "label": "Content",
+      "sub": "Writer API",
+      "since": "services"
+    },
+    {
+      "id": "notify",
+      "band": "services",
+      "slots": [
+        2,
+        2
+      ],
+      "label": "Notifications",
+      "sub": "Fan-out · email",
+      "since": "services"
+    },
+    {
+      "id": "agent",
+      "band": "services",
+      "slots": [
+        5,
+        5
+      ],
+      "label": "Agent",
+      "sub": "+ tool gateway",
+      "since": "services"
+    },
+    {
+      "id": "analytics",
+      "band": "services",
+      "slots": [
+        3,
+        3
+      ],
+      "label": "Analytics",
+      "sub": "Aggregator",
+      "since": "two-topics"
+    },
+    {
+      "id": "mcp",
+      "band": "services",
+      "slots": [
+        6,
+        6
+      ],
+      "label": "MCP server",
+      "sub": "/mcp · /mcp/admin",
+      "since": "mcp"
+    },
+    {
+      "id": "career",
+      "band": "services",
+      "slots": [
+        7,
+        7
+      ],
+      "label": "Career",
+      "sub": "Encrypted vault",
+      "since": "copilot"
+    },
+    {
+      "id": "voice",
+      "band": "services",
+      "slots": [
+        1,
+        1
+      ],
+      "label": "Voice relay",
+      "sub": "Quota-bound",
+      "since": "voice"
+    },
+    {
+      "id": "kafka",
+      "band": "events",
+      "slots": [
+        1,
+        2
+      ],
+      "label": "Kafka",
+      "sub": "Event backbone",
+      "since": "services"
+    },
+    {
+      "id": "indexers",
+      "band": "services",
+      "slots": [
+        4,
+        4
+      ],
+      "label": "Indexers",
+      "sub": "Search + RAG",
+      "since": "services"
+    },
+    {
+      "id": "postgres",
+      "band": "data",
+      "slots": [
+        0,
+        1
+      ],
+      "label": "PostgreSQL",
+      "sub": "Content · logs · outbox",
+      "since": "monolith"
+    },
+    {
+      "id": "pgvector",
+      "band": "data",
+      "slots": [
+        5,
+        5
+      ],
+      "label": "pgvector",
+      "sub": "RAG chunks",
+      "since": "services"
+    },
+    {
+      "id": "opensearch",
+      "band": "data",
+      "slots": [
+        4,
+        4
+      ],
+      "label": "OpenSearch",
+      "sub": "Search · run traces",
+      "since": "services"
+    },
+    {
+      "id": "redis",
+      "band": "data",
+      "slots": [
+        3,
+        3
+      ],
+      "label": "Redis",
+      "sub": "Valkey · shared",
+      "since": "kafka-primary"
+    },
+    {
+      "id": "assistant",
+      "band": "edge",
+      "slots": [
+        5,
+        5
+      ],
+      "label": "Assistant API",
+      "sub": "External, hosted",
+      "since": "chat",
+      "until": "agent-outbox"
+    }
+  ],
+  "links": [
+    {
+      "from": "visitors",
+      "to": "next",
+      "kind": "request",
+      "label": "pages · API routes",
+      "since": "monolith"
+    },
+    {
+      "from": "next",
+      "to": "postgres",
+      "kind": "data",
+      "label": "reads + writes",
+      "since": "monolith"
+    },
+    {
+      "from": "next",
+      "to": "assistant",
+      "kind": "request",
+      "label": "chat",
+      "since": "chat",
+      "until": "agent-outbox"
+    },
+    {
+      "from": "next",
+      "to": "content",
+      "kind": "request",
+      "label": "Writer API · JWT",
+      "since": "services"
+    },
+    {
+      "from": "next",
+      "to": "notify",
+      "kind": "request",
+      "label": "subscriptions",
+      "since": "services"
+    },
+    {
+      "from": "next",
+      "to": "agent",
+      "kind": "request",
+      "label": "tool calls",
+      "since": "services",
+      "until": "agent-outbox"
+    },
+    {
+      "from": "content",
+      "to": "postgres",
+      "kind": "data",
+      "label": "publish transaction",
+      "since": "services"
+    },
+    {
+      "from": "content",
+      "to": "kafka",
+      "kind": "event",
+      "label": "after commit",
+      "since": "services"
+    },
+    {
+      "from": "kafka",
+      "to": "notify",
+      "kind": "event",
+      "label": "content.notification.*",
+      "since": "services"
+    },
+    {
+      "from": "kafka",
+      "to": "indexers",
+      "kind": "event",
+      "label": "index jobs",
+      "since": "services",
+      "ports": [
+        null,
+        676
+      ],
+      "route": "side"
+    },
+    {
+      "from": "indexers",
+      "to": "opensearch",
+      "kind": "data",
+      "label": "search index",
+      "since": "services"
+    },
+    {
+      "from": "indexers",
+      "to": "pgvector",
+      "kind": "data",
+      "label": "RAG chunks",
+      "since": "services"
+    },
+    {
+      "from": "kafka",
+      "to": "analytics",
+      "kind": "event",
+      "label": "raw events · DLQ",
+      "since": "two-topics",
+      "ports": [
+        466,
+        534
+      ]
+    },
+    {
+      "from": "analytics",
+      "to": "postgres",
+      "kind": "data",
+      "label": "visitor logs · rollups",
+      "since": "two-topics",
+      "route": "corridor",
+      "ports": [
+        540,
+        354
+      ]
+    },
+    {
+      "from": "next",
+      "to": "analytics",
+      "kind": "request",
+      "label": "visits API",
+      "since": "two-topics"
+    },
+    {
+      "from": "next",
+      "to": "kafka",
+      "kind": "event",
+      "label": "shadow produce",
+      "since": "dual-write",
+      "until": "kafka-primary",
+      "dashed": true,
+      "x": 380
+    },
+    {
+      "from": "next",
+      "to": "kafka",
+      "kind": "event",
+      "label": "/api/track",
+      "since": "kafka-primary",
+      "x": 380
+    },
+    {
+      "from": "analytics",
+      "to": "redis",
+      "kind": "data",
+      "label": "dedup · HLL · cache",
+      "since": "kafka-primary"
+    },
+    {
+      "from": "next",
+      "to": "agent",
+      "kind": "request",
+      "label": "chat · SSE",
+      "since": "agent-outbox"
+    },
+    {
+      "from": "agent",
+      "to": "redis",
+      "kind": "data",
+      "label": "memory · budget",
+      "since": "agent-outbox",
+      "ports": [
+        782,
+        610
+      ]
+    },
+    {
+      "from": "agent",
+      "to": "pgvector",
+      "kind": "data",
+      "label": "retrieval",
+      "since": "agent-outbox"
+    },
+    {
+      "from": "agent",
+      "to": "opensearch",
+      "kind": "data",
+      "label": "run outbox → bulk index",
+      "since": "agent-outbox",
+      "ports": [
+        804,
+        744
+      ]
+    },
+    {
+      "from": "ai-clients",
+      "to": "mcp",
+      "kind": "request",
+      "label": "/mcp via Vercel",
+      "since": "mcp"
+    },
+    {
+      "from": "mcp",
+      "to": "agent",
+      "kind": "request",
+      "label": "tool gateway",
+      "since": "mcp",
+      "route": "above"
+    },
+    {
+      "from": "analytics",
+      "to": "notify",
+      "kind": "request",
+      "label": "alerts · HTTP + retry",
+      "since": "alerts",
+      "route": "above"
+    },
+    {
+      "from": "copilot",
+      "to": "mcp",
+      "kind": "request",
+      "label": "/mcp/admin · OAuth",
+      "since": "copilot"
+    },
+    {
+      "from": "mcp",
+      "to": "career",
+      "kind": "request",
+      "label": "career tools",
+      "since": "copilot",
+      "route": "below"
+    },
+    {
+      "from": "next",
+      "to": "voice",
+      "kind": "request",
+      "label": "voice session",
+      "since": "voice"
+    },
+    {
+      "from": "postgres",
+      "to": "kafka",
+      "kind": "event",
+      "label": "outbox relay · replay until acked",
+      "since": "outbox"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "monolith",
+      "date": "2024-01-30",
+      "phase": "Monolith",
+      "type": "milestone",
+      "title": "One Next.js app on Vercel",
+      "summary": "The portfolio starts as a single Next.js app: pages, API routes and a managed PostgreSQL database behind one deploy.",
+      "sections": [
+        {
+          "label": "Shape",
+          "text": "Pages read blogs and projects straight from PostgreSQL through the client SDK; a few API routes handle contact and click tracking."
+        },
+        {
+          "label": "Why it fit",
+          "text": "One maintainer and no traffic yet: one repository, one deploy and one database were the simplest thing that worked."
+        }
+      ],
+      "focus": [
+        "next",
+        "postgres"
+      ],
+      "evidence": [
+        {
+          "repo": "Portfolio",
+          "sha": "233ad26",
+          "text": "Supabase connection setup"
+        }
+      ]
+    },
+    {
+      "id": "chat",
+      "date": "2025-06-13",
+      "phase": "Monolith",
+      "type": "milestone",
+      "title": "Chat and visitor tracking, still one app",
+      "summary": "A chat widget and page-view tracking arrive without new services: API routes write chat history and visitor logs to the same database.",
+      "sections": [
+        {
+          "label": "What changed",
+          "text": "The widget calls a hosted assistant endpoint. /api/track reads Vercel's geo headers and inserts a visitor_logs row on every page view; a globe dashboard reads those rows from December."
+        },
+        {
+          "label": "Pressure building",
+          "text": "Every page view is now a synchronous insert from a serverless function into the database the pages read from."
+        }
+      ],
+      "focus": [
+        "next",
+        "assistant",
+        "postgres"
+      ],
+      "evidence": [
+        {
+          "repo": "Portfolio",
+          "sha": "fd40b5f",
+          "text": "Chatbot layout"
+        },
+        {
+          "repo": "Portfolio",
+          "sha": "c4894d7",
+          "text": "Store chat history to Supabase"
+        },
+        {
+          "repo": "Portfolio",
+          "sha": "2eefcbd",
+          "text": "Visitors' log dashboard"
+        }
+      ]
+    },
+    {
+      "id": "services",
+      "date": "2026-06-20",
+      "phase": "Services",
+      "type": "decision",
+      "title": "Services split out to Cloud Run",
+      "summary": "Content, notifications and the AI agent move into their own Java services on Cloud Run; the Next.js app becomes the front end and a thin proxy.",
+      "sections": [
+        {
+          "label": "Context",
+          "text": "Publishing now had to update site search, the RAG index and subscribers, and the chat was growing tools, memory and budgets."
+        },
+        {
+          "label": "Decision",
+          "text": "A content service (Writer API plus search and RAG indexers), a notification service, and an agent service with an MCP tool gateway, each deployed on its own. A publish writes PostgreSQL in one transaction and sends Kafka events after the commit."
+        },
+        {
+          "label": "Trade-off",
+          "text": "Each workflow deploys and scales independently, paid for with network hops, a broker to operate and distributed failure modes."
+        }
+      ],
+      "focus": [
+        "content",
+        "notify",
+        "agent",
+        "kafka"
+      ],
+      "evidence": [
+        {
+          "repo": "portfolio-admin-service",
+          "sha": "10601b3",
+          "text": "feat: initial admin content platform backend scaffold"
+        },
+        {
+          "repo": "portfolio-admin-service",
+          "sha": "a2ab209",
+          "text": "feat: multi-module Maven (admin-service + search-indexer + rag-indexer) + Kafka notification events + E2E tests"
+        },
+        {
+          "repo": "portfolio-notification-service",
+          "sha": "a2856e7",
+          "text": "feat: initial notification service"
+        },
+        {
+          "repo": "portfolio-ai-platform",
+          "sha": "9938b73",
+          "text": "feat: Sprint 1 scaffold for portfolio-agent-service + portfolio-mcp-gateway"
+        }
+      ]
+    },
+    {
+      "id": "flyway",
+      "date": "2026-06-21",
+      "phase": "Services",
+      "type": "incident",
+      "title": "Incident: the migration that never ran",
+      "summary": "Every content API call returned 500 — relation \"content_versions\" does not exist — while Flyway reported the schema as up to date.",
+      "sections": [
+        {
+          "label": "Cause",
+          "text": "The new service shared a database whose public schema already held the legacy blog and project tables. With baseline-on-migrate, Flyway recorded version 1 as a baseline instead of running it, so the new tables were never created."
+        },
+        {
+          "label": "Fix",
+          "text": "The same DDL was re-applied as V2, and validation was relaxed to recover from the checksum drift an edited V1 had caused."
+        },
+        {
+          "label": "Lesson",
+          "text": "Never edit an applied migration. CI now rejects duplicate Flyway versions (August 25)."
+        }
+      ],
+      "focus": [
+        "content",
+        "postgres",
+        "content>postgres"
+      ],
+      "evidence": [
+        {
+          "repo": "portfolio-admin-service",
+          "sha": "dc402cf",
+          "text": "fix(flyway): re-apply admin content platform DDL as V2 (V1 was baselined)"
+        },
+        {
+          "repo": "portfolio-admin-service",
+          "sha": "41ffeec",
+          "text": "fix(flyway): repair checksum mismatch on startup — V1 migration was modified after initial apply"
+        },
+        {
+          "repo": "portfolio-admin-service",
+          "sha": "1cdf09d",
+          "text": "fix(admin): enforce unique Flyway versions"
+        }
+      ]
+    },
+    {
+      "id": "two-topics",
+      "date": "2026-06-23",
+      "phase": "Event-driven",
+      "type": "decision",
+      "title": "Visitor analytics on exactly two topics",
+      "summary": "The analytics platform launches with two Kafka topics, raw events and a dead-letter queue, because the managed Kafka plan allowed only two.",
+      "sections": [
+        {
+          "label": "Decision",
+          "text": "Enrichment moved into the aggregator as an in-process pipeline instead of a separate service with its own topic: one consumer parses, de-duplicates, enriches and upserts."
+        },
+        {
+          "label": "Contract",
+          "text": "Every event ends as DONE, RETRY or DLQ, the same outcome contract as the notification service. A backfill replays the old visitor_logs through the same pipeline with stable event IDs."
+        }
+      ],
+      "focus": [
+        "kafka",
+        "analytics"
+      ],
+      "evidence": [
+        {
+          "repo": "portfolio-analytics-platform",
+          "sha": "921bc87",
+          "text": "refactor: collapse enrichment into aggregator (Aiven free-tier 2-topic cap)"
+        },
+        {
+          "repo": "portfolio-analytics-platform",
+          "sha": "85b8500",
+          "text": "feat: scaffold portfolio-analytics-platform"
+        }
+      ]
+    },
+    {
+      "id": "dual-write",
+      "date": "2026-06-24",
+      "phase": "Event-driven",
+      "type": "decision",
+      "title": "Page views reach Kafka as a shadow write",
+      "summary": "/api/track keeps inserting into PostgreSQL and also produces each page view to Kafka, best effort.",
+      "sections": [
+        {
+          "label": "Why shadow first",
+          "text": "Kafka received real traffic while PostgreSQL stayed the source of truth, and a broker outage could never block the response: a 5-second connect timeout, produce errors logged and swallowed."
+        },
+        {
+          "label": "Detail",
+          "text": "Every event carries a time-ordered UUIDv7 eventId, the de-duplication key downstream."
+        },
+        {
+          "label": "Known risk",
+          "text": "It is a dual write: the row and the event can disagree whenever one side fails."
+        }
+      ],
+      "focus": [
+        "next",
+        "kafka",
+        "postgres",
+        "next>postgres"
+      ],
+      "evidence": [
+        {
+          "repo": "Portfolio",
+          "sha": "10a013c",
+          "text": "feat(track): dual-write to Kafka + Supabase (best-effort Kafka produce)"
+        }
+      ]
+    },
+    {
+      "id": "kafka-primary",
+      "date": "2026-07-01",
+      "phase": "Event-driven",
+      "type": "decision",
+      "title": "Kafka becomes the primary path",
+      "summary": "The order flips: /api/track produces to Kafka first and writes PostgreSQL directly only when Kafka is unavailable.",
+      "sections": [
+        {
+          "label": "Decision",
+          "text": "The aggregator's batch consumer owns the visitor_logs writes, so under normal load a page view opens no database connection from Vercel. The response reports which path it took."
+        },
+        {
+          "label": "Supporting pieces",
+          "text": "Redis arrives for de-duplication, HyperLogLog unique sessions, a read-through cache with ETags, and rate limits shared across serverless instances."
+        }
+      ],
+      "focus": [
+        "next",
+        "kafka",
+        "analytics",
+        "redis"
+      ],
+      "evidence": [
+        {
+          "repo": "Portfolio",
+          "sha": "f41430a",
+          "text": "feat(track): make Kafka the primary ingestion path, Supabase is fallback"
+        },
+        {
+          "repo": "portfolio-analytics-platform",
+          "sha": "993c48a",
+          "text": "feat(aggregator): batch-persist visitor_logs so /api/track can go Kafka-primary"
+        },
+        {
+          "repo": "portfolio-analytics-platform",
+          "sha": "4bb0c7d",
+          "text": "feat(aggregator): real unique-session counting via Valkey HyperLogLog"
+        },
+        {
+          "repo": "Portfolio",
+          "sha": "505751d",
+          "text": "refactor(rate-limit): extract shared Valkey-backed rate limiter"
+        }
+      ]
+    },
+    {
+      "id": "cpu-throttle",
+      "date": "2026-07-02",
+      "phase": "Event-driven",
+      "type": "incident",
+      "title": "Incident: events dropped by a throttled consumer",
+      "summary": "New subscribers received no publication emails: every content.notification event was being silently dropped.",
+      "sections": [
+        {
+          "label": "Cause",
+          "text": "Cloud Run allocates CPU only while a request is in flight. Between requests the Kafka consumer's poll loop was throttled, and its TCP setup to the broker timed out."
+        },
+        {
+          "label": "Fix",
+          "text": "CPU always on for the consumer (--no-cpu-throttling), matching the content service. On June 20, email sending had already been moved inside the HTTP request for the same reason."
+        },
+        {
+          "label": "Later",
+          "text": "Consumers went back to scale-to-zero in July to save cost; publishers now wake them with an explicit drain call."
+        }
+      ],
+      "focus": [
+        "notify",
+        "kafka",
+        "kafka>notify"
+      ],
+      "evidence": [
+        {
+          "repo": "portfolio-notification-service",
+          "sha": "0459173",
+          "text": "fix(deploy): enable --no-cpu-throttling on Cloud Run"
+        },
+        {
+          "repo": "portfolio-notification-service",
+          "sha": "404b93a",
+          "text": "fix: dispatch email synchronously during HTTP request to avoid Cloud Run CPU throttle"
+        }
+      ]
+    },
+    {
+      "id": "agent-outbox",
+      "date": "2026-07-06",
+      "phase": "Event-driven",
+      "type": "decision",
+      "title": "The agent gets memory, RAG and its own outbox",
+      "summary": "The agent service takes over routing, memory and run telemetry, and the chat widget talks to it directly from July 7.",
+      "sections": [
+        {
+          "label": "Decision",
+          "text": "Run events are written to an outbox table in the agent's PostgreSQL; a publisher bulk-indexes them into OpenSearch every 5 seconds. It replaced a Kafka event bus that no longer fit the two-topic limit."
+        },
+        {
+          "label": "Memory and RAG",
+          "text": "Conversation memory and the daily chat budget live in Redis; answers retrieve chunks from pgvector, embedded with Gemini since July 2."
+        }
+      ],
+      "focus": [
+        "agent",
+        "redis",
+        "pgvector",
+        "opensearch"
+      ],
+      "evidence": [
+        {
+          "repo": "portfolio-ai-platform",
+          "sha": "8d45bfa",
+          "text": "feat: analytics MCP tools + secure unsubscribe workflow"
+        },
+        {
+          "repo": "portfolio-ai-platform",
+          "sha": "25720a2",
+          "text": "feat: Redis-based conversation memory layer"
+        },
+        {
+          "repo": "portfolio-ai-platform",
+          "sha": "07bd8b1",
+          "text": "feat: connect frontend directly to backend agent-service"
+        },
+        {
+          "repo": "portfolio-admin-service",
+          "sha": "3701f3c",
+          "text": "rag-indexer: swap OpenAI embeddings for Gemini gemini-embedding-001"
+        }
+      ]
+    },
+    {
+      "id": "mcp",
+      "date": "2026-07-13",
+      "phase": "Platform",
+      "type": "milestone",
+      "title": "A public MCP server",
+      "summary": "AI clients such as Claude and Codex can query the portfolio through six read-only tools at yuqi.site/mcp.",
+      "sections": [
+        {
+          "label": "Shape",
+          "text": "Vercel rewrites /mcp to the MCP server on Cloud Run, which calls the agent platform's typed tool gateway. An authenticated /mcp/admin endpoint followed on July 15 and OAuth consent on August 28."
+        }
+      ],
+      "focus": [
+        "ai-clients",
+        "mcp",
+        "agent"
+      ],
+      "evidence": [
+        {
+          "repo": "portfolio-mcp-server",
+          "sha": "893c75f",
+          "text": "feat: Portfolio MCP Server with 6 public read-only tools"
+        },
+        {
+          "repo": "Portfolio",
+          "sha": "264a15f",
+          "text": "feat: add /mcp rewrite to proxy MCP server via Vercel"
+        },
+        {
+          "repo": "Portfolio",
+          "sha": "26d420e",
+          "text": "feat: add /mcp/admin rewrite for authenticated admin MCP endpoint"
+        }
+      ]
+    },
+    {
+      "id": "scale-to-zero",
+      "date": "2026-07-17",
+      "phase": "Platform",
+      "type": "decision",
+      "title": "Scale to zero, capped instances",
+      "summary": "Cloud Run services get instance caps and idle ones scale to zero; Kubernetes stays the documented exit path (ADR-001).",
+      "sections": [
+        {
+          "label": "Context",
+          "text": "Spiky, low traffic and one maintainer: per-request billing beats an always-on cluster."
+        },
+        {
+          "label": "Trade-off",
+          "text": "Cold starts, and consumers that have to be woken up — exactly the failure mode of the July 2 incident."
+        }
+      ],
+      "focus": [
+        "content",
+        "notify",
+        "agent",
+        "analytics",
+        "mcp"
+      ],
+      "evidence": [
+        {
+          "repo": "portfolio-admin-service",
+          "sha": "686ef0a",
+          "text": "chore: cap cloud run deployment costs"
+        },
+        {
+          "repo": "portfolio-notification-service",
+          "sha": "cdfa6cf",
+          "text": "chore: scale notification service to zero"
+        },
+        {
+          "repo": "portfolio-mcp-server",
+          "sha": "bb8b077",
+          "text": "chore: cap cloud run instances"
+        }
+      ]
+    },
+    {
+      "id": "alerts",
+      "date": "2026-07-18",
+      "phase": "Platform",
+      "type": "decision",
+      "title": "Visitor alerts as durable incidents",
+      "summary": "Alert rules are evaluated on request, and every alert becomes an incident row that is delivered to the notification service over HTTP.",
+      "sections": [
+        {
+          "label": "Decision",
+          "text": "No extra Kafka topic: the incident row holds the delivery state, and failed deliveries are retried from it. Leased delivery (August 16) and fencing (August 18) came later."
+        }
+      ],
+      "focus": [
+        "analytics",
+        "notify"
+      ],
+      "evidence": [
+        {
+          "repo": "portfolio-analytics-platform",
+          "sha": "509a25c",
+          "text": "add durable visitor alert incidents"
+        },
+        {
+          "repo": "portfolio-analytics-platform",
+          "sha": "c638aa2",
+          "text": "add request-driven alert evaluation"
+        },
+        {
+          "repo": "portfolio-analytics-platform",
+          "sha": "5d545ac",
+          "text": "feat(alerts): add leased delivery lifecycle"
+        }
+      ]
+    },
+    {
+      "id": "outbox",
+      "date": "2026-07-19",
+      "phase": "Reliability",
+      "type": "decision",
+      "title": "Transactional outbox with relays",
+      "summary": "Events committed with a publish can no longer get lost: relays replay outbox rows and indexing jobs until Kafka acknowledges them.",
+      "sections": [
+        {
+          "label": "Before",
+          "text": "Since June, a publish wrote its outbox row and indexing jobs in the same transaction but sent Kafka events only after the commit. If Kafka was down, the notification event was lost and indexing jobs waited."
+        },
+        {
+          "label": "Decision",
+          "text": "A notification outbox relay (every 5 s, 60 s lease) and an indexing-job relay (every 10 s, 300 s lease) re-publish anything not acknowledged. Analytics gets its own event outbox and relay the same day."
+        },
+        {
+          "label": "Why replays are safe",
+          "text": "Consumers de-duplicate on idempotency keys, and scaled-to-zero consumers are woken by a drain call."
+        }
+      ],
+      "focus": [
+        "kafka",
+        "postgres"
+      ],
+      "evidence": [
+        {
+          "repo": "portfolio-admin-service",
+          "sha": "7b54546",
+          "text": "Add resilient content indexing recovery"
+        },
+        {
+          "repo": "portfolio-analytics-platform",
+          "sha": "d196fe4",
+          "text": "Harden analytics Kafka recovery pipeline"
+        },
+        {
+          "repo": "portfolio-notification-service",
+          "sha": "f57b2a9",
+          "text": "Harden notification delivery and admin alerts"
+        }
+      ]
+    },
+    {
+      "id": "fencing",
+      "date": "2026-08-18",
+      "phase": "Reliability",
+      "type": "decision",
+      "title": "Fenced outbox claims",
+      "summary": "Relays claim rows with FOR UPDATE SKIP LOCKED and a lease, and every claim bumps a version, so a relay that outlived its lease cannot overwrite a newer claim.",
+      "sections": [
+        {
+          "label": "Why",
+          "text": "Leases make stuck rows claimable again; without a version check, a slow relay could still mark a row that another relay had already re-claimed."
+        },
+        {
+          "label": "Same pattern",
+          "text": "Alert delivery uses the same lease-and-fence lifecycle."
+        }
+      ],
+      "focus": [
+        "kafka",
+        "postgres",
+        "postgres>kafka"
+      ],
+      "evidence": [
+        {
+          "repo": "portfolio-admin-service",
+          "sha": "ba17ee3",
+          "text": "feat(reliability): harden outbox claims and projection status"
+        },
+        {
+          "repo": "portfolio-analytics-platform",
+          "sha": "4628767",
+          "text": "feat(alerts): batch rule evaluation and fence delivery"
+        }
+      ]
+    },
+    {
+      "id": "copilot",
+      "date": "2026-08-31",
+      "phase": "Product",
+      "type": "milestone",
+      "title": "A career copilot over the admin MCP",
+      "summary": "A Chrome extension helps fill job applications from a private career vault, through the authenticated MCP endpoint.",
+      "sections": [
+        {
+          "label": "Shape",
+          "text": "Chrome copilot → /mcp/admin with OAuth → MCP server → career service, which keeps an encrypted vault and resume files."
+        }
+      ],
+      "focus": [
+        "copilot",
+        "mcp",
+        "career"
+      ],
+      "evidence": [
+        {
+          "repo": "portfolio-application-copilot",
+          "sha": "fea537f",
+          "text": "feat: add MCP-mediated application copilot"
+        },
+        {
+          "repo": "portfolio-ai-platform",
+          "sha": "dbf7ab6",
+          "text": "feat(mcp): route owner career tools"
+        }
+      ]
+    },
+    {
+      "id": "voice",
+      "date": "2026-10-21",
+      "phase": "Product",
+      "type": "decision",
+      "title": "Voice calls with hard quotas",
+      "summary": "Visitors can call Mr. Pot from the homepage; a Cloud Run relay holds the provider keys, and a database allowance caps the whole platform at five calls a day.",
+      "sections": [
+        {
+          "label": "Guardrails",
+          "text": "Counters are reserved atomically before connecting and survive restarts; one call at a time, 120 seconds per call, and a switch that ends active calls within 10 seconds."
+        }
+      ],
+      "focus": [
+        "voice",
+        "next"
+      ],
+      "evidence": [
+        {
+          "repo": "Portfolio",
+          "sha": "12afb2b",
+          "text": "feat(voice): add bounded homepage calls with durable platform quotas"
+        },
+        {
+          "repo": "Portfolio",
+          "sha": "1101a04",
+          "text": "feat(voice): launch Qwen with private conversation history"
+        }
+      ]
+    }
+  ]
+}

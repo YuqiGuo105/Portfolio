@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="747" viewBox="0 0 1160 747" role="img" aria-labelledby="title desc">
+<title id="title">Architecture time machine: The agent gets memory, RAG and its own outbox</title>
+<desc id="desc">Architecture time machine, step 9 of 16 (Jul 6, 2026): The agent gets memory, RAG and its own outbox. The agent service takes over routing, memory and run telemetry, and the chat widget talks to it directly from July 7.</desc>
+<defs>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="135%">
+    <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" flood-color="#1f2d38" flood-opacity="0.09"/>
+  </filter>
+  <marker id="arrow-request" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#33424e"/></marker>
+  <marker id="arrow-event" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#7356a6" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></marker>
+  <marker id="arrow-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1778a8"/></marker>
+  <marker id="arrow-return" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8.5" markerHeight="8.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#6f7e8a" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></marker>
+</defs>
+<style>
+  text { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #17212a; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 1.6px; fill: #56656f; }
+  .h1 { font-size: 28px; font-weight: 750; }
+  .sub { font-size: 14px; fill: #56656f; }
+  .band-title { font-size: 12px; font-weight: 750; letter-spacing: 1.3px; }
+  .stereo { font-size: 9.5px; font-weight: 600; fill: #86939e; }
+  .chip { font-size: 11.5px; font-weight: 650; }
+  .card-title { font-size: 14.5px; font-weight: 700; }
+  .card-meta { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9.5px; font-weight: 600; letter-spacing: .3px; fill: #56656f; }
+  .card-detail { font-size: 11.5px; font-weight: 500; fill: #33424e; }
+  .port { font-size: 11px; font-weight: 650; fill: #56656f; }
+  .label { font-size: 11px; font-weight: 600; fill: #56656f; }
+  .legend { font-size: 11.5px; font-weight: 600; fill: #56656f; }
+  .foot { font-size: 11px; fill: #86939e; }
+  .note { font-size: 11.5px; fill: #17212a; }
+  .topic-in { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 600; fill: #17212a; }
+  .panel-title { font-size: 13px; font-weight: 750; }
+  .panel-sub { font-size: 8.5px; font-weight: 750; letter-spacing: 1px; fill: #56656f; }
+  .panel-note { font-size: 10.5px; font-weight: 550; fill: #33424e; }
+  .stat-num { font-size: 21px; font-weight: 750; }
+  .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 1px; fill: #56656f; }
+  .head-title { font-size: 12.5px; font-weight: 700; }
+  .head-meta { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9px; font-weight: 600; fill: #56656f; }
+  .msg { font-size: 12.5px; font-weight: 620; }
+  .msg-detail { font-size: 10.5px; font-weight: 500; fill: #56656f; }
+  .seq-num { font-size: 9.5px; font-weight: 750; fill: #ffffff; }
+  .frag-op { font-size: 11px; font-weight: 800; letter-spacing: .4px; }
+  .frag-guard { font-size: 11px; font-weight: 600; fill: #56656f; }
+  .frame { font-size: 13px; font-weight: 750; }
+  .tier-title { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; fill: #56656f; }
+  .tier-host { font-size: 8.5px; font-weight: 600; letter-spacing: .3px; fill: #86939e; }
+  .node-title { font-size: 13px; font-weight: 700; }
+  .node-meta { font-size: 8.8px; font-weight: 700; letter-spacing: .7px; fill: #56656f; }
+  .module { font-size: 10.5px; font-weight: 600; fill: #33424e; }
+  .tag { font-size: 7.8px; font-weight: 800; letter-spacing: .7px; }
+  .route { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 650; fill: #56656f; }
+  .topic { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9.5px; font-weight: 600; fill: #7356a6; }
+  .edge-note { font-size: 10.5px; font-weight: 600; fill: #56656f; }
+  .store-title { font-size: 11.5px; font-weight: 700; }
+  .store-meta { font-size: 8.5px; font-weight: 700; letter-spacing: .7px; fill: #56656f; }
+  .bar-chip { font-size: 10.5px; font-weight: 600; fill: #33424e; }
+  .adr-title { font-size: 13px; font-weight: 750; }
+  .adr-key { font-size: 9px; font-weight: 800; letter-spacing: .9px; fill: #56656f; }
+  .adr-text { font-size: 11px; font-weight: 500; fill: #33424e; }
+  .lane-title { font-size: 15px; font-weight: 750; }
+  .lane-sub { font-size: 11px; font-weight: 500; fill: #56656f; }
+  .lane-num { font-size: 12px; font-weight: 800; fill: #ffffff; }
+</style>
+<rect width="1160" height="747" fill="#ffffff"/>
+<style>
+  .tm-eyebrow { font-size: 11px; font-weight: 750; letter-spacing: 1.4px; fill: #14805e; }
+  .tm-title { font-size: 24px; font-weight: 750; }
+  .tm-meta { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; font-weight: 600; fill: #56656f; }
+  .tm-badge { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 800; letter-spacing: .6px; }
+  .tm-summary { font-size: 13.5px; font-weight: 500; fill: #33424e; }
+  .tm-band { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9.5px; font-weight: 800; letter-spacing: .8px; fill: #56656f; }
+  .tm-band-sub { font-size: 9.5px; font-weight: 600; fill: #86939e; }
+  .tm-node { font-size: 13px; font-weight: 700; }
+  .tm-node-sub { font-size: 10px; font-weight: 600; fill: #56656f; }
+  .tm-new { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9px; font-weight: 800; letter-spacing: .5px; fill: #14805e; }
+  .tm-label { font-size: 10.5px; font-weight: 700; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; }
+  .tm-phase { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9.5px; font-weight: 700; letter-spacing: .5px; fill: #86939e; }
+  .tm-date { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9.5px; font-weight: 600; fill: #86939e; }
+  .tm-legend { font-size: 11px; font-weight: 600; fill: #56656f; }
+</style>
+<text x="24" y="34" class="tm-eyebrow">ARCHITECTURE TIME MACHINE · STEP 9 OF 16</text>
+<text x="24" y="66" class="tm-title">The agent gets memory, RAG and its own outbox</text>
+<rect x="24" y="80" width="64" height="19" rx="9.5" fill="#14805e" fill-opacity="0.14300000000000002"/>
+<text x="56" y="93.5" text-anchor="middle" class="tm-badge" style="fill:#14805e">DECISION</text>
+<text x="98" y="94" class="tm-meta">Jul 6, 2026 · Event-driven</text>
+<text x="24" y="122" class="tm-summary">The agent service takes over routing, memory and run telemetry, and the chat widget talks to it directly from July 7.</text>
+<g transform="translate(0 145)">
+<rect x="0" y="0" width="1160" height="96" fill="#fbfcfd"/>
+<text x="16" y="56" class="tm-band">CLIENTS</text>
+<rect x="0" y="96" width="1160" height="92" fill="#f6f8fa"/>
+<text x="16" y="139" class="tm-band">EDGE</text>
+<text x="16" y="152" class="tm-band-sub">Vercel</text>
+<rect x="0" y="188" width="1160" height="94" fill="#fbfcfd"/>
+<text x="16" y="235" class="tm-band">SERVICES</text>
+<text x="16" y="248" class="tm-band-sub">Cloud Run</text>
+<rect x="0" y="282" width="1160" height="92" fill="#f6f8fa"/>
+<text x="16" y="332" class="tm-band">EVENTS</text>
+<rect x="0" y="374" width="1160" height="96" fill="#fbfcfd"/>
+<text x="16" y="424" class="tm-band">DATA</text>
+<g opacity="0.32"><path d="M 316 75 L 316 117" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 316 75 L 316 117" fill="none" stroke="#33424e" stroke-width="1.4" marker-end="url(#arrow-request)"/></g>
+<g opacity="0.32"><path d="M 252 163 L 252 397" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 252 163 L 252 397" fill="none" stroke="#1778a8" stroke-width="1.4" marker-end="url(#arrow-data)"/></g>
+<g opacity="0.32"><path d="M 188 163 L 188 213" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 188 163 L 188 213" fill="none" stroke="#33424e" stroke-width="1.4" marker-end="url(#arrow-request)"/></g>
+<g opacity="0.32"><path d="M 444 163 L 444 213" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 444 163 L 444 213" fill="none" stroke="#33424e" stroke-width="1.4" marker-end="url(#arrow-request)"/></g>
+<g opacity="0.32"><path d="M 188 259 L 188 397" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 188 259 L 188 397" fill="none" stroke="#1778a8" stroke-width="1.4" marker-end="url(#arrow-data)"/></g>
+<g opacity="0.32"><path d="M 226 259 C 226 283, 278 281, 278 305" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 226 259 C 226 283, 278 281, 278 305" fill="none" stroke="#7356a6" stroke-width="1.4" marker-end="url(#arrow-event)"/></g>
+<g opacity="0.32"><path d="M 444 305 L 444 259" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 444 305 L 444 259" fill="none" stroke="#7356a6" stroke-width="1.4" marker-end="url(#arrow-event)"/></g>
+<g opacity="0.32"><path d="M 500 328 L 666 328 Q 676 328 676 318 L 676 259" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 500 328 L 666 328 Q 676 328 676 318 L 676 259" fill="none" stroke="#7356a6" stroke-width="1.4" marker-end="url(#arrow-event)"/></g>
+<g opacity="0.32"><path d="M 700 259 L 700 397" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 700 259 L 700 397" fill="none" stroke="#1778a8" stroke-width="1.4" marker-end="url(#arrow-data)"/></g>
+<g opacity="0.32"><path d="M 738 259 C 738 321.1, 790 334.9, 790 397" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 738 259 C 738 321.1, 790 334.9, 790 397" fill="none" stroke="#1778a8" stroke-width="1.4" marker-end="url(#arrow-data)"/></g>
+<g opacity="0.32"><path d="M 466 305 C 466 281, 534 283, 534 259" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 466 305 C 466 281, 534 283, 534 259" fill="none" stroke="#7356a6" stroke-width="1.4" marker-end="url(#arrow-event)"/></g>
+<g opacity="0.32"><path d="M 540 259 L 540 364 Q 540 374 530 374 L 364 374 Q 354 374 354 384 L 354 397" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 540 259 L 540 364 Q 540 374 530 374 L 364 374 Q 354 374 354 384 L 354 397" fill="none" stroke="#1778a8" stroke-width="1.4" marker-end="url(#arrow-data)"/></g>
+<g opacity="0.32"><path d="M 572 163 L 572 213" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 572 163 L 572 213" fill="none" stroke="#33424e" stroke-width="1.4" marker-end="url(#arrow-request)"/></g>
+<g opacity="0.32"><path d="M 380 163 L 380 305" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 380 163 L 380 305" fill="none" stroke="#7356a6" stroke-width="1.4" marker-end="url(#arrow-event)"/></g>
+<g opacity="0.32"><path d="M 572 259 L 572 397" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 572 259 L 572 397" fill="none" stroke="#1778a8" stroke-width="1.4" marker-end="url(#arrow-data)"/></g>
+<g opacity="0.5"><path d="M 628 140 L 772 140" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 628 140 L 772 140" fill="none" stroke="#33424e" stroke-width="1.4" stroke-dasharray="6 5" marker-end="url(#arrow-request)"/></g>
+<g opacity="1"><path d="M 610 163 C 610 187, 790 189, 790 213" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 610 163 C 610 187, 790 189, 790 213" fill="none" stroke="#33424e" stroke-width="2.4" marker-end="url(#arrow-request)"/></g>
+<g opacity="1"><path d="M 782 259 C 782 321.1, 610 334.9, 610 397" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 782 259 C 782 321.1, 610 334.9, 610 397" fill="none" stroke="#1778a8" stroke-width="2.4" marker-end="url(#arrow-data)"/></g>
+<g opacity="1"><path d="M 828 259 L 828 397" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 828 259 L 828 397" fill="none" stroke="#1778a8" stroke-width="2.4" marker-end="url(#arrow-data)"/></g>
+<g opacity="1"><path d="M 804 259 C 804 321.1, 744 334.9, 744 397" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85"/><path d="M 804 259 C 804 321.1, 744 334.9, 744 397" fill="none" stroke="#1778a8" stroke-width="2.4" marker-end="url(#arrow-data)"/></g>
+<g><rect x="260" y="29" width="112" height="46" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.2"/><rect x="260" y="35" width="3.5" height="34" rx="1.75" fill="#435363"/><text x="316" y="49" text-anchor="middle" class="tm-node">Visitors</text><text x="316" y="64" text-anchor="middle" class="tm-node-sub">Browser</text></g>
+<g><rect x="132" y="117" width="496" height="46" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.2"/><rect x="132" y="123" width="3.5" height="34" rx="1.75" fill="#17212a"/><text x="380" y="137" text-anchor="middle" class="tm-node">Next.js app</text><text x="380" y="152" text-anchor="middle" class="tm-node-sub">Pages + API routes</text></g>
+<g><rect x="132" y="213" width="112" height="46" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.2"/><rect x="132" y="219" width="3.5" height="34" rx="1.75" fill="#14805e"/><text x="188" y="233" text-anchor="middle" class="tm-node">Content</text><text x="188" y="248" text-anchor="middle" class="tm-node-sub">Writer API</text></g>
+<g><rect x="388" y="213" width="112" height="46" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.2"/><rect x="388" y="219" width="3.5" height="34" rx="1.75" fill="#14805e"/><text x="444" y="233" text-anchor="middle" class="tm-node">Notifications</text><text x="444" y="248" text-anchor="middle" class="tm-node-sub">Fan-out · email</text></g>
+<g><rect x="772" y="213" width="112" height="46" rx="8" fill="#ffffff" stroke="#14805e" stroke-width="2.4"/><rect x="772" y="219" width="3.5" height="34" rx="1.75" fill="#14805e"/><text x="828" y="233" text-anchor="middle" class="tm-node">Agent</text><text x="828" y="248" text-anchor="middle" class="tm-node-sub">+ tool gateway</text></g>
+<g><rect x="516" y="213" width="112" height="46" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.2"/><rect x="516" y="219" width="3.5" height="34" rx="1.75" fill="#14805e"/><text x="572" y="233" text-anchor="middle" class="tm-node">Analytics</text><text x="572" y="248" text-anchor="middle" class="tm-node-sub">Aggregator</text></g>
+<g><rect x="260" y="305" width="240" height="46" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.2"/><rect x="260" y="311" width="3.5" height="34" rx="1.75" fill="#7356a6"/><text x="380" y="325" text-anchor="middle" class="tm-node">Kafka</text><text x="380" y="340" text-anchor="middle" class="tm-node-sub">Event backbone</text></g>
+<g><rect x="644" y="213" width="112" height="46" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.2"/><rect x="644" y="219" width="3.5" height="34" rx="1.75" fill="#14805e"/><text x="700" y="233" text-anchor="middle" class="tm-node">Indexers</text><text x="700" y="248" text-anchor="middle" class="tm-node-sub">Search + RAG</text></g>
+<g><rect x="132" y="397" width="240" height="46" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.2"/><rect x="132" y="403" width="3.5" height="34" rx="1.75" fill="#1778a8"/><text x="252" y="417" text-anchor="middle" class="tm-node">PostgreSQL</text><text x="252" y="432" text-anchor="middle" class="tm-node-sub">Content · logs · outbox</text></g>
+<g><rect x="772" y="397" width="112" height="46" rx="8" fill="#ffffff" stroke="#14805e" stroke-width="2.4"/><rect x="772" y="403" width="3.5" height="34" rx="1.75" fill="#1778a8"/><text x="828" y="417" text-anchor="middle" class="tm-node">pgvector</text><text x="828" y="432" text-anchor="middle" class="tm-node-sub">RAG chunks</text></g>
+<g><rect x="644" y="397" width="112" height="46" rx="8" fill="#ffffff" stroke="#14805e" stroke-width="2.4"/><rect x="644" y="403" width="3.5" height="34" rx="1.75" fill="#1778a8"/><text x="700" y="417" text-anchor="middle" class="tm-node">OpenSearch</text><text x="700" y="432" text-anchor="middle" class="tm-node-sub">Search · run traces</text></g>
+<g><rect x="516" y="397" width="112" height="46" rx="8" fill="#ffffff" stroke="#14805e" stroke-width="2.4"/><rect x="516" y="403" width="3.5" height="34" rx="1.75" fill="#1778a8"/><text x="572" y="417" text-anchor="middle" class="tm-node">Redis</text><text x="572" y="432" text-anchor="middle" class="tm-node-sub">Valkey · shared</text></g>
+<g opacity=".45"><rect x="772" y="117" width="112" height="46" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.2" stroke-dasharray="5 4"/><rect x="772" y="123" width="3.5" height="34" rx="1.75" fill="#17212a"/><text x="828" y="137" text-anchor="middle" class="tm-node">Assistant API</text><text x="828" y="152" text-anchor="middle" class="tm-node-sub">External, hosted</text></g>
+<text x="700" y="191.5" text-anchor="middle" class="tm-label" style="fill:#17212a">chat · SSE</text>
+<text x="646.1" y="355.7" text-anchor="middle" class="tm-label" style="fill:#1778a8">memory · budget</text>
+<text x="828" y="331.5" text-anchor="middle" class="tm-label" style="fill:#1778a8">retrieval</text>
+<text x="759.3" y="351.3" text-anchor="middle" class="tm-label" style="fill:#1778a8">run outbox → bulk index</text>
+</g>
+<line x1="56" y1="643" x2="133.3" y2="643" stroke="#e1e7ec" stroke-width="2"/>
+<text x="56" y="655" class="tm-phase">MONOLITH</text>
+<line x1="194.7" y1="643" x2="272" y2="643" stroke="#e1e7ec" stroke-width="2"/>
+<text x="194.7" y="655" class="tm-phase">SERVICES</text>
+<line x1="333.3" y1="643" x2="618.7" y2="643" stroke="#14805e" stroke-width="2"/>
+<text x="333.3" y="655" class="tm-phase" style="fill:#14805e">EVENT-DRIVEN</text>
+<line x1="680" y1="643" x2="826.7" y2="643" stroke="#e1e7ec" stroke-width="2"/>
+<text x="680" y="655" class="tm-phase">PLATFORM</text>
+<line x1="888" y1="643" x2="965.3" y2="643" stroke="#e1e7ec" stroke-width="2"/>
+<text x="888" y="655" class="tm-phase">RELIABILITY</text>
+<line x1="1026.7" y1="643" x2="1104" y2="643" stroke="#e1e7ec" stroke-width="2"/>
+<text x="1026.7" y="655" class="tm-phase">PRODUCT</text>
+<line x1="60" y1="667" x2="1100" y2="667" stroke="#e1e7ec" stroke-width="4" stroke-linecap="round"/>
+<line x1="60" y1="667" x2="614.7" y2="667" stroke="#14805e" stroke-width="4" stroke-linecap="round"/>
+<circle cx="60" cy="667" r="7" fill="#435363" stroke="#435363" stroke-width="2"/>
+<text x="60" y="694" text-anchor="middle" class="tm-date">Jan 30, 2024</text>
+<circle cx="129.3" cy="667" r="7" fill="#435363" stroke="#435363" stroke-width="2"/>
+<circle cx="198.7" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="268" cy="667" r="7" fill="#ba4a52" stroke="#ba4a52" stroke-width="2"/>
+<circle cx="337.3" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="406.7" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="476" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="545.3" cy="667" r="7" fill="#ba4a52" stroke="#ba4a52" stroke-width="2"/>
+<circle cx="614.7" cy="667" r="13" fill="#14805e" fill-opacity="0.154"/>
+<circle cx="614.7" cy="667" r="9" fill="#ffffff" stroke="#14805e" stroke-width="2"/>
+<text x="614.7" y="694" text-anchor="middle" class="tm-date" style="fill:#17212a;font-weight:800">Jul 6</text>
+<circle cx="684" cy="667" r="7" fill="#ffffff" stroke="#435363" stroke-width="2"/>
+<circle cx="753.3" cy="667" r="7" fill="#ffffff" stroke="#14805e" stroke-width="2"/>
+<circle cx="822.7" cy="667" r="7" fill="#ffffff" stroke="#14805e" stroke-width="2"/>
+<circle cx="892" cy="667" r="7" fill="#ffffff" stroke="#14805e" stroke-width="2"/>
+<circle cx="961.3" cy="667" r="7" fill="#ffffff" stroke="#14805e" stroke-width="2"/>
+<circle cx="1030.7" cy="667" r="7" fill="#ffffff" stroke="#435363" stroke-width="2"/>
+<circle cx="1100" cy="667" r="7" fill="#ffffff" stroke="#14805e" stroke-width="2"/>
+<text x="1100" y="694" text-anchor="middle" class="tm-date">Oct 21, 2026</text>
+<circle cx="29" cy="721" r="5" fill="#14805e"/><text x="39" y="725" class="tm-legend">Decision</text>
+<circle cx="110.97200000000001" cy="721" r="5" fill="#ba4a52"/><text x="120.97200000000001" y="725" class="tm-legend">Incident</text>
+<circle cx="189.21280000000002" cy="721" r="5" fill="#435363"/><text x="199.21280000000002" y="725" class="tm-legend">Milestone</text>
+<line x1="272.7144" y1="721" x2="290.7144" y2="721" stroke="#33424e" stroke-width="2"/><text x="296.7144" y="725" class="tm-legend">request</text>
+<line x1="358.0896" y1="721" x2="376.0896" y2="721" stroke="#7356a6" stroke-width="2"/><text x="382.0896" y="725" class="tm-legend">event</text>
+<line x1="430.40560000000005" y1="721" x2="448.40560000000005" y2="721" stroke="#1778a8" stroke-width="2"/><text x="454.40560000000005" y="725" class="tm-legend">data</text>
+<text x="496.19200000000006" y="725" class="tm-legend" style="fill:#14805e">NEW · added in this step</text>
+<text x="648.7484000000002" y="725" class="tm-legend">faint · unchanged</text>
+</svg>
