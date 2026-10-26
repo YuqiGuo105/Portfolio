@@ -2,6 +2,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import ContactForm from "../src/components/ContactForm";
 import TestimonialSlider from "../src/components/TestimonialSlider";
+import ParallaxPortrait from "../src/components/ParallaxPortrait";
 import Layout from "../src/layout/Layout";
 import DashboardPanels from "../src/components/DashboardPanels";
 import {useEffect, useState, useRef} from "react";
@@ -813,26 +814,11 @@ const Index = () => {
                       }}
                     />}
 
-                  {/* WebP is ~20x smaller than the PNG master; the PNG stays as a fallback. */}
-                  <picture>
-                    <source srcSet="/assets/images/profile-640.webp 640w, /assets/images/profile-1024.webp 1024w" sizes="(max-width: 767px) 90vw, 680px" type="image/webp" />
-                    <img
-                      src="/assets/images/profile.png"
-                      alt="Yuqi Guo illustrated portrait on a beach at sunset"
-                      width={1024}
-                      height={1536}
-                      fetchpriority="high"
-                      decoding="async"
-                      style={{
-                        width: "100%",
-                        borderRadius: "380px",
-                        position: "relative",
-                        zIndex: 1,
-                        border: stories.length ? "5px solid white" : "0",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                  </picture>
+                  {/* Background and figure are separate layers that shift with pointer / phone tilt. */}
+                  <ParallaxPortrait
+                    alt="Yuqi Guo illustrated portrait on a beach at sunset"
+                    border={stories.length ? "5px solid white" : "0"}
+                  />
                 </div>
 
                 {/* 隐藏原有circle元素但保留在DOM中 */}
