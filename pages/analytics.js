@@ -373,7 +373,9 @@ export default function AnalyticsPage({ initialSummary = null }) {
             gap: 3px;
             padding: 3px;
           }
-          .range-tab {
+          /* Scoped one level deeper than the base .range-tab rule further down,
+             which would otherwise win and keep the desktop padding. */
+          .range-tabs .range-tab {
             width: 100%;
             min-width: 0;
             padding: 8px 3px;
@@ -433,6 +435,16 @@ export default function AnalyticsPage({ initialSummary = null }) {
           gap: 2px;
         }
         .range-tab {
+          /* The theme's global button rule sets height 52px and line-height
+             48px, which pushed the label below the pill's centre. */
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          height: auto;
+          min-height: 36px;
+          line-height: 1.2;
+          margin: 0;
+          box-shadow: none;
           padding: 8px 16px;
           border-radius: 999px;
           background: transparent;
