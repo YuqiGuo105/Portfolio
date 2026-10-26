@@ -380,7 +380,7 @@ remains manual.
 * **RAG indexing pipeline** using embeddings stored in Supabase PostgreSQL with pgvector.
 * **Notification system** with subscription management, dispatch service, email sender worker, retry handling, and delivery tracking.
 * **Supabase backend** for PostgreSQL, pgvector, storage, RLS policies, and server-side API integration.
-* **3D geospatial visitor globe** and a real-time `/analytics` dashboard powered by a Kafka → Spring Boot aggregator pipeline (Valkey dedup, pre-aggregated `geo_time_rollups`, public visits API).
+* **3D geospatial visitor globe** and a real-time `/analytics` dashboard powered by a Kafka → Spring Boot aggregator pipeline (Valkey dedup, pre-aggregated `geo_time_rollups`, public visits API). Close-ups stay sharp with NASA Blue Marble tiles served through the cached `/api/map-tiles` proxy.
 * **SEO support** with reusable metadata, `robots.txt`, and `sitemap.xml`.
 
 ---

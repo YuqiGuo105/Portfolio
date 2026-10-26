@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import GlobeLib from "react-globe.gl";
 import { supabase as supabaseClient } from "../supabase/supabaseClient";
+import { createGlobeTileLayer } from "../lib/globeTileLayer.mjs";
+import { DEFAULT_MIN_ALTITUDE } from "../lib/globeTiles.mjs";
 
 /* ============================================================
    RotatingGlobe
@@ -19,13 +21,29 @@ const log = (...a) => {
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 // The globe renders at roughly 300–600 CSS px. A 2K equirectangular texture
-// covers that on standard screens; high-DPI desktops get 4K. (The old 8K
-// source was 4.4 MB and exceeds the max texture size of many mobile GPUs.)
-const pickGlobeTexture = () => {
-  if (typeof window === "undefined") return "/textures/earth_day_2k.jpg";
-  const devicePixels = Math.min(window.innerWidth, 1200) * (window.devicePixelRatio || 1);
-  return devicePixels > 1400 ? "/textures/earth_day_4k.jpg" : "/textures/earth_day_2k.jpg";
+// covers the whole-globe view on standard screens; high-DPI desktops get 4K.
+// (The old 8K source was 4.4 MB and exceeds the max texture size of many
+// mobile GPUs.) Close-ups switch to imagery tiles, see src/lib/globeTileLayer.mjs.
+const GLOBE_TEXTURES = {
+  small: { url: "/textures/earth_day_2k.jpg", width: 2048 },
+  large: { url: "/textures/earth_day_4k.jpg", width: 4096 },
 };
+const pickGlobeTexture = () => {
+  if (typeof window === "undefined") return GLOBE_TEXTURES.small;
+  const devicePixels = Math.min(window.innerWidth, 1200) * (window.devicePixelRatio || 1);
+  return devicePixels > 1400 ? GLOBE_TEXTURES.large : GLOBE_TEXTURES.small;
+};
+
+// three-globe's globe radius; OrbitControls distances are measured from its centre.
+const GLOBE_RADIUS = 100;
+// Camera-driven tile updates run at most this often (plus a trailing update).
+const TILE_SYNC_MS = 80;
+// Idle auto-rotation drifts the view at the same on-screen pace at every zoom:
+// full speed at the default distance, proportionally slower closer in, so a
+// close-up turns gently instead of racing past.
+const AUTO_ROTATE_SPEED = 0.55;
+const autoRotateSpeedAt = (altitude) =>
+  AUTO_ROTATE_SPEED * Math.min(1, Math.max(0.02, (Number(altitude) || 2.2) / 2.2));
 
 const isFiniteNumber = (n) => Number.isFinite(n) && !Number.isNaN(n);
 
@@ -325,6 +343,13 @@ const RotatingGlobe = ({
   const elCacheRef = useRef(new Map());
   const [size, setSize] = useState({ w: 1, h: 1 });
   const [globeTexture] = useState(pickGlobeTexture);
+
+  // close-up imagery tiles (see src/lib/globeTileLayer.mjs)
+  const tileLayerRef = useRef(null);
+  const lastTileSyncRef = useRef(0);
+  const tileSyncTimerRef = useRef(null);
+  // How close the camera may go; relaxes once tiles can keep the close-up sharp.
+  const minAltitudeRef = useRef(DEFAULT_MIN_ALTITUDE);
 
   // zoom tracking
   const [stableZoomLevel, setStableZoomLevel] = useState("world");
@@ -1069,7 +1094,7 @@ const RotatingGlobe = ({
       const d = getTouchDist(e.touches);
       if (!d || !initDist) return;
       // initDist/d > 1 => fingers spread => zoom in (lower altitude)
-      const newAlt = Math.max(0.15, Math.min(4.5, initAlt * (initDist / d)));
+      const newAlt = Math.max(minAltitudeRef.current, Math.min(4.5, initAlt * (initDist / d)));
       const g = globeRef.current;
       if (g?.pointOfView) {
         const { lat, lng } = g.pointOfView();
@@ -1116,6 +1141,47 @@ const RotatingGlobe = ({
       if (g && typeof g.controls === "function") return g.controls();
     } catch {}
     return null;
+  };
+
+  // Keep the close-up tiles in step with the camera and apply the zoom limit
+  // they allow. Throttled: OrbitControls reports every frame while moving.
+  const syncTileLayer = (force = false) => {
+    const layer = tileLayerRef.current;
+    const g = globeRef.current;
+    if (!layer || !g) return;
+
+    const now = performance.now();
+    if (!force && now - lastTileSyncRef.current < TILE_SYNC_MS) {
+      if (!tileSyncTimerRef.current) {
+        tileSyncTimerRef.current = setTimeout(() => {
+          tileSyncTimerRef.current = null;
+          syncTileLayer(true);
+        }, TILE_SYNC_MS);
+      }
+      return;
+    }
+    lastTileSyncRef.current = now;
+
+    const camera = getCamera(g);
+    let canvas = null;
+    try {
+      canvas = typeof g.renderer === "function" ? g.renderer()?.domElement : null;
+    } catch {}
+    if (!camera || !canvas) return;
+
+    const pov = getCurrentPOV();
+    const next = layer.sync({
+      camera,
+      altitude: pov.altitude,
+      latitude: pov.lat,
+      viewportHeight: canvas.height,
+    });
+
+    const controls = getControls(g);
+    if (next.minAltitude !== minAltitudeRef.current) {
+      minAltitudeRef.current = next.minAltitude;
+      if (controls) controls.minDistance = GLOBE_RADIUS * (1 + next.minAltitude);
+    }
   };
 
   const scheduleStableCommit = () => {
@@ -1201,9 +1267,9 @@ const RotatingGlobe = ({
 
         // Start auto-rotate after initial pins fetch to avoid “random init POV”
         controls.autoRotate = false;
-        controls.autoRotateSpeed = 0.55;
+        controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
 
-        controls.minDistance = 120;
+        controls.minDistance = GLOBE_RADIUS * (1 + minAltitudeRef.current);
         controls.maxDistance = 2200;
         controls.zoomSpeed = 0.9;
 
@@ -1234,6 +1300,60 @@ const RotatingGlobe = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Close-up imagery: a tile shell above the base texture that switches on as
+  // the camera zooms in (src/lib/globeTileLayer.mjs).
+  useEffect(() => {
+    let cancelled = false;
+    let timer = null;
+    let tries = 0;
+
+    const create = () => {
+      if (cancelled) return;
+      const g = globeRef.current;
+      let scene = null;
+      let renderer = null;
+      try {
+        scene = typeof g?.scene === "function" ? g.scene() : null;
+        renderer = typeof g?.renderer === "function" ? g.renderer() : null;
+      } catch {}
+      if (!scene || !renderer) {
+        if (tries++ < 50) timer = setTimeout(create, 80);
+        return;
+      }
+      try {
+        tileLayerRef.current = createGlobeTileLayer({
+          scene,
+          renderer,
+          baseTextureWidth: globeTexture.width,
+        });
+      } catch (e) {
+        // Without tiles the globe keeps its base texture and today's zoom limit.
+        log("tile layer unavailable:", e?.message || e);
+        tileLayerRef.current = null;
+      }
+      syncTileLayer(true);
+    };
+    create();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      if (tileSyncTimerRef.current) {
+        clearTimeout(tileSyncTimerRef.current);
+        tileSyncTimerRef.current = null;
+      }
+      tileLayerRef.current?.dispose();
+      tileLayerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A new canvas size changes how much detail the view needs.
+  useEffect(() => {
+    syncTileLayer(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size]);
+
 
   // Enable auto-rotate once after initial server fetch (keeps init stable)
   useEffect(() => {
@@ -1246,7 +1366,7 @@ const RotatingGlobe = ({
     if (!controls) return;
 
     controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.55;
+    controls.autoRotateSpeed = autoRotateSpeedAt(getCurrentPOV().altitude);
   }, [serverPins, sb, apiBaseClean]);
   // Stop auto-rotate once user interacts, and continuously sample the camera
   // so BOTH zoom (wheel / pinch) and pan (drag / rotate) re-fetch focused
@@ -1273,15 +1393,19 @@ const RotatingGlobe = ({
       inactivityTimerRef.current = setTimeout(() => {
         if (attached) {
           attached.autoRotate = true;
-          attached.autoRotateSpeed = 0.55;
+          attached.autoRotateSpeed = autoRotateSpeedAt(getCurrentPOV().altitude);
         }
       }, 2000);
     };
 
     // Always-on sampler. sampleCameraToRefs is throttled (90ms) and early-exits
     // when nothing changed, so this is cheap. It is the single source of truth
-    // for "camera moved -> maybe re-fetch".
-    const autoTimer = setInterval(() => sampleCameraToRefs(false), 200);
+    // for "camera moved -> maybe re-fetch". It also keeps the tile layer in
+    // step if a camera move never produced a "change" event.
+    const autoTimer = setInterval(() => {
+      sampleCameraToRefs(false);
+      syncTileLayer(false);
+    }, 200);
 
     const onStart = () => {
       userInteractedRef.current = true;
@@ -1294,7 +1418,10 @@ const RotatingGlobe = ({
     };
 
     const onChange = () => {
+      // Zooming without a "start" event (wheel) keeps spinning; match the pace.
+      if (attached?.autoRotate) attached.autoRotateSpeed = autoRotateSpeedAt(getCurrentPOV().altitude);
       sampleCameraToRefs(false);
+      syncTileLayer(false);
     };
 
     const onEnd = () => {
@@ -1513,7 +1640,7 @@ const RotatingGlobe = ({
         width={size.w}
         height={size.h}
         backgroundColor="rgba(0,0,0,0)"
-        globeImageUrl={globeTexture}
+        globeImageUrl={globeTexture.url}
         htmlElementsData={displayPins}
         htmlLat={(d) => d.lat}
         htmlLng={(d) => d.lng}
