@@ -179,7 +179,7 @@ test('the layer loads the tiles in view at the right level and cleans up after i
   shown[0].material.onBeforeCompile(shader);
   assert.equal(shader.fragmentShader.includes('#include <map_fragment>'), false);
   assert.match(shader.fragmentShader, /pow\(texel, vec3\(0\.58\)\)/);
-  assert.match(shader.fragmentShader, /texture2D\(uBaseMap, baseUv\)/);
+  assert.match(shader.fragmentShader, /textureLod\(uBaseMap, baseUv, 0\.0\)/);
   assert.match(shader.vertexShader, /vGlobePos = position;/);
   assert.equal(shader.uniforms.uBaseMap.value, base);
   assert.equal(shader.uniforms.uBaseReady.value, 1);

@@ -50,7 +50,10 @@ const TILE_FRAGMENT = `{
     vec3 coarse = gradeTexel(texture2D(map, vMapUv, uLowBias).rgb);
     vec3 dir = normalize(vGlobePos);
     vec2 baseUv = vec2(atan(dir.x, dir.z) / 6.28318531 + 0.5, asin(clamp(dir.y, -1.0, 1.0)) / 3.14159265 + 0.5);
-    vec3 base = texture2D(uBaseMap, baseUv).rgb;
+    // Explicit level 0: longitude wraps from +180° to -180° inside one pixel quad there, and the implied
+    // mip pick would grab a tiny average and draw a dashed line down the antimeridian. Tiles only show
+    // when the base texture is magnified, so level 0 is always the right one.
+    vec3 base = textureLod(uBaseMap, baseUv, 0.0).rgb;
     fine *= clamp((base + 0.004) / (coarse + 0.004), vec3(0.33), vec3(3.0));
   }
   diffuseColor.rgb *= fine;
