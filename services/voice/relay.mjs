@@ -73,6 +73,13 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
       const body = JSON.parse(Buffer.concat(chunks).toString());
       const page = cleanPageContext(body.page);
       if (!page || page.path.startsWith('/admin') || !origins.has(body.origin)) return json(res, 400, { error: 'Public portfolio pages only.' });
+      // A cold profile read must not spend a daily call or the ticket lifetime.
+      // The same loader coalesces requests and is reused during the handshake.
+      const profile = await loadProfile();
+      if (profile.status !== 'EVIDENCE_FOUND') return json(res, 503, {
+        configured: false, reason: 'profile_unavailable', error: 'Portfolio information is temporarily unavailable. Please try again.',
+      });
+      if (res.destroyed) return;
       const nonce = randomBytes(32).toString('hex');
       const allowance = await budget('reserve', hash(nonce));
       cachedUntil = 0;

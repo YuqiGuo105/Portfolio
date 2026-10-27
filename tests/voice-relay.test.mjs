@@ -166,6 +166,27 @@ test('database outages, missing profile and unauthenticated requests never reach
   }
 });
 
+test('profile preflight failures never reserve a daily call or contact a model', async () => {
+  const actions = [];
+  let ready = false;
+  const budget = store();
+  const f = await fixture({ env: qwenEnv,
+    budget: (...args) => { actions.push(args[0]); return budget(...args); },
+    loadProfile: async () => ready ? profile : { status: 'UNAVAILABLE' },
+  });
+  try {
+    const unavailable = await f.reserve();
+    assert.equal(unavailable.status, 503);
+    assert.equal(unavailable.data.reason, 'profile_unavailable');
+    assert.deepEqual(actions, []);
+    assert.equal(f.providers.length, 0);
+    ready = true;
+    const available = await f.reserve();
+    assert.equal(available.status, 200);
+    assert.deepEqual(actions, ['reserve']);
+  } finally { await f.close(); }
+});
+
 test('the server deadline ends the provider independently of browser timers', async () => {
   const base = store();
   const budget = async (...args) => ({ ...await base(...args), expiresAt: new Date(Date.now() + 140).toISOString() });
@@ -409,14 +430,14 @@ test('recording setup failures stop both providers before any paid request', asy
 
 test('hangup is accepted while a claim, profile load or provider setup is still pending', async () => {
   for (const stage of ['claim', 'profile', 'provider']) {
-    const gate = deferred(), base = store(); let entered = false, releases = 0;
+    const gate = deferred(), base = store(); let entered = false, releases = 0, profileReads = 0;
     const f = await fixture({ env: qwenEnv, autoSetup: stage !== 'provider',
       budget: async (...args) => {
         if (args[0] === 'claim' && stage === 'claim') { entered = true; await gate.promise; }
         if (args[0] === 'release') releases++;
         return base(...args);
       },
-      loadProfile: async () => { if (stage === 'profile') { entered = true; await gate.promise; } return profile; },
+      loadProfile: async () => { if (++profileReads > 1 && stage === 'profile') { entered = true; await gate.promise; } return profile; },
     });
     try {
       const call = await f.open((await f.reserve()).data.ticket, { waitReady: false });

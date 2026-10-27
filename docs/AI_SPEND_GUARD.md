@@ -109,6 +109,36 @@ stop-service enabled, and the existing Google project cap was $5. Reporting
 delays, tax, unrelated uses of the accounts/keys, and charges before rollout are
 not made safe by local code. Google auto-reload remains off.
 
+## Production Recovery Preparation (October 27)
+
+The production homepage still used the direct Google Java configuration when
+checked. Do not equate the successful local overrides with a deployed fix.
+The prepared production route preserves Java intent, safety, orchestration,
+navigation, and history; it changes only the model transport:
+
+1. Java `GEMINI_BASE_URL` points to the existing relay's `/ai/v1beta` endpoint.
+   `GEMINI_API_KEY` receives the independent `AI_GATEWAY_TOKEN`, not a provider
+   credential. Explicitly set the regular text models to the pinned Qwen model.
+2. `SPEECH_MODEL=qwen3.8-omni-flash-realtime` selects recognition-only Qwen
+   dictation in that adapter. It reserves from the same monthly ledger before
+   opening the provider socket, and retains the reservation when usage is not
+   reported. Java's existing audio validation and JSON response remain intact.
+3. `KNOWLEDGE_LEXICAL_ONLY=true` avoids paid embeddings while preserving the
+   current-source eligibility contract. The additive
+   `20261027150402_current_knowledge_lexical_recovery.sql` migration was applied
+   and checked: only `service_role` may execute it. It excludes stale, private,
+   unpublished, and unapproved records; it does not query the legacy index.
+4. The relay requires a separately approved Secret Manager copy of the
+   restricted text key. Creating an empty secret or passing tests is not an
+   enabled production route. Deep search and media understanding also require
+   an explicit rollout decision; unsupported tools/media fail closed.
+
+Voice now checks current approved profile evidence before reserving a daily
+call. A cold profile fetch has a bounded 10-second deadline and concurrent
+requests share that read. Failure does not spend the daily allowance or open a
+paid model connection; stale cached evidence is never served after expiry.
+This change does not remove the five-call daily or 120-second production limits.
+
 ## Verification
 
 ```sh
@@ -120,6 +150,15 @@ PGLITE_MODULE=/path/to/@electric-sql/pglite/dist/index.js \
 
 The database test uses PGlite for SQL, privileges, and ledger behavior. It does
 not substitute for a multi-connection production Postgres concurrency test.
+
+`tests/knowledge-lexical.database.mjs` checks the lexical RPC against isolated
+PGlite fixtures, including changing access, publication, hashes, and versions.
+`tests/voice.production.integration.mjs` is an explicit single-call production
+probe, not part of automatic tests. It requires `--approved-single-call`, a
+synthetic `VOICE_TEST_WAV`, and a unique `VOICE_APPROVAL_MARKER`. It uses the
+public session endpoint and its normal quota, never reads a microphone, stops
+within 55 seconds, and verifies actual PCM output plus the history-close
+acknowledgement. It does not substitute for browser capture/playback checks.
 
 `tests/ai-text.live.mjs` is an explicit paid probe, excluded from normal tests.
 It requires `--approved-usd=0.02`, uses only the restricted text key, never retries

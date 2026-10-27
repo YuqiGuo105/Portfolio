@@ -389,7 +389,7 @@ test('profile fetch deadline aborts and reports unavailable', async context => {
   let signal;
   const load = createProfileLoader({ read: options => { signal = options.signal; return new Promise(() => {}); } });
   const pending = load();
-  context.mock.timers.tick(6500);
+  context.mock.timers.tick(10000);
   assert.deepEqual(await pending, PROFILE_UNAVAILABLE);
   assert.equal(signal.aborted, true);
 });

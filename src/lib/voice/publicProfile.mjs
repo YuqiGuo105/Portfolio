@@ -27,7 +27,7 @@ export async function fetchPublicProfile({ signal } = {}) {
   });
   try {
     await client.connect(transport);
-    const result = await client.callTool({ name: 'get_profile', arguments: {} }, undefined, { signal, timeout: 6000 });
+    const result = await client.callTool({ name: 'get_profile', arguments: {} }, undefined, { signal, timeout: 9000 });
     if (result.isError) throw new Error('Public profile unavailable');
     const raw = result.structuredContent || JSON.parse(result.content.find(block => block.type === 'text')?.text || '{}');
     return publicProfileEvidence(raw);
@@ -44,7 +44,7 @@ export function createProfileLoader({ read = fetchPublicProfile, now = Date.now 
       let timer;
       try {
         const timeout = new Promise((_, reject) => {
-          timer = setTimeout(() => { controller.abort(); reject(new Error('Public profile timeout')); }, 6500);
+          timer = setTimeout(() => { controller.abort(); reject(new Error('Public profile timeout')); }, 10000);
         });
         cached = await Promise.race([read({ signal: controller.signal }), timeout]);
         expiresAt = now() + (cached.status === 'EVIDENCE_FOUND' ? 60000 : 5000);

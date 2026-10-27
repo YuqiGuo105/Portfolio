@@ -4,6 +4,7 @@ import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { CHEAP_TEXT_MODEL, createModelGateway, quoteRequest, qwenRequest } from '../services/voice/modelGateway.mjs';
 import { SpendDenied } from '../src/lib/voice/spendGuard.mjs';
+import { QWEN_MODEL } from '../src/lib/voice/qwenProtocol.mjs';
 
 const secret = 'test-only-internal-gateway-secret';
 const body = { systemInstruction: { parts: [{ text: 'Return only JSON.' }] },
@@ -31,9 +32,10 @@ test('unpriced models and unbounded inputs are rejected before provider access',
   ]) assert.throws(() => quoteRequest(CHEAP_TEXT_MODEL, 'generateContent', request), SpendDenied);
   assert.throws(() => quoteRequest('qwen3.8-max', 'generateContent', body), SpendDenied);
 });
-async function fixture({ denied = false, fail = false, streaming = false, frames, settleWait } = {}) {
+async function fixture({ denied = false, fail = false, streaming = false, frames, settleWait, transcribe, model = CHEAP_TEXT_MODEL } = {}) {
   const calls = [], charges = [], reservations = [];
   const handler = createModelGateway({ env,
+    ...(transcribe ? { transcribe } : {}),
     spend: { reserve: async (...args) => { if (denied) throw new SpendDenied('monthly_limit'); reservations.push(args); return { settle: async charge => { if (settleWait) await settleWait; charges.push(charge); } }; } },
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
@@ -46,7 +48,7 @@ async function fixture({ denied = false, fail = false, streaming = false, frames
   const server = createServer(async (req, res) => { if (!(await handler(req, res))) { res.writeHead(404); res.end(); } });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   return { calls, charges, reservations,
-    request: (token = secret, data = body) => fetch(`http://127.0.0.1:${server.address().port}/ai/v1beta/models/${CHEAP_TEXT_MODEL}:${streaming ? 'streamGenerateContent?alt=sse' : 'generateContent'}`, { method: 'POST', headers: { 'x-goog-api-key': token }, body: JSON.stringify(data) }),
+    request: (token = secret, data = body) => fetch(`http://127.0.0.1:${server.address().port}/ai/v1beta/models/${model}:${streaming ? 'streamGenerateContent?alt=sse' : 'generateContent'}`, { method: 'POST', headers: { 'x-goog-api-key': token }, body: JSON.stringify(data) }),
     close: async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); },
   };
 }
@@ -57,6 +59,38 @@ test('authentication and budget denial make zero paid calls', async () => {
     assert.equal((await f.request()).status, 429);
     assert.equal(f.calls.length, 0);
   } finally { await f.close(); }
+});
+
+test('production dictation keeps Java JSON contract, requires auth and charges shared budget', async () => {
+  const wav = Buffer.alloc(6444);
+  wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);
+  wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(16000, 24); wav.writeUInt32LE(32000, 28); wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(wav.length - 44, 40);
+  const request = { ...body, contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'audio/wav', data: wav.toString('base64') } }] }] };
+  let calls = 0;
+  for (const denied of [false, true]) {
+    const f = await fixture({ model: QWEN_MODEL, denied, transcribe: async (audio, options) => {
+      assert.equal(audio, wav.toString('base64'));
+      const reservation = await options.spend.reserve('qwen', 'dictation', 10000);
+      calls++;
+      await reservation.settle(null);
+      return { text: 'Which university?' };
+    } });
+    try {
+      assert.equal((await f.request('invalid', request)).status, 401);
+      assert.equal((await f.request(secret, { ...request, tools: [{}] })).status, 400);
+      const response = await f.request(secret, request);
+      assert.equal(response.status, denied ? 429 : 200);
+      if (!denied) {
+        const result = await response.json();
+        assert.deepEqual(JSON.parse(result.candidates[0].content.parts[0].text), { text: 'Which university?' });
+        assert.deepEqual(f.charges, [null]);
+      }
+      assert.equal(f.calls.length, 0, 'Transcription must not invoke a text model or Google');
+    } finally { await f.close(); }
+  }
+  assert.equal(calls, 1);
 });
 test('synchronous Qwen response preserves the current Java response contract and settles usage', async () => {
   const f = await fixture();

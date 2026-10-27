@@ -1,10 +1,24 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createSpendGuard, SpendDenied } from '../../src/lib/voice/spendGuard.mjs';
+import { transcribeQwen, DictationError, readDictationWav } from '../../src/lib/voice/qwenDictation.mjs';
+import { QWEN_MODEL } from '../../src/lib/voice/qwenProtocol.mjs';
 
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
 const count = value => Number.isSafeInteger(value) && value >= 0;
 export const CHEAP_TEXT_MODEL = 'qwen3.7-flash-2026-07-15';
+
+export function dictationAudio(body, operation) {
+  if (operation !== 'generateContent' || !body || Array.isArray(body)
+    || Object.keys(body).some(key => !['systemInstruction', 'contents', 'generationConfig'].includes(key))
+    || body.contents?.length !== 1 || body.contents[0].role !== 'user'
+    || body.contents[0].parts?.length !== 1) throw new DictationError('invalid_audio', 400);
+  const part = body.contents[0].parts[0];
+  if (Object.keys(part).length !== 1 || part.inlineData?.mimeType !== 'audio/wav'
+    || Object.keys(part.inlineData).some(key => !['mimeType', 'data'].includes(key))) throw new DictationError('invalid_audio', 400);
+  readDictationWav(part.inlineData.data);
+  return part.inlineData.data;
+}
 
 export function quoteRequest(model, operation, body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new SpendDenied('unsupported_request');
@@ -79,7 +93,7 @@ function qwenResult(value, streaming) {
   };
 }
 
-export function createModelGateway({ env = process.env, fetchImpl = fetch, spend = createSpendGuard({ env, fetchImpl }) } = {}) {
+export function createModelGateway({ env = process.env, fetchImpl = fetch, spend = createSpendGuard({ env, fetchImpl }), transcribe = transcribeQwen } = {}) {
   return async function http(req, res) {
     if (!req.url?.startsWith('/ai/v1beta/')) return false;
     let reservation, finalUsage, complete = false, quote, settled = false, providerStarted = false;
@@ -110,6 +124,15 @@ export function createModelGateway({ env = process.env, fetchImpl = fetch, spend
       let size = 0; const chunks = [];
       for await (const chunk of req) { size += chunk.length; if (size > 2700000) throw new SpendDenied('request_too_large'); chunks.push(chunk); }
       const body = JSON.parse(Buffer.concat(chunks).toString());
+      if (model === QWEN_MODEL) {
+        // Keep the Java transcription contract; this path only recognizes
+        // speech and never requests an answer or stores audio.
+        const audio = dictationAudio(body, operation);
+        const result = await transcribe(audio, { env, spend, signal: abort.signal });
+        if (!res.destroyed) json(res, 200, { candidates: [{ content: { role: 'model',
+          parts: [{ text: JSON.stringify(result) }] }, finishReason: 'STOP' }], modelVersion: QWEN_MODEL });
+        return true;
+      }
       quote = quoteRequest(model, operation, body);
       let url, headers, request;
       if (quote.provider === 'qwen') {
@@ -177,7 +200,7 @@ export function createModelGateway({ env = process.env, fetchImpl = fetch, spend
     } catch (error) {
       complete = false;
       await settle();
-      if (!res.headersSent) json(res, error instanceof SpendDenied ? 429 : 502, { error: 'AI usage is temporarily unavailable.', code: error instanceof SpendDenied ? error.reason : 'provider_unavailable' });
+      if (!res.headersSent) json(res, error instanceof SpendDenied ? 429 : error instanceof DictationError ? error.status : 502, { error: 'AI usage is temporarily unavailable.', code: error instanceof SpendDenied ? error.reason : error instanceof DictationError ? error.code : 'provider_unavailable' });
       else res.destroy();
     } finally {
       abort.abort();
