@@ -15,6 +15,7 @@ import {
   History,
   Images,
   Eye,
+  Flag,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -62,6 +63,7 @@ const NAV_GROUPS = [
       { href: "/admin/subscriptions", label: "Subscribers", icon: Users },
       { href: "/admin/notifications", label: "Notifications", icon: Bell },
       { href: "/admin/visitors", label: "Visitor logs", icon: Eye },
+      { href: "/admin/globe-flags", label: "Globe flags", icon: Flag },
     ],
   },
   {

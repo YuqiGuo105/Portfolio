@@ -76,6 +76,14 @@ function attachmentFilename(value) {
 }
 
 export const adminApi = {
+  globeFlags: {
+    list(status = "pending") {
+      return request(`/api/admin/globe-flags?status=${encodeURIComponent(status)}`);
+    },
+    review(id, action) {
+      return request("/api/admin/globe-flags", { method: "POST", body: JSON.stringify({ id, action }) });
+    },
+  },
   stories: {
     list() {
       return request("/api/admin/stories");

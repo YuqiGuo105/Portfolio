@@ -283,6 +283,9 @@ const buildDisplayPins = (normalizedRawPins, zoomLevel) => {
   }));
 };
 
+// Stable empty default so the live-layer memos do not recompute on every render.
+const NO_ITEMS = Object.freeze([]);
+
 const RotatingGlobe = ({
   pins = [],
   supabase = null,
@@ -296,6 +299,15 @@ const RotatingGlobe = ({
   // is still accepted for older callers and translated below.
   window: windowProp = null,
   days = 30,
+  // Live layer (src/lib/globeLive.js): guestbook flags, arrival pulses and people looking now.
+  flags = NO_ITEMS,
+  pulses = NO_ITEMS,
+  peers = NO_ITEMS,
+  // While `picking`, a click on the globe reports its { lat, lng } instead of doing nothing.
+  picking = false,
+  onPickLocation = null,
+  // { lat, lng, key }: turn the globe to face this spot (a new key flies again).
+  flyTo = null,
 }) => {
   const sb = supabase ?? supabaseClient;
   const apiBaseClean = typeof apiBase === "string" ? apiBase.replace(/\/$/, "") : null;
@@ -1536,7 +1548,50 @@ const RotatingGlobe = ({
   const PIN_HEAD = 14; // diameter of the circle (px)
   const PIN_TAIL = 16; // length of the tail / stem (px)
 
+  const flagElement = (d) => {
+    const key = `flag|${d.id}`;
+    const cached = elCacheRef.current.get(key);
+    if (cached) return cached;
+    const wrap = document.createElement("div");
+    wrap.style.position = "relative";
+    wrap.style.width = "0";
+    wrap.style.height = "0";
+    const place = [d.city, d.country].filter(Boolean).join(", ");
+    const pin = document.createElement("button");
+    pin.type = "button";
+    pin.className = "globe-flag";
+    pin.textContent = d.emoji;
+    pin.setAttribute("aria-label", d.message ? `${d.emoji} ${d.message}` : `${d.emoji} flag${place ? ` from ${place}` : ""}`);
+    pin.title = [d.message, place].filter(Boolean).join(" — ");
+    Object.assign(pin.style, {
+      position: "absolute", left: "0", bottom: "0", transform: "translateX(-50%)",
+      font: "16px/1 system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif",
+      padding: "2px 3px", border: "0", borderRadius: "8px", background: "rgba(255,255,255,0.0)",
+      cursor: "pointer", pointerEvents: "auto", filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.35))",
+      height: "auto", lineHeight: "1", margin: "0", boxShadow: "none",
+    });
+    if (d.message) {
+      const note = document.createElement("div");
+      note.textContent = d.message;
+      Object.assign(note.style, {
+        position: "absolute", left: "50%", bottom: "26px", transform: "translateX(-50%)",
+        maxWidth: "180px", width: "max-content", padding: "5px 8px", borderRadius: "8px",
+        background: "rgba(15,23,42,0.88)", color: "#fff", font: "12px/1.35 system-ui, sans-serif",
+        display: "none", pointerEvents: "none", whiteSpace: "normal", textAlign: "center",
+      });
+      wrap.appendChild(note);
+      pin.addEventListener("click", (event) => {
+        event.stopPropagation();
+        note.style.display = note.style.display === "none" ? "block" : "none";
+      });
+    }
+    wrap.appendChild(pin);
+    elCacheRef.current.set(key, wrap);
+    return wrap;
+  };
+
   const htmlElement = (d) => {
+    if (d?.kind === "flag") return flagElement(d);
     const lat = Number(d?.lat);
     const lng = Number(d?.lng);
     const label = String(d?.label || "Unknown");
@@ -1595,18 +1650,45 @@ const RotatingGlobe = ({
     return wrap;
   };
 
+  const flagItems = useMemo(() => (Array.isArray(flags) ? flags : [])
+    .filter((f) => f && Number.isFinite(Number(f.lat)) && Number.isFinite(Number(f.lng)) && f.id != null)
+    .slice(0, 300)
+    .map((f) => ({ ...f, lat: Number(f.lat), lng: Number(f.lng), kind: "flag" })), [flags]);
+  const htmlItems = useMemo(() => [...displayPins, ...flagItems], [displayPins, flagItems]);
+
+  // Arrivals ripple out from their city; people already here glow softly.
+  const ringItems = useMemo(() => [
+    ...(Array.isArray(pulses) ? pulses : []).map((p) => ({ ...p, kind: p.self ? "self" : "pulse" })),
+    ...(Array.isArray(peers) ? peers : []).slice(0, 200).map((p, i) => ({ ...p, id: `peer-${i}`, kind: "peer" })),
+  ], [pulses, peers]);
+  const ringColor = (d) => {
+    const rgb = d.kind === "peer" ? "56,189,248" : d.kind === "self" ? "250,204,21" : "249,115,22";
+    return (t) => `rgba(${rgb},${Math.max(0, 1 - t)})`;
+  };
+
+  useEffect(() => {
+    const g = globeRef.current;
+    if (!flyTo || !g || typeof g.pointOfView !== "function") return;
+    const lat = Number(flyTo.lat); const lng = Number(flyTo.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const altitude = Math.min(getCurrentPOV().altitude || 2.2, 1.9);
+    g.pointOfView({ lat, lng, altitude }, 1100);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flyTo?.key]);
+
   // prevent cache growing forever
   useEffect(() => {
     const keep = new Set(displayPins.map((p) =>
       `${p.lat.toFixed(4)}|${p.lng.toFixed(4)}|${String(p.label || "Unknown")}`
     ));
+    flagItems.forEach((f) => keep.add(`flag|${f.id}`));
     const map = elCacheRef.current;
     if (map.size > 1400) {
       for (const k of map.keys()) {
         if (!keep.has(k)) map.delete(k);
       }
     }
-  }, [displayPins]);
+  }, [displayPins, flagItems]);
 
   useEffect(() => {
     return () => {
@@ -1626,6 +1708,7 @@ const RotatingGlobe = ({
         position: "relative",
         overflow: "hidden",
         touchAction: "none",
+        cursor: picking ? "crosshair" : undefined,
       }}
     >
       {pinsLoading && (
@@ -1656,11 +1739,20 @@ const RotatingGlobe = ({
         height={size.h}
         backgroundColor="rgba(0,0,0,0)"
         globeImageUrl={globeTexture.url}
-        htmlElementsData={displayPins}
+        htmlElementsData={htmlItems}
         htmlLat={(d) => d.lat}
         htmlLng={(d) => d.lng}
         htmlElement={htmlElement}
         htmlTransitionDuration={0}
+        ringsData={ringItems}
+        ringLat={(d) => d.lat}
+        ringLng={(d) => d.lng}
+        ringColor={ringColor}
+        ringMaxRadius={(d) => (d.kind === "peer" ? 2.2 : 6)}
+        ringPropagationSpeed={(d) => (d.kind === "peer" ? 1.2 : 3)}
+        ringRepeatPeriod={(d) => (d.kind === "peer" ? 2400 : 900)}
+        ringAltitude={0.004}
+        onGlobeClick={picking && onPickLocation ? ({ lat, lng }) => onPickLocation({ lat, lng }) : undefined}
       />
     </div>
   );

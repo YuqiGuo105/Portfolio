@@ -1,5 +1,6 @@
 import SocialLinks from '../components/SocialLinks';
 import styles from './Footer.module.css';
+import { OPEN_TERMINAL_EVENT } from '../components/TerminalLauncher';
 
 const Footer = () => {
   return (
@@ -19,6 +20,14 @@ const Footer = () => {
               <div className="copyright-text">
                 Developed by <strong>Yuqi Guo</strong>
               </div>
+              <button
+                type="button"
+                className={styles.terminal}
+                onClick={() => window.dispatchEvent(new Event(OPEN_TERMINAL_EVENT))}
+                title="Open the site terminal (` or ⌘K)"
+              >
+                <span aria-hidden="true">&gt;_</span> Open terminal <kbd>`</kbd>
+              </button>
             </div>
           </div>
         </div>

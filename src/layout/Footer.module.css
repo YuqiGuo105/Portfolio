@@ -48,3 +48,13 @@
   .content { gap: 10px; }
   .footer :global(.copyright-text) { font-size: 13px; }
 }
+.terminal {
+  display: inline-flex; align-items: center; gap: 8px; margin: 12px auto 0; padding: 6px 14px;
+  height: auto; line-height: 1.4; box-shadow: none;
+  border: 1px solid currentColor; border-radius: 999px; background: transparent; color: inherit;
+  font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; opacity: 0.8; cursor: pointer;
+}
+.terminal:hover { opacity: 1; }
+.terminal kbd { font: inherit; padding: 0 5px; border-radius: 4px; border: 1px solid currentColor; opacity: 0.7; }
+@media (hover: none) { .terminal kbd { display: none; } }
+.terminal::before, .terminal::after { content: none !important; display: none !important; }

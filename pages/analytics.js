@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Layout from "../src/layout/Layout";
 import SeoHead, { absoluteUrl } from "../src/components/SeoHead";
 
-const RotatingGlobe = dynamic(() => import("../src/components/RotatingGlobe"), {
+// The visitor globe with its live layer (presence, arrivals, guestbook flags).
+const LiveGlobe = dynamic(() => import("../src/components/LiveGlobe"), {
   ssr: false,
 });
 
@@ -246,11 +247,8 @@ export default function AnalyticsPage({ initialSummary = null }) {
                   table. `window` is forwarded so the in-globe viewport
                   re-fetch uses the same time window as the rest of the
                   dashboard. */}
-              <RotatingGlobe
-                pins={globePins}
-                supabase={false}
-                apiBase={API_BASE}
-                window={window}
+              <LiveGlobe
+                globeProps={{ pins: globePins, supabase: false, apiBase: API_BASE, window }}
               />
             </div>
             <div className="globe-legend">

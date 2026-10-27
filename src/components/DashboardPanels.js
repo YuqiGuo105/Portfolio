@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServiceHoverDetails } from "./ServiceHoverDetails";
-const RotatingGlobe = dynamic(() => import("./RotatingGlobe"), { ssr: false });
+// The visitor globe with its live layer (presence, arrivals, guestbook flags).
+const LiveGlobe = dynamic(() => import("./LiveGlobe"), { ssr: false });
 
 const MONITOR_SERVICE_VISIBLE_LIMIT = 8;
 
@@ -928,11 +929,9 @@ const DashboardPanels = () => {
             <div className="visitors-globe-pane">
               <div className="globe-frame" ref={globeFrameRef}>
                 {globeInView ? (
-                  <RotatingGlobe
-                    pins={visitors.pins}
-                    supabase={false}
-                    apiBase="/api/analytics"
-                    window="all"
+                  <LiveGlobe
+                    compact
+                    globeProps={{ pins: visitors.pins, supabase: false, apiBase: "/api/analytics", window: "all" }}
                   />
                 ) : (
                   <div className="globe-placeholder" aria-hidden="true" />

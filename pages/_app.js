@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import SeoHead from "../src/components/SeoHead";
 import MobilePullToRefresh from "../src/components/MobilePullToRefresh";
+import TerminalLauncher from "../src/components/TerminalLauncher";
 import { startPageBehaviorTracking } from "../src/lib/behaviorAnalytics";
 import { isPrivateAnalyticsPage } from "../src/lib/analyticsPagePolicy.mjs";
 import "../styles/globals.css";
@@ -233,6 +234,8 @@ function MyApp({ Component, pageProps }) {
       )}
       <MobilePullToRefresh />
       <Component {...pageProps} />{" "}
+      {/* ` or ⌘K opens the site terminal on every public page. */}
+      {!router.pathname.startsWith("/admin") && <TerminalLauncher />}
     </Fragment>
   );
 }

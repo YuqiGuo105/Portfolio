@@ -35,7 +35,7 @@ function sourceUrl(value) {
 
 const text = (value, max = 600) => typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '';
 
-function publicItem(item, expectedType) {
+export function publicItem(item, expectedType) {
   const url = sourceUrl(item?.url);
   if (!url || item?.type !== expectedType || !text(item?.title)) return null;
   return {
