@@ -16,6 +16,7 @@ import { postSSE } from "../lib/chatStream.mjs"
 import { ChatRequestError, chatRequestError, failAssistantMessage, chatStepsLabel } from "../lib/chatErrors.mjs"
 import { applyWebGuidePlan, normalizeWebGuidePlan } from "../lib/webGuide"
 import { primeVoiceAudio, releaseVoiceAudio } from "../lib/voice/audioActivation.mjs"
+import { UNAVAILABLE_CHAT_CAPABILITIES, normalizeChatCapabilities, DEEP_UNAVAILABLE, ATTACHMENTS_UNAVAILABLE } from "../lib/chatCapabilities.mjs"
 
 import dynamic from "next/dynamic"
 const ChatMarkdown = dynamic(() => import("./ChatMarkdown.mjs"))
@@ -2393,10 +2394,24 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   const BLOG_OWNER_EMAIL = "yuqi.guo17@gmail.com"
   // Matches any phrasing that implies blog creation / mutation
   const BLOG_MGMT_INTENT = /\b(create|write|add|update|edit|modify|delete|remove|publish)\b.{0,60}\b(blog|tech\s+blog|life\s+blog|blog\s+post)\b|\b(list|show)\s+(my\s+)?(tech|life)\s+blog/i
-  const [mode, setMode] = useState(() => {
-    const saved = storageSafeGet(MODE_KEY)
-    return ["thinking"].includes(saved) ? saved : "regular"
-  })
+  const [mode, setMode] = useState("regular")
+  const [capabilities, setCapabilities] = useState(UNAVAILABLE_CHAT_CAPABILITIES)
+  useEffect(() => {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 12000)
+    // One small, non-model request when the chat opens; fail closed on outage.
+    fetch("/api/rag/capabilities", { signal: controller.signal, cache: "no-store" })
+      .then(response => response.ok ? response.json() : null)
+      .then(value => {
+        if (controller.signal.aborted) return
+        const next = normalizeChatCapabilities(value)
+        setCapabilities(next)
+        if (next.deep && storageSafeGet(MODE_KEY) === "thinking") setMode("thinking")
+      })
+      .catch(() => {})
+      .finally(() => clearTimeout(timeout))
+    return () => { controller.abort(); clearTimeout(timeout) }
+  }, [])
   const isThinking = mode === "thinking"
   const [modeOpen, setModeOpen] = useState(false)
   const [showLoginDialog, setShowLoginDialog] = useState(false)
@@ -2717,6 +2732,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   const pickFiles = async (fileList) => {
     const supplied = Array.from(fileList || [])
     if (!supplied.length) return
+    if (!capabilities.attachments) { setErrorToast(ATTACHMENTS_UNAVAILABLE); return }
     if (uploadBusyRef.current || loading) {
       setErrorToast(loading ? "Wait for the current response to finish." : "Wait for uploads to finish.")
       return
@@ -3902,6 +3918,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       aria-hidden={liveVoiceOpen || undefined}
       inert={liveVoiceOpen ? "" : undefined}
       onDragEnter={(event) => {
+        if (!capabilities.attachments) return
         if (!isFileTransfer(event.dataTransfer)) return
         event.preventDefault()
         event.stopPropagation()
@@ -3912,7 +3929,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         if (!isFileTransfer(event.dataTransfer)) return
         event.preventDefault()
         event.stopPropagation()
-        event.dataTransfer.dropEffect = uploading || loading || composerFiles.length >= MAX_FILES_PER_MESSAGE ? "none" : "copy"
+        event.dataTransfer.dropEffect = !capabilities.attachments || uploading || loading || composerFiles.length >= MAX_FILES_PER_MESSAGE ? "none" : "copy"
       }}
       onDragLeave={(event) => {
         if (!isFileTransfer(event.dataTransfer)) return
@@ -4002,15 +4019,18 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
                   className="cw-mode-item"
                   role="menuitem"
                   onClick={() => {
+                    if (!capabilities.deep) return
                     setMode("thinking")
                     setModeOpen(false)
                   }}
+                  disabled={!capabilities.deep}
+                  title={!capabilities.deep ? DEEP_UNAVAILABLE : undefined}
                 >
                   <span className="cw-mode-item-head">
                     <Brain className="cw-mode-item-ico" />
                       <span className="cw-mode-left">
                         <span className="cw-mode-name">Deep</span>
-                        <span className="cw-mode-desc">Searches and verifies sources</span>
+                        <span className="cw-mode-desc">{capabilities.deep ? "Searches and verifies sources" : "Temporarily unavailable"}</span>
                       </span>
                   </span>
                   {mode === "thinking" ? <Check className="cw-check" /> : null}
@@ -4217,9 +4237,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           {/* Upload button */}
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => capabilities.attachments ? fileInputRef.current?.click() : setErrorToast(ATTACHMENTS_UNAVAILABLE)}
             disabled={loading || uploading || composerFiles.length >= MAX_FILES_PER_MESSAGE}
-            aria-label="Upload file"
+            aria-label={capabilities.attachments ? "Upload file" : "Image and PDF understanding temporarily unavailable"}
+            aria-disabled={!capabilities.attachments || undefined}
             style={{
               width: "40px",
               height: "40px",
@@ -4237,11 +4258,11 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
               color: "white",
               border: "none",
               cursor: "pointer",
-              opacity: loading || uploading || composerFiles.length >= MAX_FILES_PER_MESSAGE ? 0.6 : 1,
+              opacity: !capabilities.attachments || loading || uploading || composerFiles.length >= MAX_FILES_PER_MESSAGE ? 0.6 : 1,
               padding: 0,
               boxSizing: "border-box",
             }}
-            title={composerFiles.length >= MAX_FILES_PER_MESSAGE ? `Max ${MAX_FILES_PER_MESSAGE} files` : "Upload"}
+            title={!capabilities.attachments ? ATTACHMENTS_UNAVAILABLE : composerFiles.length >= MAX_FILES_PER_MESSAGE ? `Max ${MAX_FILES_PER_MESSAGE} files` : "Upload"}
           >
             {uploading ? (
               <Loader2 style={{ width: "18px", height: "18px", color: "white" }} className="animate-spin" />
