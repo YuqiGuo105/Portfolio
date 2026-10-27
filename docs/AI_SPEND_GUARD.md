@@ -2,30 +2,35 @@
 
 ## Status
 
-**Active for the new local Fast chat and dictation paths only, not a
-platform-wide monthly spending cap.** After explicit approval on October 26,
+**Active for production Fast chat (intent, safety and generation), dictation,
+and their local counterparts, not a platform-wide monthly spending cap.** After explicit approval on October 26,
 2026 (America/Denver), the policy in the existing Blog project was enabled with
-the original $8 monthly admission limit. No auto-reload or production service
-routing has been enabled. Historical provider charges have not been reconciled
+the original $8 monthly admission limit. The production Java agent now routes
+these requests through the authenticated Qwen gateway. Auto-reload remains off.
+Historical provider charges have not been reconciled
 into the baseline; this ledger cannot yet enforce the requested $10 aggregate
 ceiling across all existing API usage.
 
-The local voice launcher selects the verified Qwen realtime provider. The
+Production and the local voice launcher select the verified Qwen realtime provider. The
 server relay now uses Qwen when `VOICE_PROVIDER` is omitted; explicit Google
 configuration remains supported, with no automatic fallback. This does not
-change any deployed environment variable.
+make realtime calls part of the monthly ledger: the existing production
+five-call daily limit and 120-second call limit remain separate protections.
 
 The selected low-cost text candidate is `qwen3.7-flash-2026-07-15`, with thinking
 disabled. The original voice-only key correctly rejected it. On October 26,
 2026, a separately authorized text key was created with only this snapshot in
-its model allowlist. It is stored in ignored `.env.ai-text.local` with mode 0600,
-now loaded server-side by the local homepage launcher, but not deployed.
+its model allowlist. Its local copy is stored in ignored `.env.ai-text.local`
+with mode 0600. After separate approval on October 27, the production copy was
+stored in Secret Manager with secret-scoped access only for the relay runtime.
+The Java agent receives the independent internal gateway token, not that key.
 
 Four live probes through the local gateway adapter passed: public education
 facts, Chinese JSON, an unknown private fact, and incremental text streaming.
 The conservative usage estimate was $0.000163 against a $0.02 test ceiling.
 These are basic compatibility checks, not a complete agent/safety evaluation or
-a homepage end-to-end test. The production text-agent default is unchanged.
+a homepage end-to-end test. These were the initial local checks; production
+verification is recorded below.
 The new loopback-only Fast chat and dictation paths reserve through the shared
 ledger. After activation, a real 2.23-second synthetic WAV transcription
 returned HTTP 200 in about 3.1 seconds, and a Chinese education question through
@@ -83,22 +88,23 @@ separate migration/reindex plan.
 
 ## Rollout Gates
 
-1. Done: separate restricted text key and four basic live compatibility probes.
-   Still required: complete agent, safety/intent, and tool-flow evaluation before
-   changing the text-agent default.
+1. Done: restricted text key, adapter compatibility probes, Java regression
+   tests, and production homepage education Q&A, navigation and dictation.
+   This is focused recovery verification, not an exhaustive model evaluation.
 2. Wire both production and local realtime transports to the shared ledger.
    Keep unknown/interrupted usage charged; budget protection must also cover
    explicitly unlimited local calls. Direct Google browser tokens must not
    bypass the relay.
-3. Route generation, safety, intent, dictation, embeddings, RAG/search indexers,
-   and the copilot classifier through the gateway. Verify attachment and Deep
-   search compatibility or explicitly disable unsupported paid features.
+3. Done for agent generation, safety, intent and dictation. Public knowledge
+   recovery uses current-source lexical search without paid embeddings.
+   Embedding/indexer and copilot paths still need migration. Deep research and
+   attachment understanding are explicitly disabled before any model work.
 4. Remove direct provider credentials from callers; disable optional alternate
    provider paths. Otherwise a shared cap can be bypassed.
 5. Before claiming platform-wide coverage, reconcile existing month-to-date
    charges from both providers, seed the baseline conservatively, and test true
    concurrent connections on Postgres. The migration is installed and the $8
-   policy is enabled only for the new local paths described above.
+   policy covers only the guarded paths described above.
 6. Run local and deployed end-to-end tests, including denied budget, missing
    credentials, duplicate requests, disconnects, and database outages.
 7. Only then enable provider auto-reload with separately agreed recharge limits.
@@ -109,11 +115,9 @@ stop-service enabled, and the existing Google project cap was $5. Reporting
 delays, tax, unrelated uses of the accounts/keys, and charges before rollout are
 not made safe by local code. Google auto-reload remains off.
 
-## Production Recovery Preparation (October 27)
+## Production Recovery (October 27)
 
-The production homepage still used the direct Google Java configuration when
-checked. Do not equate the successful local overrides with a deployed fix.
-The prepared production route preserves Java intent, safety, orchestration,
+The production route preserves Java intent, safety, orchestration,
 navigation, and history; it changes only the model transport:
 
 1. Java `GEMINI_BASE_URL` points to the existing relay's `/ai/v1beta` endpoint.
@@ -128,10 +132,26 @@ navigation, and history; it changes only the model transport:
    `20261027150402_current_knowledge_lexical_recovery.sql` migration was applied
    and checked: only `service_role` may execute it. It excludes stale, private,
    unpublished, and unapproved records; it does not query the legacy index.
-4. The relay requires a separately approved Secret Manager copy of the
-   restricted text key. Creating an empty secret or passing tests is not an
-   enabled production route. Deep search and media understanding also require
-   an explicit rollout decision; unsupported tools/media fail closed.
+4. The relay has the approved restricted text key and a separate internal
+   gateway token. `AGENT_DEEP_PATH_ENABLED=false` and
+   `AGENT_ATTACHMENTS_ENABLED=false` are enforced server-side. The widget reads
+   `/api/rag/capabilities` once when opened, fails closed on errors, and marks
+   these features temporarily unavailable without changing widget dimensions.
+   No provider fallback or automatic retry is introduced.
+
+Production checks on `https://www.yuqi.site`:
+
+- The homepage answered a Chinese education question with Syracuse University
+  and the University of Liverpool, with sources and a completed run.
+- A chat request to visit My Blogs opened the matching website guide.
+- A 2.23-second synthetic WAV returned HTTP 200 with the recognized university
+  question in about 4.3 seconds through Next.js, Java and the Qwen relay. This
+  does not test a user's physical microphone or browser permission settings.
+- Deep and attachment requests ended as unavailable before run admission;
+  production capability flags returned `false` for both.
+- New text and transcription ledger reservations settled with no open holds.
+- The earlier production voice probe returned actual speech, a correct
+  education answer, and a completed conversation with three persisted messages.
 
 Voice now checks current approved profile evidence before reserving a daily
 call. A cold profile fetch has a bounded 10-second deadline and concurrent
