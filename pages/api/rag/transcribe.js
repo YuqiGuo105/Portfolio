@@ -1,11 +1,15 @@
 import { forwardJson, methodGuard, requireSupabaseUser } from '../../../src/lib/agentServiceProxy';
 import { isRateLimited } from '../../../src/lib/rateLimiter';
+import { localQwenEnabled, sameOrigin, DICTATION_MESSAGES } from '../../../src/lib/localAssistant.mjs';
+import { transcribeQwen, DictationError } from '../../../src/lib/voice/qwenDictation.mjs';
+import { SpendDenied } from '../../../src/lib/voice/spendGuard.mjs';
 
 export const config = { api: { bodyParser: { sizeLimit: '3mb' } } };
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (!methodGuard(req, res, ['POST'])) return;
+  if (!sameOrigin(req)) return res.status(403).json({ error: 'Invalid origin.' });
   if (req.headers.origin) {
     try {
       if (new URL(req.headers.origin).host !== req.headers.host) return res.status(403).json({ error: 'Invalid origin.' });
@@ -20,6 +24,20 @@ export default async function handler(req, res) {
   }
   const auth = await requireSupabaseUser(req, res, { allowAnonymous: true });
   if (!auth) return;
+  if (localQwenEnabled(req)) {
+    const controller = new AbortController();
+    const abort = () => { if (!res.writableEnded) controller.abort(); };
+    res.on('close', abort);
+    try {
+      const result = await transcribeQwen(req.body.audio, { signal: controller.signal });
+      if (!res.destroyed) res.status(200).json(result);
+    } catch (error) {
+      const code = error instanceof SpendDenied ? error.reason : error instanceof DictationError ? error.code : 'dictation_unavailable';
+      if (!res.destroyed) res.status(error instanceof SpendDenied ? 429 : error.status || 503)
+        .json({ code, error: DICTATION_MESSAGES[code] || DICTATION_MESSAGES.dictation_unavailable });
+    } finally { res.off('close', abort); }
+    return;
+  }
   req.body = { audio: req.body.audio };
   await forwardJson(req, res, { path: '/api/chat/transcribe', method: 'POST', auth, timeoutMs: 50_000 });
 }

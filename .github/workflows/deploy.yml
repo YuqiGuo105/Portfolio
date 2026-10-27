@@ -51,6 +51,9 @@ jobs:
       - name: Voice and private-history regression tests
         run: npm run test:voice
 
+      - name: AI budget and local recovery regression tests
+        run: npm run test:ai-budget
+
       - name: Production build
         run: npm run build
         env:

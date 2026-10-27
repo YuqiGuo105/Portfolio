@@ -12,6 +12,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { searchItems } from "../../../../src/lib/searchItems";
 import { RESPONSE_LANGUAGE_POLICY } from "../../../../src/lib/responseLanguagePolicy.mjs";
+import { localQwenEnabled } from "../../../../src/lib/localAssistant.mjs";
+import { streamLocalChat } from "../../../../src/lib/qwenLocalChat.mjs";
+import { isRateLimited } from "../../../../src/lib/rateLimiter";
 import {
   forwardRagSse,
   requireSupabaseUser,
@@ -159,6 +162,13 @@ export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  if (localQwenEnabled(req)) {
+    const auth = await requireSupabaseUser(req, res, { allowAnonymous: true });
+    if (!auth) return;
+    await streamLocalChat(req, res, { isRateLimited });
+    return;
   }
 
   // Production path: the Spring Agent owns routing, memory, attachments,

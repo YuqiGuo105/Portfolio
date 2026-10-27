@@ -13,6 +13,7 @@ import MrPotAvatar from "./MrPotAvatar"
 import { Mic, Plus, Upload, Phone } from "lucide-react"
 import { mergeEvidence } from "../lib/chatEvidence.mjs"
 import { postSSE } from "../lib/chatStream.mjs"
+import { ChatRequestError, chatRequestError, failAssistantMessage, chatStepsLabel } from "../lib/chatErrors.mjs"
 import { applyWebGuidePlan, normalizeWebGuidePlan } from "../lib/webGuide"
 import { primeVoiceAudio, releaseVoiceAudio } from "../lib/voice/audioActivation.mjs"
 
@@ -1402,6 +1403,7 @@ function getStageMeta(stage, title) {
 
 function getMrPotState(message) {
   if (!message) return "idle"
+  if (message.errorCode) return "error"
   const active = message.thinkingNow || [...(message.executionStages || [])].reverse().find((step) => !step?.tsEnd)
   const stateText = `${active?.stage || ""} ${active?.title || ""} ${active?.status || ""}`.toLowerCase()
   const answerText = String(message.content || "").toLowerCase()
@@ -1512,7 +1514,7 @@ function humanizeStep(step) {
 /* ---------- Collapsible tool history (timeline) ---------- */
 const STEP_REVEAL_INTERVAL_MS = 320
 
-function ToolHistory({ cards, kind = "tools", streaming = false }) {
+function ToolHistory({ cards, kind = "tools", streaming = false, failed = false }) {
   const [open, setOpen] = useState(Boolean(streaming))
   const [clock, setClock] = useState(Date.now())
   const [visibleCount, setVisibleCount] = useState(() => streaming ? Math.min(1, cards?.length || 0) : (cards?.length || 0))
@@ -1546,7 +1548,7 @@ function ToolHistory({ cards, kind = "tools", streaming = false }) {
     ? displayCount - 1
     : cards.filter((card) => card?.tsEnd || card?.status === "completed" || card?.status === "failed").length
   const label = kind === "steps"
-    ? (streaming ? `Working · ${doneCount}/${displayCount}` : `Completed ${count} step${count === 1 ? "" : "s"}`)
+    ? (streaming ? `Working · ${doneCount}/${displayCount}` : chatStepsLabel(count, failed || cards.some(card => card.status === "failed")))
     : `Used ${count} tool${count === 1 ? "" : "s"}`
   return (
     <div className={`cw-th mb-2 ${streaming ? "is-live" : ""}`} aria-live={streaming ? "polite" : "off"}>
@@ -1557,7 +1559,7 @@ function ToolHistory({ cards, kind = "tools", streaming = false }) {
         aria-expanded={open ? "true" : "false"}
       >
         <span className="cw-th-check" aria-hidden="true">
-          {streaming ? <Loader2 className="cw-th-spinner" /> : <Check />}
+          {streaming ? <Loader2 className="cw-th-spinner" /> : failed || cards.some(card => card.status === "failed") ? <X /> : <Check />}
         </span>
         <span className="cw-th-label">
           {label}
@@ -3054,7 +3056,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         const obj = safeJsonParse(evt.data) || {}
         const stage = obj.stage || evt.event || "message"
         if (stage === "done") return false
-        if (stage === "error") throw new Error("The assistant could not complete this response.")
+        if (stage === "error") throw chatRequestError(obj.payload || obj)
         if (stage === "run_metadata" && /^[0-9a-f-]{36}$/i.test(obj.payload?.runId || "")) {
           setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, runId: obj.payload.runId } : m))
           return
@@ -3322,9 +3324,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
     })
 
     if (!finalized) {
-      clearStage(assistantId)
-      const fallback = answerBuf || "The response ended before an answer was received. Please try again."
-      finalizeAssistant(assistantId, fallback, answerBuf ? onFinal : undefined)
+      throw new ChatRequestError("RESPONSE_INCOMPLETE")
     }
     } catch (error) {
       if (!finalized) throw error
@@ -3862,7 +3862,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       // Pass last 6 turns so RAG can resolve pronouns / follow-up questions.
       const historyForRag = messages
         .filter((m) => m.role === "user" || m.role === "assistant")
-        .filter((m) => typeof m.content === "string" && m.content.trim() && !m.streaming)
+        .filter((m) => typeof m.content === "string" && m.content.trim() && !m.streaming && !m.errorCode)
         .slice(-6)
         .map((m) => ({ role: m.role, content: m.content.trim().slice(0, 800) }))
       await startRagSSE({ question: baseQuestion, attachments: attachmentRefs, assistantId, requestMode, currentSessionId: sessionId, onFinal: finalizeAndPersist, pageContext: pageCtx, userEmail: ownerEmail, conversationHistory: historyForRag })
@@ -3877,12 +3877,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       } else {
         console.error("[ChatWidget] SSE failed:", err)
         logger.error("SSE failed:", err)
-        const msg =
-          "⚠️ The chat backend isn't reachable right now. " +
-          "Try a specific portfolio action (e.g. \"search blogs about React\") or come back later."
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantId ? { ...m, content: msg, streaming: false, thinkingNow: null } : m,
+            m.id === assistantId ? failAssistantMessage(m, err) : m,
           ),
         )
       }
@@ -4070,7 +4067,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
 
               {/* Execution trace and real MCP calls are intentionally separate. */}
               {m.role === "assistant" && Array.isArray(m.executionStages) && m.executionStages.length > 0 ? (
-                <ToolHistory cards={m.executionStages} kind="steps" streaming={Boolean(m.streaming)} />
+                <ToolHistory cards={m.executionStages} kind="steps" streaming={Boolean(m.streaming)} failed={Boolean(m.errorCode)} />
               ) : null}
               {m.role === "assistant" && !m.streaming && Array.isArray(m.toolCards) && m.toolCards.length > 0 ? (
                 <ToolHistory cards={m.toolCards} kind="tools" />
@@ -4293,7 +4290,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
             }}
           />
 
-          <button type="button" aria-label="Voice input" title="Dictate in any language. Audio is sent to Google Gemini for transcription; this site does not save recordings." aria-expanded={voiceOpen}
+          <button type="button" aria-label="Voice input" title="Dictate in any language. Audio is sent to the configured transcription provider; this site does not save recordings." aria-expanded={voiceOpen}
             disabled={loading} onClick={() => setVoiceOpen(value => !value)}
             style={{ display: "grid", placeItems: "center", flex: "0 0 36px", width: 36, height: 40, padding: 0, border: "1px solid var(--cw-input-border)", borderRadius: 8, color: "var(--cw-input-text)", background: "var(--cw-input-bg)" }}>
             <Mic size={18} />

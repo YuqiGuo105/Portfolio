@@ -1,3 +1,28 @@
+import { chatRequestError } from './chatErrors.mjs'
+
+async function readFailure(response) {
+  if (!response.body) return {}
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let body = '', bytes = 0
+  let result = {}
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      bytes += value.byteLength
+      if (bytes > 4096) break
+      body += decoder.decode(value, { stream: true })
+    }
+    if (bytes <= 4096) result = JSON.parse(body + decoder.decode())
+  } catch { /* Keep malformed or interrupted errors out of the UI. */ }
+  // Keep cleanup outside the read loop's try block. The pinned SWC compiler
+  // can release this reader early when downleveling nested async finally.
+  try { await reader.cancel() } catch {}
+  reader.releaseLock()
+  return result
+}
+
 export function parseSSEBlock(block) {
   let event = "message"
   const data = []
@@ -28,7 +53,7 @@ export async function postSSE(url, body, { onEvent, signal, deviceId, timeoutMs 
         ...(deviceId ? { "X-CW-Device-Id": deviceId } : {}) },
       body: JSON.stringify(body), mode: "cors", signal: controller.signal,
     })
-    if (!response.ok) throw new Error(`SSE HTTP ${response.status}`)
+    if (!response.ok) throw chatRequestError(await readFailure(response), response.status)
     if (!response.body) throw new Error("ReadableStream not supported")
     reader = response.body.getReader()
     const decoder = new TextDecoder()

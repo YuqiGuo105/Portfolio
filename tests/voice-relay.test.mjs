@@ -41,7 +41,7 @@ function store() {
 async function fixture(options = {}) {
   const { env: overrides, fetchImpl, autoSetup = true, ...relayOptions } = options;
   const providers = [], requests = [], connections = []; let tokens = 0;
-  const env = { NODE_ENV: 'production', VOICE_ENABLED: 'true', VOICE_GATEWAY_TOKEN: secret, GEMINI_API_KEY: 'never-browser',
+  const env = { NODE_ENV: 'production', VOICE_PROVIDER: 'google', VOICE_ENABLED: 'true', VOICE_GATEWAY_TOKEN: secret, GEMINI_API_KEY: 'never-browser',
     VOICE_PUBLIC_URL: 'https://relay.example', VOICE_RECORD_TRANSCRIPTS: 'false', ...overrides };
   const relay = createVoiceRelay({ env, budget: store(), loadProfile: async () => profile,
     fetchImpl: async (url, init) => {

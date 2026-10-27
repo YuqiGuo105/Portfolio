@@ -19,6 +19,12 @@ async function loadHandlers() {
       'const searchItems = async () => ({ results: [] });')
     .replace('"../../../../src/lib/responseLanguagePolicy.mjs"',
       JSON.stringify(new URL("../src/lib/responseLanguagePolicy.mjs", import.meta.url).href))
+    .replace('"../../../../src/lib/localAssistant.mjs"',
+      JSON.stringify(new URL("../src/lib/localAssistant.mjs", import.meta.url).href))
+    .replace('import { streamLocalChat } from "../../../../src/lib/qwenLocalChat.mjs";',
+      'const streamLocalChat = async () => { throw new Error("Unexpected local override"); };')
+    .replace('import { isRateLimited } from "../../../../src/lib/rateLimiter";',
+      'const isRateLimited = async () => false;')
     .replace(/import \{\s*forwardRagSse,\s*requireSupabaseUser,\s*\} from "[^\"]+";/,
       'const requireSupabaseUser = async () => ({ roles: "VIEWER" }); const forwardRagSse = async (_req, res) => res.end("delegated");');
   return {

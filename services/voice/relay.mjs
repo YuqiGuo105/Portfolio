@@ -44,7 +44,7 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
   budget = createBudgetStore(env, fetchImpl), loadProfile = createProfileLoader(),
   connect = (url, options) => new WebSocket(url, options) } = {}) {
   const secret = env.VOICE_GATEWAY_TOKEN;
-  const selection = env.VOICE_PROVIDER || 'google';
+  const selection = env.VOICE_PROVIDER || 'qwen';
   const qwen = qwenConfiguration(env);
   const provider = selection === 'qwen' ? 'Qwen' : 'Google';
   const model = selection === 'qwen' ? qwen.model : LIVE_MODEL;

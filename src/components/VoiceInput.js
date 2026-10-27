@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AudioLines, Check, Loader2, Mic, X } from 'lucide-react';
 import { MAX_RECORDING_MS, recordingToBase64 } from '../lib/dictationAudio.mjs';
+import { DICTATION_MESSAGES } from '../lib/localAssistant.mjs';
 
 const errors = {
   NotAllowedError: 'Allow microphone access in your browser to dictate.',
@@ -76,8 +77,8 @@ export default function VoiceInput({ onInsert, onClose }) {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ audio }), signal: run.controller.signal,
           });
-          if (!response.ok) throw new Error(response.status === 429 ? 'Voice input is temporarily limited. Please try later or type your message.' : 'Could not transcribe. Please try again.');
           const result = await response.json();
+          if (!response.ok) throw new Error(DICTATION_MESSAGES[result.code] || (response.status === 429 ? 'Voice input is temporarily limited. Please try later or type your message.' : 'The transcription service is unavailable. Please try again later.'));
           if (activeRef.current !== run) return;
           const text = typeof result.text === 'string' ? result.text.trim() : '';
           if (!text) throw new Error('No speech detected. Please try again.');
@@ -111,7 +112,7 @@ export default function VoiceInput({ onInsert, onClose }) {
   return <section className="dictation" aria-label="Voice input">
     <div className="recording-row">
       <button type="button" title="Cancel recording" aria-label="Cancel recording" onClick={() => { dispose(); onClose(); }}><X size={18} /></button>
-      <div className="recording-status" role="status" title="Auto-detected languages. Audio is sent to Google Gemini for transcription and is not saved by this site.">
+      <div className="recording-status" role="status" title="Auto-detected languages. Audio is sent to the configured transcription provider and is not saved by this site.">
         {waiting ? <Loader2 size={19} className="spinner" /> : <AudioLines size={22} className={failed ? '' : 'listening'} />}
         <span>{status === 'starting' ? 'Connecting...' : status === 'transcribing' ? 'Transcribing...' : failed ? 'Voice input paused' : 'Recording'}</span>
       </div>
