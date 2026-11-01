@@ -237,10 +237,10 @@ body.github-activity-open { overflow: hidden; }
   transform: scale(0.8);
 }
 
-/* 头像悬停效果 */
+/* 头像悬停效果：只轻微变亮提示可点击。不再放大——放大会让 1024px 的头像变糊，
+   并且盖掉手机端倾斜效果给背景层设的缩放。 */
 .slide:hover > div img {
-  transform: scale(1.05);
-  filter: brightness(1.1);
+  filter: brightness(1.05);
 }
 
 /* 相机图标动画 */
