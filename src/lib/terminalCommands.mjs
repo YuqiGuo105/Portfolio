@@ -29,6 +29,7 @@ export const PAGES = Object.freeze({
   cv: '/cv',
   resume: '/cv',
   mcp: '/mcp-guide',
+  history: '/site-history',
   contact: '/#contact-section',
 });
 
@@ -212,9 +213,14 @@ const COMMANDS = {
     },
   },
   git: {
-    summary: 'git log — how this platform evolved, with real commits',
-    usage: ['log'],
+    summary: 'git log — how the platform evolved · git checkout 2024-03 — see the site back then',
+    usage: ['log', 'checkout'],
     async run(ctx, [sub = '', ...flags]) {
+      if (sub === 'checkout') {
+        const when = flags[0] || '';
+        if (!/^(\d{4}(-\d{2}){0,2}|[0-9a-f]{7,40})$/i.test(when)) return [line('usage: git checkout 2024-03   (a date, or a commit sha)', 'err')];
+        return [line(`HEAD is now at ${when} — opening the site as it looked then`, 'dim'), ...ctx.open(`/site-history#${when}`)];
+      }
       if (sub !== 'log') return [line(`git: '${sub}' is not available here. Try: git log`, 'err')];
       const all = flags.includes('--all') || flags.includes('-a');
       const milestones = await ctx.loadEvolution();

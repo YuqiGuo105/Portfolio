@@ -169,3 +169,12 @@ test('mcp call says when an answer came from cache', async () => {
   const cached = ctx({ callTool: async (tool, args) => ({ via: 'cache', request: { params: { name: tool, arguments: args } }, result: {}, elapsedMs: 3218 }) });
   assert.match(text(await runCommand('mcp call list_projects', cached)), /cached \(live call took 3218 ms\)/);
 });
+
+test('git checkout <date> opens the site history at that point; bad refs are rejected', async () => {
+  const c = ctx();
+  assert.match(text(await runCommand('git checkout 2024-03', c)), /HEAD is now at 2024-03/);
+  assert.deepEqual(c.opened, ['/site-history#2024-03']);
+  assert.match(text(await runCommand('git checkout ../../etc', c)), /usage/);
+  assert.equal(c.opened.length, 1);
+  assert.equal(complete('git ch'), 'git checkout ');
+});

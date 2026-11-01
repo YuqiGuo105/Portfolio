@@ -55,6 +55,7 @@
   font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; opacity: 0.8; cursor: pointer;
 }
 .terminal:hover { opacity: 1; }
+a.terminal { margin-left: 8px; text-decoration: none; }
 .terminal kbd { font: inherit; padding: 0 5px; border-radius: 4px; border: 1px solid currentColor; opacity: 0.7; }
 @media (hover: none) { .terminal kbd { display: none; } }
 .terminal::before, .terminal::after { content: none !important; display: none !important; }

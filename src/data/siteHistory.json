@@ -1,0 +1,361 @@
+{
+ "repo": "https://github.com/YuqiGuo105/Portfolio",
+ "viewport": [
+  1440,
+  900
+ ],
+ "snapshots": [
+  {
+   "sha": "0bc5478",
+   "date": "2024-01-30",
+   "cover": "/site-history/2024-01-30-0bc5478-cover.webp",
+   "thumb": "/site-history/2024-01-30-0bc5478-thumb.webp",
+   "full": "/site-history/2024-01-30-0bc5478-full.webp",
+   "fullHeight": 3970,
+   "fullWidth": 720,
+   "commits": 13,
+   "previous": null,
+   "subject": "Update ProjectIsotop.js",
+   "changes": [
+    "Update ProjectIsotop.js",
+    "Update index.js",
+    "Skillset component"
+   ]
+  },
+  {
+   "sha": "5401b41",
+   "date": "2024-02-18",
+   "cover": "/site-history/2024-02-18-5401b41-cover.webp",
+   "thumb": "/site-history/2024-02-18-5401b41-thumb.webp",
+   "full": "/site-history/2024-02-18-5401b41-full.webp",
+   "fullHeight": 4374,
+   "fullWidth": 720,
+   "commits": 10,
+   "previous": "0bc5478",
+   "subject": "Update supabaseClient.js",
+   "changes": [
+    "Blog",
+    "Blog component",
+    "Project Detail Component"
+   ]
+  },
+  {
+   "sha": "d2fba70",
+   "date": "2024-03-15",
+   "cover": "/site-history/2024-03-15-d2fba70-cover.webp",
+   "thumb": "/site-history/2024-03-15-d2fba70-thumb.webp",
+   "full": "/site-history/2024-03-15-d2fba70-full.webp",
+   "fullHeight": 4684,
+   "fullWidth": 720,
+   "commits": 15,
+   "previous": "5401b41",
+   "subject": "Update README.md",
+   "changes": [
+    "Bug fix",
+    "Fix bug of layout",
+    "Bug fix"
+   ]
+  },
+  {
+   "sha": "40d45f1",
+   "date": "2024-05-02",
+   "cover": "/site-history/2024-05-02-40d45f1-cover.webp",
+   "thumb": "/site-history/2024-05-02-40d45f1-thumb.webp",
+   "full": "/site-history/2024-05-02-40d45f1-full.webp",
+   "fullHeight": 4984,
+   "fullWidth": 720,
+   "commits": 1,
+   "previous": "d2fba70",
+   "subject": "Add Sorted Attribute",
+   "changes": [
+    "Add Sorted Attribute"
+   ]
+  },
+  {
+   "sha": "f9158ad",
+   "date": "2024-09-10",
+   "cover": "/site-history/2024-09-10-f9158ad-cover.webp",
+   "thumb": "/site-history/2024-09-10-f9158ad-thumb.webp",
+   "full": "/site-history/2024-09-10-f9158ad-full.webp",
+   "fullHeight": 4980,
+   "fullWidth": 720,
+   "commits": 5,
+   "previous": "40d45f1",
+   "subject": "update leetcode icon",
+   "changes": [
+    "update leetcode icon",
+    "Leetcode icon",
+    "Image carousel"
+   ]
+  },
+  {
+   "sha": "69d3ba8",
+   "date": "2024-12-11",
+   "cover": "/site-history/2024-12-11-69d3ba8-cover.webp",
+   "thumb": "/site-history/2024-12-11-69d3ba8-thumb.webp",
+   "full": "/site-history/2024-12-11-69d3ba8-full.webp",
+   "fullHeight": 4786,
+   "fullWidth": 720,
+   "commits": 1,
+   "previous": "f9158ad",
+   "subject": "Update index.js",
+   "changes": [
+    "Update index.js"
+   ]
+  },
+  {
+   "sha": "ba17d82",
+   "date": "2025-01-13",
+   "cover": "/site-history/2025-01-13-ba17d82-cover.webp",
+   "thumb": "/site-history/2025-01-13-ba17d82-thumb.webp",
+   "full": "/site-history/2025-01-13-ba17d82-full.webp",
+   "fullHeight": 4726,
+   "fullWidth": 720,
+   "commits": 10,
+   "previous": "69d3ba8",
+   "subject": "Bug fix",
+   "changes": [
+    "Bug fix",
+    "Revise privacy",
+    "Bug fix for the leetcode icon"
+   ]
+  },
+  {
+   "sha": "3a6baae",
+   "date": "2025-03-28",
+   "cover": "/site-history/2025-03-28-3a6baae-cover.webp",
+   "thumb": "/site-history/2025-03-28-3a6baae-thumb.webp",
+   "full": "/site-history/2025-03-28-3a6baae-full.webp",
+   "fullHeight": 4726,
+   "fullWidth": 720,
+   "commits": 2,
+   "previous": "ba17d82",
+   "subject": "Update Info",
+   "changes": [
+    "Update Info",
+    "Update Info"
+   ]
+  },
+  {
+   "sha": "0c5ec4c",
+   "date": "2025-05-31",
+   "cover": "/site-history/2025-05-31-0c5ec4c-cover.webp",
+   "thumb": "/site-history/2025-05-31-0c5ec4c-thumb.webp",
+   "full": "/site-history/2025-05-31-0c5ec4c-full.webp",
+   "fullHeight": 5396,
+   "fullWidth": 720,
+   "commits": 7,
+   "previous": "3a6baae",
+   "subject": "Life Blog Content",
+   "changes": [
+    "Life Blog Content",
+    "Change to Web Infra",
+    "Add the Life Blog Part"
+   ]
+  },
+  {
+   "sha": "cfa49e7",
+   "date": "2025-06-23",
+   "cover": "/site-history/2025-06-23-cfa49e7-cover.webp",
+   "thumb": "/site-history/2025-06-23-cfa49e7-thumb.webp",
+   "full": "/site-history/2025-06-23-cfa49e7-full.webp",
+   "fullHeight": 5596,
+   "fullWidth": 720,
+   "commits": 24,
+   "previous": "0c5ec4c",
+   "subject": "Improve custom cursor responsiveness",
+   "changes": [
+    "Add basic SEO enhancements",
+    "Revise Image loading speed",
+    "fix dark mode input background"
+   ]
+  },
+  {
+   "sha": "bbcfb49",
+   "date": "2025-07-15",
+   "cover": "/site-history/2025-07-15-bbcfb49-cover.webp",
+   "thumb": "/site-history/2025-07-15-bbcfb49-thumb.webp",
+   "full": "/site-history/2025-07-15-bbcfb49-full.webp",
+   "fullHeight": 5596,
+   "fullWidth": 720,
+   "commits": 17,
+   "previous": "cfa49e7",
+   "subject": "Fix chat widget drag and width for phones",
+   "changes": [
+    "fix chat widget drag and mobile width",
+    "Hide gradient ring when no stories",
+    "Chat Widget draggable"
+   ]
+  },
+  {
+   "sha": "6452f1b",
+   "date": "2025-08-20",
+   "cover": "/site-history/2025-08-20-6452f1b-cover.webp",
+   "thumb": "/site-history/2025-08-20-6452f1b-thumb.webp",
+   "full": "/site-history/2025-08-20-6452f1b-full.webp",
+   "fullHeight": 5596,
+   "fullWidth": 720,
+   "commits": 7,
+   "previous": "bbcfb49",
+   "subject": "feat: enhance chat widget animations",
+   "changes": [
+    "feat: enhance chat widget animations",
+    "refactor: adjust chat widget layout",
+    "Make guideline response clickable"
+   ]
+  },
+  {
+   "sha": "7ee5374",
+   "date": "2025-10-31",
+   "cover": "/site-history/2025-10-31-7ee5374-cover.webp",
+   "thumb": "/site-history/2025-10-31-7ee5374-thumb.webp",
+   "full": "/site-history/2025-10-31-7ee5374-full.webp",
+   "fullHeight": 5978,
+   "fullWidth": 720,
+   "commits": 20,
+   "previous": "6452f1b",
+   "subject": "Add responsive market dashboard section",
+   "changes": [
+    "Revamp login dialog and fix dashboard dark mode",
+    "Add dark mode styling to dashboard panels",
+    "Adjust weather temperature toggle layout"
+   ]
+  },
+  {
+   "sha": "0105770",
+   "date": "2025-12-31",
+   "cover": "/site-history/2025-12-31-0105770-cover.webp",
+   "thumb": "/site-history/2025-12-31-0105770-thumb.webp",
+   "full": "/site-history/2025-12-31-0105770-full.webp",
+   "fullHeight": 6000,
+   "fullWidth": 720,
+   "commits": 44,
+   "previous": "7ee5374",
+   "subject": "Layout bug fix",
+   "changes": [
+    "Layout bug fix",
+    "Dark mode bug fix",
+    "Chat widget wysiwyg"
+   ]
+  },
+  {
+   "sha": "a850a9b",
+   "date": "2026-01-27",
+   "cover": "/site-history/2026-01-27-a850a9b-cover.webp",
+   "thumb": "/site-history/2026-01-27-a850a9b-thumb.webp",
+   "full": "/site-history/2026-01-27-a850a9b-full.webp",
+   "fullHeight": 6000,
+   "fullWidth": 720,
+   "commits": 18,
+   "previous": "0105770",
+   "subject": "Clear expire session",
+   "changes": [
+    "Clear expire session",
+    "Icon revision",
+    "Copy content bug fix for chaotic content"
+   ]
+  },
+  {
+   "sha": "62535ea",
+   "date": "2026-03-10",
+   "cover": "/site-history/2026-03-10-62535ea-cover.webp",
+   "thumb": "/site-history/2026-03-10-62535ea-thumb.webp",
+   "full": "/site-history/2026-03-10-62535ea-full.webp",
+   "fullHeight": 6000,
+   "fullWidth": 720,
+   "commits": 13,
+   "previous": "a850a9b",
+   "subject": "Border for the blogs",
+   "changes": [
+    "Border for the blogs",
+    "Tag filter and comments feature",
+    "Keywords highlight revision"
+   ]
+  },
+  {
+   "sha": "d243f64",
+   "date": "2026-05-18",
+   "cover": "/site-history/2026-05-18-d243f64-cover.webp",
+   "thumb": "/site-history/2026-05-18-d243f64-thumb.webp",
+   "full": "/site-history/2026-05-18-d243f64-full.webp",
+   "fullHeight": 5758,
+   "fullWidth": 720,
+   "commits": 10,
+   "previous": "62535ea",
+   "subject": "feat(chat): add Guide, Enhance, Deep Thinking modes with ReasoningChain + KeyConceptsBar + dynamic SiteTour",
+   "changes": [
+    "feat(chat): add Guide, Enhance, Deep Thinking modes with ReasoningChain + KeyConceptsBar + dynamic SiteTour",
+    "feat(chat): redesign tool-call cards — icon+name+duration+status, plain-English expand, filter trivial stages",
+    "fix: CV page mobile responsiveness — header stacking, profile pill wrap, fixed popover/pill, content padding"
+   ]
+  },
+  {
+   "sha": "62625a9",
+   "date": "2026-07-30",
+   "cover": "/site-history/2026-07-30-62625a9-cover.webp",
+   "thumb": "/site-history/2026-07-30-62625a9-thumb.webp",
+   "full": "/site-history/2026-07-30-62625a9-full.webp",
+   "fullHeight": 5278,
+   "fullWidth": 720,
+   "commits": 136,
+   "previous": "d243f64",
+   "subject": "feat: improve monitoring and visitor log operations",
+   "changes": [
+    "feat: improve monitoring and visitor log operations",
+    "fix: redirect expired admin sessions",
+    "fix: display unique visitor totals"
+   ]
+  },
+  {
+   "sha": "2f2312b",
+   "date": "2026-08-31",
+   "cover": "/site-history/2026-08-31-2f2312b-cover.webp",
+   "thumb": "/site-history/2026-08-31-2f2312b-thumb.webp",
+   "full": "/site-history/2026-08-31-2f2312b-full.webp",
+   "fullHeight": 5487,
+   "fullWidth": 720,
+   "commits": 45,
+   "previous": "62625a9",
+   "subject": "feat(chrome): scaffold portfolio companion extension",
+   "changes": [
+    "feat(projects): add open source contribution showcase",
+    "fix(globe): cluster nearby visitor cities",
+    "fix(globe): preserve city pins across zoom"
+   ]
+  },
+  {
+   "sha": "d30d82f",
+   "date": "2026-09-24",
+   "cover": "/site-history/2026-09-24-d30d82f-cover.webp",
+   "thumb": "/site-history/2026-09-24-d30d82f-thumb.webp",
+   "full": "/site-history/2026-09-24-d30d82f-full.webp",
+   "fullHeight": 5252,
+   "fullWidth": 720,
+   "commits": 64,
+   "previous": "2f2312b",
+   "subject": "fix(contact): open location in Google Maps",
+   "changes": [
+    "fix(contact): open location in Google Maps",
+    "fix(chat): finish guide streams after final answer",
+    "fix(chat): restore original Mr Pot frames and proportions"
+   ]
+  },
+  {
+   "sha": "9a0f47c",
+   "date": "2026-10-27",
+   "cover": "/site-history/2026-10-27-9a0f47c-cover.webp",
+   "thumb": "/site-history/2026-10-27-9a0f47c-thumb.webp",
+   "full": "/site-history/2026-10-27-9a0f47c-full.webp",
+   "fullHeight": 5569,
+   "fullWidth": 720,
+   "commits": 49,
+   "previous": "d30d82f",
+   "subject": "feat(site): live visitor globe with guestbook flags, and a site terminal",
+   "changes": [
+    "feat(site): live visitor globe with guestbook flags, and a site terminal",
+    "fix(chat): show production capability availability without paid fallbacks",
+    "fix(ai): restore budgeted local Qwen chat and dictation with safe failures"
+   ]
+  }
+ ]
+}

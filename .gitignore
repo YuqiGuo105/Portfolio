@@ -31,3 +31,6 @@ yarn-error.log*
 .vercel
 .env*
 !.env.example
+
+# site history capture inputs (public rows and images relayed for scripts/site-history)
+scripts/site-history/data/
