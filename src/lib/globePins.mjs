@@ -18,3 +18,17 @@ export function cellPixels(altitude, fovDeg, cssHeight) {
 }
 
 export const showsApproximateAreas = (altitude, fovDeg, cssHeight) => cellPixels(altitude, fovDeg, cssHeight) >= APPROX_MIN_PX;
+
+// The aggregator's marker limit. A world list shorter than this holds every metro in the time window.
+export const MARKER_LIMIT = 1600;
+// While the world list is complete, panning and zooming re-use it; it is refreshed quietly at most
+// this often, when the visitor interacts.
+export const WORLD_REFRESH_MS = 60000;
+
+// What a camera move needs from the markers API: nothing ("none"), the whole world list ("world"),
+// or the visible box ("bbox", only while the world list was cut at MARKER_LIMIT).
+export function pinRequestFor({ haveWorld, worldComplete, worldAgeMs, force = false, zoomBucket }) {
+  if (!haveWorld) return "world";
+  if (worldComplete) return force || worldAgeMs >= WORLD_REFRESH_MS ? "world" : "none";
+  return zoomBucket === "world" ? "world" : "bbox";
+}

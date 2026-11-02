@@ -672,7 +672,9 @@ const DashboardPanels = () => {
           observer.disconnect();
         }
       },
-      { rootMargin: "400px 0px" }
+      // Start loading the globe (about 1.8 MB of code and its texture) well before it scrolls in,
+      // so it is ready when it arrives.
+      { rootMargin: "1200px 0px" }
     );
     observer.observe(node);
     return () => observer.disconnect();

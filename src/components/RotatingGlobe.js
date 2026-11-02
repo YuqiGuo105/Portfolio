@@ -5,7 +5,7 @@ import GlobeLib from "react-globe.gl";
 import { supabase as supabaseClient } from "../supabase/supabaseClient";
 import { createGlobeTileLayer } from "../lib/globeTileLayer.mjs";
 import { DEFAULT_MIN_ALTITUDE, GLOBE_HD_CREDIT } from "../lib/globeTiles.mjs";
-import { APPROX_MIN_PX, cellPixels } from "../lib/globePins.mjs";
+import { APPROX_MIN_PX, MARKER_LIMIT, cellPixels, pinRequestFor } from "../lib/globePins.mjs";
 
 /* ============================================================
    RotatingGlobe
@@ -89,6 +89,11 @@ const mergePinProjections = (baseline, focused) => {
   return Array.from(merged.values());
 };
 
+// Two pin lists with the same places and numbers, in the same order.
+const samePins = (a, b) =>
+  Array.isArray(a) && Array.isArray(b) && a.length === b.length &&
+  a.every((pin, i) => pin.lat === b[i].lat && pin.lng === b[i].lng && pin.count === b[i].count && pin.label === b[i].label);
+
 const pickFiniteNumber = (...vals) => {
   for (const v of vals) {
     const n = Number(v);
@@ -139,6 +144,8 @@ const computeLevelFromAltitude = (alt) => {
 };
 
 const FOCUS_AREA_SCALE = 1.6; // ✅ enlarge focused area window
+// The loading badge only shows when there are no pins yet and the first answer is slow.
+const LOADING_DELAY_MS = 400;
 const computeDeltaDeg = (level) => {
   const base = level === "world" ? 70 : level === "continent" ? 28 : 12;
   return base * FOCUS_AREA_SCALE;
@@ -363,6 +370,9 @@ const RotatingGlobe = ({
   // The complete city projection for the selected time window. A focused
   // viewport response refreshes this baseline; it must never replace it.
   const backendWorldPinsRef = useRef([]);
+  // Whether that world list holds every metro (see pinRequestFor), and when it was loaded.
+  const backendWorldCompleteRef = useRef(false);
+  const backendWorldAtRef = useRef(0);
   // Coarse key of the last focused window we sampled (POV center + zoom
   // bucket). Used to decide when a camera move warrants a re-fetch.
   const lastFocusKeyRef = useRef("");
@@ -613,7 +623,7 @@ const RotatingGlobe = ({
     fetchingRef.current = true;
 
     if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
-    loadingDelayRef.current = setTimeout(() => setPinsLoading(true), 120);
+    loadingDelayRef.current = setTimeout(() => setPinsLoading(true), LOADING_DELAY_MS);
 
     try {
       const limit = 6000; // pull enough to cover all buckets (table is already aggregated)
@@ -678,9 +688,9 @@ const RotatingGlobe = ({
     if (!force && key === lastFetchKeyRef.current) return;
     lastFetchKeyRef.current = key;
 
-    // show loading if fetch takes >120ms (avoid flicker)
+    // show loading if the fetch takes longer than LOADING_DELAY_MS (avoid flicker)
     if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
-    loadingDelayRef.current = setTimeout(() => setPinsLoading(true), 120);
+    loadingDelayRef.current = setTimeout(() => setPinsLoading(true), LOADING_DELAY_MS);
     setServerPinsError(false);
     fetchingRef.current = true;
 
@@ -791,13 +801,26 @@ const RotatingGlobe = ({
     const { lat, lng, altitude } = getCurrentPOV();
     const zoomBucket = computeLevelFromAltitude(altitude);
     const delta = computeDeltaDeg(zoomBucket);
-    const isWorld = zoomBucket === "world";
+    const haveWorld = backendWorldPinsRef.current.length > 0;
+    const worldComplete = haveWorld && backendWorldCompleteRef.current;
+
+    // A complete world list already holds every metro in any closer view, so panning and
+    // zooming need no request: the pins on screen are right. It is only refreshed now and then.
+    const plan = pinRequestFor({
+      haveWorld,
+      worldComplete,
+      worldAgeMs: Date.now() - backendWorldAtRef.current,
+      force,
+      zoomBucket,
+    });
+    if (plan === "none") return;
+    const isWorld = plan === "world";
 
     // The world view is the complete city projection; closer views use a bbox.
     // Omitting the world bbox also avoids rejecting an all-time
     // request whose calculated square-degree area exceeds the API guardrail.
     const key = isWorld
-      ? `api|city|world|${windowParam}`
+      ? `api|city|world|${windowParam}|${worldComplete ? backendWorldAtRef.current : 0}`
       : `api|city|${zoomBucket}|${Math.round(lat * 10) / 10}|${Math.round(lng * 10) / 10}|${windowParam}`;
     if (!force && key === lastFetchKeyRef.current) return;
     lastFetchKeyRef.current = key;
@@ -807,8 +830,9 @@ const RotatingGlobe = ({
     backendAbortRef.current = controller;
     const requestId = ++backendRequestIdRef.current;
 
+    // Pins already on screen stay there while new ones load; never cover them.
     if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
-    loadingDelayRef.current = setTimeout(() => setPinsLoading(true), 120);
+    loadingDelayRef.current = haveWorld ? null : setTimeout(() => setPinsLoading(true), LOADING_DELAY_MS);
     setServerPinsError(false);
     fetchingRef.current = true;
 
@@ -820,7 +844,7 @@ const RotatingGlobe = ({
     // interprets as `lng >= lngMin OR lng <= lngMax`.
     const lngMin = normalizeLng(lng - delta);
     const lngMax = normalizeLng(lng + delta);
-    const limit = 1600;
+    const limit = MARKER_LIMIT;
 
     const params = new URLSearchParams({
       window: windowParam,
@@ -869,8 +893,12 @@ const RotatingGlobe = ({
 
       log("fetched city pins:", arr.length, "=>", nextPins.length, "zoom=", zoomBucket);
       if (isWorld) {
+        backendWorldCompleteRef.current = arr.length < limit;
+        backendWorldAtRef.current = Date.now();
+        const unchanged = samePins(backendWorldPinsRef.current, nextPins);
         backendWorldPinsRef.current = nextPins;
-        setServerPins(nextPins);
+        // An unchanged refresh keeps the same array, so nothing on the globe is rebuilt.
+        if (!unchanged) setServerPins(nextPins);
       } else {
         setServerPins((current) =>
           mergePinProjections(
@@ -909,6 +937,8 @@ const RotatingGlobe = ({
     (async () => {
       if (apiBaseClean) {
         backendWorldPinsRef.current = [];
+        backendWorldCompleteRef.current = false;
+        backendWorldAtRef.current = 0;
         let tries = 0;
         const tick = () => {
           if (!mounted) return;

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FLAG_EMOJIS, FlagError, cleanMessage, createFlagsHandler, publicFlag, validateFlag } from '../src/lib/globeFlags.mjs';
 import { cleanPeer, requestGeo } from '../src/lib/requestGeo.mjs';
-import { APPROX_CELL_KM, APPROX_MIN_PX, cellPixels, showsApproximateAreas } from '../src/lib/globePins.mjs';
+import { APPROX_CELL_KM, APPROX_MIN_PX, MARKER_LIMIT, WORLD_REFRESH_MS, cellPixels, pinRequestFor, showsApproximateAreas } from '../src/lib/globePins.mjs';
 
 const geo = { lat: 31.2, lng: 121.5, city: 'Shanghai', country: 'CN' };
 
@@ -136,4 +136,17 @@ test('close up, visitor pins become approximate areas the size of their 11 km ce
   assert.ok(switchAltitude > 0.015 && switchAltitude < 0.03, `switch at ${switchAltitude}`);
   assert.equal(cellPixels(0, 50, 480), 0);
   assert.equal(cellPixels(1, 50, 0), 0);
+});
+
+test('panning and zooming re-use the complete world list instead of asking the API again', () => {
+  assert.equal(MARKER_LIMIT, 1600);
+  const at = (extra) => pinRequestFor({ haveWorld: true, worldComplete: true, worldAgeMs: 5000, zoomBucket: 'local', ...extra });
+  assert.equal(pinRequestFor({ haveWorld: false, worldComplete: false, worldAgeMs: Infinity, zoomBucket: 'local' }), 'world', 'the world list comes first');
+  assert.equal(at(), 'none', 'a closer view is a subset of the world list');
+  assert.equal(at({ zoomBucket: 'world' }), 'none');
+  assert.equal(at({ worldAgeMs: WORLD_REFRESH_MS }), 'world', 'a quiet refresh once it is a minute old');
+  assert.equal(at({ force: true }), 'world');
+  // A world list cut at the limit may miss metros in the view: then the box is asked for.
+  assert.equal(at({ worldComplete: false }), 'bbox');
+  assert.equal(at({ worldComplete: false, zoomBucket: 'world' }), 'world');
 });
