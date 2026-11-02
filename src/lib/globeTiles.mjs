@@ -12,6 +12,27 @@ export const GLOBE_TILE_UPSTREAM =
 // The zoom limit before tiles existed: OrbitControls minDistance 120 on three-globe's radius-100 globe.
 export const DEFAULT_MIN_ALTITUDE = 0.2;
 
+// Past Blue Marble's deepest level the close-up comes from EOxCloudless 2016, a cloud-free Sentinel-2 mosaic
+// (10 m per pixel, CC BY 4.0). Level 13 is about 19 m per pixel, so the closest view is still downsampled from
+// the source and looks crisp. EOX offers its tiles free for non-commercial use with credit and asks for its
+// endpoints to be used directly, so the browser loads them from EOX (they allow cross-origin loading) instead
+// of through the caching proxy above.
+export const GLOBE_HD_MAX_ZOOM = 13;
+export const GLOBE_HD_TILE_URL =
+  "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg";
+// The credit EOX asks for next to the imagery, from the layer's WMTS abstract.
+export const GLOBE_HD_CREDIT = Object.freeze({
+  name: "EOxCloudless",
+  href: "https://cloudless.eox.at",
+  by: "EOX IT Services GmbH",
+  byHref: "https://eox.at",
+  note: "Contains modified Copernicus Sentinel data 2016",
+  license: "CC BY 4.0",
+  licenseHref: "https://creativecommons.org/licenses/by/4.0/",
+});
+// The closest the camera ever goes. globe.gl puts the camera's near plane 0.05 units (0.0005 radii) out.
+export const MIN_CAMERA_ALTITUDE = 0.001;
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 // Mercator tiles shrink towards the poles; past ~78° every level is plenty sharp anyway.
 const latitudeFactor = (latitude) => Math.max(0.2, Math.cos((clamp(Number(latitude) || 0, -90, 90) * Math.PI) / 180));
@@ -69,19 +90,49 @@ export function tilesWanted({ scale, altitude, baseZoom, active = false }) {
 // How close the camera may go: where the deepest level is still at most ~1.4x stretched on the equator.
 export function minSharpAltitude(scale, maxZoom = GLOBE_TILE_MAX_ZOOM) {
   if (!(scale > 0)) return DEFAULT_MIN_ALTITUDE;
-  return clamp(scale / 2 ** (maxZoom + 0.5), 0.04, DEFAULT_MIN_ALTITUDE);
+  return clamp(scale / 2 ** (maxZoom + 0.5), MIN_CAMERA_ALTITUDE, DEFAULT_MIN_ALTITUDE);
 }
 
 // The tile shell floats just above the base globe so the two never z-fight. The gap grows with altitude
-// (depth precision falls with distance) and stays far below a pixel, so pins still sit on the imagery.
+// (depth precision falls with distance) and stays far below a pixel, so pins still sit on the imagery:
+// about 30 m at the closest views, where the camera is only a few dozen kilometres up.
 export function tileShellScale(altitude) {
   const a = Number(altitude);
-  return 1 + Math.max(0.0001, 0.0006 * (a > 0 ? a : 0));
+  return 1 + Math.max(0.000005, 0.0006 * (a > 0 ? a : 0));
 }
 
 // The same-origin tile URL; argument order matches three-slippy-map-globe's tileUrl(x, y, level).
 export function tilePath(x, y, z) {
   return `${GLOBE_TILE_PATH}/${z}/${x}/${y}`;
+}
+
+// Levels past Blue Marble's deepest come from EOxCloudless.
+export const isHdLevel = (z) => z > GLOBE_TILE_MAX_ZOOM;
+
+export function hdTileUrl(x, y, z) {
+  return GLOBE_HD_TILE_URL.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
+}
+
+// The tile URL for any level: Blue Marble through the proxy, EOxCloudless straight from EOX.
+export function globeTileUrl(x, y, z) {
+  return isHdLevel(z) ? hdTileUrl(x, y, z) : tilePath(x, y, z);
+}
+
+// The level whose 256 px tiles each cover about one texel of the base texture: 2048 px wide → 11, 4096 → 12.
+// Down to it a tile's own blurred copy (a mip level) can stand for the base texture's resolution; deeper tiles
+// are smaller than a base texel and borrow the average colour of their ancestor at this level instead.
+export function colourMatchLevel(baseZoom) {
+  return Math.round(Number(baseZoom) || 0) + Math.log2(GLOBE_TILE_SIZE);
+}
+
+// The Web Mercator tile { x, y } at level z that holds a point.
+export function tileAt(latitude, longitude, z) {
+  const n = 2 ** z;
+  const lat = (clamp(Number(latitude) || 0, -85.05112878, 85.05112878) * Math.PI) / 180;
+  const lng = ((((Number(longitude) || 0) + 180) % 360) + 360) % 360;
+  const x = clamp(Math.floor((lng / 360) * n), 0, n - 1);
+  const y = clamp(Math.floor(((1 - Math.log(Math.tan(lat) + 1 / Math.cos(lat)) / Math.PI) / 2) * n), 0, n - 1);
+  return { x, y };
 }
 
 const TILE_INDEX = /^(0|[1-9]\d{0,2})$/;

@@ -1,16 +1,23 @@
 // Sharp imagery for close-ups on the visitor globe. A three-slippy-map-globe shell floats just above
 // RotatingGlobe's base texture and only switches on once the camera is close enough for that texture to
 // look soft; the level math lives in globeTiles.mjs. Client-only: RotatingGlobe is loaded with ssr: false.
-import { MeshPhongMaterial, PerspectiveCamera } from "three";
+// Blue Marble serves the levels up to 8; EOxCloudless serves the closer ones once a test tile shows EOX
+// can be reached from this browser.
+import { MeshPhongMaterial, PerspectiveCamera, Vector3 } from "three";
 import SlippyMapGlobe from "three-slippy-map-globe";
 
 import {
   DEFAULT_MIN_ALTITUDE,
+  GLOBE_HD_MAX_ZOOM,
   GLOBE_TILE_MAX_ZOOM,
+  colourMatchLevel,
+  globeTileUrl,
+  hdTileUrl,
+  isHdLevel,
   minSharpAltitude,
   minTileZoom,
   textureZoom,
-  tilePath,
+  tileAt,
   tileScale,
   tileShellScale,
   pickTileLevel,
@@ -31,23 +38,38 @@ const GLOBE_RADIUS = 100;
 const TILE_VERTEX = `#include <begin_vertex>
 vGlobePos = position;`;
 const TILE_GRADE = `
-vec3 gradeTexel(vec3 texel) {
-  texel = max(texel, vec3(0.0));
-  // Deep ocean in Blue Marble is nearly black (sRGB ~2,6,18); a large epsilon here classed those texels as
-  // land and left dark specks and streaks over the sea. Near-black texels with blue at least level with
-  // red and green count as water too.
+// Deep ocean in Blue Marble is nearly black (sRGB ~2,6,18); a large epsilon here classed those texels as
+// land and left dark specks and streaks over the sea. Near-black texels with blue at least level with
+// red and green count as water too.
+float waterOf(vec3 texel) {
   float bright = max(max(texel.r, texel.g), texel.b);
   float water = smoothstep(1.25, 1.8, texel.b / (max(texel.r, texel.g) + 0.0003));
-  water = max(water, (1.0 - smoothstep(0.006, 0.02, bright)) * step(max(texel.r, texel.g) * 0.9, texel.b));
+  return max(water, (1.0 - smoothstep(0.006, 0.02, bright)) * step(max(texel.r, texel.g) * 0.9, texel.b));
+}
+vec3 gradeTexel(vec3 texel) {
+  texel = max(texel, vec3(0.0));
   vec3 land = pow(texel, vec3(0.58));
   land = max(mix(vec3(dot(land, vec3(0.2126, 0.7152, 0.0722))), land, 1.25), 0.0);
-  return mix(land, vec3(0.0130, 0.0437, 0.1778), water);
+  return mix(land, vec3(0.0130, 0.0437, 0.1778), waterOf(texel));
+}
+// EOxCloudless over land is brighter and bluer than the base texture: base ≈ (0.9, 0.8, 0.55) · tile^0.7 at
+// 0.9 saturation, fitted on base-texel averages of 24 tiles from six continents. Water as for Blue Marble.
+vec3 gradeHd(vec3 texel) {
+  texel = max(texel, vec3(0.0));
+  vec3 land = pow(texel, vec3(0.7)) * vec3(0.9, 0.8, 0.55);
+  land = max(mix(vec3(dot(land, vec3(0.2126, 0.7152, 0.0722))), land, 0.9), 0.0);
+  return mix(land, vec3(0.0130, 0.0437, 0.1778), waterOf(texel));
+}
+vec3 gradeTile(vec3 texel) {
+  return uHd > 0.5 ? gradeHd(texel) : gradeTexel(texel);
 }
 `;
+// uCoarseMode: 0 = the tile's own blurred copy stands for the base resolution, 1 = the ancestor's average
+// colour (uCoarse) does, 2 = unknown, so the tile keeps its graded colours.
 const TILE_FRAGMENT = `{
-  vec3 fine = gradeTexel(texture2D(map, vMapUv).rgb);
-  if (uBaseReady > 0.5) {
-    vec3 coarse = gradeTexel(texture2D(map, vMapUv, uLowBias).rgb);
+  vec3 fine = gradeTile(texture2D(map, vMapUv).rgb);
+  if (uBaseReady > 0.5 && uCoarseMode < 1.5) {
+    vec3 coarse = gradeTile(uCoarseMode > 0.5 ? uCoarse : texture2D(map, vMapUv, uLowBias).rgb);
     vec3 dir = normalize(vGlobePos);
     vec2 baseUv = vec2(atan(dir.x, dir.z) / 6.28318531 + 0.5, asin(clamp(dir.y, -1.0, 1.0)) / 3.14159265 + 0.5);
     // Explicit level 0: longitude wraps from +180° to -180° inside one pixel quad there, and the implied
@@ -78,23 +100,105 @@ function prepareTile(object, anisotropy, shared, baseZoom) {
   old.map = null;
   old.dispose();
   // A tile spans 360° / 2^level of longitude; finer levels draw after coarser ones they cover.
-  const span = object.geometry?.parameters?.phiLength || Math.PI * 2;
+  const params = object.geometry?.parameters || {};
+  const span = params.phiLength || Math.PI * 2;
   const level = Math.round(Math.log2((Math.PI * 2) / span));
   object.renderOrder = 1 + level;
   object.userData.globeTileLevel = level;
   object.geometry?.computeBoundingSphere?.();
   object.userData.globeTileDir = object.geometry?.boundingSphere?.center.clone().normalize() || null;
   object.userData.globeTileReach = object.geometry?.boundingSphere?.radius / GLOBE_RADIUS || 0;
-  const lowBias = Math.max(0, level - baseZoom);
+  // The tile's centre, from the sphere segment the engine built (phi 90° at longitude 0, theta 0 at the pole).
+  const deg = 180 / Math.PI;
+  object.userData.globeTileCentre = {
+    lat: 90 - ((params.thetaStart || 0) + (params.thetaLength || Math.PI) / 2) * deg,
+    lng: ((params.phiStart || 0) + span / 2) * deg - 90,
+  };
+  // Tiles smaller than a base texel take the coarse colour from their ancestor (set before they are added).
+  const deep = level > colourMatchLevel(baseZoom);
+  const uniforms = {
+    uLowBias: { value: Math.max(0, level - baseZoom) },
+    uHd: { value: isHdLevel(level) ? 1 : 0 },
+    uCoarse: { value: new Vector3() },
+    uCoarseMode: { value: deep ? 2 : 0 },
+  };
+  object.userData.globeTileUniforms = uniforms;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uBaseMap = shared.uBaseMap;
     shader.uniforms.uBaseReady = shared.uBaseReady;
-    shader.uniforms.uLowBias = { value: lowBias };
+    Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = `varying vec3 vGlobePos;\n${shader.vertexShader.replace("#include <begin_vertex>", TILE_VERTEX)}`;
-    shader.fragmentShader = `varying vec3 vGlobePos;\nuniform sampler2D uBaseMap;\nuniform float uBaseReady;\nuniform float uLowBias;\n${TILE_GRADE}\n${shader.fragmentShader.replace("#include <map_fragment>", TILE_FRAGMENT)}`;
+    shader.fragmentShader = [
+      "varying vec3 vGlobePos;",
+      "uniform sampler2D uBaseMap;",
+      "uniform float uBaseReady;",
+      "uniform float uLowBias;",
+      "uniform float uHd;",
+      "uniform vec3 uCoarse;",
+      "uniform float uCoarseMode;",
+      TILE_GRADE,
+      shader.fragmentShader.replace("#include <map_fragment>", TILE_FRAGMENT),
+    ].join("\n");
   };
-  material.customProgramCacheKey = () => "globe-tile-grade-v2";
+  material.customProgramCacheKey = () => "globe-tile-grade-v3";
   object.material = material;
+}
+
+// sRGB byte → linear, for averaging tile colours the way the GPU averages them into mip levels.
+const SRGB_TO_LINEAR = Array.from({ length: 256 }, (_, i) => {
+  const c = i / 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+});
+
+// The mean linear colour of a tile image, or null if it cannot be read (no DOM, a failed load, no CORS).
+function averageTileColour(url) {
+  return new Promise((resolve) => {
+    if (typeof Image === "undefined" || typeof document === "undefined") {
+      resolve(null);
+      return;
+    }
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      try {
+        const width = image.naturalWidth || 256;
+        const height = image.naturalHeight || 256;
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        context.drawImage(image, 0, 0);
+        const { data } = context.getImageData(0, 0, width, height);
+        const sum = [0, 0, 0];
+        for (let i = 0; i < data.length; i += 4) {
+          sum[0] += SRGB_TO_LINEAR[data[i]];
+          sum[1] += SRGB_TO_LINEAR[data[i + 1]];
+          sum[2] += SRGB_TO_LINEAR[data[i + 2]];
+        }
+        const count = data.length / 4 || 1;
+        resolve(sum.map((value) => value / count));
+      } catch {
+        resolve(null);
+      }
+    };
+    image.onerror = () => resolve(null);
+    image.src = url;
+  });
+}
+
+// Whether this browser can load EOX tiles for WebGL: one small cross-origin image, cached by the browser.
+function probeHdImagery() {
+  return new Promise((resolve) => {
+    if (typeof Image === "undefined") {
+      resolve(false);
+      return;
+    }
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(true);
+    image.onerror = () => resolve(false);
+    image.src = hdTileUrl(0, 0, 0);
+  });
 }
 
 // The engine fetches every tile with a corner in the view frustum, which also takes in the far side of
@@ -142,15 +246,28 @@ function disposeTile(object) {
   material.dispose();
 }
 
+// Average colours of colour-match-level tiles, shared by the deep tiles inside each one.
+const MAX_COLOURS = 1500;
+
 /**
  * Adds the tile shell to `scene` and returns a controller, or null without a scene.
- * Call `sync()` whenever the camera moves; it reports whether tiles are on and how close the camera may go.
+ * Call `sync()` whenever the camera moves; it reports whether tiles are on, how close the camera may go and
+ * whether EOxCloudless imagery (which needs a credit on screen) is showing.
+ * `probeHd` and `tileColour` stand in for the browser's image loading in tests.
  */
-export function createGlobeTileLayer({ scene, renderer, baseTextureWidth, tileUrl = tilePath } = {}) {
+export function createGlobeTileLayer({
+  scene,
+  renderer,
+  baseTextureWidth,
+  tileUrl = globeTileUrl,
+  probeHd = probeHdImagery,
+  tileColour = averageTileColour,
+} = {}) {
   if (!scene || typeof scene.add !== "function") return null;
 
   const baseZoom = textureZoom(baseTextureWidth);
   const minLevel = minTileZoom(baseZoom);
+  const matchLevel = colourMatchLevel(baseZoom);
   let shownLevel = null;
   const engine = new SlippyMapGlobe(GLOBE_RADIUS, {
     minLevel,
@@ -164,25 +281,60 @@ export function createGlobeTileLayer({ scene, renderer, baseTextureWidth, tileUr
   const anisotropy = Math.max(1, Math.min(8, renderer?.capabilities?.getMaxAnisotropy?.() || 1));
   // The zoom limit only relaxes once a tile has actually arrived, so a dead proxy keeps today's limit.
   let tileArrived = false;
+  // EOxCloudless: "unknown" until tiles first switch on, then "probing", then "ready" or "off".
+  let hd = "unknown";
+  const colours = new Map();
+  const colourOf = (z, x, y) => {
+    const key = `${z}/${x}/${y}`;
+    if (!colours.has(key)) {
+      if (colours.size >= MAX_COLOURS) colours.delete(colours.keys().next().value);
+      colours.set(key, Promise.resolve().then(() => tileColour(tileUrl(x, y, z))).catch(() => null));
+    }
+    return colours.get(key);
+  };
+
   const shared = baseUniforms();
   const add = engine.add.bind(engine);
+  const show = (object) => {
+    if (object?.material?.userData?.globeTile) tileArrived = true;
+    add(object);
+  };
   engine.add = (...objects) => {
     objects.forEach((object) => {
       prepareTile(object, anisotropy, shared, baseZoom);
-      if (object?.material?.userData?.globeTile) tileArrived = true;
+      const uniforms = object?.userData?.globeTileUniforms;
+      const centre = object?.userData?.globeTileCentre;
+      if (!uniforms || uniforms.uCoarseMode.value !== 2 || !centre) {
+        show(object);
+        return;
+      }
+      // A deep tile waits for its ancestor's average colour, so it appears in its final colours.
+      const { x, y } = tileAt(centre.lat, centre.lng, matchLevel);
+      colourOf(matchLevel, x, y).then((colour) => {
+        if (object.userData.globeTileGone) return;
+        if (Array.isArray(colour) && colour.every(Number.isFinite)) {
+          uniforms.uCoarse.value.set(colour[0], colour[1], colour[2]);
+          uniforms.uCoarseMode.value = 1;
+        }
+        show(object);
+      });
     });
-    return add(...objects);
+    return engine;
   };
   const remove = engine.remove.bind(engine);
   engine.remove = (...objects) => {
+    objects.forEach((object) => {
+      if (object?.userData) object.userData.globeTileGone = true;
+    });
     const result = remove(...objects);
     objects.forEach(disposeTile);
     return result;
   };
   scene.add(engine);
 
-  // active: tiles are wanted at this distance; minAltitude: how close the camera may go.
-  const state = { active: false, minAltitude: DEFAULT_MIN_ALTITUDE };
+  // active: tiles are wanted at this distance; minAltitude: how close the camera may go;
+  // credit: EOxCloudless tiles are showing.
+  const state = { active: false, minAltitude: DEFAULT_MIN_ALTITUDE, credit: false };
   // The engine only knows the view frustum; it picks tiles through this stand-in camera (see aimCuller).
   const culler = new PerspectiveCamera();
   let lastAltitude = 0;
@@ -214,6 +366,13 @@ export function createGlobeTileLayer({ scene, renderer, baseTextureWidth, tileUr
     if (active) {
       engine.visible = true;
       engine.tileUrl = tileUrl;
+      // Only visitors who zoom in ever ask EOX for anything.
+      if (hd === "unknown") {
+        hd = "probing";
+        Promise.resolve()
+          .then(probeHd)
+          .then((ok) => { hd = ok ? "ready" : "off"; }, () => { hd = "off"; });
+      }
     } else {
       engine.tileUrl = undefined;
       shownLevel = null;
@@ -235,12 +394,13 @@ export function createGlobeTileLayer({ scene, renderer, baseTextureWidth, tileUr
       // download every level it passes through.
       const zooming = lastAltitude > 0 && Math.abs(Math.log(altitude / lastAltitude)) > ZOOM_SETTLE;
       lastAltitude = altitude;
+      const maxLevel = hd === "ready" ? GLOBE_HD_MAX_ZOOM : GLOBE_TILE_MAX_ZOOM;
 
       if (!tilesWanted({ scale, altitude, baseZoom, active: state.active })) {
         setActive(false);
       } else if (!zooming) {
         // Thresholds and culler first: switching the layer on fetches straight away.
-        const level = pickTileLevel({ scale, altitude, latitude, current: shownLevel, minLevel, maxLevel: GLOBE_TILE_MAX_ZOOM });
+        const level = pickTileLevel({ scale, altitude, latitude, current: shownLevel, minLevel, maxLevel });
         shownLevel = level;
         // Pin the engine to that level (it clamps its own threshold pick to [minLevel, maxLevel]).
         engine.minLevel = level;
@@ -255,7 +415,9 @@ export function createGlobeTileLayer({ scene, renderer, baseTextureWidth, tileUr
           engine.updatePov(culler);
         }
       }
-      state.minAltitude = tileArrived ? minSharpAltitude(scale) : DEFAULT_MIN_ALTITUDE;
+      if (hd === "ready") state.minAltitude = minSharpAltitude(scale, GLOBE_HD_MAX_ZOOM);
+      else state.minAltitude = tileArrived ? minSharpAltitude(scale) : DEFAULT_MIN_ALTITUDE;
+      state.credit = state.active && shownLevel !== null && isHdLevel(shownLevel);
       return { ...state };
     },
 

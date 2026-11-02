@@ -7,8 +7,9 @@ import * as tiles from '../src/lib/globeTiles.mjs';
 import { createGlobeTileLayer } from '../src/lib/globeTileLayer.mjs';
 
 const {
-  DEFAULT_MIN_ALTITUDE, GLOBE_TILE_MAX_ZOOM, idealZoom, minSharpAltitude, minTileZoom, parseTileRequest, pickTileLevel,
-  textureZoom, tilePath, tileScale, tileShellScale, tilesWanted, upstreamTileUrl, zoomThresholds,
+  DEFAULT_MIN_ALTITUDE, GLOBE_HD_CREDIT, GLOBE_HD_MAX_ZOOM, GLOBE_TILE_MAX_ZOOM, MIN_CAMERA_ALTITUDE, colourMatchLevel,
+  globeTileUrl, hdTileUrl, idealZoom, isHdLevel, minSharpAltitude, minTileZoom, parseTileRequest, pickTileLevel,
+  textureZoom, tileAt, tilePath, tileScale, tileShellScale, tilesWanted, upstreamTileUrl, zoomThresholds,
 } = tiles;
 
 // The dashboard globe on a phone: 420 CSS px tall, drawn at the renderer's 2x pixel-ratio cap.
@@ -66,11 +67,17 @@ test('the zoom limit keeps the deepest level sharp and never tightens the old li
   assert.ok(texelRatio(GLOBE_TILE_MAX_ZOOM, limit, PHONE, 0) >= 0.707 - 1e-9);
   assert.equal(minSharpAltitude(0), DEFAULT_MIN_ALTITUDE);
   assert.equal(minSharpAltitude(tileScale(20000, 50)), DEFAULT_MIN_ALTITUDE);
-  assert.equal(minSharpAltitude(tileScale(100, 50)), 0.04);
+  assert.equal(minSharpAltitude(tileScale(10, 50)), MIN_CAMERA_ALTITUDE);
+
+  // With EOxCloudless the phone may come down to about 12 km, still above globe.gl's camera near plane.
+  const close = minSharpAltitude(PHONE, GLOBE_HD_MAX_ZOOM);
+  assert.ok(close > 0.0015 && close < 0.0025, `phone close-up limit ${close}`);
+  assert.ok(texelRatio(GLOBE_HD_MAX_ZOOM, close, PHONE, 0) >= 0.707 - 1e-9);
+  assert.ok(MIN_CAMERA_ALTITUDE > 0.05 / 100);
 });
 
 test('the tile shell floats a hair above the globe, more so further out', () => {
-  assert.equal(tileShellScale(0), 1.0001);
+  assert.equal(tileShellScale(0), 1.000005);
   assert.ok(tileShellScale(1) > tileShellScale(0.3));
   assert.ok(tileShellScale(2) < 1.002);
 });
@@ -145,7 +152,7 @@ test('the layer loads the tiles in view at the right level and cleans up after i
     return { z: Number(match[1]), x: Number(match[2]), y: Number(match[3]) };
   };
 
-  assert.deepEqual(sync(2.2), { active: false, minAltitude: DEFAULT_MIN_ALTITUDE });
+  assert.deepEqual(sync(2.2), { active: false, minAltitude: DEFAULT_MIN_ALTITUDE, credit: false });
   assert.equal(requests.length, 0);
 
   // Mid-zoom nothing is fetched; once the camera holds still the layer switches on.
@@ -162,13 +169,13 @@ test('the layer loads the tiles in view at the right level and cleans up after i
   assert.ok(requested.every((t) => Math.abs(t.x - home.x) <= 4 && Math.abs(t.y - home.y) <= 4), 'only tiles around the view');
 
   // Before any tile arrives the old zoom limit holds; afterwards the deepest sharp level sets it.
-  assert.deepEqual(sync(altitude), { active: true, minAltitude: DEFAULT_MIN_ALTITUDE });
+  assert.deepEqual(sync(altitude), { active: true, minAltitude: DEFAULT_MIN_ALTITUDE, credit: false });
   requests.forEach((request) => request.arrive());
   const shown = engine.children.filter((child) => child.material?.userData?.globeTile);
   assert.equal(shown.length, requested.length);
   assert.ok(shown.every((tile) => tile.material.type === 'MeshPhongMaterial' && tile.material.map.anisotropy === 8
-    && tile.material.customProgramCacheKey() === 'globe-tile-grade-v2' && tile.renderOrder === 1 + level));
-  assert.deepEqual(sync(altitude), { active: true, minAltitude: minSharpAltitude(PHONE) });
+    && tile.material.customProgramCacheKey() === 'globe-tile-grade-v3' && tile.renderOrder === 1 + level));
+  assert.deepEqual(sync(altitude), { active: true, minAltitude: minSharpAltitude(PHONE), credit: false });
 
   // Tiles render like the base globe (Phong) and take their colours from the base texture: the shader
   // replaces three's texture sample with graded fine detail rescaled to the base texture's low frequencies.
@@ -184,6 +191,8 @@ test('the layer loads the tiles in view at the right level and cleans up after i
   assert.equal(shader.uniforms.uBaseMap.value, base);
   assert.equal(shader.uniforms.uBaseReady.value, 1);
   assert.equal(shader.uniforms.uLowBias.value, level - 3);
+  assert.equal(shader.uniforms.uHd.value, 0, 'Blue Marble grading');
+  assert.equal(shader.uniforms.uCoarseMode.value, 0, 'blurred copy of the tile itself');
 
   // Zooming back out drops the tiles and frees their GPU resources.
   let disposed = 0;
@@ -302,6 +311,161 @@ test('panning north and south at a fixed zoom never throws tiles away', () => {
     pending.splice(0).forEach((arrive) => arrive());
   }
   assert.equal(removed, 0);
+  layer.dispose();
+  delete globalThis.document;
+});
+
+test('levels past Blue Marble come straight from EOxCloudless, in WMTS row/column order', () => {
+  assert.equal(globeTileUrl(210, 97, 8), '/api/map-tiles/8/210/97');
+  assert.equal(globeTileUrl(1683, 775, 11), 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/GoogleMapsCompatible/11/775/1683.jpg');
+  assert.equal(hdTileUrl(0, 0, 0), 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/GoogleMapsCompatible/0/0/0.jpg');
+  assert.equal(isHdLevel(GLOBE_TILE_MAX_ZOOM), false);
+  assert.equal(isHdLevel(GLOBE_TILE_MAX_ZOOM + 1), true);
+  assert.equal(GLOBE_HD_MAX_ZOOM, 13);
+  assert.deepEqual(tileAt(BEIJING.lat, BEIJING.lng, 8), tileOf(BEIJING, 8));
+  assert.deepEqual(tileAt(-33.9, 151.2, 12), tileOf({ lat: -33.9, lng: 151.2 }, 12));
+  assert.deepEqual(tileAt(0, 180, 3), { x: 0, y: 4 }, 'the antimeridian wraps');
+  assert.deepEqual(tileAt(89.9, -180, 2), { x: 0, y: 0 }, 'polar latitudes clamp to the grid');
+  assert.equal(colourMatchLevel(3), 11);
+  assert.equal(colourMatchLevel(4), 12);
+  assert.equal(GLOBE_HD_CREDIT.note, 'Contains modified Copernicus Sentinel data 2016');
+  assert.equal(GLOBE_HD_CREDIT.license, 'CC BY 4.0');
+  assert.match(GLOBE_HD_CREDIT.href, /^https:\/\/cloudless\.eox\.at$/);
+});
+
+// Records three's image requests (TextureLoader asks the DOM for an <img>) and lets the test deliver them.
+function fakeImages() {
+  const requests = [];
+  globalThis.document = {
+    createElementNS: () => {
+      const listeners = {};
+      const image = {
+        addEventListener: (type, listener) => { listeners[type] = listener; },
+        removeEventListener: () => {},
+        set src(url) { requests.push({ url, arrive: () => listeners.load?.call(image) }); },
+      };
+      return image;
+    },
+  };
+  return requests;
+}
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+const eoxTile = (url) => {
+  const match = url.match(/^https:\/\/tiles\.maps\.eox\.at\/wmts\/1\.0\.0\/s2cloudless_3857\/default\/GoogleMapsCompatible\/(\d+)\/(\d+)\/(\d+)\.jpg$/);
+  return match ? { z: Number(match[1]), y: Number(match[2]), x: Number(match[3]) } : null;
+};
+// Altitude where the ideal level over Beijing is 12.9: level 13, just above the phone's close-up limit.
+const CLOSE = (PHONE * Math.cos((BEIJING.lat * Math.PI) / 180)) / 2 ** 12.9;
+
+test('close-ups past level 8 load EOxCloudless, show its credit and colour deep tiles from their ancestor', async () => {
+  const requests = fakeImages();
+  const colourAsked = [];
+  let release;
+  const colourReady = new Promise((resolve) => { release = resolve; });
+  let probes = 0;
+  const scene = new Scene();
+  const layer = createGlobeTileLayer({
+    scene,
+    renderer: null,
+    baseTextureWidth: 2048,
+    probeHd: async () => { probes += 1; return true; },
+    tileColour: async (url) => { colourAsked.push(url); await colourReady; return [0.1, 0.2, 0.05]; },
+  });
+  const engine = scene.children[0];
+  const sync = (altitude) => layer.sync({ camera: cameraAt(BEIJING, altitude), altitude, latitude: BEIJING.lat, viewportHeight: 840 });
+
+  // EOX is only asked once tiles switch on, and only once.
+  sync(2.2);
+  await settle();
+  assert.equal(probes, 0);
+  sync(0.3);
+  sync(0.3);
+  sync(0.3);
+  await settle();
+  assert.equal(probes, 1);
+  assert.equal(requests.some(({ url }) => eoxTile(url)), false, 'Blue Marble serves the wider views');
+
+  sync(CLOSE); // still zooming
+  const state = sync(CLOSE);
+  assert.equal(state.credit, true);
+  assert.equal(state.minAltitude, minSharpAltitude(PHONE, GLOBE_HD_MAX_ZOOM));
+  const close = requests.filter(({ url }) => eoxTile(url));
+  const levels = new Set(close.map(({ url }) => eoxTile(url).z));
+  assert.deepEqual([...levels], [13]);
+  const home = tileOf(BEIJING, 13);
+  assert.ok(close.some(({ url }) => eoxTile(url).x === home.x && eoxTile(url).y === home.y), 'the tile under the camera');
+  assert.ok(close.length >= 4 && close.length <= 60, `${close.length} tiles`);
+
+  // Level-13 tiles are smaller than a texel of the 2K base texture: they wait for the colour of their
+  // level-11 ancestor, so they never appear in one colour and then change.
+  close.forEach((request) => request.arrive());
+  const deep = () => engine.children.filter((child) => child.userData?.globeTileLevel === 13);
+  await settle();
+  assert.equal(deep().length, 0);
+  const ancestor = tileOf(BEIJING, 11);
+  assert.ok(colourAsked.includes(hdTileUrl(ancestor.x, ancestor.y, 11)), 'asks for the ancestor tile');
+  assert.ok(colourAsked.every((url) => eoxTile(url)?.z === 11));
+  assert.equal(new Set(colourAsked).size, colourAsked.length, 'each ancestor once');
+  release();
+  await settle();
+  await settle();
+  assert.equal(deep().length, close.length);
+  const uniforms = deep()[0].userData.globeTileUniforms;
+  assert.equal(uniforms.uHd.value, 1, 'EOxCloudless grading');
+  assert.equal(uniforms.uCoarseMode.value, 1, 'coarse colour from the ancestor');
+  assert.deepEqual(uniforms.uCoarse.value.toArray(), [0.1, 0.2, 0.05]);
+  const shader = { uniforms: {}, vertexShader: ShaderLib.phong.vertexShader, fragmentShader: ShaderLib.phong.fragmentShader };
+  deep()[0].material.onBeforeCompile(shader);
+  assert.match(shader.fragmentShader, /uniform vec3 uCoarse;/);
+  assert.match(shader.fragmentShader, /vec3 gradeHd\(vec3 texel\)/);
+  assert.equal(shader.uniforms.uCoarse, uniforms.uCoarse);
+
+  // Back above level 8 the credit goes with the EOX tiles.
+  sync(0.3);
+  assert.equal(sync(0.3).credit, false);
+  assert.equal(deep().length, 0);
+  layer.dispose();
+  delete globalThis.document;
+});
+
+test('a deep tile dropped while its colour loads is never added; without EOX the close-up stops at level 8', async () => {
+  let requests = fakeImages();
+  let release;
+  const colourReady = new Promise((resolve) => { release = resolve; });
+  let scene = new Scene();
+  let layer = createGlobeTileLayer({
+    scene, renderer: null, baseTextureWidth: 2048, probeHd: async () => true, tileColour: () => colourReady.then(() => null),
+  });
+  let engine = scene.children[0];
+  const syncWith = (target) => (altitude) => target.sync({ camera: cameraAt(BEIJING, altitude), altitude, latitude: BEIJING.lat, viewportHeight: 840 });
+  let sync = syncWith(layer);
+  sync(0.3); sync(0.3);
+  await settle();
+  sync(CLOSE); sync(CLOSE);
+  requests.filter(({ url }) => eoxTile(url)).forEach((request) => request.arrive());
+  sync(0.3); sync(0.3); // zoomed out before the colour came back
+  release();
+  await settle();
+  await settle();
+  assert.equal(engine.children.filter((child) => child.userData?.globeTileLevel === 13).length, 0);
+  layer.dispose();
+
+  // EOX unreachable (blocked, rate-limited): Blue Marble only, and the old close-up limit.
+  requests = fakeImages();
+  scene = new Scene();
+  layer = createGlobeTileLayer({ scene, renderer: null, baseTextureWidth: 2048, probeHd: async () => false });
+  engine = scene.children[0];
+  sync = syncWith(layer);
+  sync(0.3); sync(0.3);
+  await settle();
+  sync(CLOSE);
+  const state = sync(CLOSE);
+  assert.equal(state.credit, false);
+  assert.equal(requests.some(({ url }) => eoxTile(url)), false);
+  const levels = requests.map(({ url }) => Number(url.split('/')[3]));
+  assert.ok(levels.every((z) => z <= GLOBE_TILE_MAX_ZOOM), `levels ${[...new Set(levels)]}`);
+  requests.forEach((request) => request.arrive());
+  assert.equal(sync(CLOSE).minAltitude, minSharpAltitude(PHONE));
   layer.dispose();
   delete globalThis.document;
 });
