@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import GlobeLib from "react-globe.gl";
 import { supabase as supabaseClient } from "../supabase/supabaseClient";
 import { createGlobeTileLayer } from "../lib/globeTileLayer.mjs";
-import { DEFAULT_MIN_ALTITUDE } from "../lib/globeTiles.mjs";
+import { DEFAULT_MIN_ALTITUDE, GLOBE_HD_CREDIT } from "../lib/globeTiles.mjs";
+import { APPROX_MIN_PX, cellPixels } from "../lib/globePins.mjs";
 
 /* ============================================================
    RotatingGlobe
@@ -43,7 +44,24 @@ const TILE_SYNC_MS = 80;
 // close-up turns gently instead of racing past.
 const AUTO_ROTATE_SPEED = 0.55;
 const autoRotateSpeedAt = (altitude) =>
-  AUTO_ROTATE_SPEED * Math.min(1, Math.max(0.02, (Number(altitude) || 2.2) / 2.2));
+  AUTO_ROTATE_SPEED * Math.min(1, Math.max(0.0002, (Number(altitude) || 2.2) / 2.2));
+// Rings float 0.2% of the camera's height above the ground: clear of the globe and the tile shell for the
+// depth test at every distance, and never above a close-up camera. Powers of two, so zooming re-renders
+// the rings only now and then.
+const ringAltitudeFor = (altitude) =>
+  2 ** Math.round(Math.log2(clamp((Number(altitude) || 2.2) * 0.002, 0.00002, 0.004)));
+
+const CREDIT_LINK = { color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 };
+
+// Close up, visitor pins are drawn as approximate areas; see src/lib/globePins.mjs.
+const PIN_AREA_CSS = `
+.rg-pin-area { display: none; position: absolute; left: 0; top: 0; pointer-events: none;
+  width: var(--rg-cell, ${APPROX_MIN_PX}px); height: var(--rg-cell, ${APPROX_MIN_PX}px);
+  transform: translate(-50%, -50%); border-radius: 50%;
+  background: radial-gradient(circle, rgba(249,115,22,0.34) 0%, rgba(249,115,22,0.2) 45%, rgba(249,115,22,0) 70%); }
+[data-approx="1"] .rg-pin-area { display: block; }
+[data-approx="1"] .rg-pin-point { display: none; }
+`;
 
 const isFiniteNumber = (n) => Number.isFinite(n) && !Number.isNaN(n);
 
@@ -363,6 +381,11 @@ const RotatingGlobe = ({
   const tileSyncTimerRef = useRef(null);
   // How close the camera may go; relaxes once tiles can keep the close-up sharp.
   const minAltitudeRef = useRef(DEFAULT_MIN_ALTITUDE);
+  // Pins are drawn as approximate areas (see src/lib/globePins.mjs) while this is true.
+  const approxRef = useRef(false);
+  // EOxCloudless close-ups are on screen, so their credit must be too.
+  const [hdCredit, setHdCredit] = useState(false);
+  const [ringAltitude, setRingAltitude] = useState(() => ringAltitudeFor(2.2));
 
   // zoom tracking
   const [stableZoomLevel, setStableZoomLevel] = useState("world");
@@ -1209,6 +1232,19 @@ const RotatingGlobe = ({
       minAltitudeRef.current = next.minAltitude;
       if (controls) controls.minDistance = GLOBE_RADIUS * (1 + next.minAltitude);
     }
+    setHdCredit(Boolean(next.credit));
+    setRingAltitude(ringAltitudeFor(pov.altitude));
+
+    const container = containerRef.current;
+    if (container) {
+      const cell = cellPixels(pov.altitude, camera.fov, canvas.clientHeight || canvas.height);
+      container.style.setProperty("--rg-cell", `${Math.round(Math.min(cell, 4000))}px`);
+      const approx = cell >= APPROX_MIN_PX;
+      if (approx !== approxRef.current) {
+        approxRef.current = approx;
+        container.dataset.approx = approx ? "1" : "";
+      }
+    }
   };
 
   const scheduleStableCommit = () => {
@@ -1610,9 +1646,15 @@ const RotatingGlobe = ({
     wrap.style.pointerEvents = "none";
     wrap.title = label;
 
+    // Close up, the pin gives way to a soft disc covering its whole cell.
+    const area = document.createElement("div");
+    area.className = "rg-pin-area";
+    wrap.appendChild(area);
+
     // Inner pin: anchored so its BOTTOM edge (the tail tip) sits on the
     // wrapper centre == the geo coord, and horizontally centred.
     const inner = document.createElement("div");
+    inner.className = "rg-pin-point";
     inner.style.position = "absolute";
     inner.style.left = "0";
     inner.style.bottom = "0"; // bottom edge at wrapper centre (the coord)
@@ -1711,6 +1753,7 @@ const RotatingGlobe = ({
         cursor: picking ? "crosshair" : undefined,
       }}
     >
+      <style>{PIN_AREA_CSS}</style>
       {pinsLoading && (
         <div
           style={{
@@ -1751,9 +1794,35 @@ const RotatingGlobe = ({
         ringMaxRadius={(d) => (d.kind === "peer" ? 2.2 : 6)}
         ringPropagationSpeed={(d) => (d.kind === "peer" ? 1.2 : 3)}
         ringRepeatPeriod={(d) => (d.kind === "peer" ? 2400 : 900)}
-        ringAltitude={0.004}
+        ringAltitude={ringAltitude}
         onGlobeClick={picking && onPickLocation ? ({ lat, lng }) => onPickLocation({ lat, lng }) : undefined}
       />
+
+      {hdCredit && (
+        <div
+          style={{
+            position: "absolute",
+            right: 8,
+            bottom: 6,
+            zIndex: 6,
+            // Clear of the "Plant a flag" button in the bottom-left corner.
+            maxWidth: "min(calc(100% - 150px), 420px)",
+            padding: "3px 8px",
+            borderRadius: 6,
+            background: "rgba(0,0,0,0.5)",
+            color: "rgba(255,255,255,0.88)",
+            fontSize: 10,
+            lineHeight: 1.4,
+            textAlign: "right",
+          }}
+        >
+          <a href={GLOBE_HD_CREDIT.href} target="_blank" rel="noopener noreferrer" style={CREDIT_LINK}>{GLOBE_HD_CREDIT.name}</a>
+          {" by "}
+          <a href={GLOBE_HD_CREDIT.byHref} target="_blank" rel="noopener noreferrer" style={CREDIT_LINK}>{GLOBE_HD_CREDIT.by}</a>
+          {` (${GLOBE_HD_CREDIT.note}) · `}
+          <a href={GLOBE_HD_CREDIT.licenseHref} target="_blank" rel="noopener noreferrer license" style={CREDIT_LINK}>{GLOBE_HD_CREDIT.license}</a>
+        </div>
+      )}
     </div>
   );
 };

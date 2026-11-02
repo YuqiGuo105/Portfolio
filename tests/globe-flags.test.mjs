@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FLAG_EMOJIS, FlagError, cleanMessage, createFlagsHandler, publicFlag, validateFlag } from '../src/lib/globeFlags.mjs';
 import { cleanPeer, requestGeo } from '../src/lib/requestGeo.mjs';
+import { APPROX_CELL_KM, APPROX_MIN_PX, cellPixels, showsApproximateAreas } from '../src/lib/globePins.mjs';
 
 const geo = { lat: 31.2, lng: 121.5, city: 'Shanghai', country: 'CN' };
 
@@ -32,7 +33,7 @@ test('emoji-only flags are approved at once and use the visitor city; notes wait
 
 test('a spot picked on the globe is rounded and does not carry the visitor city', () => {
   const flag = validateFlag({ emoji: '🐼', lat: 48.85661, lng: 2.35222 }, geo);
-  assert.deepEqual([flag.lat, flag.lng, flag.city, flag.country], [48.86, 2.35, null, null]);
+  assert.deepEqual([flag.lat, flag.lng, flag.city, flag.country], [48.9, 2.4, null, null], 'about 11 km, like pins');
   assert.throws(() => validateFlag({ emoji: '🐼', lat: 10 }, geo), { code: 'invalid_location' });
   assert.throws(() => validateFlag({ emoji: '🐼', lat: 100, lng: 0 }, geo), { code: 'invalid_location' });
   assert.throws(() => validateFlag({ emoji: '🐼', lat: true, lng: 0 }, geo), { code: 'invalid_location' });
@@ -114,4 +115,25 @@ test('presence from other browsers is reduced to rounded, bounded city fields', 
   assert.equal(cleanPeer({ lat: 'a', lng: 1 }), null);
   assert.equal(cleanPeer({ lat: 10, lng: 999 }), null);
   assert.equal(cleanPeer({ lat: 1, lng: 1, city: 'x'.repeat(200) }).city.length, 60);
+});
+
+test('flags already stored more precisely still leave the server rounded to about 11 km', () => {
+  const flag = publicFlag({ id: 7, lat: 39.0997, lng: -94.5786, emoji: '🚩', created_at: 't' });
+  assert.deepEqual([flag.lat, flag.lng], [39.1, -94.6]);
+});
+
+test('close up, visitor pins become approximate areas the size of their 11 km cell', () => {
+  assert.equal(APPROX_CELL_KM, 11.1);
+  // The dashboard globe, about 480 px tall with three-globe's 50° field of view.
+  assert.ok(cellPixels(2.2, 50, 480) < 2, 'a dot from the default view');
+  assert.equal(showsApproximateAreas(2.2, 50, 480), false);
+  assert.equal(showsApproximateAreas(0.3, 50, 480), false, 'regional views keep pins');
+  const closest = cellPixels(0.0022, 50, 480); // the EOxCloudless close-up limit
+  assert.ok(closest > 300, `cell ${closest} px at the closest view`);
+  assert.equal(showsApproximateAreas(0.0022, 50, 480), true);
+  // The switch happens where the cell outgrows a pin, at roughly 140 km up.
+  const switchAltitude = (APPROX_CELL_KM * 480) / (APPROX_MIN_PX * 2 * 6371 * Math.tan((25 * Math.PI) / 180));
+  assert.ok(switchAltitude > 0.015 && switchAltitude < 0.03, `switch at ${switchAltitude}`);
+  assert.equal(cellPixels(0, 50, 480), 0);
+  assert.equal(cellPixels(1, 50, 0), 0);
 });

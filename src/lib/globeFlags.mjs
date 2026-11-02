@@ -28,11 +28,15 @@ export function cleanMessage(value) {
   return text;
 }
 
+// Every place on the globe is approximate: one decimal degree (about 11 km), like visitor pins and
+// presence. A spot picked on the globe is rounded the same way, so a flag can never mark a home or a street.
+const roundCoordinate = (n) => Math.round(n * 10) / 10;
+
 const coordinate = (value, limit) => {
   if (value == null) return null;
   const n = Number(value);
   if (typeof value === 'boolean' || !Number.isFinite(n) || Math.abs(n) > limit) throw new FlagError('invalid_location');
-  return Math.round(n * 100) / 100;
+  return roundCoordinate(n);
 };
 
 // The flag a visitor asked for, before storage. `geo` is the request's own approximate location.
@@ -67,7 +71,7 @@ export function publicFlag(row) {
   const lat = Number(row.lat); const lng = Number(row.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || !FLAG_EMOJIS.includes(row.emoji)) return null;
   return {
-    id: String(row.id), lat, lng, emoji: row.emoji,
+    id: String(row.id), lat: roundCoordinate(lat), lng: roundCoordinate(lng), emoji: row.emoji,
     message: typeof row.message === 'string' ? row.message : '',
     city: typeof row.city === 'string' ? row.city : '',
     country: typeof row.country === 'string' ? row.country : '',
