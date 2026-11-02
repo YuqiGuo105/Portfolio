@@ -57,6 +57,35 @@ test('ls projects reads the live MCP list and links each project', async () => {
   assert.match(text(await runCommand('ls nowhere', c)), /No such file/);
 });
 
+test('ls takes coreutils options: ls -ltr, -a, -1, several targets, and rejects unknown flags', async () => {
+  const c = ctx();
+  const long = await runCommand('ls -ltr', c);
+  assert.equal(long[0].text, 'total 5');
+  assert.deepEqual(long.slice(1).map((l) => l.text.split(/\s+/).pop()), ['globe.app', 'architecture.md', 'resume.txt', 'articles/', 'projects/']);
+  assert.match(long[1].text, /^-r-xr-xr-x\s+visitor\s+globe\.app$/);
+  assert.match(long[5].text, /^dr-xr-xr-x\s+visitor\s+projects\/$/);
+  assert.equal(c.calls.length, 0);
+  assert.equal(text(await runCommand('ls -la', c)).split('\n')[1].trim().split(/\s+/).pop(), './');
+  assert.equal((await runCommand('ls -1', c)).length, 5);
+  assert.equal(text(await runCommand('ls --all -- ~', c)), './   ../   projects/   articles/   resume.txt   architecture.md   globe.app');
+
+  const projects = await runCommand('ls -l projects/', c);
+  assert.deepEqual(c.calls, [['list_projects', undefined]]);
+  assert.equal(projects[1].href, 'https://www.yuqi.site/work-single/p1');
+  assert.match(projects[1].text, /^-r--r--r--\s+visitor\s+Event pipeline$/);
+
+  const several = text(await runCommand('ls projects nowhere', c));
+  assert.match(several, /^projects:/m);
+  assert.match(several, /cannot access 'nowhere'/);
+
+  assert.match(text(await runCommand('ls -z', c)), /invalid option -- 'z'[\s\S]*ls --help/);
+  assert.match(text(await runCommand('ls --long', c)), /unrecognized option '--long'/);
+  assert.match(text(await runCommand('ls --help', c)), /usage: ls/);
+  assert.match(text(await runCommand('cat -n resume.txt', c)), /Engineer @ Acme/);
+  assert.equal(complete('ls -l pro'), 'ls -l projects ');
+  assert.equal(complete('ls -'), null);
+});
+
 test('cat resume.txt shows experience and public links from get_profile', async () => {
   const out = text(await runCommand('cat resume.txt', ctx()));
   assert.match(out, /Engineer @ Acme/);

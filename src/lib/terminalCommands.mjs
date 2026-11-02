@@ -35,6 +35,47 @@ export const PAGES = Object.freeze({
 
 const MCP_TOOLS = ['search_portfolio', 'list_projects', 'list_articles', 'get_profile'];
 const FILES = ['projects/', 'articles/', 'resume.txt', 'architecture.md', 'globe.app'];
+// What `ls -l` shows for each entry. There are no sizes or dates to show: the entries are live views.
+const MODES = { 'projects/': 'dr-xr-xr-x', 'articles/': 'dr-xr-xr-x', 'globe.app': '-r-xr-xr-x' };
+const modeOf = (name) => MODES[name] || '-r--r--r--';
+
+// ls options as in coreutils. Ones that only change sorting by size or time are accepted and change
+// nothing, since the entries carry no sizes or times.
+const LS_SHORT = new Set(['a', 'A', 'l', 'r', '1', 't', 'S', 'h', 'F', 'G', 'p', 'c', 'u', 'U', 'f']);
+const LS_LONG = { all: 'a', 'almost-all': 'A', reverse: 'r', 'human-readable': 'h', classify: 'F', color: 'G', colour: 'G' };
+const LS_USAGE = [
+  line('usage: ls [-alr1] [projects/ | articles/ ...]', 'head'),
+  line('  -l  long listing   -a  include . and ..   -r  reverse order   -1  one entry per line', 'dim'),
+  line('  Other coreutils flags are accepted; there are no sizes or dates to sort by.', 'dim'),
+];
+
+// Splits ls arguments into options and targets. Returns { error } for an unknown option.
+function lsArgs(args) {
+  const flags = new Set();
+  const targets = [];
+  let options = true;
+  for (const arg of args) {
+    if (options && arg === '--') { options = false; continue; }
+    if (options && arg.startsWith('--')) {
+      const name = arg.slice(2).split('=')[0];
+      if (name === 'help') return { help: true };
+      if (!LS_LONG[name]) return { error: `ls: unrecognized option '${arg}'` };
+      flags.add(LS_LONG[name]);
+      continue;
+    }
+    if (options && arg.length > 1 && arg.startsWith('-')) {
+      for (const flag of arg.slice(1)) {
+        if (!LS_SHORT.has(flag)) return { error: `ls: invalid option -- '${flag}'` };
+        flags.add(flag);
+      }
+      continue;
+    }
+    targets.push(arg);
+  }
+  return { flags, targets };
+}
+
+const ordered = (list, flags) => (flags.has('r') ? [...list].reverse() : list);
 
 // Split a command line into words; quotes group words ("kafka outbox").
 export function tokenize(input) {
@@ -108,26 +149,53 @@ const COMMANDS = {
     ],
   },
   ls: {
-    summary: 'list projects/ or articles/',
+    summary: 'list projects/ or articles/ (-l long, -a all, -r reverse)',
     usage: ['projects', 'articles'],
-    async run(ctx, [target = '']) {
-      const dir = target.replace(/\/$/, '');
-      if (!dir || dir === '~' || dir === '.') return [line(FILES.join('   '))];
-      if (dir === 'projects') {
-        const reply = await tool(ctx, 'list_projects');
-        return [line(`${reply.result.items.length} projects (live from the MCP server)`, 'dim'), ...itemLines(reply.result.items, 'no projects')];
+    async run(ctx, args) {
+      const parsed = lsArgs(args);
+      if (parsed.help) return LS_USAGE;
+      if (parsed.error) return [line(parsed.error, 'err'), line("Try 'ls --help' for more information.", 'dim')];
+      const { flags, targets } = parsed;
+      const long = flags.has('l');
+      const list = (names) => {
+        const all = [...(flags.has('a') ? ['./', '../'] : []), ...names];
+        const shown = ordered(all, flags);
+        if (long) return [line(`total ${names.length}`, 'dim'), ...shown.map((name) => row(`${modeOf(name)}  ${PROMPT_USER}  ${name}`))];
+        return flags.has('1') ? shown.map((name) => line(name)) : [line(shown.join('   '))];
+      };
+      const listing = async (target) => {
+        const dir = target.replace(/\/$/, '');
+        if (!dir || dir === '~' || dir === '.') return list(FILES);
+        if (dir === 'projects' || dir === 'articles') {
+          const reply = await tool(ctx, dir === 'projects' ? 'list_projects' : 'list_articles');
+          const items = ordered(reply.result.items, flags);
+          const head = line(`${items.length} ${dir} (live from the MCP server)`, 'dim');
+          if (!long) return [head, ...itemLines(items, `no ${dir}`)];
+          return [head, ...items.map((item) => line(`${modeOf(item.title)}  ${PROMPT_USER}  ${item.title}`, 'link', item.url))];
+        }
+        return null;
+      };
+
+      const names = targets.length ? targets : [''];
+      const out = [];
+      for (const [index, target] of names.entries()) {
+        const lines = await listing(target);
+        if (!lines) {
+          out.push(line(`ls: cannot access '${target}': No such file or directory`, 'err'));
+          continue;
+        }
+        if (names.length > 1) out.push(...(index ? [line('')] : []), line(`${target}:`, 'head'));
+        out.push(...lines);
       }
-      if (dir === 'articles') {
-        const reply = await tool(ctx, 'list_articles');
-        return [line(`${reply.result.items.length} articles (live from the MCP server)`, 'dim'), ...itemLines(reply.result.items, 'no articles')];
-      }
-      return [line(`ls: cannot access '${target}': No such file or directory`, 'err')];
+      return out;
     },
   },
   cat: {
     summary: 'read resume.txt or architecture.md',
     usage: ['resume.txt', 'architecture.md'],
-    async run(ctx, [file = '']) {
+    async run(ctx, args) {
+      // Options such as -n change nothing here; the first other word is the file.
+      const file = args.find((arg) => arg === '-' || !arg.startsWith('-')) || '';
       const name = file.replace(/^\.\//, '');
       if (name === 'resume.txt' || name === 'resume') {
         const { result } = await tool(ctx, 'get_profile');
@@ -301,8 +369,9 @@ export function complete(input) {
   const command = COMMANDS[words[0]?.toLowerCase()];
   if (!command?.usage) return null;
   const prefix = trailing ? '' : words[words.length - 1];
-  const position = trailing ? words.length : words.length - 1;
-  if (position !== 1) return null;
+  // Options before the argument (ls -l pro) are kept and skipped when counting positions.
+  const before = words.slice(1, trailing ? words.length : -1);
+  if (prefix.startsWith('-') || before.some((word) => !word.startsWith('-'))) return null;
   const hits = command.usage.filter((u) => u.startsWith(prefix));
-  return hits.length === 1 ? `${words[0]} ${hits[0]} ` : null;
+  return hits.length === 1 ? [words[0], ...before, hits[0]].join(' ') + ' ' : null;
 }
