@@ -108,9 +108,10 @@ const Blogs = () => {
       }
 
       // Fetch life blogs
+      // Listing fields only: the body of login-only posts is not readable without signing in.
       const { data: lifeBlogs, error: lifeError } = await supabase
         .from('life_blogs')
-        .select('*')
+        .select('id, title, image_url, category, published_at, description, require_login, created_at, updated_at, tags')
         .order('created_at', { ascending: false });
 
       if (lifeError) {

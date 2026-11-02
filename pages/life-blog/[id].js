@@ -1,9 +1,13 @@
 import Layout from "../../src/layout/Layout";
 import {supabase} from '../../src/supabase/supabaseClient';
+
 import {useRouter} from 'next/router';
 import {useState, useEffect} from 'react';
 import BlogComments from "../../src/components/BlogComments";
 import DOMPurify from 'dompurify';
+
+// Listing fields; anonymous visitors cannot read the content column (see the RPC below).
+const LISTING_FIELDS = "id, title, image_url, category, published_at, description, require_login, created_at, updated_at, tags";
 
 const LifeBlog = () => {
   const [blog, setBlog] = useState(null);
@@ -34,8 +38,8 @@ const LifeBlog = () => {
 
     const fetchBlog = async () => {
       const { data, error } = await supabase
-        .from("life_blogs")                // ← correct table
-        .select("*")
+        .from("life_blogs")
+        .select(LISTING_FIELDS)
         .eq("id", id)
         .single();
 
@@ -52,8 +56,27 @@ const LifeBlog = () => {
         return;
       }
 
+      /* The body comes from life_blog_content(), which only returns login-only posts to signed-in
+         users (supabase/migrations/20261101120000_public_read_policies.sql). Until that migration
+         is applied the function does not exist, so fall back to reading the column directly. */
+      let body = await supabase.rpc("life_blog_content", { post_id: Number(id) });
+      if (body.error && ["PGRST202", "42883"].includes(body.error.code)) {
+        body = await supabase.from("life_blogs").select("content").eq("id", id).single();
+        body = { data: body.data?.content ?? null, error: body.error };
+      }
+      if (body.error) {
+        setError(body.error);
+        setLoading(false);
+        return;
+      }
+      if (body.data == null && data.require_login) {
+        setAccessDenied(true);
+        setLoading(false);
+        return;
+      }
+
       /* sanitise & store */
-      data.content = DOMPurify.sanitize(data.content ?? "");
+      data.content = DOMPurify.sanitize(body.data ?? "");
       setAccessDenied(false);
       setBlog(data);
       setLoading(false);
