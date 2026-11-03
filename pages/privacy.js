@@ -19,6 +19,7 @@ export default function PrivacyPage() {
       <h2>How information is used</h2>
       <p>Information is used to operate and secure the site, understand aggregate engagement, improve content and reliability, answer requested AI interactions, deliver subscribed notifications, and troubleshoot failures. Personal information is not sold or used for third-party advertising.</p>
       <p>The visitor globe shows visitors only as counts per metro area, located to about 11 km, and never an individual&apos;s precise location. Flags you plant there, and the live &quot;people here now&quot; markers, are rounded the same way.</p>
+      <p>The view counter on the GitHub profile (github.com/YuqiGuo105) counts how often GitHub loads its image. GitHub fetches the image through its own proxy, so the count records no IP address, location or browser of the person viewing the profile.</p>
 
       <h2>Service providers</h2>
       <p>Limited information may be processed by infrastructure, authentication, database, analytics, email, search, and AI providers that support the requested feature. Access is limited to the purpose of operating the service and subject to provider safeguards.</p>

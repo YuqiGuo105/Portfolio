@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { BellPlus, Check, Copy, ExternalLink, Filter, List, SearchCheck, Save, Trash2, X } from 'lucide-react';
 import { alertFromVisitor, assessmentEvidence, eventTimestamp, mapLink, readSavedViews, referrerOrigin, sanitizeSavedView, sessionWindow, scrollDepthPercent } from '../../lib/visitorWorkbench.mjs';
+import { isGithubProfileView } from '../../lib/githubProfileBadge.mjs';
 import styles from './VisitorWorkbench.module.css';
 
 export function CopyValue({ value, label }) {
@@ -46,6 +47,8 @@ export function VisitCheckpoints({ event, zone }) {
 
 export function VisitorContext({ item, onFilter, onInspect, onAlert, zone }) {
   const map = mapLink(item), source = referrerOrigin(item.referrer);
+  // GitHub fetches README images through its own proxy, so a profile view carries nothing about the viewer.
+  if (isGithubProfileView(item)) return <GithubViewContext item={item} onInspect={onInspect} onAlert={onAlert} zone={zone} />;
   return <div className={styles.root}>
     <div className={styles.context}>
       <div className={styles.field}><span className={styles.label}>Location</span>
@@ -75,6 +78,37 @@ export function VisitorContext({ item, onFilter, onInspect, onAlert, zone }) {
     <details className={styles.ids}><summary>Visitor identifiers and timestamps</summary>
       {[['Session ID', item.sessionId], ['Anonymous ID', item.anonymousId], ['Event ID', item.eventId], ['Event time (ISO)', item.eventTime], ['Received time (ISO)', item.serverTime]].map(([label, value]) => <div className={styles.line} key={label}><span>{label}</span><code>{value || 'Not recorded'}</code><CopyValue value={value} label={label} /></div>)}
       <span className={styles.muted}>Received: {eventTimestamp(item.serverTime, zone)}. A shared IP does not establish a shared identity.</span>
+    </details>
+  </div>;
+}
+
+function GithubViewContext({ item, onInspect, onAlert, zone }) {
+  return <div className={styles.root}>
+    <div className={styles.context}>
+      <div className={styles.field}><span className={styles.label}>Location</span>
+        <strong>Not shared</strong>
+        <span className={styles.muted}>GitHub&apos;s image proxy hides the viewer</span>
+      </div>
+      <div className={styles.field}><span className={styles.label}>Client</span>
+        <strong>GitHub image proxy</strong>
+        <span className={styles.muted}>{item.userAgent || 'Not recorded'}</span>
+      </div>
+      <div className={styles.field}><span className={styles.label}>Source</span>
+        <a className={styles.link} href="https://github.com/YuqiGuo105" target="_blank" rel="noopener noreferrer">github.com/YuqiGuo105<ExternalLink size={12} /></a>
+        <span className={styles.muted}>Profile README view counter</span>
+      </div>
+      <div className={styles.field}><span className={styles.label}>Visitor</span>
+        <strong>Anonymous</strong>
+        <span className={styles.muted}>No IP or session is recorded</span>
+      </div>
+    </div>
+    <div className={styles.actions}>
+      <button className={styles.button} type="button" onClick={() => onInspect(item, 'evidence')}><SearchCheck size={14} /> Classification evidence</button>
+      <button className={styles.button} type="button" onClick={() => onAlert(item)}><BellPlus size={14} /> Create alert</button>
+    </div>
+    <details className={styles.ids}><summary>Event identifiers and timestamps</summary>
+      {[['Event ID', item.eventId], ['Event time (ISO)', item.eventTime], ['Received time (ISO)', item.serverTime]].map(([label, value]) => <div className={styles.line} key={label}><span>{label}</span><code>{value || 'Not recorded'}</code><CopyValue value={value} label={label} /></div>)}
+      <span className={styles.muted}>Received: {eventTimestamp(item.serverTime, zone)}.</span>
     </details>
   </div>;
 }

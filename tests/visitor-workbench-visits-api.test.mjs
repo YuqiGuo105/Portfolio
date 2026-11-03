@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
+const githubBadge = await import('../src/lib/githubProfileBadge.mjs');
 const { transform } = require('next/dist/build/swc');
 const { code } = await transform(readFileSync(new URL('../pages/api/admin/visitors.js', import.meta.url), 'utf8'), {
   filename: 'visitors.js', jsc: { parser: { syntax: 'ecmascript' }, target: 'es2020' }, module: { type: 'commonjs' },
@@ -16,6 +17,7 @@ function handler(allowed) {
     } };
     if (name.includes('supabaseServer')) return { supabaseServer: { from: () => { throw new Error('Unexpected content lookup'); } } };
     if (name.includes('analyticsHostFilter')) return { isLoopbackUrl: () => false };
+    if (name.includes('githubProfileBadge')) return githubBadge;
     throw new Error(`Unexpected import ${name}`);
   }, exports);
   return exports.default;

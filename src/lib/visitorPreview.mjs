@@ -1,6 +1,21 @@
 import { validateSessionRequest } from './visitorSessionRequest.mjs';
 import { sampleHistory, previewOverview } from './visitorOverviewPreview.mjs';
 import { groupVisitorEvents } from './visitorWorkbench.mjs';
+import { GITHUB_PROFILE_URL, GITHUB_PROFILE_VIEW_EVENT, githubProfileContent } from './githubProfileBadge.mjs';
+
+// GitHub profile README views arrive through GitHub's image proxy with no IP, session or location.
+function githubViewSamples(now) {
+  return [4, 47].map((minutes, index) => {
+    const event = {
+      eventId: `sample-github-view-${index}`, siteId: 'preview.local', eventName: GITHUB_PROFILE_VIEW_EVENT,
+      eventTime: new Date(now - minutes * 60000).toISOString(), serverTime: new Date(now - minutes * 60000 + 300).toISOString(),
+      pageUrl: GITHUB_PROFILE_URL, referrer: GITHUB_PROFILE_URL, userAgent: 'github-camo (sample)',
+      deviceType: 'desktop', browser: 'unknown', os: 'unknown', bot: false,
+      properties: {},
+    };
+    return { ...event, pageContent: githubProfileContent(event) };
+  });
+}
 
 // Synthetic fixtures only. Never contains production visitor data or credentials.
 export function createVisitorPreviewApi() {
@@ -15,7 +30,7 @@ export function createVisitorPreviewApi() {
     referrer: index < 29 ? 'https://linkedin.com/feed/?private=removed' : '', ipAddress: index < 29 ? '198.51.100.24' : '203.0.113.9', bot: index >= 29,
     userAgent: index < 29 ? 'Sample Safari iPhone' : 'Sample Googlebot/2.1',
     properties: { ...(index % 3 === 1 ? { progressPercent: [25, 50, 75, 100][Math.floor(index / 3) % 4] } : {}), ...(index < 29 ? {} : { botAssessmentProvider: 'GOOGLE_RECAPTCHA_ENTERPRISE', botAssessmentStatus: 'VALID', botAssessmentHumanScore: 0.1, botAssessmentReasons: ['AUTOMATION'], botAssessmentVerifiedBot: true }) },
-  }))].sort((a, b) => a.eventTime.localeCompare(b.eventTime));
+  })), ...githubViewSamples(now)].sort((a, b) => a.eventTime.localeCompare(b.eventTime));
   const rules = [{ ruleId: 1, siteId: 'preview.local', name: 'Sample visitor alert', eventType: 'page_view', geoLevel: 'GLOBAL', geoAreaId: '', threshold: 1, comparator: '>=', granularity: '5m', cooldownSeconds: 1800, filters: { bot: 'EXCLUDE' }, enabled: false }];
   const pending = new Map();
   function matches(item, f) {

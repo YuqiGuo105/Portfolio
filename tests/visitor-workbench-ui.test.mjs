@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { test, beforeEach, afterEach, after } from 'node:test';
 import { JSDOM } from 'jsdom';
 import * as helpers from '../src/lib/visitorWorkbench.mjs';
+import * as githubBadge from '../src/lib/githubProfileBadge.mjs';
 const require = createRequire(import.meta.url);
 const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost/' });
 globalThis.window = dom.window; globalThis.document = dom.window.document; globalThis.localStorage = dom.window.localStorage;
@@ -18,6 +19,7 @@ const exports = {};
 new Function('require', 'exports', code)(name => {
   if (name.endsWith('.css')) return { __esModule: true, default: {} };
   if (name.endsWith('visitorWorkbench.mjs')) return helpers;
+  if (name.endsWith('githubProfileBadge.mjs')) return githubBadge;
   return require(name);
 }, exports);
 let root;

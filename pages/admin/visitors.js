@@ -34,6 +34,7 @@ import { adminApi } from "../../src/lib/adminApi";
 import { useAdminSession } from "../../src/components/admin/AdminSessionContext";
 import { ScrollDepth, VisitCheckpoints, VisitorRecordView, VisitorContext, VisitorInspector, VisitorToolbar, alertFromVisitor, useDialogFocus } from "../../src/components/admin/VisitorWorkbench";
 import { eventTimestamp } from "../../src/lib/visitorWorkbench.mjs";
+import { GITHUB_PROFILE_VIEW_EVENT } from "../../src/lib/githubProfileBadge.mjs";
 import VisitorOverview from "../../src/components/admin/VisitorOverview";
 
 const PAGE_SIZE = 50;
@@ -895,6 +896,7 @@ function InsightNumber({ label, value, hint }) {
 function VisitorEventCard({ item, zone, onFilter, onInspect, onAlert }) {
   const eventTone = visitorStyles[`eventTone${eventToneName(item.eventName)}`] || visitorStyles.eventToneNeutral;
   const pagePath = displayPath(item.pageUrl);
+  const pageLink = externalPage(item.pageUrl) || { label: pagePath, href: pagePath };
   const targetPath = displayPath(item.targetUrl);
 
   return (
@@ -918,8 +920,8 @@ function VisitorEventCard({ item, zone, onFilter, onInspect, onAlert }) {
             <span className={visitorStyles.eventIntent}>{item.visit ? `${item.visit.eventCount} recorded events` : eventIntent(item.eventName)}</span>
           </div>
           {pagePath && (
-            <a className={visitorStyles.pathPill} href={pagePath} target="_blank" rel="noreferrer" title={item.pageUrl || pagePath}>
-              {pagePath}
+            <a className={visitorStyles.pathPill} href={pageLink.href} target="_blank" rel="noreferrer" title={item.pageUrl || pagePath}>
+              {pageLink.label}
               <ExternalLink size={12} aria-hidden="true" />
             </a>
           )}
@@ -949,7 +951,8 @@ function ContentReference({ content, url, label, compact = false }) {
   const fallbackTitle = PAGE_TITLES[path] || path || "Unknown page";
   const title = content?.title || fallbackTitle;
   const type = content?.type || label;
-  const subtitle = path && path !== title ? path : "";
+  const shown = externalPage(url)?.label || path;
+  const subtitle = shown && shown !== title ? shown : "";
 
   if (compact) {
     return (
@@ -1525,6 +1528,7 @@ function formatTime(value) {
 }
 
 function humanizeEventName(value) {
+  if (value === GITHUB_PROFILE_VIEW_EVENT) return "GitHub Profile View";
   if (value === "engaged_time") return "Legacy Duration";
   if (value === "read_progress") return "Scroll Depth";
   const normalized = String(value || "unknown").replace(/[_-]+/g, " ").trim();
@@ -1532,6 +1536,7 @@ function humanizeEventName(value) {
 }
 
 function eventAbbrev(value) {
+  if (value === GITHUB_PROFILE_VIEW_EVENT) return "GH";
   const text = String(value || "event").replace(/[_-]+/g, " ").trim();
   const words = text.split(/\s+/).filter(Boolean);
   if (!words.length) return "EV";
@@ -1540,6 +1545,7 @@ function eventAbbrev(value) {
 }
 
 function eventToneName(value) {
+  if (value === GITHUB_PROFILE_VIEW_EVENT) return "Github";
   const text = String(value || "").toLowerCase();
   if (text.includes("page")) return "Page";
   if (text.includes("progress") || text.includes("engaged")) return "Engagement";
@@ -1550,6 +1556,7 @@ function eventToneName(value) {
 }
 
 function eventIntent(value) {
+  if (value === GITHUB_PROFILE_VIEW_EVENT) return "Someone viewed your GitHub profile README";
   const text = String(value || "").toLowerCase();
   if (text.includes("page_view")) return "Visitor loaded a page";
   if (text.includes("read_progress")) return "Approximate page scroll checkpoint";
@@ -1580,6 +1587,18 @@ function contentInitials(value) {
 function displayPath(value) {
   if (!value) return "";
   try { return new URL(value, "https://www.yuqi.site").pathname; } catch { return String(value); }
+}
+
+// A page on another site (a GitHub profile view's page is the profile itself) links there, not to yuqi.site.
+function externalPage(value) {
+  if (!/^https?:\/\//i.test(String(value || ""))) return null;
+  try {
+    const url = new URL(value);
+    if (/(^|\.)yuqi\.site$/i.test(url.hostname)) return null;
+    return { label: `${url.hostname.replace(/^www\./, "")}${url.pathname.replace(/\/$/, "")}`, href: url.href };
+  } catch {
+    return null;
+  }
 }
 
 function displayHost(value) {
