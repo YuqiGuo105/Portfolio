@@ -1,16 +1,18 @@
 // The view counter on the GitHub profile README (github.com/YuqiGuo105). The README embeds
 // /api/badge/github-profile as an image, and GitHub fetches README images through its Camo image proxy on
 // every profile load, so each Camo fetch is one profile view. The view goes into the analytics Kafka topic
-// as a `github_profile_view` event, the admin visitor workbench labels it, and the badge shows the running
-// total from the aggregator's daily rollups.
+// as a `github_profile_view` event and the badge shows the running total from the aggregator's daily rollups.
+// The badge is the only place the count appears.
 //
 // Privacy: Camo hides the viewer, so GitHub's server IP and its user agent are all the request carries. The
-// event keeps the user agent and nothing else: no IP, no session, no location. The public site stats count
-// page views only, so these events never inflate them.
+// event keeps the user agent and nothing else: no IP, no session, no location.
 
 export const GITHUB_PROFILE_VIEW_EVENT = "github_profile_view";
 export const GITHUB_PROFILE_URL = "https://github.com/YuqiGuo105";
-export const SITE_ID = "yuqi.site";
+// The views are filed under their own site. The admin visitor workbench, the admin MCP visitor tools and the
+// public stats all read site yuqi.site only, so a view of the GitHub profile never shows up in them. Camo
+// cannot tell the owner's own views from anyone else's, so they would only be noise there.
+export const GITHUB_PROFILE_SITE_ID = "github-profile";
 
 export const BADGE_LABEL = "profile views";
 // GitHub's link blue, so the badge reads as part of the profile page.
@@ -37,16 +39,6 @@ export function isGithubCamo(userAgent) {
   return /^github-camo\b/i.test(String(userAgent || "").trim());
 }
 
-export function isGithubProfileView(item) {
-  return item?.eventName === GITHUB_PROFILE_VIEW_EVENT || item?.eventType === GITHUB_PROFILE_VIEW_EVENT;
-}
-
-// What the admin workbench shows as the "page" of a GitHub profile view.
-export function githubProfileContent(item) {
-  if (!isGithubProfileView(item)) return null;
-  return { title: "GitHub profile README", type: "GitHub", canonicalUrl: GITHUB_PROFILE_URL };
-}
-
 // The RawEvent for one profile view, in the wire format analytics-aggregator-service reads (see pages/api/track.js).
 // Without a session, anonymous id or IP the aggregator builds no session for it, and without a geo hint it lands
 // on the GLOBAL rollup only, so it never adds a pin to the globe.
@@ -55,7 +47,7 @@ export function githubProfileViewEvent({ eventId, now = new Date(), userAgent })
   return {
     eventId,
     schemaVersion: 1,
-    siteId: SITE_ID,
+    siteId: GITHUB_PROFILE_SITE_ID,
     eventType: GITHUB_PROFILE_VIEW_EVENT,
     eventTime: time,
     serverTime: time,

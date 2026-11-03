@@ -5,8 +5,8 @@
 // total so far. src/lib/githubProfileBadge.mjs has the rules; this file wires in Kafka, Supabase and Valkey.
 import {
   BADGE_RATE_LIMIT,
+  GITHUB_PROFILE_SITE_ID,
   GITHUB_PROFILE_VIEW_EVENT,
-  SITE_ID,
   createGithubBadgeHandler,
   sumEventCounts,
 } from '../../../src/lib/githubProfileBadge.mjs';
@@ -31,7 +31,7 @@ async function loadCount() {
     const { data, error } = await supabaseServer
       .from('geo_time_rollups')
       .select('event_count')
-      .eq('site_id', SITE_ID)
+      .eq('site_id', GITHUB_PROFILE_SITE_ID)
       .eq('granularity', '1d')
       .eq('geo_level', 'GLOBAL')
       .eq('event_type', GITHUB_PROFILE_VIEW_EVENT)

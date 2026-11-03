@@ -1,7 +1,6 @@
 import { requireAdminUser } from "../../../src/lib/agentServiceProxy";
 import { supabaseServer } from "../../../src/supabase/supabaseServer";
 import { isLoopbackUrl } from "../../../src/lib/analyticsHostFilter";
-import { githubProfileContent } from "../../../src/lib/githubProfileBadge.mjs";
 
 const PROD_DEFAULT = "https://portfolio-analytics-aggregator-702193211434.us-central1.run.app";
 const EXPORT_FORMATS = new Set(["csv", "json"]);
@@ -73,7 +72,7 @@ export default async function handler(req, res) {
       ...payload,
       items: items.map((item) => ({
         ...item,
-        pageContent: githubProfileContent(item) || contentByPath.get(normalizePath(item.pageUrl)) || null,
+        pageContent: contentByPath.get(normalizePath(item.pageUrl)) || null,
         targetContent: contentByPath.get(normalizePath(item.targetUrl)) || null,
       })),
     });

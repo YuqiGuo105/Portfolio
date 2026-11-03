@@ -3,16 +3,15 @@ import test from 'node:test';
 import {
   BADGE_HEADERS,
   COUNT_CACHE_MS,
+  GITHUB_PROFILE_SITE_ID,
   GITHUB_PROFILE_URL,
   GITHUB_PROFILE_VIEW_EVENT,
   RECORD_TIMEOUT_MS,
   createGithubBadgeHandler,
   fallbackVisitorLog,
   formatCount,
-  githubProfileContent,
   githubProfileViewEvent,
   isGithubCamo,
-  isGithubProfileView,
   renderViewBadge,
   sumEventCounts,
   textWidth,
@@ -60,7 +59,9 @@ test('only GitHub image proxy fetches count as profile views', () => {
 test('a profile view event carries no IP, session or location', () => {
   const event = githubProfileViewEvent({ eventId: 'e1', now: new Date('2026-11-02T12:00:00Z'), userAgent: CAMO });
   assert.equal(event.eventType, GITHUB_PROFILE_VIEW_EVENT);
-  assert.equal(event.siteId, 'yuqi.site');
+  // Kept out of everything scoped to yuqi.site: the admin workbench, admin MCP tools and public stats.
+  assert.equal(event.siteId, GITHUB_PROFILE_SITE_ID);
+  assert.notEqual(event.siteId, 'yuqi.site');
   assert.equal(event.pageUrl, GITHUB_PROFILE_URL);
   assert.equal(event.eventTime, '2026-11-02T12:00:00.000Z');
   for (const key of ['sessionId', 'anonId', 'ipRaw', 'ipHash', 'geoHint', 'targetUrl']) assert.equal(event[key], null, key);
@@ -73,16 +74,6 @@ test('a profile view event carries no IP, session or location', () => {
   assert.equal(row.event, GITHUB_PROFILE_VIEW_EVENT);
   assert.equal(row.city, null);
   assert.equal(row.latitude, null);
-});
-
-test('the workbench recognizes profile views and links them to GitHub', () => {
-  assert.equal(isGithubProfileView({ eventName: GITHUB_PROFILE_VIEW_EVENT }), true);
-  assert.equal(isGithubProfileView({ eventName: 'page_view' }), false);
-  assert.equal(isGithubProfileView(null), false);
-  assert.deepEqual(githubProfileContent({ eventName: GITHUB_PROFILE_VIEW_EVENT }), {
-    title: 'GitHub profile README', type: 'GitHub', canonicalUrl: GITHUB_PROFILE_URL,
-  });
-  assert.equal(githubProfileContent({ eventName: 'page_view' }), null);
 });
 
 test('rollup rows add up and counts are formatted for the badge', () => {

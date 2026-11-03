@@ -162,7 +162,6 @@
 .eventToneConversion { border-color: #b9dcbf; background: #eef8ef; color: #28733a; }
 .eventToneAgent { border-color: #bfdbfe; background: #eef6ff; color: #1d5f9f; }
 .eventToneNeutral { border-color: #d2dadf; background: #f5f7f8; color: #53616b; }
-.eventToneGithub { border-color: #c9d1d9; background: #f6f8fa; color: #24292f; }
 .eventMain { display: grid; min-width: 0; gap: 12px; }
 .eventHeader { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .eventTitleBlock { display: grid; min-width: 0; gap: 4px; }
