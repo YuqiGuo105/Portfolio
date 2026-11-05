@@ -65,14 +65,23 @@ export function zoomThresholds(scale, latitude = 0, maxZoom = GLOBE_TILE_MAX_ZOO
   return Array.from({ length: maxZoom + 1 }, (_, z) => s / 2 ** (z + 0.5));
 }
 
-// The level to show, with hysteresis: keep the current level until the ideal one is 0.75 levels away.
-// Without it, panning north or south (latitude shifts the ideal level) or the last frames of a zoom
-// flipped the whole layer between two levels, and every flip down threw away the finer tiles.
+// Levels are picked a little finer than one texel per screen pixel. Rounding the ideal level to the nearest
+// one let a texel grow to 1.4 screen pixels, and up to 1.7 while the hysteresis below kept a level, which
+// looked soft on high-DPI screens just before each switch. Biased by LEVEL_BIAS, a new level shows texels of
+// 0.55 to 1.1 pixels and a kept one at most 1.2; the cost is more and smaller tiles.
+export const LEVEL_BIAS = 0.35;
+// Hysteresis: keep the shown level while it is within this many levels of the biased target. Without it,
+// panning north or south (latitude shifts the ideal level) or the last frames of a zoom flipped the whole
+// layer between two levels, and every flip down threw away the finer tiles.
+export const LEVEL_KEEP = 0.6;
+
+// The level to show.
 export function pickTileLevel({ scale, altitude, latitude = 0, current = null, minLevel = 0, maxLevel = GLOBE_TILE_MAX_ZOOM }) {
   const ideal = idealZoom(scale, altitude, latitude);
   if (!Number.isFinite(ideal)) return minLevel;
-  const keep = Number.isInteger(current) && current >= minLevel && current <= maxLevel && Math.abs(ideal - current) < 0.75;
-  return keep ? current : clamp(Math.round(ideal), minLevel, maxLevel);
+  const target = ideal + LEVEL_BIAS;
+  const keep = Number.isInteger(current) && current >= minLevel && current <= maxLevel && Math.abs(target - current) < LEVEL_KEEP;
+  return keep ? current : clamp(Math.round(target), minLevel, maxLevel);
 }
 
 // The coarsest tile level worth loading: twice the base texture's detail.
@@ -80,11 +89,36 @@ export function minTileZoom(baseZoom) {
   return clamp(Math.ceil(baseZoom) + 1, 0, GLOBE_TILE_MAX_ZOOM);
 }
 
-// Tiles switch on once the base texture is stretched about 2.4x and off again below 2x, so the layer does
-// not flicker at the boundary. The base texture is equirectangular, so its sharpness does not gain with latitude.
+// Tiles switch on once a base texel covers about 1.7 screen pixels and off again below 1.4, so the layer does
+// not flicker at the boundary. (They used to wait for 2.4 pixels: zooming in, the view sat on a visibly
+// stretched base texture right up to the switch.) The base texture is equirectangular, so its sharpness does
+// not gain with latitude.
+export const TILES_ON_STRETCH = 0.75;
+export const TILES_OFF_STRETCH = 0.5;
+
 export function tilesWanted({ scale, altitude, baseZoom, active = false }) {
   const stretch = idealZoom(scale, altitude, 0) - baseZoom;
-  return active ? stretch >= 1 : stretch >= 1.25;
+  return active ? stretch >= TILES_OFF_STRETCH : stretch >= TILES_ON_STRETCH;
+}
+
+// A base texture with twice the detail (8192 px wide, zoom 5) sharpens every view up to continental close-ups
+// with nothing to load while panning, at the price of a 2.6 MB download and about 170 MB of GPU memory.
+// Only desktops with a high-resolution screen, a mouse, a GPU that takes 8192 px textures and no data saver get it.
+export const DETAILED_TEXTURE_WIDTH = 8192;
+
+export function wantsDetailedTexture({
+  maxTextureSize = 0,
+  devicePixelRatio = 1,
+  viewportWidth = 0,
+  finePointer = false,
+  deviceMemory = null,
+  saveData = false,
+  effectiveType = "",
+} = {}) {
+  if (!(maxTextureSize >= DETAILED_TEXTURE_WIDTH) || !finePointer || saveData) return false;
+  if (/(^|-)(2g|3g)$/.test(String(effectiveType || ""))) return false;
+  if (Number.isFinite(deviceMemory) && deviceMemory < 8) return false;
+  return Math.min(Number(viewportWidth) || 0, 1600) * (Number(devicePixelRatio) || 1) >= 2400;
 }
 
 // How close the camera may go: where the deepest level is still at most ~1.4x stretched on the equator.

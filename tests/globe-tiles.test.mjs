@@ -50,14 +50,15 @@ test('tiles switch on once the base texture looks soft, and off again with some 
   assert.equal(minTileZoom(4), 5);
 
   const at = (stretch) => PHONE / 2 ** (3 + stretch); // altitude where the 2K texture is stretched 2^stretch
-  assert.equal(tilesWanted({ scale: PHONE, altitude: at(1.2), baseZoom: 3 }), false);
-  assert.equal(tilesWanted({ scale: PHONE, altitude: at(1.3), baseZoom: 3 }), true);
-  assert.equal(tilesWanted({ scale: PHONE, altitude: at(1.1), baseZoom: 3, active: true }), true);
-  assert.equal(tilesWanted({ scale: PHONE, altitude: at(0.9), baseZoom: 3, active: true }), false);
+  // On once a base texel covers about 1.7 screen pixels, off again below 1.4.
+  assert.equal(tilesWanted({ scale: PHONE, altitude: at(0.7), baseZoom: 3 }), false);
+  assert.equal(tilesWanted({ scale: PHONE, altitude: at(0.8), baseZoom: 3 }), true);
+  assert.equal(tilesWanted({ scale: PHONE, altitude: at(0.6), baseZoom: 3, active: true }), true);
+  assert.equal(tilesWanted({ scale: PHONE, altitude: at(0.4), baseZoom: 3, active: true }), false);
 
-  // On a phone the switch happens about where the globe fills the frame, never at the default view (2.2).
-  const switchOn = at(1.25);
-  assert.ok(switchOn > 1 && switchOn < 1.3, `switch-on altitude ${switchOn}`);
+  // On a phone the switch happens a little before the globe fills the frame, never at the default view (2.2).
+  const switchOn = at(0.75);
+  assert.ok(switchOn > 1.3 && switchOn < 2, `switch-on altitude ${switchOn}`);
   assert.equal(tilesWanted({ scale: PHONE, altitude: 2.2, baseZoom: 3 }), false);
 });
 
@@ -162,11 +163,12 @@ test('the layer loads the tiles in view at the right level and cleans up after i
   assert.equal(sync(altitude).active, true, 'settled');
   const level = engineLevel(zoomThresholds(PHONE, BEIJING.lat), altitude, 4);
   const requested = requests.map(({ url }) => parse(url));
-  assert.ok(requested.length >= 4 && requested.length <= 40, `${requested.length} tiles`);
+  // The view and the prefetch band around it.
+  assert.ok(requested.length >= 4 && requested.length <= 80, `${requested.length} tiles`);
   assert.ok(requested.every((t) => t.z === level), `all at level ${level}`);
   const home = tileOf(BEIJING, level);
   assert.ok(requested.some((t) => t.x === home.x && t.y === home.y), 'the tile under the camera');
-  assert.ok(requested.every((t) => Math.abs(t.x - home.x) <= 4 && Math.abs(t.y - home.y) <= 4), 'only tiles around the view');
+  assert.ok(requested.every((t) => Math.abs(t.x - home.x) <= 6 && Math.abs(t.y - home.y) <= 6), 'only tiles around the view');
 
   // Before any tile arrives the old zoom limit holds; afterwards the deepest sharp level sets it.
   assert.deepEqual(sync(altitude), { active: true, minAltitude: DEFAULT_MIN_ALTITUDE, credit: false });
@@ -279,14 +281,31 @@ test('tiles that turn out of view give their GPU memory back and return without 
   delete globalThis.document;
 });
 
-test('the shown level only changes once the ideal level is clearly elsewhere', () => {
+test('the shown level is a little finer than the screen and only changes once the target is clearly elsewhere', () => {
   const at = (zoom, latitude = 0) => (PHONE * Math.cos((latitude * Math.PI) / 180)) / 2 ** zoom; // altitude where ideal = zoom
-  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(6.4), minLevel: 4 }), 6);
-  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(6.6), current: 6, minLevel: 4 }), 6, 'stays');
-  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(5.4), current: 6, minLevel: 4 }), 6, 'stays');
-  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(6.8), current: 6, minLevel: 4 }), 7, 'moves up');
-  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(5.2), current: 6, minLevel: 4 }), 5, 'moves down');
+  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(6.1), minLevel: 4 }), 6);
+  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(6.4), minLevel: 4 }), 7, 'rounds up early');
+  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(6.2), current: 6, minLevel: 4 }), 6, 'stays');
+  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(5.1), current: 6, minLevel: 4 }), 6, 'stays');
+  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(6.3), current: 6, minLevel: 4 }), 7, 'moves up');
+  assert.equal(pickTileLevel({ scale: PHONE, altitude: at(5.0), current: 6, minLevel: 4 }), 5, 'moves down');
   assert.equal(pickTileLevel({ scale: PHONE, altitude: at(9.5), current: 8, minLevel: 4 }), 8);
+});
+
+test('zooming in and out never leaves a texel bigger than 1.2 screen pixels', () => {
+  for (const latitude of [0, 37, 60]) {
+    let current = null;
+    const altitudes = [];
+    for (let altitude = 2; altitude > 0.05; altitude *= 0.97) altitudes.push(altitude);
+    for (const altitude of [...altitudes, ...altitudes.slice().reverse(), ...altitudes]) {
+      current = pickTileLevel({ scale: PHONE, altitude, latitude, current, minLevel: 0 });
+      const ideal = idealZoom(PHONE, altitude, latitude);
+      if (ideal > GLOBE_TILE_MAX_ZOOM) continue; // clamped at the deepest level
+      const texelPixels = 2 ** (ideal - current);
+      assert.ok(texelPixels <= 1.2, `${texelPixels.toFixed(2)} px at altitude ${altitude.toFixed(3)}, latitude ${latitude}`);
+      assert.ok(texelPixels >= 0.5, `${texelPixels.toFixed(2)} px is needlessly fine`);
+    }
+  }
 });
 
 test('panning north and south at a fixed zoom never throws tiles away', () => {
@@ -521,4 +540,119 @@ test('the proxy caches good tiles for a long time and never caches failures', as
   assert.equal(res.statusCode, 200);
   assert.equal(res.body, undefined);
   assert.deepEqual(calls, ['http://127.0.0.1:9/6/24/52.jpeg']);
+});
+
+test('a pan finds the tiles it moves onto already requested, after the tiles in view', () => {
+  let requests = [];
+  globalThis.document = {
+    createElementNS: () => ({ addEventListener() {}, removeEventListener() {}, set src(url) { requests.push(url); } }),
+  };
+  // A desktop-shaped view (2.4:1) at a regional close-up.
+  const wideCamera = (lng, altitude) => {
+    const camera = cameraAt({ lat: 40, lng }, altitude);
+    camera.aspect = 2.4;
+    camera.updateProjectionMatrix();
+    return camera;
+  };
+  const load = (lng, altitude = 0.3) => {
+    requests = [];
+    const scene = new Scene();
+    const layer = createGlobeTileLayer({ scene, renderer: null, baseTextureWidth: 2048 });
+    const engine = scene.children[0];
+    const passes = [];
+    const update = engine.updatePov.bind(engine);
+    engine.updatePov = (camera) => {
+      const before = requests.length;
+      update(camera);
+      if (camera) passes.push(requests.slice(before));
+    };
+    layer.sync({ camera: wideCamera(lng, altitude), altitude, latitude: 40, viewportHeight: 840 });
+    layer.dispose();
+    return { view: passes[0], band: passes[1], all: new Set(requests) };
+  };
+
+  const here = load(100);
+  assert.ok(here.view.length > 0 && here.band.length > 0, 'the view first, then the band around it');
+  // One level past an 8K base texture a pan shows that texture nearly as sharp: no band.
+  const near = (() => {
+    requests = [];
+    const scene = new Scene();
+    const layer = createGlobeTileLayer({ scene, renderer: null, baseTextureWidth: 8192 });
+    const engine = scene.children[0];
+    let passes = 0;
+    const update = engine.updatePov.bind(engine);
+    engine.updatePov = (camera) => { update(camera); if (camera) passes += 1; };
+    const altitude = PHONE / 2 ** 5.85;
+    layer.sync({ camera: wideCamera(100, altitude), altitude, latitude: 0, viewportHeight: 840 });
+    const result = { passes, levels: new Set(requests.map((url) => url.split('/')[3])) };
+    layer.dispose();
+    return result;
+  })();
+  assert.deepEqual([...near.levels], ['6']);
+  assert.equal(near.passes, 1);
+  assert.ok(here.band.every((url) => !here.view.includes(url)), 'each tile is requested once');
+  for (const shift of [2, 3, 4, 5]) {
+    const there = load(100 + shift);
+    const missing = there.view.filter((url) => !here.all.has(url));
+    assert.equal(missing.length, 0, `${missing.length} tiles in view after a ${shift}° pan were not requested yet`);
+    assert.ok(there.view.some((url) => !here.view.includes(url)), `a ${shift}° pan reaches past the old view`);
+  }
+  delete globalThis.document;
+});
+
+test('a more detailed base texture moves the tiles one level finer and updates their colour match', () => {
+  const requests = [];
+  globalThis.document = {
+    createElementNS: () => {
+      const listeners = {};
+      const image = {
+        addEventListener: (type, listener) => { listeners[type] = listener; },
+        removeEventListener: () => {},
+        set src(url) { requests.push({ url, arrive: () => listeners.load?.call(image) }); },
+      };
+      return image;
+    },
+  };
+  const scene = new Scene();
+  const layer = createGlobeTileLayer({ scene, renderer: null, baseTextureWidth: 4096 });
+  const engine = scene.children[0];
+  const at = (stretch, baseZoom) => PHONE / 2 ** (baseZoom + stretch);
+  const sync = (altitude) => layer.sync({ camera: cameraAt(BEIJING, altitude), altitude, latitude: 0, viewportHeight: 840 });
+  const levels = () => new Set(requests.map(({ url }) => Number(url.split('/')[3])));
+
+  // Stretched 1.7x over the 4K texture: tiles from level 5.
+  sync(at(0.8, 4));
+  assert.equal(sync(at(0.8, 4)).active, true);
+  assert.deepEqual([...levels()], [5]);
+  requests.forEach((request) => request.arrive());
+  const tile = engine.children.find((child) => child.material?.userData?.globeTile);
+  assert.equal(tile.userData.globeTileUniforms.uLowBias.value, 1);
+
+  layer.setBaseTextureWidth(8192);
+  assert.equal(tile.userData.globeTileUniforms.uLowBias.value, 0, 'matched against the finer texture');
+  assert.equal(tile.userData.globeTileUniforms.uMatch.value, 1);
+  // The 8K texture is sharp enough here: the tiles switch off.
+  assert.equal(sync(at(0.8, 4)).active, false);
+  // Further in they come back, from level 6.
+  requests.length = 0;
+  sync(at(0.9, 5));
+  assert.equal(sync(at(0.9, 5)).active, true);
+  assert.ok([...levels()].every((level) => level >= 6), `levels ${[...levels()]}`);
+  layer.dispose();
+  delete globalThis.document;
+});
+
+test('only capable high-DPI desktops download the 8K base texture', () => {
+  const desktop = { maxTextureSize: 16384, devicePixelRatio: 2, viewportWidth: 1470, finePointer: true };
+  assert.equal(tiles.wantsDetailedTexture(desktop), true);
+  assert.equal(tiles.wantsDetailedTexture({ ...desktop, deviceMemory: 8 }), true);
+  assert.equal(tiles.wantsDetailedTexture({ ...desktop, deviceMemory: 4 }), false, 'little memory');
+  assert.equal(tiles.wantsDetailedTexture({ ...desktop, maxTextureSize: 4096 }), false, 'GPU cannot take it');
+  assert.equal(tiles.wantsDetailedTexture({ ...desktop, finePointer: false }), false, 'phones and tablets');
+  assert.equal(tiles.wantsDetailedTexture({ ...desktop, saveData: true }), false, 'data saver');
+  assert.equal(tiles.wantsDetailedTexture({ ...desktop, effectiveType: '3g' }), false, 'slow connection');
+  assert.equal(tiles.wantsDetailedTexture({ ...desktop, effectiveType: '4g' }), true);
+  assert.equal(tiles.wantsDetailedTexture({ ...desktop, devicePixelRatio: 1, viewportWidth: 1920 }), false, 'a 1x screen does not need it');
+  assert.equal(tiles.wantsDetailedTexture({ ...desktop, devicePixelRatio: 1.5, viewportWidth: 1920 }), true);
+  assert.equal(tiles.wantsDetailedTexture(), false);
 });

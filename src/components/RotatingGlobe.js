@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import GlobeLib from "react-globe.gl";
 import { supabase as supabaseClient } from "../supabase/supabaseClient";
-import { createGlobeTileLayer } from "../lib/globeTileLayer.mjs";
-import { DEFAULT_MIN_ALTITUDE, GLOBE_HD_CREDIT } from "../lib/globeTiles.mjs";
+import { createGlobeTileLayer, loadBaseTexture } from "../lib/globeTileLayer.mjs";
+import { DEFAULT_MIN_ALTITUDE, DETAILED_TEXTURE_WIDTH, GLOBE_HD_CREDIT, wantsDetailedTexture } from "../lib/globeTiles.mjs";
 import { APPROX_MIN_PX, MARKER_LIMIT, cellPixels, pinRequestFor } from "../lib/globePins.mjs";
 
 /* ============================================================
@@ -23,12 +23,17 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 // The globe renders at roughly 300–600 CSS px. A 2K equirectangular texture
 // covers the whole-globe view on standard screens; high-DPI desktops get 4K.
-// (The old 8K source was 4.4 MB and exceeds the max texture size of many
-// mobile GPUs.) Close-ups switch to imagery tiles, see src/lib/globeTileLayer.mjs.
+// Close-ups switch to imagery tiles, see src/lib/globeTileLayer.mjs.
+// Capable high-DPI desktops then swap in the 8K texture once the globe is idle
+// (2.6 MB; too large for many phone GPUs), so regional views are sharp and
+// panning across them has nothing to load (see wantsDetailedTexture).
 const GLOBE_TEXTURES = {
   small: { url: "/textures/earth_day_2k.jpg", width: 2048 },
   large: { url: "/textures/earth_day_4k.jpg", width: 4096 },
 };
+const DETAILED_GLOBE_TEXTURE = { url: "/textures/earth_day_8k.jpg", width: DETAILED_TEXTURE_WIDTH };
+// The 8K download starts this long after the first texture is showing, when the page is idle.
+const DETAILED_TEXTURE_DELAY_MS = 1500;
 const pickGlobeTexture = () => {
   if (typeof window === "undefined") return GLOBE_TEXTURES.small;
   const devicePixels = Math.min(window.innerWidth, 1200) * (window.devicePixelRatio || 1);
@@ -1425,12 +1430,86 @@ const RotatingGlobe = ({
         tileLayerRef.current = null;
       }
       syncTileLayer(true);
+      scheduleDetailedTexture();
+    };
+
+    // three-globe's own globe mesh and its texture, once that has loaded.
+    const findGlobeMesh = () => {
+      let mesh = null;
+      try {
+        globeRef.current?.scene().traverse((obj) => {
+          if (mesh || obj.__globeObjType !== "globe") return;
+          mesh = obj.children.find((child) => child.isMesh && child.material?.map?.image) || null;
+        });
+      } catch {}
+      return mesh;
+    };
+
+    // Swap in the 8K base texture on capable desktops. Waits for the first texture: three-globe would
+    // otherwise put it back when it finishes loading.
+    let upgradeTimer = null;
+    let idleHandle = null;
+    const scheduleDetailedTexture = () => {
+      if (globeTexture.width >= DETAILED_GLOBE_TEXTURE.width || typeof window === "undefined") return;
+      let renderer = null;
+      try {
+        renderer = globeRef.current?.renderer();
+      } catch {}
+      const connection = navigator.connection || {};
+      const wanted = wantsDetailedTexture({
+        maxTextureSize: renderer?.capabilities?.maxTextureSize || 0,
+        devicePixelRatio: window.devicePixelRatio || 1,
+        viewportWidth: window.innerWidth,
+        finePointer: Boolean(window.matchMedia?.("(pointer: fine)")?.matches),
+        deviceMemory: Number.isFinite(navigator.deviceMemory) ? navigator.deviceMemory : null,
+        saveData: Boolean(connection.saveData),
+        effectiveType: connection.effectiveType || "",
+      });
+      if (!wanted) return;
+
+      const upgrade = () => {
+        idleHandle = null;
+        if (cancelled) return;
+        loadBaseTexture(DETAILED_GLOBE_TEXTURE.url, renderer).then((texture) => {
+          const mesh = findGlobeMesh();
+          if (cancelled || !texture || !mesh) {
+            texture?.dispose();
+            return;
+          }
+          const previous = mesh.material.map;
+          mesh.material.map = texture;
+          mesh.material.needsUpdate = true;
+          if (previous && previous !== texture) previous.dispose();
+          baseTextureRef.current = texture;
+          tileLayerRef.current?.setBaseTextureWidth(DETAILED_GLOBE_TEXTURE.width);
+          syncTileLayer(true);
+        });
+      };
+      const waitForFirstTexture = () => {
+        upgradeTimer = null;
+        if (cancelled) return;
+        if (!findGlobeMesh()) {
+          upgradeTimer = setTimeout(waitForFirstTexture, 500);
+          return;
+        }
+        upgradeTimer = setTimeout(() => {
+          upgradeTimer = null;
+          if (typeof window.requestIdleCallback === "function") {
+            idleHandle = window.requestIdleCallback(upgrade, { timeout: 4000 });
+          } else {
+            upgrade();
+          }
+        }, DETAILED_TEXTURE_DELAY_MS);
+      };
+      waitForFirstTexture();
     };
     create();
 
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
+      if (upgradeTimer) clearTimeout(upgradeTimer);
+      if (idleHandle !== null && typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(idleHandle);
       if (tileSyncTimerRef.current) {
         clearTimeout(tileSyncTimerRef.current);
         tileSyncTimerRef.current = null;

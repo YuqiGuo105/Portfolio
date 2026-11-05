@@ -3,7 +3,7 @@
 // look soft; the level math lives in globeTiles.mjs. Client-only: RotatingGlobe is loaded with ssr: false.
 // Blue Marble serves the levels up to 8; EOxCloudless serves the closer ones once a test tile shows EOX
 // can be reached from this browser.
-import { MeshPhongMaterial, PerspectiveCamera } from "three";
+import { MeshPhongMaterial, PerspectiveCamera, SRGBColorSpace, Texture } from "three";
 import SlippyMapGlobe from "three-slippy-map-globe";
 
 import {
@@ -153,13 +153,23 @@ const ZOOM_SETTLE = 0.015;
 const MAX_TILES = 600;
 // A tile stays resident while within this many view radii of the view centre.
 const KEEP_MARGIN = 1.6;
+// Once the tiles in view are requested, the ones in a band around the view follow, so a pan finds them
+// already loaded instead of showing the base texture while they download. The band reaches half a view
+// past each edge (in the camera's tangent space): about 2.2 times the tiles. Band tiles beyond KEEP_MARGIN
+// stay in memory without a GPU texture until they come into view.
+export const PREFETCH_VIEW_SCALE = 1.5;
+// Only where the base texture would look clearly worse than the tiles: at least two levels coarser.
+// Just past the base texture's own level a pan shows it nearly as sharp, and the band would double the
+// tiles of a wide view for little gain.
+export const PREFETCH_MIN_LEVEL_GAP = 2;
 
-function aimCuller(culler, camera, radius) {
+function aimCuller(culler, camera, radius, viewScale = 1) {
   culler.copy(camera, false);
   const distance = camera.position.length(); // the camera always looks at the globe's centre
   culler.far = Math.max(culler.near * 2, distance - (radius * radius) / distance + radius * 0.02);
   const core = (2 * Math.asin(Math.min(1, (CORE_DISC * radius) / distance)) * 180) / Math.PI;
-  culler.fov = Math.min(camera.fov, core);
+  const fov = (2 * Math.atan(Math.tan((camera.fov * Math.PI) / 360) * viewScale) * 180) / Math.PI;
+  culler.fov = Math.min(fov, core);
   culler.updateProjectionMatrix();
   culler.updateMatrixWorld(true);
 }
@@ -185,6 +195,30 @@ function disposeTile(object) {
 }
 
 /**
+ * Loads a base texture for the globe, ready to swap in: the browser decodes the image off the main thread
+ * (img.decode) and it is uploaded to the GPU here, once, so the frame that swaps it in does not stall.
+ * Resolves null if the image cannot be loaded.
+ */
+export function loadBaseTexture(url, renderer) {
+  if (typeof Image === "undefined") return Promise.resolve(null);
+  const image = new Image();
+  image.decoding = "async";
+  image.src = url;
+  return image.decode().then(() => {
+    const texture = new Texture(image);
+    texture.colorSpace = SRGBColorSpace;
+    texture.anisotropy = Math.max(1, Math.min(8, renderer?.capabilities?.getMaxAnisotropy?.() || 1));
+    texture.needsUpdate = true;
+    try {
+      renderer?.initTexture?.(texture);
+    } catch {
+      // Uploaded on first use instead.
+    }
+    return texture;
+  }, () => null);
+}
+
+/**
  * Adds the tile shell to `scene` and returns a controller, or null without a scene.
  * Call `sync()` whenever the camera moves; it reports whether tiles are on, how close the camera may go and
  * whether EOxCloudless imagery (which needs a credit on screen) is showing.
@@ -199,8 +233,9 @@ export function createGlobeTileLayer({
 } = {}) {
   if (!scene || typeof scene.add !== "function") return null;
 
-  const baseZoom = textureZoom(baseTextureWidth);
-  const minLevel = minTileZoom(baseZoom);
+  // Both change if a more detailed base texture replaces the first one (setBaseTextureWidth).
+  let baseZoom = textureZoom(baseTextureWidth);
+  let minLevel = minTileZoom(baseZoom);
   let shownLevel = null;
   const engine = new SlippyMapGlobe(GLOBE_RADIUS, {
     minLevel,
@@ -238,6 +273,7 @@ export function createGlobeTileLayer({
   const state = { active: false, minAltitude: DEFAULT_MIN_ALTITUDE, credit: false };
   // The engine only knows the view frustum; it picks tiles through this stand-in camera (see aimCuller).
   const culler = new PerspectiveCamera();
+  const prefetchCuller = new PerspectiveCamera();
   let lastAltitude = 0;
   const camDir = culler.position.clone();
 
@@ -309,17 +345,38 @@ export function createGlobeTileLayer({
         engine.scale.setScalar(tileShellScale(altitude));
         engine.updateMatrixWorld(true);
         aimCuller(culler, camera, GLOBE_RADIUS);
+        aimCuller(prefetchCuller, camera, GLOBE_RADIUS, PREFETCH_VIEW_SCALE);
         setActive(true);
+        // The tiles in view are requested first, then the band around it.
+        const prefetch = level - baseZoom >= PREFETCH_MIN_LEVEL_GAP;
         engine.updatePov(culler);
+        if (prefetch) engine.updatePov(prefetchCuller);
         if (trimToView(camera) > MAX_TILES) {
           engine.clearTiles();
           engine.updatePov(culler);
+          if (prefetch) engine.updatePov(prefetchCuller);
         }
       }
       if (hd === "ready") state.minAltitude = minSharpAltitude(scale, GLOBE_HD_MAX_ZOOM);
       else state.minAltitude = tileArrived ? minSharpAltitude(scale) : DEFAULT_MIN_ALTITUDE;
       state.credit = state.active && shownLevel !== null && isHdLevel(shownLevel);
       return { ...state };
+    },
+
+    // A more detailed base texture arrived: tiles start one level finer and match colours to it. Tiles
+    // already loaded stay and only have their colour-match settings updated.
+    setBaseTextureWidth(width) {
+      const nextZoom = textureZoom(width);
+      if (!(nextZoom > 0) || nextZoom === baseZoom) return;
+      baseZoom = nextZoom;
+      minLevel = minTileZoom(baseZoom);
+      engine.children.forEach((tile) => {
+        const uniforms = tile.userData?.globeTileUniforms;
+        const level = tile.userData?.globeTileLevel;
+        if (!uniforms || !Number.isInteger(level)) return;
+        uniforms.uLowBias.value = Math.max(0, level - baseZoom);
+        uniforms.uMatch.value = colourMatchWeight(level, baseZoom);
+      });
     },
 
     dispose() {
