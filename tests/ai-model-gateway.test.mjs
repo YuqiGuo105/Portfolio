@@ -153,3 +153,44 @@ test('truncated streams and invalid billing metadata retain the whole reservatio
     } finally { await f.close(); }
   }
 });
+
+test('a synchronous answer reaches the caller before the accounting write, which still runs before the request ends', async () => {
+  let release;
+  const settleWait = new Promise(resolve => { release = resolve; });
+  const f = await fixture({ settleWait });
+  try {
+    const response = await f.request();
+    assert.equal(response.headers.get('content-length') !== null, true);
+    const value = await Promise.race([response.json(), new Promise((_, reject) => setTimeout(() => reject(new Error('body waited for accounting')), 1000))]);
+    assert.equal(value.candidates[0].content.parts[0].text, '{"ok":true}');
+    assert.deepEqual(f.charges, [], 'accounting is still in progress');
+    release();
+    for (let i = 0; i < 50 && !f.charges.length; i++) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.deepEqual(f.charges, [36]);
+  } finally { release(); await f.close(); }
+});
+
+test('a transcript reaches the caller before the dictation reservation is settled', async () => {
+  const wav = Buffer.alloc(6444);
+  wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);
+  wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(16000, 24); wav.writeUInt32LE(32000, 28); wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(wav.length - 44, 40);
+  const request = { ...body, contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'audio/wav', data: wav.toString('base64') } }] }] };
+  let release, settled = false, deferSettle;
+  const wait = new Promise(resolve => { release = resolve; });
+  const f = await fixture({ model: QWEN_MODEL, transcribe: async (audio, options) => {
+    deferSettle = options.deferSettle;
+    return { text: '你好 Redis', settle: async () => { await wait; settled = true; } };
+  } });
+  try {
+    const response = await f.request(secret, request);
+    const result = await Promise.race([response.json(), new Promise((_, reject) => setTimeout(() => reject(new Error('transcript waited for accounting')), 1000))]);
+    assert.deepEqual(JSON.parse(result.candidates[0].content.parts[0].text), { text: '你好 Redis' });
+    assert.equal(deferSettle, true);
+    assert.equal(settled, false);
+    release();
+    for (let i = 0; i < 50 && !settled; i++) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(settled, true);
+  } finally { release(); await f.close(); }
+});

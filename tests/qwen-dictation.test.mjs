@@ -82,3 +82,19 @@ test('local provider overrides cannot activate on production or remote callers',
   assert.equal(sameOrigin({ headers: { origin: 'https://evil.example', host: 'localhost:3118' } }), false);
   assert.equal(sameOrigin({ headers: { 'sec-fetch-site': 'cross-site' } }), false);
 });
+
+test('deferred settlement hands the transcript back first and settles once, later', async () => {
+  const h = harness();
+  const result = await transcribeQwen(wav().toString('base64'), { ...h.options, deferSettle: true });
+  assert.equal(result.text, '系统架构 Redis Java');
+  assert.deepEqual(h.charges, [], 'not settled yet');
+  await result.settle();
+  await result.settle();
+  assert.deepEqual(h.charges, [null], 'unknown usage keeps the whole reservation, charged once');
+  assert.equal(h.socket.readyState, 3);
+});
+test('with deferred settlement a failure still settles before rejecting', async () => {
+  const h = harness([{ type: 'error', error: { message: 'provider down' } }]);
+  await assert.rejects(transcribeQwen(wav().toString('base64'), { ...h.options, deferSettle: true }), { code: 'dictation_unavailable' });
+  assert.deepEqual(h.charges, [null]);
+});

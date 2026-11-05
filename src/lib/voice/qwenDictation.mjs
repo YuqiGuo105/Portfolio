@@ -44,8 +44,12 @@ export function dictationSession() {
     turn_detection: null, max_tokens: 1 } };
 }
 
+// With deferSettle the transcript comes back as { text, settle } and the caller settles the reservation
+// after it has handed the text on (the gateway keeps its request open until then). Failures always
+// settle before rejecting.
 export async function transcribeQwen(audio, { env = process.env, signal,
-  connect = (url, options) => new WebSocket(url, options), spend = createSpendGuard({ env }), timeoutMs = 30000 } = {}) {
+  connect = (url, options) => new WebSocket(url, options), spend = createSpendGuard({ env }), timeoutMs = 30000,
+  deferSettle = false } = {}) {
   const pcm = readDictationWav(audio);
   const config = qwenConfiguration(env);
   if (!config.configured) throw new DictationError('dictation_not_configured');
@@ -53,10 +57,10 @@ export async function transcribeQwen(audio, { env = process.env, signal,
   // No response.create is sent: recognition only, no spoken answer. Retain a
   // conservative reservation because this event does not include billed usage.
   const reservation = await spend.reserve('qwen', 'dictation', 10000);
-  let started = false;
+  let started = false, deferred = false;
   try {
     if (signal?.aborted) throw new DictationError('cancelled', 499);
-    return await new Promise((resolve, reject) => {
+    const result = await new Promise((resolve, reject) => {
       let socket, finished = false, setupSent = false, committed = false, itemId;
       const timer = setTimeout(() => finish(new DictationError('dictation_timeout', 504)), timeoutMs);
       const abort = () => finish(new DictationError('cancelled', 499));
@@ -98,7 +102,11 @@ export async function transcribeQwen(audio, { env = process.env, signal,
         });
       } catch { finish(new DictationError('dictation_unavailable')); }
     });
+    if (!deferSettle) return result;
+    deferred = true;
+    let settled;
+    return { ...result, settle: () => (settled ??= reservation.settle(null).catch(() => {})) };
   } finally {
-    await reservation.settle(started ? null : 0).catch(() => {});
+    if (!deferred) await reservation.settle(started ? null : 0).catch(() => {});
   }
 }

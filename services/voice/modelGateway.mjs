@@ -5,6 +5,14 @@ import { QWEN_MODEL } from '../../src/lib/voice/qwenProtocol.mjs';
 
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
+// Hands a complete JSON body to the caller (Content-Length lets it finish reading at once) while the
+// request stays open: the accounting write that follows still runs before the response ends, as on a
+// CPU-throttled host it must, but it is no longer on the caller's critical path.
+const deliver = (res, body) => {
+  const payload = JSON.stringify(body);
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Content-Length': Buffer.byteLength(payload) });
+  res.write(payload);
+};
 const count = value => Number.isSafeInteger(value) && value >= 0;
 export const CHEAP_TEXT_MODEL = 'qwen3.7-flash-2026-07-15';
 
@@ -128,9 +136,11 @@ export function createModelGateway({ env = process.env, fetchImpl = fetch, spend
         // Keep the Java transcription contract; this path only recognizes
         // speech and never requests an answer or stores audio.
         const audio = dictationAudio(body, operation);
-        const result = await transcribe(audio, { env, spend, signal: abort.signal });
-        if (!res.destroyed) json(res, 200, { candidates: [{ content: { role: 'model',
-          parts: [{ text: JSON.stringify(result) }] }, finishReason: 'STOP' }], modelVersion: QWEN_MODEL });
+        const result = await transcribe(audio, { env, spend, signal: abort.signal, deferSettle: true });
+        if (!res.destroyed) deliver(res, { candidates: [{ content: { role: 'model',
+          parts: [{ text: JSON.stringify({ text: result.text }) }] }, finishReason: 'STOP' }], modelVersion: QWEN_MODEL });
+        if (typeof result.settle === 'function') await result.settle();
+        if (!res.destroyed) res.end();
         return true;
       }
       quote = quoteRequest(model, operation, body);
@@ -170,8 +180,9 @@ export function createModelGateway({ env = process.env, fetchImpl = fetch, spend
         for await (const chunk of upstream.body) { bytes += chunk.length; if (bytes > 2e6) throw new Error('Response too large'); chunks.push(chunk); }
         const output = observe(JSON.parse(Buffer.concat(chunks).toString()));
         complete = true;
+        deliver(res, output);
         await settle();
-        json(res, 200, output);
+        res.end();
       } else {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' });
         let pending = '', total = 0;
