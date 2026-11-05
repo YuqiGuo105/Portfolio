@@ -204,11 +204,11 @@ test('the layer loads the tiles in view at the right level and cleans up after i
   assert.equal(engine.visible, false);
   assert.equal(engine.children.filter((child) => child.material?.userData?.globeTile).length, 0);
 
-  // Wide views fetch the face of the globe only: a few dozen tiles, none of them behind the horizon.
+  // Wide views fetch the face of the globe and a band around the view: dozens of tiles, none behind the horizon.
   requests.length = 0;
   for (const a of [1.1, 1.1]) sync(a);
   const wide = requests.map(({ url }) => parse(url));
-  assert.ok(wide.length > 4 && wide.length <= 40, `${wide.length} tiles at altitude 1.1`);
+  assert.ok(wide.length > 4 && wide.length <= 80, `${wide.length} tiles at altitude 1.1`);
   // Angle from the view centre to the nearest corner or the centre of a tile.
   const rad = Math.PI / 180;
   const angle = (lat, lng) => Math.acos(Math.min(1, Math.sin(lat * rad) * Math.sin(BEIJING.lat * rad)
@@ -573,7 +573,7 @@ test('a pan finds the tiles it moves onto already requested, after the tiles in 
 
   const here = load(100);
   assert.ok(here.view.length > 0 && here.band.length > 0, 'the view first, then the band around it');
-  // One level past an 8K base texture a pan shows that texture nearly as sharp: no band.
+  // The band is there whenever tiles are on, even one level past an 8K base texture.
   const near = (() => {
     requests = [];
     const scene = new Scene();
@@ -589,7 +589,7 @@ test('a pan finds the tiles it moves onto already requested, after the tiles in 
     return result;
   })();
   assert.deepEqual([...near.levels], ['6']);
-  assert.equal(near.passes, 1);
+  assert.equal(near.passes, 2);
   assert.ok(here.band.every((url) => !here.view.includes(url)), 'each tile is requested once');
   for (const shift of [2, 3, 4, 5]) {
     const there = load(100 + shift);
@@ -655,4 +655,92 @@ test('only capable high-DPI desktops download the 8K base texture', () => {
   assert.equal(tiles.wantsDetailedTexture({ ...desktop, devicePixelRatio: 1, viewportWidth: 1920 }), false, 'a 1x screen does not need it');
   assert.equal(tiles.wantsDetailedTexture({ ...desktop, devicePixelRatio: 1.5, viewportWidth: 1920 }), true);
   assert.equal(tiles.wantsDetailedTexture(), false);
+});
+
+test('a tile image that fails to load is retried with a growing delay instead of staying blank', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const requests = [];
+  globalThis.document = {
+    createElementNS: () => {
+      const listeners = {};
+      const image = {
+        addEventListener: (type, listener) => { listeners[type] = listener; },
+        removeEventListener: () => {},
+        set src(url) { requests.push({ url, arrive: () => listeners.load?.call(image), fail: () => listeners.error?.call(image, new Event('error')) }); },
+      };
+      return image;
+    },
+  };
+  const scene = new Scene();
+  const layer = createGlobeTileLayer({ scene, renderer: null, baseTextureWidth: 2048 });
+  const engine = scene.children[0];
+  const altitude = 0.3;
+  const sync = () => layer.sync({ camera: cameraAt(BEIJING, altitude), altitude, latitude: BEIJING.lat, viewportHeight: 840 });
+  sync();
+  const first = requests[0].url;
+  const count = (url) => requests.filter((request) => request.url === url).length;
+
+  requests[0].fail();
+  assert.equal(count(first), 1, 'no instant retry');
+  t.mock.timers.tick(800);
+  assert.equal(count(first), 2, 'retried after 0.8 s');
+  requests.filter((request) => request.url === first).at(-1).arrive();
+  assert.ok(engine.children.some((child) => child.material?.map?.image && child.material.userData.globeTile), 'the retried tile is shown');
+
+  // A tile that keeps failing is given up after the last delay.
+  const second = requests.find((request) => request.url !== first);
+  second.fail();
+  for (const delay of [800, 2500, 6000, 15000]) {
+    t.mock.timers.tick(delay);
+    requests.filter((request) => request.url === second.url).at(-1).fail();
+  }
+  t.mock.timers.tick(60000);
+  assert.equal(count(second.url), 5, 'one load and four retries');
+  layer.dispose();
+  delete globalThis.document;
+});
+
+test('new tiles fade in over the imagery below them', async () => {
+  const requests = [];
+  globalThis.document = {
+    createElementNS: () => {
+      const listeners = {};
+      const image = {
+        addEventListener: (type, listener) => { listeners[type] = listener; },
+        removeEventListener: () => {},
+        set src(url) { requests.push(() => listeners.load?.call(image)); },
+      };
+      return image;
+    },
+  };
+  const scene = new Scene();
+  const layer = createGlobeTileLayer({ scene, renderer: null, baseTextureWidth: 2048 });
+  const engine = scene.children[0];
+  layer.sync({ camera: cameraAt(BEIJING, 0.3), altitude: 0.3, latitude: BEIJING.lat, viewportHeight: 840 });
+  requests[0]();
+  const tile = engine.children.find((child) => child.material?.userData?.globeTile);
+  assert.equal(tile.material.transparent, true);
+  assert.equal(tile.material.opacity, 0, 'invisible until its first frame');
+  tile.onBeforeRender();
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  tile.onBeforeRender();
+  assert.ok(tile.material.opacity > 0 && tile.material.opacity < 1, `half-way at ${tile.material.opacity}`);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  tile.onBeforeRender();
+  assert.equal(tile.material.opacity, 1);
+  layer.dispose();
+  delete globalThis.document;
+});
+
+test('the base texture gets anisotropic filtering once, so the globe edge does not shimmer', () => {
+  const scene = new Scene();
+  const layer = createGlobeTileLayer({ scene, renderer: { capabilities: { getMaxAnisotropy: () => 16 } }, baseTextureWidth: 2048 });
+  const base = new Texture({ width: 2048, height: 1024 });
+  const version = base.version;
+  layer.sync({ camera: cameraAt(BEIJING, 2.2), altitude: 2.2, latitude: BEIJING.lat, viewportHeight: 840, baseTexture: base });
+  assert.equal(base.anisotropy, 8);
+  assert.equal(base.version, version + 1, 'uploaded again with the new filtering');
+  layer.sync({ camera: cameraAt(BEIJING, 2.2), altitude: 2.2, latitude: BEIJING.lat, viewportHeight: 840, baseTexture: base });
+  assert.equal(base.version, version + 1, 'only once');
+  layer.dispose();
 });

@@ -3,12 +3,14 @@
 // look soft; the level math lives in globeTiles.mjs. Client-only: RotatingGlobe is loaded with ssr: false.
 // Blue Marble serves the levels up to 8; EOxCloudless serves the closer ones once a test tile shows EOX
 // can be reached from this browser.
-import { MeshPhongMaterial, PerspectiveCamera, SRGBColorSpace, Texture } from "three";
+import { MeshPhongMaterial, PerspectiveCamera, SRGBColorSpace, Texture, TextureLoader } from "three";
 import SlippyMapGlobe from "three-slippy-map-globe";
 
 import {
   DEFAULT_MIN_ALTITUDE,
   GLOBE_HD_MAX_ZOOM,
+  GLOBE_HD_TILE_URL,
+  GLOBE_TILE_PATH,
   GLOBE_TILE_MAX_ZOOM,
   colourMatchWeight,
   globeTileUrl,
@@ -71,6 +73,50 @@ const TILE_FRAGMENT = `{
   }
   diffuseColor.rgb *= fine;
 }`;
+
+// A tile image that fails to load (a CDN miss that timed out, EOX rate-limiting a burst) used to leave a
+// hole for good: three-slippy-map-globe loads each tile once, without an error callback, and marks it as
+// loading forever. As the globe kept turning, those squares stayed on the soft base texture. Tile loads
+// now retry with a growing delay; three's other image loads are untouched.
+export const TILE_RETRY_DELAYS_MS = Object.freeze([800, 2500, 6000, 15000]);
+const EOX_ORIGIN = new URL(GLOBE_HD_TILE_URL).origin;
+const isTileImage = (url) => typeof url === "string" && (url.startsWith(`${GLOBE_TILE_PATH}/`) || url.startsWith(`${EOX_ORIGIN}/`));
+let retryInstalled = false;
+
+export function installTileRetry(delays = TILE_RETRY_DELAYS_MS, wait = (ms, run) => setTimeout(run, ms)) {
+  if (retryInstalled) return;
+  retryInstalled = true;
+  const load = TextureLoader.prototype.load;
+  TextureLoader.prototype.load = function loadWithRetry(url, onLoad, onProgress, onError) {
+    if (onError || !isTileImage(url)) return load.call(this, url, onLoad, onProgress, onError);
+    let attempt = 0;
+    const tryLoad = () => load.call(this, url, onLoad, onProgress, () => {
+      if (attempt < delays.length) wait(delays[attempt++], tryLoad);
+    });
+    return tryLoad();
+  };
+}
+
+// New tiles fade in over the coarser imagery under them instead of popping in square by square.
+export const TILE_FADE_MS = 220;
+
+function fadeIn(object, now = () => (typeof performance !== "undefined" ? performance.now() : Date.now())) {
+  const material = object.material;
+  if (!material?.userData?.globeTile || material.userData.faded) return;
+  material.userData.faded = true;
+  material.transparent = true;
+  material.opacity = 0;
+  let start = null;
+  object.onBeforeRender = () => {
+    start ??= now();
+    const progress = Math.min(1, (now() - start) / TILE_FADE_MS);
+    material.opacity = progress * progress * (3 - 2 * progress);
+    if (progress >= 1) {
+      material.opacity = 1;
+      object.onBeforeRender = () => {};
+    }
+  };
+}
 
 // One set of uniforms for every tile: the base texture arrives after the layer is created.
 function baseUniforms() {
@@ -142,15 +188,17 @@ function probeHdImagery() {
 // The engine fetches every tile with a corner in the view frustum, which also takes in the far side of
 // the globe and, while the whole globe is on screen, a limb so foreshortened that the base texture serves
 // it fine. The culler is the real camera with its far plane on the horizon (nothing behind the globe) and,
-// until the globe fills the view, its field narrowed to the inner 80% of the disc.
-const CORE_DISC = 0.8;
+// until the globe fills the view, its field narrowed to the inner 92% of the disc. (At 80% the ring
+// left on the base texture was wide enough to see as a blurry band turning in from the edge.)
+const CORE_DISC = 0.92;
 // A camera that moved more than 1.5% in altitude since the last sync is still zooming.
 const ZOOM_SETTLE = 0.015;
 // Tiles that turn away from the camera (auto-rotation, panning) give their GPU texture back and hide; three
 // re-uploads them from the kept image if they come round again, so nothing flashes and phones do not run
 // out of GPU memory (a lost WebGL context blanks or reloads the page). Only far past this many loaded
-// tiles does the layer start over from the current view.
-const MAX_TILES = 600;
+// tiles does the layer start over from the current view. Hidden tiles keep only their image (no GPU
+// texture), so this can be generous; starting over flashes the whole view back to the base texture.
+const MAX_TILES = 1500;
 // A tile stays resident while within this many view radii of the view centre.
 const KEEP_MARGIN = 1.6;
 // Once the tiles in view are requested, the ones in a band around the view follow, so a pan finds them
@@ -158,10 +206,10 @@ const KEEP_MARGIN = 1.6;
 // past each edge (in the camera's tangent space): about 2.2 times the tiles. Band tiles beyond KEEP_MARGIN
 // stay in memory without a GPU texture until they come into view.
 export const PREFETCH_VIEW_SCALE = 1.5;
-// Only where the base texture would look clearly worse than the tiles: at least two levels coarser.
-// Just past the base texture's own level a pan shows it nearly as sharp, and the band would double the
-// tiles of a wide view for little gain.
-export const PREFETCH_MIN_LEVEL_GAP = 2;
+// Whenever tiles are on: ground turning in at the edge (idle auto-rotation, a drag) then arrives already
+// loaded instead of as a soft band of base texture that sharpens a moment later. This roughly doubles the
+// tiles of a wide view.
+export const PREFETCH_MIN_LEVEL_GAP = 1;
 
 function aimCuller(culler, camera, radius, viewScale = 1) {
   culler.copy(camera, false);
@@ -252,11 +300,15 @@ export function createGlobeTileLayer({
   // EOxCloudless: "unknown" until tiles first switch on, then "probing", then "ready" or "off".
   let hd = "unknown";
   const shared = baseUniforms();
+  installTileRetry();
   const add = engine.add.bind(engine);
   engine.add = (...objects) => {
     objects.forEach((object) => {
       prepareTile(object, anisotropy, shared, baseZoom);
-      if (object?.material?.userData?.globeTile) tileArrived = true;
+      if (object?.material?.userData?.globeTile) {
+        tileArrived = true;
+        fadeIn(object);
+      }
     });
     return add(...objects);
   };
@@ -323,6 +375,12 @@ export function createGlobeTileLayer({
       if (baseTexture !== shared.uBaseMap.value) {
         shared.uBaseMap.value = baseTexture || null;
         shared.uBaseReady.value = baseTexture?.image ? 1 : 0;
+        // three-globe uploads its texture without anisotropic filtering, so the globe's oblique edges
+        // shimmered and looked jagged while it turned. One re-upload of the base texture fixes that.
+        if (baseTexture?.image && (baseTexture.anisotropy || 1) < anisotropy) {
+          baseTexture.anisotropy = anisotropy;
+          baseTexture.needsUpdate = true;
+        }
       }
       const scale = tileScale(viewportHeight, camera?.fov);
       if (!camera || !(scale > 0) || !(altitude > 0)) return { ...state };
