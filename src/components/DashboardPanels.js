@@ -1201,6 +1201,10 @@ const DashboardPanels = () => {
           --timestamp-pill-bg: rgba(255, 255, 255, 0.58);
           --timestamp-pill-text: #6b7280;
           --timestamp-pill-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+          --card-shadow-hover: 0 22px 48px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(79, 70, 229, 0.14);
+          --card-border-hover: rgba(79, 70, 229, 0.28);
+          --row-hover-bg: rgba(79, 70, 229, 0.07);
+          --accent-hover: #4f46e5;
 
           background: var(--dashboard-bg);
           padding: 3rem 0;
@@ -1236,6 +1240,10 @@ const DashboardPanels = () => {
           --timestamp-pill-bg: rgba(148, 163, 184, 0.08);
           --timestamp-pill-text: #ffffff;
           --timestamp-pill-shadow: none;
+          --card-shadow-hover: 0 28px 56px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(129, 140, 248, 0.28);
+          --card-border-hover: rgba(129, 140, 248, 0.4);
+          --row-hover-bg: rgba(129, 140, 248, 0.1);
+          --accent-hover: #a5b4fc;
         }
 
         /* ... keep rest of your CSS unchanged ... */
@@ -2278,6 +2286,119 @@ const DashboardPanels = () => {
         .grafana-links a:hover {
           color: #4f46e5;
           text-decoration: underline;
+        }
+
+        /* Real-Time Data hover feedback. Every rule sits inside (hover: hover) and only changes how a card or
+           row looks while the pointer is over it, so the resting layout is exactly what it was. */
+        @media (hover: hover) {
+          .dashboard-card-1,
+          .dashboard-card-2,
+          .dashboard-card-3,
+          .dashboard-card-4 {
+            transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s ease,
+              border-color 0.35s ease;
+          }
+
+          .dashboard-card-1:hover,
+          .dashboard-card-2:hover,
+          .dashboard-card-3:hover {
+            transform: translateY(-4px);
+          }
+
+          /* The visitors card holds the draggable globe, so it glows instead of moving under the pointer. */
+          .dashboard-card-1:hover,
+          .dashboard-card-2:hover,
+          .dashboard-card-3:hover,
+          .dashboard-card-4:hover {
+            box-shadow: var(--card-shadow-hover);
+            border-color: var(--card-border-hover);
+          }
+
+          .dashboard-card-1 header,
+          .dashboard-card-2 header,
+          .dashboard-card-3 header,
+          .dashboard-card-4 header {
+            transition: box-shadow 0.45s ease;
+          }
+
+          .dashboard-card-1:hover header,
+          .dashboard-card-2:hover header,
+          .dashboard-card-3:hover header,
+          .dashboard-card-4:hover header {
+            box-shadow: inset 0 -48px 72px -36px rgba(96, 165, 250, 0.6);
+          }
+
+          /* A soft pill behind the hovered row; the spread shadow pads it without moving anything. */
+          .market-row,
+          .stat {
+            border-radius: 10px;
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+          }
+
+          .market-row:hover,
+          .stat:hover {
+            background-color: var(--row-hover-bg);
+            box-shadow: 0 0 0 8px var(--row-hover-bg);
+          }
+
+          .symbol,
+          .stat-value {
+            transition: color 0.2s ease;
+          }
+
+          .market-row:hover .symbol,
+          .stat:hover .stat-value {
+            color: var(--accent-hover);
+          }
+
+          .icon-wrapper {
+            transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s ease;
+          }
+
+          .weather-card:hover .icon-wrapper {
+            transform: scale(1.06) rotate(-4deg);
+            box-shadow: 0 10px 24px rgba(249, 115, 22, 0.22);
+          }
+
+          .side-item::after,
+          .side-label {
+            transition: opacity 0.2s ease, color 0.2s ease;
+          }
+
+          .side-bar {
+            transition: box-shadow 0.2s ease, filter 0.2s ease;
+          }
+
+          .side-item:hover::after {
+            opacity: 1;
+          }
+
+          .side-item:hover .side-label {
+            color: var(--text-primary);
+          }
+
+          .side-item:hover .side-bar {
+            box-shadow: 0 0 10px rgba(34, 211, 238, 0.55);
+            filter: saturate(1.3);
+          }
+
+          .globe-frame {
+            transition: box-shadow 0.3s ease, border-color 0.3s ease;
+          }
+
+          .globe-frame:hover {
+            border-color: rgba(99, 102, 241, 0.45);
+            box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.25), 0 18px 40px rgba(79, 70, 229, 0.18);
+          }
+        }
+
+        @media (hover: hover) and (prefers-reduced-motion: reduce) {
+          .dashboard-card-1:hover,
+          .dashboard-card-2:hover,
+          .dashboard-card-3:hover,
+          .weather-card:hover .icon-wrapper {
+            transform: none;
+          }
         }
 
         @media (max-width: 1024px) {
