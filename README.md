@@ -1,10 +1,35 @@
 # Yuqi Guo's Portfolio Platform
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-0f766e.svg)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-12-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org)
+[![Spring Boot](https://img.shields.io/badge/Spring_Boot-services-6DB33F?logo=springboot&logoColor=white)](#microservices-github-repositories)
+[![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-events-231F20?logo=apachekafka&logoColor=white)](#data-flows)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL_+_pgvector-3FCF8E?logo=supabase&logoColor=white)](#supabase-setup)
 
 A modern Next.js portfolio application for showcasing projects, blogs, CV, visitor analytics, and an AI-powered portfolio assistant. The site is designed as both a personal portfolio and a microservice-backed engineering platform, with serverless frontend APIs, Supabase-backed content storage, Kafka-based event fan-out, OpenSearch search, pgvector RAG indexing, notification delivery, and a real-time visitor analytics pipeline.
 
 **Production:** https://www.yuqi.site
+
+<p align="center">
+  <a href="https://www.yuqi.site">
+    <img src="docs/readme-assets/homepage-hero.jpg" alt="The yuqi.site homepage: name, role and the hero portrait" width="100%" />
+  </a>
+</p>
+
+## At a glance
+
+- **What it is:** a personal portfolio (projects, blogs, CV) that is also a running platform: a Next.js front end on Vercel in front of Spring Boot services on Google Cloud Run, connected through Kafka.
+- **Data:** Supabase PostgreSQL holds the content and pgvector embeddings; OpenSearch serves search; Redis holds AI budgets, chat memory and de-duplication keys.
+- **Mr. Pot:** the site's AI assistant, the little pot in the corner of the site. Visitors chat with it, or call it by voice; it answers from the portfolio's own content with sources.
+- **For AI clients:** a public read-only MCP server at `https://www.yuqi.site/mcp`, and an admin MCP endpoint behind sign-in.
+- **Explore:** [live site](https://www.yuqi.site) · [interactive architecture](https://www.yuqi.site/architecture) · [MCP guide](https://www.yuqi.site/mcp-guide) · [run it locally](#getting-started)
+
+## Highlights
+
+- **Transactional outbox, fenced.** Publishing writes the new version, its outbox event, two indexing jobs and an audit row in one PostgreSQL transaction, with no dual write to Kafka. Relays replay rows until Kafka acknowledges them, claiming work with `FOR UPDATE SKIP LOCKED`, a lease and a version bump, so a relay that outlived its lease cannot overwrite a newer claim. ([flow ②](#workflow-publish-content))
+- **Visitor analytics counted once.** Each page event gets a UUIDv7 id at the edge and goes to Kafka, or straight to PostgreSQL with the same id when Kafka is down. A batch consumer drops duplicates with Redis `SETNX`, claims each event in a durable inbox and updates sessions and 5-minute / daily rollups in the same transaction, then acknowledges Kafka: exactly once in effect. ([flow ④](#workflow-track-visitor))
+- **One policy point for AI tools.** Every MCP call, public or admin, passes one tool gateway: a typed registry, RBAC and risk levels, `Idempotency-Key` checks, explicit confirmation for writes, sanitized results and audited execution. ([flow ⑤](#workflow-execute-mcp))
+- **Grounded answers inside a daily budget.** Mr. Pot reserves its daily model budget atomically in Redis before each run, retrieves evidence from the pgvector chunks that publishing writes, and answers without evidence rather than failing when retrieval is down. ([flow ①](#workflow-ask-agent))
 
 ---
 
@@ -57,7 +82,7 @@ The [architecture time machine](https://www.yuqi.site/architecture#evolution) re
 | Jul 19, 2026 | [Transactional outbox with relays](https://www.yuqi.site/architecture#evolution/outbox) | Decision | Events committed with a publish can no longer get lost: relays replay outbox rows and indexing jobs until Kafka acknowledges them. |
 | Aug 18, 2026 | [Fenced outbox claims](https://www.yuqi.site/architecture#evolution/fencing) | Decision | Relays claim rows with FOR UPDATE SKIP LOCKED and a lease, and every claim bumps a version, so a relay that outlived its lease cannot overwrite a newer claim. |
 | Aug 31, 2026 | [A career copilot over the admin MCP](https://www.yuqi.site/architecture#evolution/copilot) | Milestone | A Chrome extension helps fill job applications from a private career vault, through the authenticated MCP endpoint. |
-| Oct 21, 2026 | [Voice calls with hard quotas](https://www.yuqi.site/architecture#evolution/voice) | Decision | Visitors can call Mr. Pot from the homepage; a Cloud Run relay holds the provider keys, and a database allowance caps the whole platform at five calls a day. |
+| Oct 21, 2026 | [Voice calls with hard quotas](https://www.yuqi.site/architecture#evolution/voice) | Decision | Visitors can call Mr. Pot, the site's AI assistant, from the homepage; a Cloud Run relay holds the provider keys, and a database allowance caps the whole platform at five calls a day. |
 
 </details>
 
@@ -371,7 +396,7 @@ remains manual.
 ## Features
 
 * **Modern portfolio frontend** built with Next.js, including projects, blogs, CV, parallax project detail pages, and guided navigation.
-* **AI chat assistant** with RAG retrieval, multi-round reasoning, intent classification, and MCP tool execution.
+* **Mr. Pot, the AI assistant** (chat and voice) with RAG retrieval, multi-round reasoning, intent classification, and MCP tool execution.
 * **Public MCP integration** that gives ChatGPT, Claude, GitHub Copilot, Cursor, and other MCP clients read-only access to projects, articles, stored architecture diagrams, and public profile data.
 * **Application Copilot** that combines an authenticated Chrome extension, MCP workflow, deterministic field resolution, private resume assets, and explicit review before any sensitive field is applied.
 * **Admin dashboard** for managing blogs, projects, life posts, and portfolio content.
@@ -380,7 +405,7 @@ remains manual.
 * **RAG indexing pipeline** using embeddings stored in Supabase PostgreSQL with pgvector.
 * **Notification system** with subscription management, dispatch service, email sender worker, retry handling, and delivery tracking.
 * **Supabase backend** for PostgreSQL, pgvector, storage, RLS policies, and server-side API integration.
-* **3D geospatial visitor globe** and a real-time `/analytics` dashboard powered by a Kafka → Spring Boot aggregator pipeline (Valkey dedup, pre-aggregated `geo_time_rollups`, public visits API). Close-ups stay sharp with NASA Blue Marble tiles served through the cached `/api/map-tiles` proxy.
+* **3D geospatial visitor globe** and a real-time `/analytics` dashboard powered by a Kafka → Spring Boot aggregator pipeline (Valkey dedup, pre-aggregated `geo_time_rollups`, public visits API). Close-ups stay sharp with NASA Blue Marble tiles through the cached `/api/map-tiles` proxy and EOxCloudless (Sentinel-2) imagery for the closest views; visitors appear only as metro-level aggregates, about 11 km precise.
 * **SEO support** with reusable metadata, `robots.txt`, and `sitemap.xml`.
 
 ---
@@ -464,12 +489,12 @@ Restrict the API key to the reCAPTCHA Enterprise API. Never expose
 
 ## Supabase Setup
 
-1. Create a Supabase project at [app.supabase.com](https://app.supabase.com).
+1. Create a Supabase project in the [Supabase dashboard](https://supabase.com/dashboard).
 2. Copy the Project URL and anon public API key from **Project Settings → API**.
 3. Add them to `.env` as `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 4. Copy the `service_role` key and set it as `SUPABASE_SERVICE_ROLE_KEY`.
 5. Open the Supabase SQL Editor.
-6. Review `creat_sql.txt` and `docs/security/` before setting up the database. Do not run legacy bootstrap SQL against an existing production database.
+6. Review `create_sql.txt`, `supabase/migrations/` and `docs/security/` before setting up the database. Do not run legacy bootstrap SQL against an existing production database.
 7. Confirm that required tables, policies, and server-side access patterns are configured correctly.
 
 ---
@@ -492,8 +517,8 @@ This project includes basic SEO support:
 
 * Reusable SEO metadata component
 * Page-level titles and descriptions
-* `robots.txt`
-* `sitemap.xml`
+* Server-rendered project and blog lists: the home page, `/works-list` and `/blogs` read their cards in `getStaticProps` (regenerated every 5 minutes), so crawlers and visitors without JavaScript see the full lists (`src/lib/publicContent.mjs`)
+* `robots.txt`, `sitemap.xml`, `/rss.xml` and `/llms.txt`
 * Production site URL configuration
 
 ---

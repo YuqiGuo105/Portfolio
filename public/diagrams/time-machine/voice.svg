@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="747" viewBox="0 0 1160 747" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="766" viewBox="0 0 1160 766" role="img" aria-labelledby="title desc">
 <title id="title">Architecture time machine: Voice calls with hard quotas</title>
-<desc id="desc">Architecture time machine, step 16 of 16 (Oct 21, 2026): Voice calls with hard quotas. Visitors can call Mr. Pot from the homepage; a Cloud Run relay holds the provider keys, and a database allowance caps the whole platform at five calls a day.</desc>
+<desc id="desc">Architecture time machine, step 16 of 16 (Oct 21, 2026): Voice calls with hard quotas. Visitors can call Mr. Pot, the site's AI assistant, from the homepage; a Cloud Run relay holds the provider keys, and a database allowance caps the whole platform at five calls a day.</desc>
 <defs>
   <filter id="shadow" x="-10%" y="-10%" width="120%" height="135%">
     <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" flood-color="#1f2d38" flood-opacity="0.09"/>
@@ -59,7 +59,7 @@
   .lane-sub { font-size: 11px; font-weight: 500; fill: #56656f; }
   .lane-num { font-size: 12px; font-weight: 800; fill: #ffffff; }
 </style>
-<rect width="1160" height="747" fill="#ffffff"/>
+<rect width="1160" height="766" fill="#ffffff"/>
 <style>
   .tm-eyebrow { font-size: 11px; font-weight: 750; letter-spacing: 1.4px; fill: #14805e; }
   .tm-title { font-size: 24px; font-weight: 750; }
@@ -81,8 +81,9 @@
 <rect x="24" y="80" width="64" height="19" rx="9.5" fill="#14805e" fill-opacity="0.14300000000000002"/>
 <text x="56" y="93.5" text-anchor="middle" class="tm-badge" style="fill:#14805e">DECISION</text>
 <text x="98" y="94" class="tm-meta">Oct 21, 2026 · Product</text>
-<text x="24" y="122" class="tm-summary">Visitors can call Mr. Pot from the homepage; a Cloud Run relay holds the provider keys, and a database allowance caps the whole platform at five calls a day.</text>
-<g transform="translate(0 145)">
+<text x="24" y="122" class="tm-summary">Visitors can call Mr. Pot, the site's AI assistant, from the homepage; a Cloud Run relay holds the provider keys, and a database allowance caps the whole platform at five</text>
+<text x="24" y="141" class="tm-summary">calls a day.</text>
+<g transform="translate(0 164)">
 <rect x="0" y="0" width="1160" height="96" fill="#fbfcfd"/>
 <text x="16" y="56" class="tm-band">CLIENTS</text>
 <rect x="0" y="96" width="1160" height="92" fill="#f6f8fa"/>
@@ -141,45 +142,45 @@
 <g><rect x="516" y="397" width="112" height="46" rx="8" fill="#ffffff" stroke="#c3ced7" stroke-width="1.2"/><rect x="516" y="403" width="3.5" height="34" rx="1.75" fill="#1778a8"/><text x="572" y="417" text-anchor="middle" class="tm-node">Redis</text><text x="572" y="432" text-anchor="middle" class="tm-node-sub">Valkey · shared</text></g>
 <text x="316" y="191.5" text-anchor="middle" class="tm-label" style="fill:#17212a">voice session</text>
 </g>
-<line x1="56" y1="643" x2="133.3" y2="643" stroke="#e1e7ec" stroke-width="2"/>
-<text x="56" y="655" class="tm-phase">MONOLITH</text>
-<line x1="194.7" y1="643" x2="272" y2="643" stroke="#e1e7ec" stroke-width="2"/>
-<text x="194.7" y="655" class="tm-phase">SERVICES</text>
-<line x1="333.3" y1="643" x2="618.7" y2="643" stroke="#e1e7ec" stroke-width="2"/>
-<text x="333.3" y="655" class="tm-phase">EVENT-DRIVEN</text>
-<line x1="680" y1="643" x2="826.7" y2="643" stroke="#e1e7ec" stroke-width="2"/>
-<text x="680" y="655" class="tm-phase">PLATFORM</text>
-<line x1="888" y1="643" x2="965.3" y2="643" stroke="#e1e7ec" stroke-width="2"/>
-<text x="888" y="655" class="tm-phase">RELIABILITY</text>
-<line x1="1026.7" y1="643" x2="1104" y2="643" stroke="#14805e" stroke-width="2"/>
-<text x="1026.7" y="655" class="tm-phase" style="fill:#14805e">PRODUCT</text>
-<line x1="60" y1="667" x2="1100" y2="667" stroke="#e1e7ec" stroke-width="4" stroke-linecap="round"/>
-<line x1="60" y1="667" x2="1100" y2="667" stroke="#14805e" stroke-width="4" stroke-linecap="round"/>
-<circle cx="60" cy="667" r="7" fill="#435363" stroke="#435363" stroke-width="2"/>
-<text x="60" y="694" text-anchor="middle" class="tm-date">Jan 30, 2024</text>
-<circle cx="129.3" cy="667" r="7" fill="#435363" stroke="#435363" stroke-width="2"/>
-<circle cx="198.7" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
-<circle cx="268" cy="667" r="7" fill="#ba4a52" stroke="#ba4a52" stroke-width="2"/>
-<circle cx="337.3" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
-<circle cx="406.7" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
-<circle cx="476" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
-<circle cx="545.3" cy="667" r="7" fill="#ba4a52" stroke="#ba4a52" stroke-width="2"/>
-<circle cx="614.7" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
-<circle cx="684" cy="667" r="7" fill="#435363" stroke="#435363" stroke-width="2"/>
-<circle cx="753.3" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
-<circle cx="822.7" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
-<circle cx="892" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
-<circle cx="961.3" cy="667" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
-<circle cx="1030.7" cy="667" r="7" fill="#435363" stroke="#435363" stroke-width="2"/>
-<circle cx="1100" cy="667" r="13" fill="#14805e" fill-opacity="0.154"/>
-<circle cx="1100" cy="667" r="9" fill="#ffffff" stroke="#14805e" stroke-width="2"/>
-<text x="1100" y="694" text-anchor="middle" class="tm-date" style="fill:#17212a;font-weight:800">Oct 21, 2026</text>
-<circle cx="29" cy="721" r="5" fill="#14805e"/><text x="39" y="725" class="tm-legend">Decision</text>
-<circle cx="110.97200000000001" cy="721" r="5" fill="#ba4a52"/><text x="120.97200000000001" y="725" class="tm-legend">Incident</text>
-<circle cx="189.21280000000002" cy="721" r="5" fill="#435363"/><text x="199.21280000000002" y="725" class="tm-legend">Milestone</text>
-<line x1="272.7144" y1="721" x2="290.7144" y2="721" stroke="#33424e" stroke-width="2"/><text x="296.7144" y="725" class="tm-legend">request</text>
-<line x1="358.0896" y1="721" x2="376.0896" y2="721" stroke="#7356a6" stroke-width="2"/><text x="382.0896" y="725" class="tm-legend">event</text>
-<line x1="430.40560000000005" y1="721" x2="448.40560000000005" y2="721" stroke="#1778a8" stroke-width="2"/><text x="454.40560000000005" y="725" class="tm-legend">data</text>
-<text x="496.19200000000006" y="725" class="tm-legend" style="fill:#14805e">NEW · added in this step</text>
-<text x="648.7484000000002" y="725" class="tm-legend">faint · unchanged</text>
+<line x1="56" y1="662" x2="133.3" y2="662" stroke="#e1e7ec" stroke-width="2"/>
+<text x="56" y="674" class="tm-phase">MONOLITH</text>
+<line x1="194.7" y1="662" x2="272" y2="662" stroke="#e1e7ec" stroke-width="2"/>
+<text x="194.7" y="674" class="tm-phase">SERVICES</text>
+<line x1="333.3" y1="662" x2="618.7" y2="662" stroke="#e1e7ec" stroke-width="2"/>
+<text x="333.3" y="674" class="tm-phase">EVENT-DRIVEN</text>
+<line x1="680" y1="662" x2="826.7" y2="662" stroke="#e1e7ec" stroke-width="2"/>
+<text x="680" y="674" class="tm-phase">PLATFORM</text>
+<line x1="888" y1="662" x2="965.3" y2="662" stroke="#e1e7ec" stroke-width="2"/>
+<text x="888" y="674" class="tm-phase">RELIABILITY</text>
+<line x1="1026.7" y1="662" x2="1104" y2="662" stroke="#14805e" stroke-width="2"/>
+<text x="1026.7" y="674" class="tm-phase" style="fill:#14805e">PRODUCT</text>
+<line x1="60" y1="686" x2="1100" y2="686" stroke="#e1e7ec" stroke-width="4" stroke-linecap="round"/>
+<line x1="60" y1="686" x2="1100" y2="686" stroke="#14805e" stroke-width="4" stroke-linecap="round"/>
+<circle cx="60" cy="686" r="7" fill="#435363" stroke="#435363" stroke-width="2"/>
+<text x="60" y="713" text-anchor="middle" class="tm-date">Jan 30, 2024</text>
+<circle cx="129.3" cy="686" r="7" fill="#435363" stroke="#435363" stroke-width="2"/>
+<circle cx="198.7" cy="686" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="268" cy="686" r="7" fill="#ba4a52" stroke="#ba4a52" stroke-width="2"/>
+<circle cx="337.3" cy="686" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="406.7" cy="686" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="476" cy="686" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="545.3" cy="686" r="7" fill="#ba4a52" stroke="#ba4a52" stroke-width="2"/>
+<circle cx="614.7" cy="686" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="684" cy="686" r="7" fill="#435363" stroke="#435363" stroke-width="2"/>
+<circle cx="753.3" cy="686" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="822.7" cy="686" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="892" cy="686" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="961.3" cy="686" r="7" fill="#14805e" stroke="#14805e" stroke-width="2"/>
+<circle cx="1030.7" cy="686" r="7" fill="#435363" stroke="#435363" stroke-width="2"/>
+<circle cx="1100" cy="686" r="13" fill="#14805e" fill-opacity="0.154"/>
+<circle cx="1100" cy="686" r="9" fill="#ffffff" stroke="#14805e" stroke-width="2"/>
+<text x="1100" y="713" text-anchor="middle" class="tm-date" style="fill:#17212a;font-weight:800">Oct 21, 2026</text>
+<circle cx="29" cy="740" r="5" fill="#14805e"/><text x="39" y="744" class="tm-legend">Decision</text>
+<circle cx="110.97200000000001" cy="740" r="5" fill="#ba4a52"/><text x="120.97200000000001" y="744" class="tm-legend">Incident</text>
+<circle cx="189.21280000000002" cy="740" r="5" fill="#435363"/><text x="199.21280000000002" y="744" class="tm-legend">Milestone</text>
+<line x1="272.7144" y1="740" x2="290.7144" y2="740" stroke="#33424e" stroke-width="2"/><text x="296.7144" y="744" class="tm-legend">request</text>
+<line x1="358.0896" y1="740" x2="376.0896" y2="740" stroke="#7356a6" stroke-width="2"/><text x="382.0896" y="744" class="tm-legend">event</text>
+<line x1="430.40560000000005" y1="740" x2="448.40560000000005" y2="740" stroke="#1778a8" stroke-width="2"/><text x="454.40560000000005" y="744" class="tm-legend">data</text>
+<text x="496.19200000000006" y="744" class="tm-legend" style="fill:#14805e">NEW · added in this step</text>
+<text x="648.7484000000002" y="744" class="tm-legend">faint · unchanged</text>
 </svg>

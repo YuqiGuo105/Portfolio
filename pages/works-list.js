@@ -1,11 +1,24 @@
-import dynamic from "next/dynamic";
 import Layout from "../src/layout/Layout";
 import SeoHead from "../src/components/SeoHead";
+import ProjectIsotop from "../src/components/ProjectIsotop";
+import {
+  LIST_REVALIDATE_SECONDS,
+  loadProjectCards,
+  orEmpty,
+  publicServerClient,
+} from "../src/lib/publicContent.mjs";
 
-const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
-  ssr: false,
-});
-const WorksList = () => {
+// The archive is in the first HTML (see src/lib/publicContent.mjs); the browser refreshes it after load.
+export async function getStaticProps() {
+  const { projects, systems } = await orEmpty(
+    () => loadProjectCards(publicServerClient()),
+    { projects: [], systems: {} },
+    "projects"
+  );
+  return { props: { projects, systems }, revalidate: LIST_REVALIDATE_SECONDS };
+}
+
+const WorksList = ({ projects = [], systems = {} }) => {
   return (
     <Layout>
       <SeoHead
@@ -50,7 +63,7 @@ const WorksList = () => {
           <div className="row">
             <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
               {/* Works */}
-              <ProjectIsotop showViewAll={false} />
+              <ProjectIsotop showViewAll={false} initialProjects={projects} initialSystems={systems} />
             </div>
           </div>
         </div>

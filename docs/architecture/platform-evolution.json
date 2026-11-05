@@ -1069,7 +1069,7 @@
       "phase": "Product",
       "type": "decision",
       "title": "Voice calls with hard quotas",
-      "summary": "Visitors can call Mr. Pot from the homepage; a Cloud Run relay holds the provider keys, and a database allowance caps the whole platform at five calls a day.",
+      "summary": "Visitors can call Mr. Pot, the site's AI assistant, from the homepage; a Cloud Run relay holds the provider keys, and a database allowance caps the whole platform at five calls a day.",
       "sections": [
         {
           "label": "Guardrails",

@@ -28,9 +28,14 @@ export default function PreLoader() {
 
   if (phase === 'done') return null;
   return (
-    <div className={`${styles.entrance} ${phase === 'leaving' ? styles.leaving : ''}`} role="status" aria-label="Loading portfolio">
-      <img src="/assets/images/YuqiLogo.png" width="64" height="64" alt="" />
-      <span className={styles.progress} aria-hidden="true" />
-    </div>
+    <>
+      {/* Without JavaScript nothing removes this overlay, and the server-rendered page under it is
+          complete, so a browser with scripting off never shows it. */}
+      <noscript dangerouslySetInnerHTML={{ __html: '<style>[data-preloader]{display:none!important}</style>' }} />
+      <div data-preloader="" className={`${styles.entrance} ${phase === 'leaving' ? styles.leaving : ''}`} role="status" aria-label="Loading portfolio">
+        <img src="/assets/images/YuqiLogo.png" width="64" height="64" alt="" />
+        <span className={styles.progress} aria-hidden="true" />
+      </div>
+    </>
   );
 }

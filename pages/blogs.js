@@ -5,6 +5,55 @@ import { useRouter } from 'next/router';
 import { supabase } from '../src/supabase/supabaseClient';
 import SeoHead from "../src/components/SeoHead";
 import LogInDialog from "../src/components/LogInDialog";
+import {
+  BLOG_CARD_COLUMNS,
+  LIFE_BLOG_CARD_COLUMNS,
+  LIST_REVALIDATE_SECONDS,
+  loadLifeBlogCards,
+  loadTechBlogCards,
+  orEmpty,
+  publicServerClient,
+} from "../src/lib/publicContent.mjs";
+
+// Technical and life posts as one list, each with its type, display date and link.
+function combineBlogs(techBlogs, lifeBlogs) {
+  const normalizedTechBlogs = (techBlogs || []).map(blog => ({
+    ...blog,
+    blogType: 'technical',
+    displayDate: blog.date,
+    linkPath: `/blog-single/${blog.id}`
+  }));
+  const normalizedLifeBlogs = (lifeBlogs || []).map(blog => ({
+    ...blog,
+    blogType: 'life',
+    displayDate: blog.published_at,
+    linkPath: `/life-blog/${blog.id}`
+  }));
+  return [...normalizedTechBlogs, ...normalizedLifeBlogs];
+}
+
+function collectTags(blogs) {
+  const tagsSet = new Set();
+  blogs.forEach(blog => {
+    if (blog.tags) {
+      blog.tags.split(',').forEach(tag => {
+        const trimmed = tag.trim();
+        if (trimmed) tagsSet.add(trimmed);
+      });
+    }
+  });
+  return Array.from(tagsSet).sort();
+}
+
+// The post list is in the first HTML (see src/lib/publicContent.mjs); the browser refreshes it after load.
+export async function getStaticProps() {
+  const client = publicServerClient();
+  const [techBlogs, lifeBlogs] = await Promise.all([
+    orEmpty(() => loadTechBlogCards(client), [], "blogs"),
+    orEmpty(() => loadLifeBlogCards(client), [], "life blogs"),
+  ]);
+  return { props: { initialBlogs: combineBlogs(techBlogs, lifeBlogs) }, revalidate: LIST_REVALIDATE_SECONDS };
+}
 
 // Pagination Component
 const Pagination = ({ totalItems, itemsPerPage, currentPage, onPageChange }) => {
@@ -40,20 +89,20 @@ const Pagination = ({ totalItems, itemsPerPage, currentPage, onPageChange }) => 
   );
 };
 
-const Blogs = () => {
+const Blogs = ({ initialBlogs = [] }) => {
   const router = useRouter();
   const { tag: queryTag, type: queryType } = router.query;
 
-  const [allBlogs, setAllBlogs] = useState([]);
-  const [filteredBlogs, setFilteredBlogs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [allBlogs, setAllBlogs] = useState(initialBlogs);
+  const [filteredBlogs, setFilteredBlogs] = useState(initialBlogs);
+  const [loading, setLoading] = useState(initialBlogs.length === 0);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(6);
   
   // Filter states
   const [selectedTag, setSelectedTag] = useState('');
   const [selectedType, setSelectedType] = useState('all'); // 'all', 'technical', 'life'
-  const [allTags, setAllTags] = useState([]);
+  const [allTags, setAllTags] = useState(() => collectTags(initialBlogs));
   
   // Login states
   const [showLogin, setShowLogin] = useState(false);
@@ -95,12 +144,13 @@ const Blogs = () => {
   // Fetch all blogs
   useEffect(() => {
     const fetchBlogs = async () => {
-      setLoading(true);
+      // Server-rendered posts stay on screen while they refresh.
+      if (!initialBlogs.length) setLoading(true);
       
       // Fetch technical blogs
       const { data: techBlogs, error: techError } = await supabase
         .from('Blogs')
-        .select('*')
+        .select(BLOG_CARD_COLUMNS)
         .order('date', { ascending: false });
 
       if (techError) {
@@ -111,42 +161,21 @@ const Blogs = () => {
       // Listing fields only: the body of login-only posts is not readable without signing in.
       const { data: lifeBlogs, error: lifeError } = await supabase
         .from('life_blogs')
-        .select('id, title, image_url, category, published_at, description, require_login, created_at, updated_at, tags')
+        .select(LIFE_BLOG_CARD_COLUMNS)
         .order('created_at', { ascending: false });
 
       if (lifeError) {
         console.error('Error fetching life blogs:', lifeError);
       }
 
-      // Combine and normalize blogs
-      const normalizedTechBlogs = (techBlogs || []).map(blog => ({
-        ...blog,
-        blogType: 'technical',
-        displayDate: blog.date,
-        linkPath: `/blog-single/${blog.id}`
-      }));
-
-      const normalizedLifeBlogs = (lifeBlogs || []).map(blog => ({
-        ...blog,
-        blogType: 'life',
-        displayDate: blog.published_at,
-        linkPath: `/life-blog/${blog.id}`
-      }));
-
-      const combined = [...normalizedTechBlogs, ...normalizedLifeBlogs];
+      // A failed refresh keeps the server-rendered list.
+      if ((techError || lifeError) && initialBlogs.length) {
+        setLoading(false);
+        return;
+      }
+      const combined = combineBlogs(techBlogs, lifeBlogs);
       setAllBlogs(combined);
-
-      // Extract all unique tags
-      const tagsSet = new Set();
-      combined.forEach(blog => {
-        if (blog.tags) {
-          blog.tags.split(',').forEach(tag => {
-            const trimmed = tag.trim();
-            if (trimmed) tagsSet.add(trimmed);
-          });
-        }
-      });
-      setAllTags(Array.from(tagsSet).sort());
+      setAllTags(collectTags(combined));
 
       setLoading(false);
     };

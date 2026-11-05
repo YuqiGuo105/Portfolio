@@ -1,4 +1,3 @@
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import ContactForm from "../src/components/ContactForm";
 import TestimonialSlider from "../src/components/TestimonialSlider";
@@ -19,11 +18,35 @@ import { trackClick } from "../src/lib/behaviorAnalytics";
 import { GitPullRequest } from "lucide-react";
 
 import SocialLinks from "../src/components/SocialLinks";
+import ProjectIsotop from "../src/components/ProjectIsotop";
+import {
+  BLOG_CARD_COLUMNS,
+  LIST_REVALIDATE_SECONDS,
+  loadExperiences,
+  loadLifeBlogCards,
+  loadProjectCards,
+  loadTechBlogCards,
+  orEmpty,
+  publicServerClient,
+} from "../src/lib/publicContent.mjs";
 
 Modal.setAppElement('#__next');
-const ProjectIsotop = dynamic(() => import("../src/components/ProjectIsotop"), {
-  ssr: false,
-});
+
+// Projects, blogs and experience are in the first HTML (see src/lib/publicContent.mjs), so the page is
+// complete without JavaScript; the browser refreshes them after load.
+export async function getStaticProps() {
+  const client = publicServerClient();
+  const [featured, blogs, lifeBlogs, experiences] = await Promise.all([
+    orEmpty(() => loadProjectCards(client, { featuredOnly: true }), { projects: [], systems: {} }, "projects"),
+    orEmpty(() => loadTechBlogCards(client), [], "blogs"),
+    orEmpty(() => loadLifeBlogCards(client, { ascending: true }), [], "life blogs"),
+    orEmpty(() => loadExperiences(client), [], "experience"),
+  ]);
+  return {
+    props: { initialContent: { projects: featured.projects, systems: featured.systems, blogs, lifeBlogs, experiences } },
+    revalidate: LIST_REVALIDATE_SECONDS,
+  };
+}
 
 const BlogSliderArrow = ({ className = "", onClick, direction }) => {
   const isPrev = direction === "prev";
@@ -42,13 +65,15 @@ const BlogSliderArrow = ({ className = "", onClick, direction }) => {
   );
 };
 
-const Index = () => {
-  const [blogs, setBlogs] = useState([]);
+const Index = ({ initialContent = {} }) => {
+  const [blogs, setBlogs] = useState(() => initialContent.blogs || []);
   const [error, setError] = useState(null);
   const [yearsOfExperience, setYearsOfExperience] = useState(1);
-  const [experiences, setExperiences] = useState([]);
-  const [companiesCount, setCompaniesCount] = useState(0);
-  const [lifeBlogs, setLifeBlogs] = useState([]);
+  const [experiences, setExperiences] = useState(() => initialContent.experiences || []);
+  const [companiesCount, setCompaniesCount] = useState(
+    () => new Set((initialContent.experiences || []).map((e) => e.name)).size
+  );
+  const [lifeBlogs, setLifeBlogs] = useState(() => initialContent.lifeBlogs || []);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -126,7 +151,7 @@ const Index = () => {
       /* tech blogs */
       const { data: tech, error: techErr } = await supabase
         .from("Blogs")
-        .select("*")
+        .select(BLOG_CARD_COLUMNS)
         .order("date", { ascending: false });
       if (techErr) return setError(techErr.message);
       setBlogs(tech);
@@ -1040,7 +1065,11 @@ const Index = () => {
             </div>
 
             {/* Works */}
-            <ProjectIsotop featuredOnly />
+            <ProjectIsotop
+              featuredOnly
+              initialProjects={initialContent.projects}
+              initialSystems={initialContent.systems}
+            />
           </div>
         </section>
 

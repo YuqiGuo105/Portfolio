@@ -583,7 +583,7 @@ export default function CVPage() {
       if (error) throw error;
       if (!data || data.length === 0) {
         throw new Error(
-          "Delete blocked by Supabase RLS. Run the 'Owner can delete cv_comments' policy from creat_sql.txt in the Supabase SQL editor."
+          "Delete blocked by Supabase RLS. Apply supabase/migrations/20261101120000_public_read_policies.sql (policy 'Owner can delete CV comments') in the Supabase SQL editor."
         );
       }
       setComments((prev) => prev.filter((c) => c.id !== commentId));

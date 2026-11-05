@@ -1,8 +1,8 @@
-import Isotope from "isotope-layout";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import ProjectSystemCover, { supportsSystemCover } from "./projects/ProjectSystemCover";
 import { supabase } from "../supabase/supabaseClient";
+import { PROJECT_CARD_COLUMNS, PROJECT_SYSTEM_COLUMNS, firstSystemByProject } from "../lib/publicContent.mjs";
 
 const BASE_FILTERS = [
   { key: "all", label: "All", icon: "fa-border-all" },
@@ -13,11 +13,13 @@ const BASE_FILTERS = [
 
 const categoryKey = (category) => category.trim().replace(/\s+/g, "-");
 
-const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
+// `initialProjects` / `initialSystems` come from the page's getStaticProps, so the cards are in the
+// server-rendered HTML; the browser then refreshes them.
+const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjects = null, initialSystems = null }) => {
   const isotope = useRef();
   const [filterKey, setFilterKey] = useState("all");
-  const [projects, setProjects] = useState([]);
-  const [projectSystems, setProjectSystems] = useState({});
+  const [projects, setProjects] = useState(() => (Array.isArray(initialProjects) ? initialProjects : []));
+  const [projectSystems, setProjectSystems] = useState(() => initialSystems || {});
 
   const filters = useMemo(() => {
     const known = new Set(BASE_FILTERS.map(({ key }) => key));
@@ -40,7 +42,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
     const fetchProjects = async () => {
       let query = supabase
         .from("Projects")
-        .select("*")
+        .select(PROJECT_CARD_COLUMNS)
         .eq("publication_status", "PUBLISHED")
         .order("num", { ascending: false });
       if (featuredOnly) query = query.eq("featured", true);
@@ -60,7 +62,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
 
       const { data: systems, error: systemsError } = await supabase
         .from("project_subsystems")
-        .select("id,project_id,title,eyebrow,maturity,sort_order,diagram_config")
+        .select(PROJECT_SYSTEM_COLUMNS)
         .in("project_id", nextProjects.map((project) => project.id))
         .eq("active", true)
         .order("sort_order", { ascending: true });
@@ -71,10 +73,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
         return;
       }
 
-      setProjectSystems((systems || []).reduce((byProject, system) => {
-        if (!byProject[system.project_id]) byProject[system.project_id] = system;
-        return byProject;
-      }, {}));
+      setProjectSystems(firstSystemByProject(systems));
     };
     fetchProjects();
   }, [featuredOnly]);
@@ -85,7 +84,12 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
       isotope.current.destroy();
       isotope.current = null;
     }
-    const timer = setTimeout(() => {
+    // Isotope touches window when imported, so it loads in the browser only; the grid itself renders
+    // on the server.
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const { default: Isotope } = await import("isotope-layout");
+      if (cancelled) return;
       isotope.current = new Isotope(".proj-grid", {
         itemSelector: ".proj-col",
         layoutMode: "fitRows",
@@ -93,6 +97,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true }) => {
       });
     }, 120);
     return () => {
+      cancelled = true;
       clearTimeout(timer);
       if (isotope.current) {
         isotope.current.destroy();
