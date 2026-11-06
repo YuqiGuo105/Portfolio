@@ -45,6 +45,9 @@ jobs:
       - name: Security regression tests
         run: npm run test:security
 
+      - name: Contact form abuse protection
+        run: npm run test:contact
+
       - name: OAuth regression tests
         run: npm run test:oauth
 
