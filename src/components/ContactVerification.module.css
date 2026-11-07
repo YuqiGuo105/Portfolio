@@ -2,6 +2,8 @@
   --verification-ink: #4b5756;
   --verification-line: #c6cdca;
   --verification-hover: #00000008;
+  position: relative;
+  z-index: 1;
   margin: 16px 0;
   min-height: 65px;
   max-width: 100%;

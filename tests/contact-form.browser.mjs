@@ -104,6 +104,8 @@ try {
           overlap: statusBox.right > buttonBox.left && statusBox.bottom > buttonBox.top,
           actionsAligned: Math.abs((buttonBox.top + buttonBox.height / 2) - (linkBox.top + linkBox.height / 2)) < 1,
           pseudoContent: getComputedStyle(button, '::before').content,
+          aboveDecoration: getComputedStyle(element).position === 'relative'
+            && Number(getComputedStyle(element).zIndex) > 0,
         };
       });
       assert.equal(layout.buttonWidth, width <= 600 ? 44 : 36, 'Retry remains a compact, square control');
@@ -113,6 +115,7 @@ try {
       assert.equal(layout.overlap, false, 'Status and actions do not overlap');
       assert.equal(layout.actionsAligned, true, 'Recovery actions share a baseline');
       assert.equal(layout.pseudoContent, 'none', 'No inherited template button decoration');
+      assert.equal(layout.aboveDecoration, true, 'Verification stays above decorative shapes');
       await retry.focus();
       assert.equal(await retry.evaluate(element => getComputedStyle(element).outlineWidth), '2px');
       await retry.press('Tab');
