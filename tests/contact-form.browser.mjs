@@ -11,7 +11,9 @@ const browser = await chromium.launch({ headless: true, channel: 'chrome' });
 const widgetScript = `window.turnstile = {
   render(container, options) {
     window.testVerification = options;
-    container.innerHTML = '<div data-test-verification style="height:65px;max-width:100%;border:1px solid #b6c7c1;padding:16px;box-sizing:border-box">Verification fixture</div>';
+    const compact = options.size === 'compact';
+    const dark = options.theme === 'dark';
+    container.innerHTML = '<div data-test-verification style="width:' + (compact ? 150 : 300) + 'px;height:' + (compact ? 140 : 65) + 'px;border:1px solid #b6c7c1;padding:16px;box-sizing:border-box;background:' + (dark ? '#232323' : '#fafafa') + ';color:' + (dark ? '#fff' : '#222') + '">Verification fixture</div>';
     return 'fixture';
   },
   remove() { document.querySelector('[data-test-verification]')?.remove(); }
@@ -27,8 +29,11 @@ try {
   assert.equal((await rejected.json()).code, 'verification_required');
 
   for (const width of [1280, 390, 320]) {
-    const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce' });
-    await context.addInitScript(() => localStorage.setItem('portfolioSubscriptionPrompt:v1', String(Date.now())));
+    const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', colorScheme: 'dark' });
+    await context.addInitScript(() => {
+      localStorage.setItem('portfolioSubscriptionPrompt:v1', String(Date.now()));
+      localStorage.setItem('ober-mood', 'day');
+    });
     const page = await context.newPage();
     page.setDefaultTimeout(10000);
     page.on('pageerror', error => console.log('Preview error:', error.message));
@@ -79,7 +84,6 @@ try {
     await email.fill('fixture@example.com');
     await message.fill('Please keep this message after a failed verification.');
 
-    await page.evaluate(() => window.testVerification['error-callback']());
     const verification = form.locator('[data-contact-verification]');
     const retry = verification.getByRole('button', { name: 'Retry verification' });
     for (const theme of ['light', 'dark']) {
@@ -88,6 +92,30 @@ try {
       }
       await page.waitForFunction(theme => getComputedStyle(document.querySelector('#contact-section')).backgroundColor
         === (theme === 'dark' ? 'rgb(24, 30, 39)' : 'rgb(235, 231, 224)'), theme);
+      await page.waitForFunction(theme => window.testVerification?.theme === theme, theme);
+      assert.equal(await page.evaluate(() => window.testVerification.size), width === 320 ? 'compact' : 'normal');
+      const footerLayout = await form.locator('[data-contact-actions]').evaluate(element => {
+        const widget = element.querySelector('[data-test-verification]').getBoundingClientRect();
+        const button = element.querySelector('button[type="submit"]').getBoundingClientRect();
+        const box = element.getBoundingClientRect();
+        return {
+          buttonHeight: button.height,
+          buttonWidth: button.width,
+          width: box.width,
+          sideBySide: button.left >= widget.right,
+          stacked: button.top >= widget.bottom,
+          overflow: [widget, button].some(child => child.left < box.left - 1 || child.right > Math.min(innerWidth, box.right) + 1),
+        };
+      });
+      assert.equal(footerLayout.buttonHeight, 48, 'Submit uses a stable, compact height');
+      assert.equal(footerLayout.overflow, false, 'Native widget and Submit stay within the form');
+      if (width > 600) assert.equal(footerLayout.sideBySide, true);
+      else {
+        assert.equal(footerLayout.stacked, true);
+        assert.ok(Math.abs(footerLayout.buttonWidth - footerLayout.width) < 1, 'Mobile Submit fills the form width');
+      }
+      await form.screenshot({ path: `/tmp/contact-form-${theme}-${width}.png` });
+      await page.evaluate(() => window.testVerification['error-callback']());
       await retry.waitFor();
       const layout = await verification.evaluate(element => {
         const button = element.querySelector('button');
@@ -131,6 +159,22 @@ try {
     await form.getByRole('alert').filter({ hasText: 'complete the verification' }).waitFor();
 
     const token = async value => page.evaluate(value => window.testVerification.callback(value), value);
+    await token('before-theme-change');
+    await page.evaluate(() => { window.staleVerification = window.testVerification; });
+    await page.locator('.switcher-btn').click();
+    await page.waitForFunction(() => window.testVerification?.theme === 'light');
+    await page.evaluate(() => window.staleVerification.callback('stale-token'));
+    await submit.click();
+    assert.equal(requests, 0, 'Theme change clears tokens and ignores the previous widget callback');
+    if (width === 1280) {
+      await token('before-resize');
+      await page.setViewportSize({ width: 320, height: 900 });
+      await page.waitForFunction(() => window.testVerification?.size === 'compact');
+      await submit.click();
+      assert.equal(requests, 0, 'Resize clears the previous widget token');
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForFunction(() => window.testVerification?.size === 'normal');
+    }
     mode = 'invalid'; await token('invalid'); await submit.click();
     await form.getByRole('alert').filter({ hasText: 'expired or failed' }).waitFor();
     assert.equal(await name.inputValue(), 'Local visitor');

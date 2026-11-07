@@ -1,0 +1,145 @@
+.form {
+  --contact-ink: #213c36;
+  --contact-line: #a4afaa;
+  --contact-surface: #ffffff40;
+  --contact-accent: #245449;
+  --contact-hover: #173f36;
+  --contact-on-accent: #ffffff;
+  position: relative;
+  z-index: 1;
+  font-family: "Rubik", system-ui, sans-serif;
+}
+
+.form > label {
+  padding-bottom: 24px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* Override the template's body-level input theme without affecting other forms. */
+:global(body) form.form input[type="text"],
+:global(body) form.form input[type="email"],
+:global(body) form.form textarea {
+  margin-top: 8px;
+  padding: 14px 16px;
+  height: 52px;
+  border-color: var(--contact-line);
+  border-radius: 6px;
+  background: var(--contact-surface);
+  color: var(--contact-ink);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+  transition: border-color 120ms ease;
+}
+
+:global(body) form.form textarea {
+  height: 180px;
+  min-height: 150px;
+  resize: vertical;
+}
+
+:global(body) form.form input[type="text"]:focus,
+:global(body) form.form input[type="email"]:focus,
+:global(body) form.form textarea:focus {
+  border-color: var(--contact-accent);
+  outline: 2px solid var(--contact-accent) !important;
+  outline-offset: 2px;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--contact-line);
+}
+
+.form .submit {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  min-width: 152px;
+  height: 48px;
+  padding: 0 22px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--contact-accent);
+  color: var(--contact-on-accent);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0;
+  transition: background-color 120ms ease;
+}
+
+.form .submit::before,
+.form .submit::after {
+  content: none;
+  display: none;
+}
+
+.form .submit:hover:not(:disabled) {
+  background: var(--contact-hover);
+}
+
+.form .submit:focus-visible {
+  outline: 2px solid var(--contact-accent) !important;
+  outline-offset: 3px;
+}
+
+.form .submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.notice {
+  margin: 16px 0 0;
+  color: var(--contact-ink);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.spinner {
+  animation: contact-spin 1s linear infinite;
+}
+
+@keyframes contact-spin {
+  to { transform: rotate(360deg); }
+}
+
+:global(body.dark-skin) .form {
+  --contact-ink: #e3eee8;
+  --contact-line: #566962;
+  --contact-surface: #ffffff05;
+  --contact-accent: #b5dfcb;
+  --contact-hover: #d1eddf;
+  --contact-on-accent: #163c30;
+}
+
+@media (max-width: 600px) {
+  .footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+    gap: 16px;
+  }
+
+  .form .submit {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}

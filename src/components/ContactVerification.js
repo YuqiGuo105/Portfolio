@@ -35,6 +35,7 @@ export default function ContactVerification({ active, resetKey, onToken }) {
   const [nearby, setNearby] = useState(false);
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [appearance, setAppearance] = useState(null);
   const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const enabled = active || nearby;
 
@@ -49,6 +50,21 @@ export default function ContactVerification({ active, resetKey, onToken }) {
 
   useEffect(() => {
     if (!enabled) return;
+    const update = () => {
+      const theme = document.body.classList.contains('dark-skin') ? 'dark' : 'light';
+      const size = container.current.clientWidth < 300 ? 'compact' : 'normal';
+      setAppearance(previous => previous?.theme === theme && previous?.size === size ? previous : { theme, size });
+    };
+    update();
+    const themeObserver = new MutationObserver(update);
+    themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    const sizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    sizeObserver?.observe(container.current);
+    return () => { themeObserver.disconnect(); sizeObserver?.disconnect(); };
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled || !appearance) return;
     callback.current('');
     setError(false);
     if (!sitekey) { setError(true); return; }
@@ -57,8 +73,7 @@ export default function ContactVerification({ active, resetKey, onToken }) {
     loadTurnstile().then(api => {
       if (cancelled) return;
       widget = api.render(container.current, {
-        sitekey, action: 'contact_submit', theme: 'auto',
-        size: container.current.clientWidth < 300 ? 'compact' : 'flexible',
+        sitekey, action: 'contact_submit', ...appearance,
         'response-field': false,
         callback: token => { if (!cancelled) { setError(false); callback.current(token); } },
         'expired-callback': () => { if (!cancelled) callback.current(''); },
@@ -67,9 +82,9 @@ export default function ContactVerification({ active, resetKey, onToken }) {
       });
     }).catch(() => { if (!cancelled) setError(true); });
     return () => { cancelled = true; if (widget !== undefined) window.turnstile?.remove(widget); };
-  }, [enabled, resetKey, retry, sitekey]);
+  }, [enabled, resetKey, retry, sitekey, appearance]);
 
-  return <div className={styles.verification} data-contact-verification>
+  return <div className={styles.verification} data-contact-verification data-size={error ? undefined : appearance?.size}>
     <div ref={container} className={error ? styles.failedWidget : undefined} aria-hidden={error || undefined} />
     {error && <div className={styles.feedback}>
       <span className={styles.status} role="status">

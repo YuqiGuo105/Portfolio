@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import TalkNestContact from "./TalkNestContact";
 import ContactVerification from "./ContactVerification";
+import { ArrowUpRight, LoaderCircle } from "lucide-react";
+import styles from "./ContactForm.module.css";
 
 const ContactForm = () => {
   const [contactData, setContactData] = useState({
@@ -66,7 +68,7 @@ const ContactForm = () => {
   };
 
   return (
-    <section className="section section-bg section-parallax section-parallax-2" id="contact-section">
+    <section className="section section-bg" id="contact-section">
       <div className="container">
         <div className="m-titles">
           <h2 className="m-title" id="tour-contact">Contact Me</h2>
@@ -99,7 +101,7 @@ const ContactForm = () => {
           <div className="col-md-9 vertical-line contact-form-column">
             <TalkNestContact />
             <div className="contacts-form">
-              <form onSubmit={onSubmit} onFocusCapture={() => setVerificationActive(true)} aria-busy={sending}>
+              <form className={styles.form} onSubmit={onSubmit} onFocusCapture={() => setVerificationActive(true)} aria-busy={sending}>
                 <label>
                   Name
                   <input type="text" name="name" value={name} onChange={onChange} placeholder="Enter your full name" maxLength={120} required/>
@@ -119,9 +121,14 @@ const ContactForm = () => {
                 <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>
                   <label>Leave this field empty<input type="text" name="website" tabIndex={-1} autoComplete="off" value={contactData.website} onChange={onChange}/></label>
                 </div>
-                <ContactVerification active={verificationActive} resetKey={verificationReset} onToken={setTurnstileToken}/>
-                {notice && <p role="alert">{notice}</p>}
-                <button type="submit" className="btn" disabled={sending}>{sending ? 'Sending...' : 'Submit'}</button>
+                <div className={styles.footer} data-contact-actions>
+                  <ContactVerification active={verificationActive} resetKey={verificationReset} onToken={setTurnstileToken}/>
+                  <button type="submit" className={styles.submit} disabled={sending}>
+                    <span>{sending ? 'Sending...' : 'Submit'}</span>
+                    {sending ? <LoaderCircle size={18} className={styles.spinner} aria-hidden="true" /> : <ArrowUpRight size={18} aria-hidden="true" />}
+                  </button>
+                </div>
+                {notice && <p className={styles.notice} role="alert">{notice}</p>}
               </form>
             </div>
             {submitted && (
