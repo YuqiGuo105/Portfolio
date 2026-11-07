@@ -38,6 +38,16 @@ only the gateway runtime service account access to this new GCP secret. Deploy
 the authenticated gateway first (the old website tolerates the additional
 header), then deploy the website with both Turnstile settings present.
 
+The gateway uses a dedicated runtime identity, configured through the
+`GATEWAY_RUNTIME_SA_EMAIL` deployment variable. Grant Secret Accessor on each
+required secret, not on the project, and Cloud Run Invoker only on its private
+Application Copilot downstream. Do not create downloadable service-account keys.
+Check inherited project policies too: a resource-level grant does not exclude
+other runtimes that already have project-wide Secret Accessor. Remove their
+access to `CONTACT_MCP_TOKEN` without changing access to existing secrets before
+enabling this credential in production. Deployment administrators retain their
+existing operational access.
+
 ## Limits and audit
 
 The existing contact rate limit defaults to five requests per ten minutes,
