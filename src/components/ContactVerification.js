@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { CircleAlert, RotateCw } from 'lucide-react';
+import styles from './ContactVerification.module.css';
 
 let loading;
 function loadTurnstile() {
@@ -67,12 +69,20 @@ export default function ContactVerification({ active, resetKey, onToken }) {
     return () => { cancelled = true; if (widget !== undefined) window.turnstile?.remove(widget); };
   }, [enabled, resetKey, retry, sitekey]);
 
-  return <div style={{ margin: '16px 0', minHeight: 65, maxWidth: '100%' }}>
-    <div ref={container} />
-    {error && <div role="status">
-      <span>Verification unavailable. </span>
-      <button type="button" onClick={() => setRetry(value => value + 1)} aria-label="Retry verification">Retry</button>
-      <span> or <a href="mailto:yuqi.guo17@gmail.com">email directly</a>.</span>
+  return <div className={styles.verification} data-contact-verification>
+    <div ref={container} className={error ? styles.failedWidget : undefined} aria-hidden={error || undefined} />
+    {error && <div className={styles.feedback}>
+      <span className={styles.status} role="status">
+        <CircleAlert size={16} aria-hidden="true" />
+        <span>Verification unavailable.</span>
+      </span>
+      <div className={styles.actions}>
+        <button className={styles.retry} type="button" onClick={() => setRetry(value => value + 1)}
+          aria-label="Retry verification" title="Retry verification">
+          <RotateCw size={18} aria-hidden="true" />
+        </button>
+        <a className={styles.emailLink} href="mailto:yuqi.guo17@gmail.com">Email instead</a>
+      </div>
     </div>}
   </div>;
 }

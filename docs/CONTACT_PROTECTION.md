@@ -64,6 +64,13 @@ does not add persistent message quarantine or probabilistic content filtering.
 
 ## Verification
 
+- For a local widget preview, set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` to Cloudflare's
+  public test site key `1x00000000000000000000AA` in an ignored
+  `.env.development.local`, then restart the dev server. Arbitrary placeholder
+  strings are invalid site keys and leave the widget permanently unavailable.
+  The test widget does not prove real mail delivery: its dummy tokens cannot pass
+  production verification. Keep local SMTP credentials unset; use the browser
+  test's in-memory mail sink for the complete submission flow.
 - `npm run test:contact`: API guards, authenticated MCP exemption, replay/error
   cases, safe errors, field limits and multilingual messages; no real emails.
 - `CONTACT_TEST_URL=http://127.0.0.1:3140 PLAYWRIGHT_MODULE_PATH=/path/to/playwright/index.mjs node tests/contact-form.browser.mjs`:

@@ -78,6 +78,51 @@ try {
     await name.fill('Local visitor');
     await email.fill('fixture@example.com');
     await message.fill('Please keep this message after a failed verification.');
+
+    await page.evaluate(() => window.testVerification['error-callback']());
+    const verification = form.locator('[data-contact-verification]');
+    const retry = verification.getByRole('button', { name: 'Retry verification' });
+    for (const theme of ['light', 'dark']) {
+      if (await page.locator('body').evaluate(element => element.classList.contains('dark-skin')) !== (theme === 'dark')) {
+        await page.locator('.switcher-btn').click();
+      }
+      await page.waitForFunction(theme => getComputedStyle(document.querySelector('#contact-section')).backgroundColor
+        === (theme === 'dark' ? 'rgb(24, 30, 39)' : 'rgb(235, 231, 224)'), theme);
+      await retry.waitFor();
+      const layout = await verification.evaluate(element => {
+        const button = element.querySelector('button');
+        const link = element.querySelector('a');
+        const status = element.querySelector('[role="status"]');
+        const box = element.getBoundingClientRect();
+        const buttonBox = button.getBoundingClientRect();
+        const linkBox = link.getBoundingClientRect();
+        const statusBox = status.getBoundingClientRect();
+        return {
+          buttonWidth: buttonBox.width, buttonHeight: buttonBox.height,
+          placeholderHeight: element.firstElementChild.getBoundingClientRect().height,
+          overflow: [buttonBox, linkBox, statusBox].some(child => child.left < box.left - 1 || child.right > Math.min(box.right, innerWidth) + 1),
+          overlap: statusBox.right > buttonBox.left && statusBox.bottom > buttonBox.top,
+          actionsAligned: Math.abs((buttonBox.top + buttonBox.height / 2) - (linkBox.top + linkBox.height / 2)) < 1,
+          pseudoContent: getComputedStyle(button, '::before').content,
+        };
+      });
+      assert.equal(layout.buttonWidth, width <= 600 ? 44 : 36, 'Retry remains a compact, square control');
+      assert.equal(layout.buttonHeight, layout.buttonWidth);
+      assert.equal(layout.placeholderHeight, 0, 'Failed challenge does not leave a blank placeholder');
+      assert.equal(layout.overflow, false, `${theme} feedback stays within the ${width}px form`);
+      assert.equal(layout.overlap, false, 'Status and actions do not overlap');
+      assert.equal(layout.actionsAligned, true, 'Recovery actions share a baseline');
+      assert.equal(layout.pseudoContent, 'none', 'No inherited template button decoration');
+      await retry.focus();
+      assert.equal(await retry.evaluate(element => getComputedStyle(element).outlineWidth), '2px');
+      await retry.press('Tab');
+      assert.equal(await verification.getByRole('link', { name: 'Email instead' }).evaluate(element => element === document.activeElement), true);
+      await form.screenshot({ path: `/tmp/contact-retry-${theme}-${width}.png` });
+    }
+    await retry.click();
+    await verification.getByRole('status').waitFor({ state: 'hidden' });
+    assert.equal(requests, 0, 'Retry only reloads verification, never sends mail');
+
     await submit.click();
     assert.equal(requests, 0, 'Do not submit without a token');
     await form.getByRole('alert').filter({ hasText: 'complete the verification' }).waitFor();

@@ -1,0 +1,118 @@
+.verification {
+  --verification-ink: #4b5756;
+  --verification-line: #c6cdca;
+  --verification-hover: #00000008;
+  margin: 16px 0;
+  min-height: 65px;
+  max-width: 100%;
+}
+
+.failedWidget {
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.feedback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 8px 0;
+  border-top: 1px solid var(--verification-line);
+  color: var(--verification-ink);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.status svg {
+  flex: 0 0 16px;
+  margin-top: 3px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Isolate this utility control from the template's large button styles. */
+.verification .retry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--verification-line);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  line-height: 1;
+  transition: background-color 120ms ease;
+}
+
+.verification .retry::before,
+.verification .retry::after {
+  content: none;
+  display: none;
+}
+
+.verification .retry:hover {
+  background: var(--verification-hover);
+}
+
+.verification .emailLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.verification .retry:focus-visible,
+.verification .emailLink:focus-visible {
+  outline: 2px solid currentColor !important;
+  outline-offset: 3px;
+}
+
+:global(body.dark-skin) .verification {
+  --verification-ink: #c2cecc;
+  --verification-line: #536260;
+  --verification-hover: #ffffff12;
+}
+
+@media (max-width: 600px) {
+  .status {
+    flex-basis: 100%;
+  }
+
+  .actions {
+    margin-left: 24px;
+  }
+
+  .verification .retry {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .verification .emailLink {
+    min-height: 44px;
+  }
+}
