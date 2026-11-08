@@ -11,7 +11,7 @@ import styles from "../../styles/NotificationBell.module.css";
  *
  * If no subscriber exists in localStorage, the bell is hidden.
  */
-export default function NotificationBell({ onOpenSubscribe, isDark = false }) {
+export default function NotificationBell({ onOpenSubscribe, isDark = false, className = "" }) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -113,11 +113,12 @@ export default function NotificationBell({ onOpenSubscribe, isDark = false }) {
     return (
       <button
         type="button"
-        className={styles.bell}
+        className={`${styles.bell} ${className}`}
         onClick={onOpenSubscribe}
         aria-label="Subscribe to notifications"
         style={bellButtonStyle}
-        title="Subscribe to notifications"
+        data-nav-action="notifications"
+        data-tooltip="Subscribe"
       >
         <Bell size={22} aria-hidden="true" />
       </button>
@@ -128,12 +129,14 @@ export default function NotificationBell({ onOpenSubscribe, isDark = false }) {
     <div style={{ position: "relative", display: "inline-block" }}>
       <button
         type="button"
-        className={styles.bell}
+        className={`${styles.bell} ${className}`}
         ref={anchorRef}
         onClick={() => { if (!open) fetchNotifications(subscriber); setOpen((o) => !o); }}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={`Notifications (${unreadCount} unread)`}
+        data-nav-action="notifications"
+        data-tooltip="Notifications"
         style={bellButtonStyle}
       >
         <Bell size={22} aria-hidden="true" />

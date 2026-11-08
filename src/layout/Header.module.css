@@ -1,0 +1,188 @@
+.header {
+  --nav-tint: #24544912;
+  --nav-focus: #245449;
+  --nav-hint-bg: #253b36;
+  --nav-hint-ink: #fff;
+}
+
+:global(body.dark-skin) .header {
+  --nav-tint: #b5dfcb1a;
+  --nav-focus: #b5dfcb;
+  --nav-hint-bg: #dcebe5;
+  --nav-hint-ink: #213b31;
+}
+
+.logoLink img { transform-origin: center; }
+
+.header .logoLink:focus-visible {
+  outline: 2px solid var(--nav-focus);
+  outline-offset: 8px;
+}
+
+.logoLink:focus-visible img { animation: logo-turn 900ms ease-in-out; }
+
+.header .action {
+  isolation: isolate;
+  overflow: visible;
+  transition: color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Retain the original icon positions when replacing links with native buttons. */
+.header .theme,
+.header .menu {
+  width: 25px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  line-height: 30px;
+}
+
+/* Override template/button decoration only for the four header actions. */
+.header .action::before {
+  content: "";
+  display: block !important;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--nav-tint);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.header .action::after {
+  content: attr(data-tooltip);
+  display: block !important;
+  position: absolute;
+  top: calc(50% + 28px);
+  left: 50%;
+  width: max-content;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: var(--nav-hint-bg);
+  color: var(--nav-hint-ink);
+  font-family: "Rubik", system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, -3px);
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.header .menu::after {
+  left: auto;
+  right: -4px;
+  transform: translateY(-3px);
+}
+
+.header .action:focus-visible {
+  outline: 2px solid var(--nav-focus) !important;
+  outline-offset: 5px;
+}
+
+.header .action:focus-visible::before { opacity: 1; }
+.header .action:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+.header .menu:focus-visible::after { transform: translateY(0); }
+
+.action > i,
+.action > svg { transform-origin: 50% 25%; }
+.action > i { display: inline-block; }
+.menu > span::before { --menu-offset: -3px; }
+.menu > span::after { --menu-offset: 3px; }
+
+@media (hover: hover) and (pointer: fine) {
+  .logoLink:hover img { animation: logo-turn 900ms ease-in-out; }
+  .header .action:hover::before { opacity: 1; }
+  .header .action:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
+    transition-delay: 180ms;
+  }
+  .header .menu:hover::after { transform: translateY(0); }
+
+  .action[data-nav-action="search"]:hover > i { animation: search-peek 480ms ease-out; }
+  .action[data-nav-action="notifications"]:hover > svg { animation: bell-ring 620ms ease-in-out; }
+  .theme:hover :global(.sw-before) svg { animation: sun-turn 650ms ease-out; }
+  .theme:hover :global(.sw-after) svg { animation: moon-lean 650ms ease-out; }
+  .menu:not(:global(.active)):hover > span::before,
+  .menu:not(:global(.active)):hover > span::after { animation: menu-nudge 480ms ease-out; }
+}
+
+.action[data-nav-action="search"]:focus-visible > i { animation: search-peek 480ms ease-out; }
+.action[data-nav-action="notifications"]:focus-visible > svg { animation: bell-ring 620ms ease-in-out; }
+.theme:focus-visible :global(.sw-before) svg { animation: sun-turn 650ms ease-out; }
+.theme:focus-visible :global(.sw-after) svg { animation: moon-lean 650ms ease-out; }
+.menu:not(:global(.active)):focus-visible > span::before,
+.menu:not(:global(.active)):focus-visible > span::after { animation: menu-nudge 480ms ease-out; }
+
+@keyframes search-peek {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  45% { transform: translate(2px, -1px) rotate(-10deg); }
+}
+
+@keyframes logo-turn {
+  0%, 100% { transform: rotate(0); }
+  42% { transform: rotate(14deg); }
+  72% { transform: rotate(-3deg); }
+}
+
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(13deg); }
+  42% { transform: rotate(-10deg); }
+  64% { transform: rotate(6deg); }
+  82% { transform: rotate(-3deg); }
+}
+
+@keyframes sun-turn {
+  0%, 100% { transform: rotate(0); }
+  45% { transform: rotate(35deg); }
+}
+
+@keyframes moon-lean {
+  0%, 100% { transform: rotate(0); }
+  45% { transform: rotate(-16deg); }
+}
+
+@keyframes menu-nudge {
+  0%, 100% { transform: translateX(0); }
+  45% { transform: translateX(var(--menu-offset)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header .logoLink,
+  .header .logoLink img,
+  .header .action,
+  .header .action::before,
+  .header .action::after,
+  .header .action > i,
+  .header .action > svg,
+  .header .action span,
+  .header .action span::before,
+  .header .action span::after,
+  .header .action span svg {
+    animation: none !important;
+    transition: none !important;
+  }
+}

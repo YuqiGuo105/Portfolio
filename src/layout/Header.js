@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import dynamic from "next/dynamic";
+import styles from "./Header.module.css";
 
 const NotificationBell = dynamic(() => import("../components/NotificationBell"), { ssr: false });
 const SubscribeDialog = dynamic(() => import("../components/SubscribeDialog"), { ssr: false });
@@ -10,9 +11,11 @@ const SubscriptionPrompt = dynamic(() => import("../components/SubscriptionPromp
 import SocialLinks from '../components/SocialLinks';
 
 const Header = ({ onOpenSearch }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
   const openMenu = (event) => {
     event.preventDefault();
     const menu = document.querySelector(".menu-btn");
+    setMenuOpen(!menu.classList.contains("active"));
     if (menu.classList.contains("active")) {
       menu.classList.remove("active");
       menu.classList.add("no-touch");
@@ -99,6 +102,7 @@ const Header = ({ onOpenSearch }) => {
 
   const linkClick = () => {
     const menu = document.querySelector(".menu-btn");
+    setMenuOpen(!menu.classList.contains("active"));
     if (menu.classList.contains("active")) {
       menu.classList.remove("active");
       menu.classList.add("no-touch");
@@ -134,14 +138,14 @@ const Header = ({ onOpenSearch }) => {
   };
 
   return (
-    <header className="header">
+    <header className={`header ${styles.header}`}>
       <div className="header__builder">
         <div className="row">
           <div className="col-xs-4 col-sm-4 col-md-4 col-lg-4">
             {/* logo */}
             <div className="logo">
               <Link href="/">
-                <a>
+                <a className={styles.logoLink} aria-label="Yuqi Guo home">
                   <img
                     src="https://iyvhmpdfrnznxgyvvkvx.supabase.co/storage/v1/object/public/Page/YuqiLogo.png"
                     alt=""
@@ -154,20 +158,26 @@ const Header = ({ onOpenSearch }) => {
             <button
               type="button"
               onClick={handleOpenSearch}
-              className="header-search-btn mr-5 hidden-xs flex h-10 w-10 items-center justify-center rounded-full transition"
+              className={`header-search-btn mr-5 hidden-xs flex h-10 w-10 items-center justify-center rounded-full transition ${styles.action}`}
               aria-label="Open search"
+              data-nav-action="search"
+              data-tooltip="Search"
             >
               <i className="fa fa-search" aria-hidden="true"></i>
             </button>
             {/* notification bell */}
-            <NotificationBell onOpenSubscribe={() => setSubscribeOpen(true)} isDark={!day} />
+            <NotificationBell className={styles.action} onOpenSubscribe={() => setSubscribeOpen(true)} isDark={!day} />
             {/* subscribe button — only shown when NOT already subscribed (Bell handles that case) */}
             <SubscribeDialog open={subscribeOpen} onClose={() => setSubscribeOpen(false)} isDark={!day} />
             {router.pathname === "/" && <SubscriptionPrompt isDark={!day} />}
             {/* switcher btn */}
-            <a
-              className={`switcher-btn ${day ? "active" : ""}`}
+            <button
+              type="button"
+              className={`switcher-btn ${styles.action} ${styles.theme} ${day ? "active" : ""}`}
               onClick={() => setDay(!day)}
+              aria-label={day ? "Switch to dark mode" : "Switch to light mode"}
+              data-nav-action="theme"
+              data-tooltip={day ? "Dark mode" : "Light mode"}
             >
               <span className="sw-before">
                 <svg
@@ -197,16 +207,18 @@ const Header = ({ onOpenSearch }) => {
                   />
                 </svg>
               </span>
-            </a>
+            </button>
             {/* menu btn */}
-            <a href="#" className="menu-btn" onClick={() => openMenu(event)}>
+            <button type="button" className={`menu-btn ${styles.action} ${styles.menu}`} onClick={openMenu}
+              aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} aria-controls="site-navigation"
+              data-nav-action="menu" data-tooltip={menuOpen ? "Close menu" : "Menu"}>
               <span />
-            </a>
+            </button>
           </div>
         </div>
       </div>
       {/* Menu Full Overlay */}
-      <div className="menu-full-overlay" style={{ minHeight: "100vh" }}>
+      <div id="site-navigation" className="menu-full-overlay" style={{ minHeight: "100vh" }}>
         <div className="menu-full-container">
           <div className="container">
             <div className="row">
