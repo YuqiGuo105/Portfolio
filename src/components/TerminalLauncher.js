@@ -45,7 +45,7 @@ export default function TerminalLauncher() {
     if (!open) return undefined;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    // Mr. Pot's launcher sits at the top z-index too; step it aside while the terminal is open.
+    // Keep the terminal above both Mr. Pot surfaces without unmounting the active conversation.
     document.documentElement.classList.add("site-terminal-open");
     return () => {
       document.body.style.overflow = previous;

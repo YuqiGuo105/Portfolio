@@ -79,6 +79,14 @@ try {
     await page.getByRole('dialog', { name: 'Site terminal' }).waitFor();
     await page.getByText('visitor@yuqi.site:~$ ls projects', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Close terminal' }).click();
+    await page.locator('.launch-button').click();
+    await page.keyboard.press('Control+k');
+    await page.getByRole('dialog', { name: 'Site terminal' }).waitFor();
+    assert.equal(await page.locator('.bot-container').isVisible(), false, 'Chat must not cover terminal results');
+    await page.getByRole('button', { name: 'Close terminal' }).click();
+    await page.locator('.bot-container').waitFor({ state: 'visible' });
+    await page.locator('.bot-container').getByText('Education fixture: Syracuse University.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Minimize chat', exact: true }).click();
     await page.goto(`${base}/mr-pot-lab`, { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: 'Globe: Tokyo', exact: true }).click();
     await page.getByRole('button', { name: 'Run on page' }).click();

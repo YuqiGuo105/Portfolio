@@ -273,7 +273,8 @@ export default function SiteTerminal({ onClose }) {
           .term-backdrop { align-items: flex-end; padding: 0; }
           .term { height: 78vh; border-radius: 14px 14px 0 0; font-size: 12px; }
         }
-        :global(html.site-terminal-open .launch-button) { display: none !important; }
+        :global(html.site-terminal-open .launch-button),
+        :global(html.site-terminal-open #__chat_widget_root .bot-container) { display: none !important; }
         @keyframes tin { from { opacity: 0; } to { opacity: 1; } }
         @media (prefers-reduced-motion: reduce) { .term-backdrop { animation: none; } }
       `}</style>
