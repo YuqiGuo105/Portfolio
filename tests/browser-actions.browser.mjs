@@ -59,10 +59,17 @@ try {
     assert.equal(await page.locator('.bot-container').getByText('MUST_NOT_APPEAR', { exact: false }).count(), 0);
     assert.equal(calls, 1);
     await page.screenshot({ path: `${artifacts}/chat-${width}.png`, fullPage: false });
+    await page.evaluate(() => {
+      const messages = JSON.parse(localStorage.getItem('chatMessages'));
+      messages.push({ id: 'guide-answer-fixture', role: 'assistant', content: 'Education fixture: Syracuse University.',
+        showGuideCta: true, guideCopy: 'Explore the education section.', streaming: false });
+      localStorage.setItem('chatMessages', JSON.stringify(messages));
+    });
     await page.reload({ waitUntil: 'networkidle' });
     if (await page.locator('.launch-button').isVisible()) await page.locator('.launch-button').click();
     await page.locator('.bot-container').getByText('Here is the publication workflow.', { exact: true }).waitFor();
     await page.locator('.bot-container').getByRole('button', { name: 'Run on page' }).waitFor();
+    await page.locator('.bot-container').getByText('Education fixture: Syracuse University.', { exact: true }).waitFor();
     await page.getByText('Step 1 / 15', { exact: true }).waitFor();
     assert.equal(calls, 1, 'Restoring history must not call the agent or auto-run old actions');
     await page.getByRole('button', { name: 'Minimize chat', exact: true }).click();

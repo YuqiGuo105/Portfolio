@@ -4132,6 +4132,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
                   </div>
                 </div>
               ) : m.showGuideCta ? (
+                <>
+                {m.content?.trim() && m.guideCopy?.trim() && m.content.trim() !== m.guideCopy.trim()
+                  ? <MarkdownMessage key={`${m.id}-guide-answer`} content={m.content} /> : null}
                 <div className="cw-guide-message">
                   <p className="cw-guide-title">{m.guideTitle || "Web guide"}</p>
                   <p className="cw-guide-copy">
@@ -4144,6 +4147,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
                     </button>
                   </div>
                 </div>
+                </>
               ) : m.role === "assistant" ? (
                 m.streaming ? (
                   m.content === "" ? (
