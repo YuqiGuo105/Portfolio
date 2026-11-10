@@ -33,7 +33,7 @@ import visitorStyles from "../../src/components/admin/VisitorsPage.module.css";
 import { adminApi } from "../../src/lib/adminApi";
 import { useAdminSession } from "../../src/components/admin/AdminSessionContext";
 import { ScrollDepth, VisitCheckpoints, VisitorRecordView, VisitorContext, VisitorInspector, VisitorToolbar, alertFromVisitor, useDialogFocus } from "../../src/components/admin/VisitorWorkbench";
-import { eventTimestamp } from "../../src/lib/visitorWorkbench.mjs";
+import { eventTimestamp, outboundLinkDetails } from "../../src/lib/visitorWorkbench.mjs";
 import VisitorOverview from "../../src/components/admin/VisitorOverview";
 
 const PAGE_SIZE = 50;
@@ -849,6 +849,7 @@ function JourneyFact({ icon, label, value }) {
 }
 
 function JourneyTimelineStep({ index, previous, step }) {
+  const outbound = outboundLinkDetails(step);
   const path = displayPath(step.targetPath || step.pagePath) || "No path";
   const delta = previous
     ? Math.max(0, new Date(step.eventTime).getTime() - new Date(previous.eventTime).getTime())
@@ -863,8 +864,10 @@ function JourneyTimelineStep({ index, previous, step }) {
           <time dateTime={step.eventTime}>{formatTime(step.eventTime)}</time>
           {index > 0 && <small>+{formatDuration(delta)}</small>}
         </span>
-        <strong>{humanizeEventName(step.eventName)}</strong>
-        {path.startsWith("/") ? (
+        <strong>{outbound?.label || humanizeEventName(step.eventName)}</strong>
+        {outbound?.href ? (
+          <a href={outbound.href} target="_blank" rel="noopener noreferrer" title={outbound.href}>{outbound.href}<ExternalLink size={10} /></a>
+        ) : !outbound && path.startsWith("/") ? (
           <a href={path} target="_blank" rel="noreferrer">{path}<ExternalLink size={10} /></a>
         ) : <span className={visitorStyles.timelinePath}>{path}</span>}
         <span className={visitorStyles.timelineSignals}>
@@ -893,6 +896,8 @@ function InsightNumber({ label, value, hint }) {
 }
 
 function VisitorEventCard({ item, zone, onFilter, onInspect, onAlert }) {
+  const outbound = outboundLinkDetails(item);
+  const eventLabel = item.visit ? 'Page visit' : outbound?.label || humanizeEventName(item.eventName);
   const eventTone = visitorStyles[`eventTone${eventToneName(item.eventName)}`] || visitorStyles.eventToneNeutral;
   const pagePath = displayPath(item.pageUrl);
   const targetPath = displayPath(item.targetUrl);
@@ -900,8 +905,8 @@ function VisitorEventCard({ item, zone, onFilter, onInspect, onAlert }) {
   return (
     <article className={visitorStyles.eventCard}>
       <div className={visitorStyles.eventRail}>
-        <span className={`${visitorStyles.eventBadge} ${eventTone}`} title={humanizeEventName(item.eventName)}>
-          {eventAbbrev(item.eventName)}
+        <span className={`${visitorStyles.eventBadge} ${eventTone}`} title={eventLabel}>
+          {eventAbbrev(outbound?.label || item.eventName)}
         </span>
         <time className={visitorStyles.eventTime} dateTime={item.eventTime} title={formatDateTime(item.eventTime)}>
           <span>{eventTimestamp(item.eventTime, zone)}</span>
@@ -913,7 +918,7 @@ function VisitorEventCard({ item, zone, onFilter, onInspect, onAlert }) {
           <div className={visitorStyles.eventTitleBlock}>
             <span className={visitorStyles.eventAction}>
               <MousePointerClick size={15} aria-hidden="true" />
-              {item.visit ? 'Page visit' : humanizeEventName(item.eventName)}
+              {eventLabel}
             </span>
             <span className={visitorStyles.eventIntent}>{item.visit ? `${item.visit.eventCount} recorded events` : eventIntent(item.eventName)}</span>
           </div>
@@ -930,7 +935,11 @@ function VisitorEventCard({ item, zone, onFilter, onInspect, onAlert }) {
             <ContentReference content={item.pageContent} url={item.pageUrl} label="Page" />
             <ScrollDepth event={item} />
             <VisitCheckpoints event={item} zone={zone} />
-            {targetPath && targetPath !== pagePath && (
+            {outbound?.href ? (
+              <a className={visitorStyles.targetLink} href={outbound.href} target="_blank" rel="noopener noreferrer" title={outbound.href}>
+                <span>Target</span><strong>{outbound.href}</strong><ExternalLink size={11} aria-hidden="true" />
+              </a>
+            ) : !outbound && targetPath && targetPath !== pagePath && (
               <ContentReference content={item.targetContent} url={item.targetUrl} label="Target" compact />
             )}
           </div>

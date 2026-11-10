@@ -1,0 +1,5 @@
+.operationCard { grid-template-columns: 36px minmax(0, 1fr); align-items: start; }
+.operationCopy { display: grid; min-width: 0; gap: 6px; }
+.operationsTable { min-width: 640px; }
+.operationsTable td:nth-child(2) { white-space: nowrap; }
+.operationsTable td:last-child { min-width: 220px; }

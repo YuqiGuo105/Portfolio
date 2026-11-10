@@ -1,3 +1,23 @@
+import { publicOutboundTarget } from './analyticsPagePolicy.mjs';
+
+const OUTBOUND_PLATFORMS = [
+  { id: 'github', name: 'GitHub', host: 'github.com' },
+  { id: 'linkedin', name: 'LinkedIn', host: 'linkedin.com' },
+  { id: 'instagram', name: 'Instagram', host: 'instagram.com' },
+  { id: 'leetcode', name: 'LeetCode', host: 'leetcode.com' },
+];
+
+export function outboundLinkDetails(event = {}) {
+  if (event.eventName !== 'outbound_link_clicked') return null;
+  const href = publicOutboundTarget(event.targetUrl);
+  const host = href ? new URL(href).hostname.toLowerCase() : '';
+  // Prefer the recorded destination; normalized journeys may only retain action.
+  const platform = host
+    ? OUTBOUND_PLATFORMS.find(item => host === item.host || host.endsWith(`.${item.host}`))
+    : !event.targetUrl && OUTBOUND_PLATFORMS.find(item => item.id === event.properties?.action);
+  return { label: platform ? `${platform.name} link` : 'External link', href };
+}
+
 export function referrerOrigin(value) {
   if (!value || typeof value !== 'string' || /[\s\\]/.test(value)) return null;
   try {

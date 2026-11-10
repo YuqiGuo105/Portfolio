@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
-import { mapLink, referrerOrigin, assessmentEvidence, alertFromVisitor, readSavedViews, sanitizeSavedView, sessionWindow, eventTimestamp } from '../src/lib/visitorWorkbench.mjs';
+import { mapLink, referrerOrigin, outboundLinkDetails, assessmentEvidence, alertFromVisitor, readSavedViews, sanitizeSavedView, sessionWindow, eventTimestamp } from '../src/lib/visitorWorkbench.mjs';
 import { createVisitorSessionHandler, readVisitorSession, validateSessionRequest } from '../src/lib/visitorSession.mjs';
 import { createVisitorPreviewApi } from '../src/lib/visitorPreview.mjs';
 
@@ -16,6 +16,21 @@ test('map URL includes only approximate location, never visitor identifiers', ()
 test('referrer external action strips paths, query and hash; blocks unsafe URLs', () => {
   assert.deepEqual(referrerOrigin('https://linkedin.com/feed/?token=secret#part'), { domain: 'linkedin.com', href: 'https://linkedin.com' });
   for (const value of ['javascript:alert(1)', 'data:text/html,hello', 'https://x@linkedin.com', 'https://linkedin.com\\@evil.com', 'http://', '']) assert.equal(referrerOrigin(value), null);
+});
+test('outbound labels identify platforms from the destination, not the referrer or a conflicting action', () => {
+  for (const [host, name] of [['github.com', 'GitHub'], ['www.linkedin.com', 'LinkedIn'], ['www.instagram.com', 'Instagram'], ['leetcode.com', 'LeetCode']]) {
+    const event = { eventName: 'outbound_link_clicked', targetUrl: `https://${host}/example?token=secret#part`, referrer: 'https://other.example', properties: { action: 'other' } };
+    assert.deepEqual(outboundLinkDetails(event), { label: `${name} link`, href: `https://${host}/example` });
+  }
+  assert.equal(outboundLinkDetails({ eventName: 'page_view', referrer: 'https://github.com' }), null);
+  assert.deepEqual(outboundLinkDetails({ eventName: 'outbound_link_clicked', targetUrl: 'https://github.com.evil.example/', properties: { action: 'github' } }), { label: 'External link', href: 'https://github.com.evil.example/' });
+});
+test('normalized journeys can use a known action but never fabricate destination URLs', () => {
+  assert.deepEqual(outboundLinkDetails({ eventName: 'outbound_link_clicked', targetPath: '/example', properties: { action: 'github' } }), { label: 'GitHub link', href: null });
+  assert.deepEqual(outboundLinkDetails({ eventName: 'outbound_link_clicked' }), { label: 'External link', href: null });
+  for (const targetUrl of ['javascript:alert(1)', 'https://user:secret@github.com/', '/example']) {
+    assert.deepEqual(outboundLinkDetails({ eventName: 'outbound_link_clicked', targetUrl, properties: { action: 'github' } }), { label: 'External link', href: null });
+  }
 });
 test('missing or invalid provider scores never become a human assertion', () => {
   assert.equal(assessmentEvidence({ bot: false }).score, null);

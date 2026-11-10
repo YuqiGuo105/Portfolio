@@ -31,10 +31,7 @@ import AdminTokenGate from "./AdminTokenGate";
 import { useAdminSession } from "./AdminSessionContext";
 import { supabase } from "../../supabase/supabaseClient";
 import styles from "./AdminLayout.module.css";
-
-const ADMIN_SERVICE_SWAGGER =
-  process.env.NEXT_PUBLIC_ADMIN_SERVICE_SWAGGER_URL ||
-  "https://portfolio-admin-service-y45c2mnbja-uc.a.run.app/swagger-ui.html";
+import { ADMIN_API_DOCS_PATH } from "../../lib/adminApiDocs.mjs";
 
 const NOTIFICATION_SERVICE_SWAGGER =
   process.env.NEXT_PUBLIC_NOTIFICATION_SERVICE_SWAGGER_URL ||
@@ -82,7 +79,7 @@ const NAV_GROUPS = [
     items: [
       { href: "/admin/jobs", label: "Jobs & audit", icon: ScrollText },
       { href: "/admin/users", label: "Admin users", icon: UserCog, ownerOnly: true },
-      { href: ADMIN_SERVICE_SWAGGER, label: "Admin API", icon: Radio, external: true },
+      { href: ADMIN_API_DOCS_PATH, label: "Admin API", icon: Radio, adminOnly: true },
       { href: NOTIFICATION_SERVICE_SWAGGER, label: "Notification API", icon: Radio, external: true },
     ],
   },

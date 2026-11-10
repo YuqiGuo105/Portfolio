@@ -5,16 +5,23 @@ import { groupVisitorEvents } from './visitorWorkbench.mjs';
 // Synthetic fixtures only. Never contains production visitor data or credentials.
 export function createVisitorPreviewApi() {
   const now = Date.now();
+  const socialLinks = [
+    ['github', 'https://github.com/example'],
+    ['linkedin', 'https://www.linkedin.com/in/example/'],
+    ['instagram', 'https://www.instagram.com/example/'],
+    ['leetcode', 'https://leetcode.com/u/example/'],
+  ];
   const events = [...sampleHistory(now), ...Array.from({ length: 32 }, (_, index) => ({
     eventId: `sample-event-${index}`, siteId: 'preview.local', sessionId: index < 29 ? 'sample-jaipur-session' : 'sample-bot-session',
     anonymousId: 'sample-anonymous', eventTime: new Date(now - (33 - index) * 90000).toISOString(),
     serverTime: new Date(now - (33 - index) * 90000 + 1200).toISOString(),
-    eventName: index % 3 === 0 ? 'page_view' : index % 3 === 1 ? 'read_progress' : 'click',
+    eventName: index % 3 === 0 ? 'page_view' : index % 3 === 1 ? 'read_progress' : 'outbound_link_clicked',
+    targetUrl: index % 3 === 2 ? socialLinks[Math.floor(index / 3) % socialLinks.length][1] : null,
     pageUrl: index % 3 === 0 ? '/' : '/mcp-guide', deviceType: index < 29 ? 'mobile' : 'bot', browser: index < 29 ? 'Safari' : 'Chrome', os: index < 29 ? 'iOS' : 'Linux',
     city: index < 29 ? 'Jaipur' : '', region: index < 29 ? 'RJ' : '', country: index < 29 ? 'IN' : 'US',
     referrer: index < 29 ? 'https://linkedin.com/feed/?private=removed' : '', ipAddress: index < 29 ? '198.51.100.24' : '203.0.113.9', bot: index >= 29,
     userAgent: index < 29 ? 'Sample Safari iPhone' : 'Sample Googlebot/2.1',
-    properties: { ...(index % 3 === 1 ? { progressPercent: [25, 50, 75, 100][Math.floor(index / 3) % 4] } : {}), ...(index < 29 ? {} : { botAssessmentProvider: 'GOOGLE_RECAPTCHA_ENTERPRISE', botAssessmentStatus: 'VALID', botAssessmentHumanScore: 0.1, botAssessmentReasons: ['AUTOMATION'], botAssessmentVerifiedBot: true }) },
+    properties: { ...(index % 3 === 2 ? { action: socialLinks[Math.floor(index / 3) % socialLinks.length][0], component: 'footer' } : {}), ...(index % 3 === 1 ? { progressPercent: [25, 50, 75, 100][Math.floor(index / 3) % 4] } : {}), ...(index < 29 ? {} : { botAssessmentProvider: 'GOOGLE_RECAPTCHA_ENTERPRISE', botAssessmentStatus: 'VALID', botAssessmentHumanScore: 0.1, botAssessmentReasons: ['AUTOMATION'], botAssessmentVerifiedBot: true }) },
   }))].sort((a, b) => a.eventTime.localeCompare(b.eventTime));
   const rules = [{ ruleId: 1, siteId: 'preview.local', name: 'Sample visitor alert', eventType: 'page_view', geoLevel: 'GLOBAL', geoAreaId: '', threshold: 1, comparator: '>=', granularity: '5m', cooldownSeconds: 1800, filters: { bot: 'EXCLUDE' }, enabled: false }];
   const pending = new Map();

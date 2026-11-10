@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { BellPlus, Check, Copy, ExternalLink, Filter, List, SearchCheck, Save, Trash2, X } from 'lucide-react';
-import { alertFromVisitor, assessmentEvidence, eventTimestamp, mapLink, readSavedViews, referrerOrigin, sanitizeSavedView, sessionWindow, scrollDepthPercent } from '../../lib/visitorWorkbench.mjs';
+import { alertFromVisitor, assessmentEvidence, eventTimestamp, mapLink, outboundLinkDetails, readSavedViews, referrerOrigin, sanitizeSavedView, sessionWindow, scrollDepthPercent } from '../../lib/visitorWorkbench.mjs';
 import styles from './VisitorWorkbench.module.css';
 
 export function CopyValue({ value, label }) {
@@ -162,7 +162,18 @@ export function VisitorInspector({ selection, api, hours, zone, onClose, onFilte
           {!item.sessionId && <p>No session identifier was recorded.</p>}
           {result && tab === 'timeline' && <><p className={styles.muted}>{result.page?.totalElements ?? events.length} activities in window{result.summary && ` from ${result.summary.totalEvents} recorded events`}. Reading checkpoints are grouped by session and page.</p>
             {result.summary?.totalEvents === 1 && <div className={styles.notice}>This session has one recorded event. Activity with a different session ID is kept separate.</div>}
-            <ol className={styles.timeline}>{events.map((event, index) => <li key={event.eventId || index}><time>{eventTimestamp(event.visit?.firstEventTime || event.eventTime, zone)}</time><strong>{event.visit ? 'Page visit' : event.eventName === 'engaged_time' ? 'Legacy duration event' : String(event.eventName || 'Event').replace(/_/g, ' ')}</strong><span>{event.pageUrl || event.pagePath || 'Page not recorded'}</span><ScrollDepth event={event} /><VisitCheckpoints event={event} zone={zone} />{event.targetUrl && <div className={styles.muted}>Target: {event.targetUrl}</div>}</li>)}</ol>{!events.length && <p>No events in this time window.</p>}</>}
+            <ol className={styles.timeline}>{events.map((event, index) => {
+              const outbound = outboundLinkDetails(event);
+              return <li key={event.eventId || index}>
+                <time>{eventTimestamp(event.visit?.firstEventTime || event.eventTime, zone)}</time>
+                <strong>{event.visit ? 'Page visit' : outbound?.label || (event.eventName === 'engaged_time' ? 'Legacy duration event' : String(event.eventName || 'Event').replace(/_/g, ' '))}</strong>
+                <span>{event.pageUrl || event.pagePath || 'Page not recorded'}</span>
+                <ScrollDepth event={event} /><VisitCheckpoints event={event} zone={zone} />
+                {event.targetUrl && <div className={styles.muted}>Target: {outbound?.href
+                  ? <a className={styles.link} href={outbound.href} target="_blank" rel="noopener noreferrer">{outbound.href}</a>
+                  : event.targetUrl}</div>}
+              </li>;
+            })}</ol>{!events.length && <p>No events in this time window.</p>}</>}
           {result && tab === 'analysis' && <>
             <h3>{analysis ? String(analysis.verdict).replace(/_/g, ' ') : 'Analysis not available'}</h3>
             {analysis ? <><dl><dt>Evidence source</dt><dd>Admin MCP · visitor.get_session_events</dd><dt>Detector</dt><dd>{analysis.detector}</dd><dt>Sampled events</dt><dd>{analysis.sampledEvents} / {analysis.windowTotalEvents ?? 'unknown'}</dd><dt>Automation indicated</dt><dd>{analysis.counts?.automationIndicated ?? 0}</dd><dt>Stored flag conflicts</dt><dd>{analysis.counts?.storedFlagConflicts ?? 0}</dd><dt>Human verification</dt><dd>Not performed</dd></dl><div className={styles.notice}>{analysis.completeWindow ? 'All events in this window were returned.' : 'Partial evidence only. Read other pages before drawing conclusions.'}</div>

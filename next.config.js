@@ -3,6 +3,13 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   poweredByHeader: false,
+  webpack(config) {
+    // Bundle the private viewer's CSS as text; do not depend on runtime files or a CDN.
+    const styles = config.module.rules.find((rule) => Array.isArray(rule.oneOf));
+    if (!styles) throw new Error('Missing webpack stylesheet rules');
+    styles.oneOf.unshift({ resourceQuery: /^\?private-docs-text$/, type: 'asset/source' });
+    return config;
+  },
   i18n: {
     locales: ["en"],
     defaultLocale: "en",

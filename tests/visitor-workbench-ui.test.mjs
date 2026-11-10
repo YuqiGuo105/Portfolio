@@ -164,6 +164,20 @@ test('social clicks remain visible alongside the same-session visit with their e
   } } };
   await render({ api });
   assert.equal(document.querySelectorAll('ol > li').length, 2);
-  assert.match(document.body.textContent, /outbound link clicked/);
+  assert.match(document.body.textContent, /LinkedIn link/);
   assert.match(document.body.textContent, /Target: https:\/\/www\.linkedin\.com\/in\/example\//);
+  const destination = document.querySelector('ol > li a');
+  assert.equal(destination.href, 'https://www.linkedin.com/in/example/');
+  assert.equal(destination.target, '_blank');
+  assert.equal(destination.rel, 'noopener noreferrer');
+});
+
+test('timeline names each social platform and does not link unsafe destinations', async () => {
+  const api = { visitors: { list: async () => ({ items: [
+    ...['github', 'instagram', 'leetcode'].map(platform => ({ ...item, eventId: platform, eventName: 'outbound_link_clicked', targetUrl: `https://${platform}.com/example` })),
+    { ...item, eventId: 'unsafe', eventName: 'outbound_link_clicked', targetUrl: 'javascript:alert(1)' },
+  ], page: { totalElements: 4 } }) } };
+  await render({ api });
+  assert.deepEqual([...document.querySelectorAll('ol > li > strong')].map(el => el.textContent), ['GitHub link', 'Instagram link', 'LeetCode link', 'External link']);
+  assert.equal(document.querySelectorAll('ol > li a').length, 3);
 });

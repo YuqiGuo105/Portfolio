@@ -1,9 +1,9 @@
-import { Bot, ExternalLink, RotateCcw, ScrollText } from "lucide-react";
+import Link from "next/link";
+import { Bot, BookOpen, RotateCcw, ScrollText } from "lucide-react";
 import AdminLayout from "../../src/components/admin/AdminLayout";
 import { PageHeader, adminStyles as ui } from "../../src/components/admin/AdminUI";
-
-const ADMIN_SERVICE_SWAGGER = process.env.NEXT_PUBLIC_ADMIN_SERVICE_SWAGGER_URL ||
-  "https://portfolio-admin-service-y45c2mnbja-uc.a.run.app/swagger-ui.html";
+import { ADMIN_API_DOCS_PATH } from "../../src/lib/adminApiDocs.mjs";
+import styles from "../../src/components/admin/JobsPage.module.css";
 
 const OPERATIONS = [
   { method: "GET", path: "/api/admin/indexing-jobs", purpose: "Filter RAG and search indexing jobs by status." },
@@ -12,18 +12,21 @@ const OPERATIONS = [
 ];
 
 export default function JobsAuditPage() {
+  return <AdminLayout><JobsAuditWorkspace /></AdminLayout>;
+}
+
+export function JobsAuditWorkspace() {
   return (
-    <AdminLayout>
       <div className={ui.page}>
         <PageHeader
           title="Jobs & audit"
           subtitle="Operational entry points for indexing retries, outbox delivery and content audit history."
           actions={(
             <>
-              <a className={ui.buttonSecondary} href="/admin/agent"><Bot size={15} /> Use operate console</a>
-              <a className={ui.buttonPrimary} href={ADMIN_SERVICE_SWAGGER} target="_blank" rel="noreferrer">
-                Open Admin API <ExternalLink size={15} />
-              </a>
+              <Link href="/admin/agent"><a className={ui.buttonSecondary}><Bot size={15} /> Use operate console</a></Link>
+              <Link href={ADMIN_API_DOCS_PATH}><a className={ui.buttonPrimary}>
+                Open Admin API <BookOpen size={15} />
+              </a></Link>
             </>
           )}
         />
@@ -39,8 +42,8 @@ export default function JobsAuditPage() {
             <h2 className={ui.sectionTitle}>Available operations</h2>
             <span className={ui.sectionMeta}>Authorization required</span>
           </div>
-          <div className={ui.tableWrap}>
-            <table className={ui.table}>
+          <div className={ui.tableWrap} role="region" aria-label="Available API operations" tabIndex={0}>
+            <table className={`${ui.table} ${styles.operationsTable}`}>
               <thead><tr><th>Method</th><th>Endpoint</th><th>Purpose</th></tr></thead>
               <tbody>
                 {OPERATIONS.map((operation) => (
@@ -55,16 +58,17 @@ export default function JobsAuditPage() {
           </div>
         </section>
       </div>
-    </AdminLayout>
   );
 }
 
 function OperationCard({ icon: Icon, title, text }) {
   return (
-    <div className={ui.actionCard}>
-      <span className={ui.actionIcon}><Icon size={18} /></span>
-      <span className={ui.actionTitle}>{title}</span>
-      <span className={ui.actionText}>{text}</span>
+    <div className={`${ui.actionCard} ${styles.operationCard}`}>
+      <span className={ui.actionIcon}><Icon size={18} aria-hidden="true" /></span>
+      <span className={styles.operationCopy}>
+        <span className={ui.actionTitle}>{title}</span>
+        <span className={ui.actionText}>{text}</span>
+      </span>
     </div>
   );
 }
