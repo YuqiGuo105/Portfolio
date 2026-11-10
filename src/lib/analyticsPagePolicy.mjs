@@ -15,3 +15,15 @@ export function isPrivateAnalyticsEvent(body = {}, referer = '') {
   // A public destination does not make an event from the admin console public.
   return [body?.page, body?.pageUrl, referer].some(isPrivateAnalyticsPage);
 }
+
+// Preserve the destination domain without recording query tokens or fragments.
+export function publicOutboundTarget(value) {
+  if (typeof value !== 'string' || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return null;
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return null;
+  }
+}

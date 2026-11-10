@@ -865,7 +865,7 @@ const Index = ({ initialContent = {} }) => {
                     <strong>Microservices</strong> and <strong>Distributed Systems</strong>.
                   </p>
 
-                  <SocialLinks className="social-links" onVisit={(url) => recordClick("social-link", url)} />
+                  <SocialLinks className="social-links" placement="home-intro" />
                 </div>
               </div>
               <div className="info-list">

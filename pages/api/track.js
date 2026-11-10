@@ -21,7 +21,7 @@ import { uuidv7 } from '../../src/lib/uuidv7';
 import { isRateLimited } from '../../src/lib/rateLimiter';
 import crypto from 'crypto';
 import { isLocalAnalyticsRequest, isLocalAnalyticsEvent } from '../../src/lib/analyticsHostFilter';
-import { isPrivateAnalyticsEvent } from '../../src/lib/analyticsPagePolicy.mjs';
+import { isPrivateAnalyticsEvent, publicOutboundTarget } from '../../src/lib/analyticsPagePolicy.mjs';
 import { allowAnalyticsRequest } from '../../src/lib/analyticsRequestPolicy';
 import { assessmentProperties, createRecaptchaAssessment } from '../../src/lib/recaptchaAssessment.mjs';
 
@@ -177,6 +177,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Unsupported event' });
   }
   const event = rawEventName;
+  const targetUrl = event === 'outbound_link_clicked'
+    ? publicOutboundTarget(body.target) : safePath(body.target);
+  if (event === 'outbound_link_clicked' && !targetUrl) {
+    return res.status(400).json({ error: 'Invalid outbound target' });
+  }
 
   // Geolocation -------------------------------------------------------------
   const geo = geoFromHeaders(req.headers);
@@ -214,7 +219,7 @@ export default async function handler(req, res) {
     anonId:     identified ? pseudonymousId(body.anonymousId, 'anonymous') : null,
     consentState,
     pageUrl:    safePath(body.page),
-    targetUrl:  safePath(body.target),
+    targetUrl,
     referrer:   typeof body.referrer === 'string' ? body.referrer.slice(0, 2048) : null,
     uaRaw:      ua,
     ipRaw:      ip,
@@ -255,6 +260,13 @@ export default async function handler(req, res) {
     const kafkaOk = await produceRawEvent(rawEvent);
     if (kafkaOk) {
       return res.status(200).json({ ok: true, via: 'kafka' });
+    }
+
+    // The legacy fallback cannot retain a destination/session or appear in the
+    // admin timeline. Never acknowledge an outbound click saved only there.
+    if (event === 'outbound_link_clicked') {
+      console.warn('[Track] outbound event ingestion unavailable');
+      return res.status(503).json({ ok: false, message: 'ingest_unavailable' });
     }
 
     // ---- Fallback path: Supabase direct insert ----

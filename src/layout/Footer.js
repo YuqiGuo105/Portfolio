@@ -10,7 +10,7 @@ const Footer = () => {
         <div className="container">
           <div className={styles.content}>
             <div className={styles.social}>
-              <SocialLinks className="social-links" />
+              <SocialLinks className="social-links" placement="footer" />
             </div>
             <div>
               <div className="copyright-text">

@@ -271,7 +271,7 @@ const Header = ({ onOpenSearch }) => {
             </div>
           </div>
         </div>
-        <SocialLinks className="menu-social-links" />
+        <SocialLinks className="menu-social-links" placement="navigation-menu" />
       </div>
     </header>
   );

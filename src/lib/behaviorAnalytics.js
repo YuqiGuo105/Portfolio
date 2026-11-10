@@ -1,5 +1,5 @@
 import { isBrowserAnalyticsDisabled } from "./analyticsHostFilter";
-import { isPrivateAnalyticsPage } from "./analyticsPagePolicy.mjs";
+import { isPrivateAnalyticsPage, publicOutboundTarget } from "./analyticsPagePolicy.mjs";
 
 const CONSENT_KEY = "yuqi_analytics_consent";
 const ANON_COOKIE = "yuqi_analytics_id";
@@ -157,6 +157,9 @@ export function trackBehavior(eventName, context = {}) {
   if (typeof window === "undefined" || !ALLOWED_EVENTS.has(eventName)) return false;
   if (isPrivateAnalyticsPage(context.page) || isPrivateAnalyticsPage(window.location.href)) return false;
   if (isBrowserAnalyticsDisabled(window.location.hostname)) return false;
+  const target = eventName === 'outbound_link_clicked'
+    ? publicOutboundTarget(context.target) : currentPath(context.target);
+  if (eventName === 'outbound_link_clicked' && !target) return false;
   const consentState = getAnalyticsConsent();
   if (consentState === "denied") return false;
 
@@ -172,7 +175,7 @@ export function trackBehavior(eventName, context = {}) {
       localTime,
       consentState: getAnalyticsConsent(),
       page,
-      target: currentPath(context.target),
+      target,
       referrer: context.referrer ?? document.referrer ?? null,
       sessionId: identified ? getSessionId() : null,
       anonymousId: identified ? getAnonymousId() : null,

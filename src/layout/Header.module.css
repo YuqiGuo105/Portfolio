@@ -5,6 +5,11 @@
   --nav-hint-ink: #fff;
 }
 
+/* The full-screen menu must keep its social links clear of the chat portal. */
+:global(body):has(.header :global(.menu-full-overlay.visible)) :global(#__chat_widget_root) {
+  visibility: hidden;
+}
+
 :global(body.dark-skin) .header {
   --nav-tint: #b5dfcb1a;
   --nav-focus: #b5dfcb;

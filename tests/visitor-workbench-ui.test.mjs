@@ -153,3 +153,17 @@ test('timeline orders a grouped visit by its first event rather than its last ch
   await render({ api });
   assert.deepEqual([...document.querySelectorAll('ol > li > strong')].map(el => el.textContent), ['Page visit', 'click']);
 });
+
+test('social clicks remain visible alongside the same-session visit with their external destination', async () => {
+  const api = { visitors: { list: async args => {
+    assert.equal(args.sessionId, item.sessionId);
+    return { items: [
+      { ...item, eventId: 'view', eventName: 'page_view', pageUrl: '/', visit: { eventCount: 2, firstEventTime: item.eventTime, checkpoints: [] } },
+      { ...item, eventId: 'social', eventName: 'outbound_link_clicked', pageUrl: '/', targetUrl: 'https://www.linkedin.com/in/example/' },
+    ], page: { totalElements: 2 } };
+  } } };
+  await render({ api });
+  assert.equal(document.querySelectorAll('ol > li').length, 2);
+  assert.match(document.body.textContent, /outbound link clicked/);
+  assert.match(document.body.textContent, /Target: https:\/\/www\.linkedin\.com\/in\/example\//);
+});
