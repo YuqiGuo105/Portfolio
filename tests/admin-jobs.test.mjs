@@ -83,6 +83,19 @@ test('upstream authorization failures and outages remain fail-closed and sanitiz
   }
 });
 
+test('documentation diagnostics identify the failure stage without credentials or document content', async () => {
+  const logs = [];
+  const res = response();
+  await createAdminDocsHandler({ env, requireAdmin: async () => ({}),
+    logFailure: entry => logs.push(entry),
+    fetchImpl: async () => { throw new TypeError('Bearer fixture-session secret diagnostic'); },
+  })(request, res);
+  assert.equal(res.code, 502);
+  assert.deepEqual(logs, [{ event: 'admin_api_docs_failure', stage: 'upstream_request',
+    reason: 'TypeError', upstreamStatus: null, upstreamOrigin: 'https://admin.example' }]);
+  assert.doesNotMatch(JSON.stringify([logs, res.body]), /fixture-session|secret diagnostic/);
+});
+
 test('documentation proxy rejects write methods and unsafe configured origins', async () => {
   const dependencies = { requireAdmin: async () => ({}), fetchImpl: () => assert.fail('No upstream request') };
   for (const method of ['POST', 'PUT', 'DELETE']) {
