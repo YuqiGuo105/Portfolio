@@ -5,8 +5,10 @@
 **Active for production Fast chat (intent, safety and generation), dictation,
 and their local counterparts, not a platform-wide monthly spending cap.** After explicit approval on October 26,
 2026 (America/Denver), the policy in the existing Blog project was enabled with
-the original $8 monthly admission limit. The production Java agent now routes
-these requests through the authenticated Qwen gateway. Auto-reload remains off.
+the original $8 monthly admission limit. The production Java agent routes
+these requests through the authenticated model gateway: Fast text uses Gemini
+2.5 Flash-Lite, while dictation continues to use Qwen. The local text
+configuration is unchanged. Auto-reload remains off.
 Historical provider charges have not been reconciled
 into the baseline; this ledger cannot yet enforce the requested $10 aggregate
 ceiling across all existing API usage.
@@ -110,10 +112,40 @@ separate migration/reindex plan.
 7. Only then enable provider auto-reload with separately agreed recharge limits.
 
 Provider console budgets are defense in depth, not an instantaneous guarantee.
-In this investigation the Alibaba monthly account budget was set to $3 with
-stop-service enabled, and the existing Google project cap was $5. Reporting
-delays, tax, unrelated uses of the accounts/keys, and charges before rollout are
-not made safe by local code. Google auto-reload remains off.
+The October investigation recorded an Alibaba $3 monthly stop-service budget
+and a Google $5 project cap; those historical settings are not proof of current
+enforcement. Prepaid credit and provider tier limits are not monthly budgets.
+Reporting delays, tax, unrelated uses of the accounts/keys, and charges before
+rollout are not made safe by local code. Google auto-reload remains off.
+
+## Production Model Switch (November 10)
+
+After the account owner replenished Google prepaid credit, a bounded live probe
+through the existing model gateway returned HTTP 200 for
+`gemini-2.5-flash-lite`. Production revision
+`portfolio-agent-service-00140-s88` then received 100% of agent traffic.
+
+- Intent, intent escalation, safety, regular generation, utility generation,
+  and the inactive Deep-generation setting all select `gemini-2.5-flash-lite`.
+  The same six GitHub deployment variables are persisted for future releases.
+- Thinking remains disabled. Using the same intent and escalation model skips
+  the escalation call; there is no fallback to a higher-priced model/provider.
+- The internal gateway token, shared $8 admission policy, request bounds, and
+  accounting path are unchanged. This does not expand ledger coverage to voice,
+  embeddings/indexers, or copilot.
+- Qwen dictation and realtime voice remain unchanged. Deep research and
+  image/PDF understanding remain disabled server-side.
+
+Deployed checks passed for a homepage education answer naming Syracuse and
+Liverpool, a Tokyo globe action followed by the simulated `ls projects`
+command, and rejection of a semicolon-chained command. The public execution
+record showed all five stages completing, with 2,833 input and 27 output tokens
+for generation (estimated generation-only cost: $0.000294). These are focused
+rollout checks, not a full model-quality benchmark or a voice retest.
+
+Google's standard text rate was rechecked on November 10: $0.10 per million
+input tokens and $0.40 per million output tokens. See the
+[Gemini 2.5 Flash-Lite pricing table](https://aistudio.google.com/docs/pricing#gemini-2.5-flash-lite).
 
 ## Production Recovery (October 27)
 
