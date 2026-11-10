@@ -45,6 +45,25 @@ test('unknown usage and old outstanding work cannot replenish the budget', async
     assert.equal((await call(db, 'status')).remainingMicros, 5000000);
   } finally { await db.close(); }
 });
+test('lowering the monthly limit to five dollars preserves charges and outstanding reservations', async () => {
+  const db = await database();
+  try {
+    await db.exec('update public.ai_spend_policy set enabled = true;');
+    const settled = randomUUID();
+    await call(db, 'reserve', settled, 1000000);
+    await call(db, 'settle', settled, 500000);
+    await call(db, 'reserve', randomUUID(), 250000);
+    await db.exec('update public.ai_spend_months set baseline_micros = 500000;');
+    await db.exec('update public.ai_spend_policy set monthly_limit_micros = 5000000;');
+    assert.equal((await call(db, 'status')).remainingMicros, 3750000);
+    assert.equal((await call(db, 'reserve', randomUUID(), 3750001)).reason, 'monthly_limit');
+    assert.equal((await call(db, 'reserve', randomUUID(), 3750000)).allowed, true);
+    assert.equal((await call(db, 'reserve', randomUUID(), 1)).reason, 'monthly_limit');
+    const { rows } = await db.query('select baseline_micros, settled_micros from public.ai_spend_months');
+    assert.equal(Number(rows[0].baseline_micros), 500000);
+    assert.equal(Number(rows[0].settled_micros), 500000);
+  } finally { await db.close(); }
+});
 test('overrun records the real charge and disables new calls', async () => {
   const db = await database();
   try {

@@ -5,7 +5,9 @@
 **Active for production Fast chat (intent, safety and generation), dictation,
 and their local counterparts, not a platform-wide monthly spending cap.** After explicit approval on October 26,
 2026 (America/Denver), the policy in the existing Blog project was enabled with
-the original $8 monthly admission limit. The production Java agent routes
+the original $8 monthly admission limit. On November 10, the owner requested
+a lower limit and the live policy was reduced to **$5/month** without resetting
+existing charges or outstanding reservations. The production Java agent routes
 these requests through the authenticated model gateway: Fast text uses Gemini
 2.5 Flash-Lite, while dictation continues to use Qwen. The local text
 configuration is unchanged. Auto-reload remains off.
@@ -53,7 +55,8 @@ service-role-only, RLS-protected ledger. Amounts are integer USD microdollars.
 
 - One policy-row lock serializes reservations across hosts and providers.
 - Baseline spend, settled usage, and all outstanding reservations count toward
-  an $8 monthly admission limit, leaving $2 of the requested $10 as a buffer.
+  the current $5 monthly admission limit. The migration's original $8 default
+  is historical; the live singleton policy controls admission immediately.
 - Reserve before a paid request; no reservation means no provider request.
 - Unknown usage retains the full reservation. There is no expiry refund.
 - Duplicate reservation IDs are rejected. Settlement is idempotent.
@@ -105,7 +108,7 @@ separate migration/reindex plan.
    provider paths. Otherwise a shared cap can be bypassed.
 5. Before claiming platform-wide coverage, reconcile existing month-to-date
    charges from both providers, seed the baseline conservatively, and test true
-   concurrent connections on Postgres. The migration is installed and the $8
+   concurrent connections on Postgres. The migration is installed and the $5
    policy covers only the guarded paths described above.
 6. Run local and deployed end-to-end tests, including denied budget, missing
    credentials, duplicate requests, disconnects, and database outages.
@@ -146,6 +149,24 @@ rollout checks, not a full model-quality benchmark or a voice retest.
 Google's standard text rate was rechecked on November 10: $0.10 per million
 input tokens and $0.40 per million output tokens. See the
 [Gemini 2.5 Flash-Lite pricing table](https://aistudio.google.com/docs/pricing#gemini-2.5-flash-lite).
+
+### Monthly Limit Follow-Up (November 10)
+
+The shared live policy was lowered from 8,000,000 to 5,000,000 USD microdollars.
+It remains enabled, with no new environment bypass or cache. A production
+transaction using `service_role` verified that an above-$5 reservation is
+rejected and a within-budget reservation is accepted. All verification writes
+were rolled back; no provider request was made by that check. Existing usage
+and open reservations were preserved.
+
+Google AI Studio independently displayed a $5 monthly project spend cap for
+the existing Gemini project. That provider cap is defense in depth: Google
+documents approximately 10 minutes of enforcement latency, and its calendar
+uses Pacific time while the shared ledger uses UTC. The cap does not cover
+Qwen realtime calls or unrelated Cloud services. Automatic reload is separate
+from API spend and must also have its own $5 monthly auto-charge limit before
+it is enabled; its final console state must be verified, not inferred from the
+project cap. See [Google billing controls](https://aistudio.google.com/docs/billing).
 
 ## Production Recovery (October 27)
 
