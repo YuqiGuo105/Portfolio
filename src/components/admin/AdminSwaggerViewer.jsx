@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import SwaggerUIBundle from 'swagger-ui-dist/swagger-ui-bundle';
+import styles from './AdminSwaggerViewer.module.css';
 
 export default function AdminSwaggerViewer({ document }) {
   const container = useRef(null);
@@ -18,7 +19,7 @@ export default function AdminSwaggerViewer({ document }) {
       node.replaceChildren();
     };
   }, [document]);
-  return <section aria-label="Protected Swagger documentation">
+  return <section className={styles.viewer} aria-label="Protected Swagger documentation">
     <style>{document.stylesheet}</style>
     <style>{`.swagger-ui .auth-wrapper { display: none; } .swagger-ui .opblock-summary-path { overflow-wrap: anywhere; }`}</style>
     <div ref={container} />

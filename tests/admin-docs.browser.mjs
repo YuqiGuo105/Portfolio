@@ -12,14 +12,15 @@ const token = [{ alg: 'HS256', typ: 'JWT' }, { sub: 'docs-ui-test', exp }]
 const stylesheet = await readFile(require.resolve('swagger-ui-dist/swagger-ui.css'), 'utf8');
 const output = new URL('../test-artifacts/admin-docs/', import.meta.url).pathname;
 await mkdir(output, { recursive: true });
-const spec = { openapi: '3.0.1', info: { title: 'Protected API fixture', version: 'test' }, paths: {
-  '/api/admin/indexing-jobs': { get: { tags: ['Jobs'], summary: 'List indexing jobs', responses: { 200: { description: 'Success' } } } },
+const spec = { openapi: '3.0.1', info: { title: 'Protected API fixture', version: 'test' },
+  tags: [{ name: 'Admin Indexing Jobs', description: 'List and retry failed RAG and search indexing jobs after reviewing their errors.' }], paths: {
+  '/api/admin/indexing-jobs/{jobId}/status': { get: { tags: ['Admin Indexing Jobs'], summary: 'List indexing jobs', responses: { 200: { description: 'Success' } } } },
 } };
 
 for (const [name, engine, options] of [['chrome', chromium, { channel: 'chrome' }], ['webkit', webkit, {}]]) {
   const browser = await engine.launch({ ...options, headless: true });
   try {
-    for (const width of [1280, 390]) {
+    for (const width of [1280, 390, 320]) {
       const context = await browser.newContext({ viewport: { width, height: 900 } });
       await context.addInitScript(({ storageKey, token, exp }) => localStorage.setItem(storageKey, JSON.stringify({
         access_token: token, refresh_token: 'fixture-only', expires_at: exp, token_type: 'bearer',
@@ -50,6 +51,9 @@ for (const [name, engine, options] of [['chrome', chromium, { channel: 'chrome' 
       await page.goto(`${base}/admin/jobs`);
       await page.getByRole('link', { name: 'Open Admin API', exact: true }).click();
       await page.locator('.swagger-ui .opblock-summary-method').waitFor({ timeout: 60000 });
+      const description = await page.locator('.swagger-ui .opblock-tag small').boundingBox();
+      assert.ok(description.width > 200, 'Group description must not collapse into a narrow column');
+      assert.ok(description.height < 100, 'Group description should wrap into a few readable lines');
       await page.getByText('List indexing jobs', { exact: true }).click();
       assert.equal(await page.getByRole('button', { name: 'Try it out', exact: true }).count(), 0);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
