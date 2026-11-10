@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { PROMPT_HOST, PROMPT_USER, complete, runCommand } from "../lib/terminalCommands.mjs";
+import { registerBrowserTarget, normalizeBrowserAction } from "../lib/browserActions.mjs";
 
 const QUICK = ["help", "ls projects", "cat resume.txt", "mcp call search_portfolio kafka", "kubectl get pods", "git log", "sudo hire yuqi"];
 const MAX_LINES = 600;
@@ -104,6 +105,7 @@ export default function SiteTerminal({ onClose }) {
   const [tick, setTick] = useState(0);
   const inputRef = useRef(null);
   const bodyRef = useRef(null);
+  const busyRef = useRef(false);
 
   useEffect(() => { inputRef.current?.focus(); warmTerminal(); }, []);
   useEffect(() => {
@@ -143,6 +145,7 @@ export default function SiteTerminal({ onClose }) {
   }), [open, onClose]);
 
   const run = useCallback(async (command) => {
+    if (busyRef.current) throw new Error("Terminal is busy");
     const text = command.trim();
     setInput("");
     cursorRef.current = -1;
@@ -150,13 +153,22 @@ export default function SiteTerminal({ onClose }) {
     if (!text) { setLines((current) => [...current, echo]); return; }
     historyRef.current = [...historyRef.current.filter((h) => h !== text), text].slice(-50);
     setLines((current) => [...current, echo]);
+    busyRef.current = true;
     setBusy(true);
     setStartedAt(Date.now());
-    const out = await runCommand(text, ctx);
-    setBusy(false);
+    let out;
+    try { out = await runCommand(text, ctx); }
+    finally { busyRef.current = false; setBusy(false); }
     if (text === "clear") return;
     setLines((current) => [...current, ...out].slice(-MAX_LINES));
   }, [ctx]);
+
+  useEffect(() => registerBrowserTarget("terminal", async raw => {
+    const action = normalizeBrowserAction(raw);
+    if (action?.type !== "terminal_command") throw new Error("Command not allowed");
+    await run(action.command);
+    return "Site terminal command finished";
+  }), [run]);
 
   function onKeyDown(event) {
     if (event.key === "Enter") { event.preventDefault(); if (!busy) run(input); return; }

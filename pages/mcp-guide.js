@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Check, Copy, LockKeyhole, Search, ShieldCheck, History } from 'lucide-react';
+import { ArrowUpRight, Check, Copy, ExternalLink, LockKeyhole, Search, ShieldCheck, History } from 'lucide-react';
 import SeoHead from '../src/components/SeoHead';
 import McpPlayground from '../src/components/McpPlayground';
 import styles from '../styles/McpGuide.module.css';
@@ -73,6 +73,11 @@ export default function McpGuidePage() {
           <section id="connect" className={styles.section}>
             <header className={styles.sectionTitle}><span>01 / PUBLIC</span><h2>Explore the work. Ask your AI.</h2><p>Find projects, articles, architecture, and professional background. Read-only. No portfolio login required.</p></header>
             <Endpoint label="Public endpoint" value={PUBLIC_URL} />
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 16 }}>
+              <Link href="/mcp/connect?access=public&client=claude"><a>Connect Claude <ExternalLink size={15} /></a></Link>
+              <Link href="/mcp/connect?access=public&client=chatgpt"><a>Connect ChatGPT <ExternalLink size={15} /></a></Link>
+              <Link href="/architecture#evolution"><a>Architecture decisions <ExternalLink size={15} /></a></Link>
+            </div>
             <p id="first-question" className={styles.example}>Try asking: <strong>Which project demonstrates Yuqi&apos;s distributed-systems experience? Link the evidence.</strong></p>
             <Figure file="codex-public-plugin.png" width={1429} height={1100} alt="Yuqi Portfolio plugin in Codex" caption="Codex: projects, writing, and professional background." />
             <Figure file="claude-public-tools.png" width={2056} height={1374} alt="Claude public connector showing read-only portfolio tools" caption="Claude: connected public tools. Private records stay excluded." />

@@ -16,6 +16,7 @@
     }
   }
   .launch-button {
+    color: #202b30;
     position: fixed;
     bottom: 0;
     right: 0;
@@ -44,6 +45,7 @@
   .launch-button:active {
     cursor: grabbing;
   }
+  .launch-button > span:last-child { color: inherit; }
   .launch-button:hover {
     background: #ff8059;
     border-color: #ff8059;

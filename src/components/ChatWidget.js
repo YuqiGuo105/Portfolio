@@ -8,6 +8,10 @@ import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path
 import { useRouter } from "next/router"
 import LogInDialog from "../components/LogInDialog"
 import AnswerSources from "./AnswerSources"
+import RunReplay from "./RunReplay"
+import BrowserActionPlan from "./BrowserActionPlan"
+import { recordPublicRunEvent } from "../lib/publicRunReplay.mjs"
+import { normalizeBrowserPlan } from "../lib/browserActions.mjs"
 import VoiceInput from "./VoiceInput"
 import MrPotAvatar from "./MrPotAvatar"
 import { Mic, Plus, Upload, Phone } from "lucide-react"
@@ -2304,6 +2308,7 @@ function AttachmentProgressRow({ name, progress }) {
 /* ---------- Chat window ---------- */
 
 function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef, guideQuestion }) {
+  const freshBrowserPlansRef = useRef(new Set())
   const [messages, setMessages] = useState(() => {
     // If the widget has been inactive for a while, start fresh (no old history).
     if (!isSessionFresh()) {
@@ -3071,6 +3076,18 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         if (stoppedAssistantIdsRef.current.has(assistantId) || finalized) return false
         const obj = safeJsonParse(evt.data) || {}
         const stage = obj.stage || evt.event || "message"
+        if (obj.status && !["answer_delta", "answer_final"].includes(stage)) {
+          setMessages(prev => prev.map(m => m.id === assistantId
+            ? { ...m, publicRunEvents: recordPublicRunEvent(m.publicRunEvents, { ...obj, stage }) } : m))
+        }
+        if (stage === "browser_actions") {
+          const browserPlan = normalizeBrowserPlan(obj.payload)
+          if (browserPlan) {
+            freshBrowserPlansRef.current.add(assistantId)
+            setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, browserPlan } : m))
+          }
+          return
+        }
         if (stage === "done") return false
         if (stage === "error") throw chatRequestError(obj.payload || obj)
         if (stage === "run_metadata" && /^[0-9a-f-]{36}$/i.test(obj.payload?.runId || "")) {
@@ -4086,7 +4103,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
               ) : null}
 
               {/* Execution trace and real MCP calls are intentionally separate. */}
-              {m.role === "assistant" && Array.isArray(m.executionStages) && m.executionStages.length > 0 ? (
+              {m.role === "assistant" && (m.streaming || !m.publicRunEvents?.length) && Array.isArray(m.executionStages) && m.executionStages.length > 0 ? (
                 <ToolHistory cards={m.executionStages} kind="steps" streaming={Boolean(m.streaming)} failed={Boolean(m.errorCode)} />
               ) : null}
               {m.role === "assistant" && !m.streaming && Array.isArray(m.toolCards) && m.toolCards.length > 0 ? (
@@ -4155,6 +4172,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
               {m.role === "assistant" && (m.sourceCards?.length > 0 || m.relatedLinks?.length > 0) ? (
                 <AnswerSources cards={m.sourceCards} related={m.relatedLinks} answer={m.content} />
               ) : null}
+              {m.role === "assistant" && m.browserPlan && <BrowserActionPlan plan={m.browserPlan} active={freshBrowserPlansRef.current.has(m.id) && !m.streaming && !m.errorCode} />}
+              {m.role === "assistant" && <RunReplay events={m.publicRunEvents} sources={m.sourceCards} streaming={m.streaming} />}
               {m.role === "assistant" && m.runId ? <details style={{ marginTop: 10, fontSize: 12, overflowWrap: "anywhere" }}>
                 <summary style={{ cursor: "pointer" }}>Run details</summary>
                 <code style={{ userSelect: "text" }}>{m.runId}</code>

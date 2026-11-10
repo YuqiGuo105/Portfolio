@@ -42,6 +42,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Page controls and public execution records
+        run: npm run test:browser-actions
+
       - name: Security regression tests
         run: npm run test:security
 

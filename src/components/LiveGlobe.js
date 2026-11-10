@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { addLocalFlag, useGlobeLive } from "../lib/globeLive";
+import { registerBrowserTarget } from "../lib/browserActions.mjs";
 
 const RotatingGlobe = dynamic(() => import("./RotatingGlobe"), { ssr: false });
 
@@ -32,6 +33,15 @@ export default function LiveGlobe({ globeProps = {}, compact = false }) {
   const [ticker, setTicker] = useState(null);
   const honeypot = useRef(null);
   const seenPulses = useRef(new Set());
+  const containerRef = useRef(null);
+  useEffect(() => registerBrowserTarget("globe", (action, isActive) => new Promise((resolve, reject) => {
+    containerRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+    setFlyTo({ lat: action.lat, lng: action.lng, key: Date.now(), isActive, onComplete: error => {
+      if (error) { reject(error); return; }
+      setNotice({ text: action.city });
+      resolve(`Globe focused on ${action.city}`);
+    } });
+  })), []);
 
   // Announce arrivals from elsewhere ("Someone in Tokyo just arrived").
   useEffect(() => {
@@ -93,7 +103,7 @@ export default function LiveGlobe({ globeProps = {}, compact = false }) {
   }), [picking]);
 
   return (
-    <div className={`live-globe ${compact ? "compact" : ""}`}>
+    <div ref={containerRef} className={`live-globe ${compact ? "compact" : ""}`}>
       <RotatingGlobe
         {...globeProps}
         flags={live.flags}

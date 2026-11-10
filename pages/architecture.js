@@ -1,10 +1,12 @@
-import { ExternalLink, Maximize2, Minus, Plus, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink, Maximize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import SeoHead from "../src/components/SeoHead";
 import ArchitectureTimeMachine from "../src/components/ArchitectureTimeMachine";
 import styles from "../src/components/ArchitectureViewer.module.css";
 import sequences from "../docs/architecture/platform-sequences.json";
 import evolution from "../docs/architecture/platform-evolution.json";
+import { registerBrowserTarget } from "../src/lib/browserActions.mjs";
+import { sequenceSteps } from "../src/lib/sequenceSteps.mjs";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.5;
@@ -37,6 +39,16 @@ export default function ArchitectureViewerPage() {
   const [view, setView] = useState("container");
   const [flowKey, setFlowKey] = useState(FLOWS[0]?.key);
   const [step, setStep] = useState(undefined);
+  const [messageStep, setMessageStep] = useState(0);
+
+  useEffect(() => registerBrowserTarget("diagram", action => {
+    const flow = FLOWS.find(item => item.key === action.flow);
+    if (!flow || action.step > sequenceSteps(flow.steps).length) throw new Error("Unknown diagram step");
+    setView("flows"); setFlowKey(flow.key); setMessageStep(action.step - 1); setZoom(1);
+    window.history.replaceState(null, "", `#flows/${flow.key}`);
+    requestAnimationFrame(() => document.getElementById("flow-walkthrough")?.scrollIntoView({ block: "center" }));
+    return `${flow.title}: step ${action.step}`;
+  }), []);
 
   useEffect(() => {
     const sync = () => {
@@ -44,6 +56,7 @@ export default function ArchitectureViewerPage() {
       setView(state.view);
       setFlowKey(state.flow);
       setStep(state.step);
+      setMessageStep(0);
     };
     sync();
     window.addEventListener("hashchange", sync);
@@ -53,6 +66,7 @@ export default function ArchitectureViewerPage() {
   const select = useCallback((nextView, nextFlow) => {
     setView(nextView);
     if (nextFlow) setFlowKey(nextFlow);
+    setMessageStep(0);
     setZoom(1);
     const hash = nextView === "flows" ? `#flows/${nextFlow || flowKey}` : nextView === "evolution" && step ? `#evolution/${step}` : `#${nextView}`;
     window.history.replaceState(null, "", hash);
@@ -69,6 +83,9 @@ export default function ArchitectureViewerPage() {
   }, []);
 
   const scenario = FLOWS.find((item) => item.key === flowKey) || FLOWS[0];
+  const messages = useMemo(() => sequenceSteps(scenario?.steps), [scenario]);
+  const message = messages[Math.min(messageStep, messages.length - 1)];
+  const participant = id => scenario.participants.find(item => item.id === id)?.title || id;
 
   const diagram = useMemo(() => {
     if (view === "topology") {
@@ -151,6 +168,18 @@ export default function ArchitectureViewerPage() {
           <ArchitectureTimeMachine data={evolution} initialId={step} onChange={showStep} />
         ) : (
           <>
+            {view === "flows" && message && <section id="flow-walkthrough" className={styles.walkthrough} aria-label="Diagram step">
+              <div className={styles.walkControls}>
+                <button type="button" title="Previous step" aria-label="Previous step" disabled={messageStep === 0} onClick={() => setMessageStep(i => i - 1)}><ArrowLeft size={18} /></button>
+                <output aria-live="polite">Step {messageStep + 1} / {messages.length}</output>
+                <button type="button" title="Next step" aria-label="Next step" disabled={messageStep >= messages.length - 1} onClick={() => setMessageStep(i => i + 1)}><ArrowRight size={18} /></button>
+              </div>
+              <div className={styles.walkMessage}>
+                <strong>{participant(message.self || message.from)}</strong><ArrowRight aria-hidden="true" size={22} /><strong>{participant(message.self || message.to)}</strong>
+              </div>
+              <p aria-live="polite"><b>{message.label}</b>{message.detail && <> · {message.detail}</>}</p>
+              {message.context.length > 0 && <small>{message.context.join(" / ")}</small>}
+            </section>}
             <section className={styles.viewport} aria-label="Zoomable architecture diagram">
               <div className={styles.canvas} style={{ width: `${zoom * 100}%` }}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- static SVG diagrams, zoomed by width */}

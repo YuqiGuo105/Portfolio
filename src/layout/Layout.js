@@ -9,12 +9,8 @@ import {
 import Footer from "./Footer";
 import Header from "./Header";
 import PreLoader from "./PreLoader";
-import dynamic from "next/dynamic";
 import SearchOverlay from "../components/SearchOverlay";
 
-const ChatWidget = dynamic(() => import("../../src/components/ChatWidget"), {
-  ssr: false,
-});
 
 const Layout = ({ children, extraWrapClass }) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -52,7 +48,6 @@ const Layout = ({ children, extraWrapClass }) => {
         {/* Footer */}
         <Footer />
       </div>
-      <ChatWidget />
       <SearchOverlay
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}

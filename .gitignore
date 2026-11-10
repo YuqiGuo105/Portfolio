@@ -9,6 +9,7 @@
 .env
 .next
 .next-voice-local*
+.next-mr-pot-*
 /services/voice/node_modules/
 
 # testing

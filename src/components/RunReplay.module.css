@@ -1,0 +1,11 @@
+.replay { font-size: 12px; margin-top: 12px; border-top: 1px solid #a0a8ad55; padding-top: 8px; overflow-wrap: anywhere; }
+.replay summary { cursor: pointer; font-weight: 600; }
+.replay summary span { font-weight: 400; margin-left: 8px; opacity: .7; }
+.replay ol { list-style: none; padding: 0 0 0 10px; border-left: 2px solid #208777; margin: 12px 0; }
+.replay ol > li { margin: 0 0 12px; }
+.replay li > div { display: flex; justify-content: space-between; gap: 8px; }
+.replay li > div span { opacity: .7; }
+.replay dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); margin: 5px 0 0; gap: 8px; }
+.replay dt { opacity: .7; font-size: 11px; }
+.replay dd { margin: 0; font-variant-numeric: tabular-nums; }
+.replay ul { padding-left: 16px; }

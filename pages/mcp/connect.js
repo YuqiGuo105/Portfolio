@@ -1,7 +1,7 @@
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   Check,
@@ -20,8 +20,8 @@ const PUBLIC_ENDPOINT = process.env.NEXT_PUBLIC_MCP_PUBLIC_URL || 'https://www.y
 const ADMIN_ENDPOINT = process.env.NEXT_PUBLIC_MCP_ADMIN_URL || 'https://www.yuqi.site/mcp/admin';
 
 const CLIENTS = [
-  { id: 'claude', label: 'Claude', instruction: 'Add a custom connector and paste the endpoint below.' },
-  { id: 'chatgpt', label: 'ChatGPT', instruction: 'Add an MCP app or custom connector with the endpoint below.' },
+  { id: 'claude', label: 'Claude', instruction: 'In Connectors, add a custom connector with this endpoint. Review access before connecting.', url: 'https://claude.ai/customize/connectors', docs: 'https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp' },
+  { id: 'chatgpt', label: 'ChatGPT', instruction: 'In Plugins, add a custom MCP server with this endpoint. Availability depends on your account and workspace permissions.', url: 'https://chatgpt.com/plugins', docs: 'https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt' },
   { id: 'codex', label: 'Codex', instruction: 'Add the endpoint as a Streamable HTTP MCP server.' },
   { id: 'desktop', label: 'Cursor / VS Code', instruction: 'Create a remote MCP server entry using the endpoint below.' },
   { id: 'gemini', label: 'Gemini', instruction: 'Use the client\'s remote MCP connection settings with the endpoint below.' },
@@ -38,10 +38,15 @@ function CopyButton({ value, copied, onCopy }) {
 
 export default function McpConnectPage() {
   const router = useRouter();
-  const requestedAccess = router.query.access === 'public' ? 'public' : 'admin';
+  const requestedAccess = router.query.access === 'admin' ? 'admin' : 'public';
   const [access, setAccess] = useState(requestedAccess);
   const [client, setClient] = useState('claude');
   const [copiedValue, setCopiedValue] = useState('');
+  useEffect(() => {
+    if (!router.isReady) return;
+    setAccess(router.query.access === 'admin' ? 'admin' : 'public');
+    if (CLIENTS.some(item => item.id === router.query.client)) setClient(router.query.client);
+  }, [router.isReady, router.query.access, router.query.client]);
 
   const selectedClient = useMemo(
     () => CLIENTS.find((item) => item.id === client) || CLIENTS[0],
@@ -153,6 +158,10 @@ export default function McpConnectPage() {
                 <code>{endpoint}</code>
                 <CopyButton value={endpoint} copied={copiedValue === endpoint} onCopy={copy} />
               </div>
+              {selectedClient.url && <div className="actions">
+                <a className="primary-action" href={selectedClient.url} target="_blank" rel="noopener noreferrer">Open {selectedClient.label} <ExternalLink size={17} /></a>
+                <a href={selectedClient.docs} target="_blank" rel="noopener noreferrer">Official setup guide</a>
+              </div>}
 
               <div className="section-heading authorize-heading">
                 <span>03</span>

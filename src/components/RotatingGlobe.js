@@ -384,6 +384,8 @@ const RotatingGlobe = ({
 
   // globe
   const globeRef = useRef(null);
+  const globeReadyAtRef = useRef(Infinity);
+  const flightLifecycleRef = useRef({ generation: 0, request: null });
   const containerRef = useRef(null);
   const elCacheRef = useRef(new Map());
   const [size, setSize] = useState({ w: 1, h: 1 });
@@ -1818,12 +1820,50 @@ const RotatingGlobe = ({
   };
 
   useEffect(() => {
-    const g = globeRef.current;
-    if (!flyTo || !g || typeof g.pointOfView !== "function") return;
+    if (!flyTo) return;
+    const lifecycle = flightLifecycleRef.current;
+    const generation = ++lifecycle.generation;
+    lifecycle.request = flyTo;
     const lat = Number(flyTo.lat); const lng = Number(flyTo.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-    const altitude = Math.min(getCurrentPOV().altitude || 2.2, 1.9);
-    g.pointOfView({ lat, lng, altitude }, 1100);
+    let timer;
+    let finished = false;
+    const deadline = Date.now() + 5000;
+    const complete = error => {
+      if (finished) return;
+      finished = true;
+      flyTo.onComplete?.(error);
+    };
+    const move = () => {
+      if (flyTo.isActive && !flyTo.isActive()) { complete(new Error("Globe action expired.")); return; }
+      const g = globeRef.current;
+      const controls = getControls(g);
+      if (!g?.pointOfView || !controls || Date.now() < globeReadyAtRef.current) {
+        if (Date.now() >= deadline) { complete(new Error("The globe is not ready. Please try again.")); return; }
+        timer = setTimeout(move, 100);
+        return;
+      }
+      userInteractedRef.current = true;
+      clearTimeout(inactivityTimerRef.current);
+      controls.autoRotate = false;
+      controls.autoRotateSpeed = 0;
+      const altitude = Math.min(getCurrentPOV().altitude || 2.2, 1.9);
+      const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1100;
+      g.pointOfView({ lat, lng, altitude }, duration);
+      timer = setTimeout(() => {
+        const position = getCurrentPOV();
+        const longitudeGap = Math.abs(((position.lng - lng + 540) % 360) - 180);
+        complete(Math.abs(position.lat - lat) < 1 && longitudeGap < 1 ? null : new Error("Globe movement was interrupted."));
+      }, duration + 100);
+    };
+    move();
+    return () => {
+      clearTimeout(timer);
+      // Strict Mode restarts this effect synchronously with the same request.
+      queueMicrotask(() => {
+        if (lifecycle.generation === generation || lifecycle.request !== flyTo) complete(new Error("Globe movement cancelled."));
+      });
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flyTo?.key]);
 
@@ -1887,6 +1927,8 @@ const RotatingGlobe = ({
 
       <GlobeLib
         ref={globeRef}
+        // The library's initial 1.2s mesh rotation is independent of camera position.
+        onGlobeReady={() => { globeReadyAtRef.current = Date.now() + 1250; }}
         width={size.w}
         height={size.h}
         backgroundColor="rgba(0,0,0,0)"

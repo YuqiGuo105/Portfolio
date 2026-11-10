@@ -248,3 +248,12 @@
   .canvas { transition: none; }
   .tab, .tabActive { transition: none; }
 }
+.walkthrough { padding: 20px 0; border-block: 1px solid #71808755; margin-bottom: 16px; scroll-margin-top: 24px; }
+.walkControls { display: flex; gap: 16px; align-items: center; margin-bottom: 20px; }
+.walkControls button { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid #71808766; border-radius: 4px; background: transparent; color: inherit; padding: 0; }
+.walkControls button::before, .walkControls button::after { display: none; }
+.walkControls button:disabled { opacity: .35; }
+.walkMessage { display: grid; grid-template-columns: minmax(0,1fr) 22px minmax(0,1fr); gap: 16px; align-items: center; max-width: 650px; }
+.walkMessage strong { padding: 12px; border-bottom: 2px solid #278575; text-align: center; overflow-wrap: anywhere; }
+.walkthrough p { margin: 12px 0 5px; overflow-wrap: anywhere; }
+.walkthrough small { opacity: .75; }
