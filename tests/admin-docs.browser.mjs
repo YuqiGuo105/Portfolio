@@ -42,6 +42,8 @@ for (const [name, engine, options] of [['chrome', chromium, { channel: 'chrome' 
         }
         if (url.pathname.includes('/auth/v1/')) return route.fulfill({ json: {} });
         if (url.hostname === 'fonts.googleapis.com') return route.fulfill({ contentType: 'text/css', body: '' });
+        // Next production HTML can inline the site's font CSS before routing starts.
+        if (url.hostname === 'fonts.gstatic.com' && request.resourceType() === 'font') return route.abort();
         if (url.origin === base && (url.pathname.startsWith('/_next/') || url.pathname.startsWith('/admin/') || url.pathname.startsWith('/assets/') || ['/favicon.ico', '/manifest.webmanifest'].includes(url.pathname))) return route.continue();
         unexpected.push(request.url());
         return route.abort();
