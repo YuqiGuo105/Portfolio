@@ -9,9 +9,9 @@ export function createVisitorGovernancePreview(events, now = Date.now()) {
   let pending = [], received = 0, serial = 0;
   const stamp = () => new Date().toISOString();
   const expires = new Date(now + 90 * 86400000).toISOString();
-  const record = (action, batchId = null, count = 0, reason = null) => {
+  const record = (action, batchId = null, count = 0, reason = null, outcome = 'success') => {
     audit.unshift({ auditId: String(++serial), occurredAt: stamp(), actor: 'sample-admin', action, target: 'visitor_governance',
-      batchId, reason, affectedCount: count, outcome: 'success' });
+      batchId, reason, affectedCount: count, outcome });
     audit.splice(20);
   };
   async function archive(limit = 100) {
@@ -58,7 +58,7 @@ export function createVisitorGovernancePreview(events, now = Date.now()) {
     async archive() { await ready(); return archive(); },
     async verify(batchId) {
       await ready(); const bundle = packages.get(batchId); if (!bundle) throw new Error('Sample batch not found.');
-      const result = await verifyEvidencePackage(bundle); record('batch_verified', batchId, bundle.manifest.receipts.length);
+      const result = await verifyEvidencePackage(bundle); record('verify', batchId, bundle.manifest.receipts.length, null, result.status);
       return { ...result, verifiedAt: stamp(), sourceIntegrity: 'not_checked', sourceCheckedCount: 0, sourceMissingCount: 0, sourceMismatchCount: 0 };
     },
     async export(batchId) {

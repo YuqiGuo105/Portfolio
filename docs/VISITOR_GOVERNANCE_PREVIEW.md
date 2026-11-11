@@ -11,7 +11,7 @@ node scripts/dev-visitor-governance.mjs
 ```
 
 Open `http://127.0.0.1:3143/admin/visitor-preview#visitor-governance` and expand
-**Governance & evidence**. This loopback-only server serves the synthetic preview
+**Visitor record protection**. This loopback-only server serves the synthetic preview
 and static assets, and blocks every API and public-page route. The preview uses
 18 sample receipts in memory, not production records. Reload resets the sample.
 
@@ -19,8 +19,23 @@ and static assets, and blocks every API and public-page route. The preview uses
 - Place, renew or release a 90-day batch hold with a bounded reason and explicit
   confirmation; the expiry date is visible on the batch.
 - Check a downloaded package locally; file contents are never uploaded.
-- See the resulting sample access/change audit. Independent timestamp remains
-  `not configured`; preview storage is explicitly `in memory`.
+- See the resulting sample access/change audit. Third-party timestamp remains
+  `not connected`; preview storage is explicitly `in memory`.
+
+### Reading the panel
+
+- **Archived / Waiting to archive / Total received** count event evidence records,
+  not unique visitors. Preserved records are a subset of archived records.
+- The status strip separates maintenance health from recent archive checks.
+  Pending records are not an error; unchecked archives are not reported as verified.
+  Failed checks and maintenance issues stay visible outside collapsed details.
+- **Saved archives** shows each batch, its record count and its latest check in
+  the returned audit window. IDs, fingerprints and cleanup eligibility are folded
+  into each row's **Archive details**.
+- **Retention & protection settings** and **Admin activity log** start collapsed.
+  Check results also distinguish file integrity from comparison with live sources.
+- This local UI revision adds no polling or API calls. Status reflects the loaded
+  snapshot and the bounded recent audit window, not continuous monitoring.
 
 ## Existing controls and gaps
 
