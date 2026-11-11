@@ -1,6 +1,7 @@
 import { requireAdminUser } from "../../../src/lib/agentServiceProxy";
 import { supabaseServer } from "../../../src/supabase/supabaseServer";
 import { isLoopbackUrl } from "../../../src/lib/analyticsHostFilter";
+import { createVisitorActorHeaders } from "../../../src/lib/visitorActorHeaders.mjs";
 
 const PROD_DEFAULT = "https://portfolio-analytics-aggregator-702193211434.us-central1.run.app";
 const EXPORT_FORMATS = new Set(["csv", "json"]);
@@ -58,13 +59,14 @@ export default async function handler(req, res) {
   }
 
   res.setHeader("Cache-Control", "private, no-store");
+  const actorHeaders = createVisitorActorHeaders(auth, format);
   try {
     if (format) {
-      const exported = await loadExportRows(base, token, params);
+      const exported = await loadExportRows(base, token, params, actorHeaders);
       return sendExport(res, format, exported);
     }
 
-    const payload = await fetchVisitorPage(base, token, params, view);
+    const payload = await fetchVisitorPage(base, token, params, actorHeaders, view);
     const items = filterLocalhostRecords(payload.items);
     const contentByPath = await loadContentReferences(items);
 
@@ -84,7 +86,7 @@ export default async function handler(req, res) {
   }
 }
 
-async function fetchVisitorPage(base, token, params, view = "events") {
+async function fetchVisitorPage(base, token, params, actorHeaders, view = "events") {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
@@ -93,6 +95,7 @@ async function fetchVisitorPage(base, token, params, view = "events") {
       headers: {
         Accept: "application/json",
         "X-Internal-Token": token,
+        ...actorHeaders,
       },
       signal: controller.signal,
     });
@@ -124,12 +127,12 @@ async function fetchVisitorPage(base, token, params, view = "events") {
   }
 }
 
-async function loadExportRows(base, token, queryParams) {
+async function loadExportRows(base, token, queryParams, actorHeaders) {
   const firstParams = new URLSearchParams(queryParams);
   firstParams.set("page", "0");
   firstParams.set("size", String(EXPORT_PAGE_SIZE));
 
-  const firstPage = await fetchVisitorPage(base, token, firstParams);
+  const firstPage = await fetchVisitorPage(base, token, firstParams, actorHeaders);
   const reportedTotal = Math.max(0, Number(firstPage.page?.totalElements || 0));
   const rowLimit = Math.min(reportedTotal, EXPORT_MAX_ROWS);
   const totalPages = Math.ceil(rowLimit / EXPORT_PAGE_SIZE);
@@ -143,7 +146,7 @@ async function loadExportRows(base, token, queryParams) {
   const remainingPages = await mapWithConcurrency(pageNumbers, EXPORT_CONCURRENCY, async (pageNumber) => {
     const pageParams = new URLSearchParams(stableParams);
     pageParams.set("page", String(pageNumber));
-    return fetchVisitorPage(base, token, pageParams);
+    return fetchVisitorPage(base, token, pageParams, actorHeaders);
   });
   const items = filterLocalhostRecords([
     ...(Array.isArray(firstPage.items) ? firstPage.items : []),

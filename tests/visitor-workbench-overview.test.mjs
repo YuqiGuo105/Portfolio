@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { createVisitorPreviewApi } from '../src/lib/visitorPreview.mjs';
+import { createVisitorActorHeaders } from '../src/lib/visitorActorHeaders.mjs';
 
 test('overview aggregates the full window, independent of page size, and fills empty buckets', async () => {
   const api = createVisitorPreviewApi();
@@ -36,7 +37,7 @@ test('overview bot and content filters match the records and unknown is not huma
 
 const source = readFileSync(new URL('../pages/api/admin/visitor-overview.js', import.meta.url), 'utf8');
 function handler(requireAdminUser, fetch) {
-  return new Function('requireAdminUser', 'fetch', source.replace(/^import .*;\n/, '').replace('export default async function handler', 'return async function handler'))(requireAdminUser, fetch);
+  return new Function('requireAdminUser', 'fetch', 'createVisitorActorHeaders', source.replace(/^import .*;\r?$/gm, '').replace('export default async function handler', 'return async function handler'))(requireAdminUser, fetch, createVisitorActorHeaders);
 }
 function response() { return { headers: {}, statusCode: 200, body: null, setHeader(k, v) { this.headers[k] = v; }, status(v) { this.statusCode = v; return this; }, json(v) { this.body = v; return this; } }; }
 

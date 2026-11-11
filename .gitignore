@@ -8,6 +8,7 @@
 .gitignore
 .env
 .next
+.next-visitor-governance
 .next-voice-local*
 .next-mr-pot-*
 /services/voice/node_modules/

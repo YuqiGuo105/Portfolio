@@ -1,6 +1,7 @@
 import { validateSessionRequest } from './visitorSessionRequest.mjs';
 import { sampleHistory, previewOverview } from './visitorOverviewPreview.mjs';
 import { groupVisitorEvents } from './visitorWorkbench.mjs';
+import { createVisitorGovernancePreview } from './visitorGovernancePreview.mjs';
 
 // Synthetic fixtures only. Never contains production visitor data or credentials.
 export function createVisitorPreviewApi() {
@@ -25,6 +26,7 @@ export function createVisitorPreviewApi() {
   }))].sort((a, b) => a.eventTime.localeCompare(b.eventTime));
   const rules = [{ ruleId: 1, siteId: 'preview.local', name: 'Sample visitor alert', eventType: 'page_view', geoLevel: 'GLOBAL', geoAreaId: '', threshold: 1, comparator: '>=', granularity: '5m', cooldownSeconds: 1800, filters: { bot: 'EXCLUDE' }, enabled: false }];
   const pending = new Map();
+  const governance = createVisitorGovernancePreview(events, now);
   function matches(item, f) {
     if (f.bot === 'EXCLUDE' && item.bot !== false || f.bot === 'ONLY' && item.bot !== true) return false;
     const to = f.to ? Date.parse(f.to) : now;
@@ -35,6 +37,7 @@ export function createVisitorPreviewApi() {
   }
   function paginate(items, page, size) { return { items: items.slice(page * size, (page + 1) * size), page: { number: page, size, totalElements: items.length, totalPages: Math.ceil(items.length / size) } }; }
   return {
+    visitorGovernance: governance,
     visitors: {
       async overview(filters) { return previewOverview(events.filter(item => matches(item, filters)), filters, now); },
       async list(filters) { const items = events.filter(item => matches(item, filters)).reverse(); return { ...paginate(filters.view === 'visits' ? groupVisitorEvents(items) : items, filters.page || 0, filters.size || 50), view: filters.view || 'events', summary: { totalEvents: items.length, uniqueVisitors: new Set(items.map(e => e.sessionId)).size, countries: new Set(items.map(e => e.country)).size, cities: new Set(items.map(e => e.city).filter(Boolean)).size } }; },

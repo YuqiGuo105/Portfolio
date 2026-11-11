@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { createVisitorActorHeaders } from '../src/lib/visitorActorHeaders.mjs';
 const require = createRequire(import.meta.url);
 const { transform } = require('next/dist/build/swc');
 const { code } = await transform(readFileSync(new URL('../pages/api/admin/visitors.js', import.meta.url), 'utf8'), {
@@ -16,6 +17,7 @@ function handler(allowed) {
     } };
     if (name.includes('supabaseServer')) return { supabaseServer: { from: () => { throw new Error('Unexpected content lookup'); } } };
     if (name.includes('analyticsHostFilter')) return { isLoopbackUrl: () => false };
+    if (name.includes('visitorActorHeaders')) return { createVisitorActorHeaders };
     throw new Error(`Unexpected import ${name}`);
   }, exports);
   return exports.default;

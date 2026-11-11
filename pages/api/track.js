@@ -28,6 +28,15 @@ import { assessmentProperties, createRecaptchaAssessment } from '../../src/lib/r
 // 允许的来源域名
 const ALLOWED_ORIGINS = ['https://www.yuqi.site', 'https://yuqi.site'];
 
+function exactOrigin(value) {
+  if (typeof value !== 'string' || /[\u0000-\u0020\\]/.test(value)) return '';
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password
+      ? url.origin : '';
+  } catch { return ''; }
+}
+
 // Allowed event names — prevents arbitrary string injection into visitor_logs.event
 const ALLOWED_EVENTS = new Set([
   'page_view', 'content_impression', 'content_open', 'read_progress', 'engaged_time',
@@ -148,7 +157,7 @@ export default async function handler(req, res) {
   // 1. Origin / Referer 检查
   const origin = req.headers['origin'] || '';
   const referer = req.headers['referer'] || '';
-  const originOk = ALLOWED_ORIGINS.some(o => origin.startsWith(o) || referer.startsWith(o));
+  const originOk = ALLOWED_ORIGINS.includes(exactOrigin(origin)) || ALLOWED_ORIGINS.includes(exactOrigin(referer));
   const isDev = process.env.NODE_ENV === 'development';
   if (!isDev && !originOk) {
     return res.status(403).json({ error: 'Forbidden' });

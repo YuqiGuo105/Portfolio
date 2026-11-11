@@ -44,7 +44,7 @@ function getWriterApiBase() {
 }
 
 /**
- * Validate the request's Supabase session. Returns `{ email, roles }` on
+ * Validate the request's Supabase session. Returns `{ userId, email, roles }` on
  * success, or writes an error response and returns null on failure.
  *
  * `roles` is a comma-separated string matching what the agent service expects
@@ -107,7 +107,7 @@ export async function requireSupabaseUser(req, res, { allowAnonymous = false } =
     });
     return null;
   }
-  return { email, roles, anonymous: false };
+  return { userId: user.id, email, roles, anonymous: false };
 }
 
 /** Require an authenticated user whose server-derived roles include ADMIN. */

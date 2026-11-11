@@ -1,4 +1,5 @@
 import { requireAdminUser } from "../../../src/lib/agentServiceProxy";
+import { createVisitorActorHeaders } from "../../../src/lib/visitorActorHeaders.mjs";
 
 const PROD_DEFAULT = "https://portfolio-analytics-aggregator-702193211434.us-central1.run.app";
 const ALLOWED_QUERY = new Set(["from", "to", "hours", "includeAdmin"]);
@@ -28,6 +29,7 @@ export default async function handler(req, res) {
   const base = (process.env.ANALYTICS_API_URL || PROD_DEFAULT).replace(/\/+$/, "");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
+  const actorHeaders = createVisitorActorHeaders(auth);
   try {
     const upstream = await fetch(
       `${base}/api/admin/visitor-intelligence?${params.toString()}`,
@@ -35,6 +37,7 @@ export default async function handler(req, res) {
         headers: {
           Accept: "application/json",
           "X-Internal-Token": token,
+          ...actorHeaders,
         },
         signal: controller.signal,
       },

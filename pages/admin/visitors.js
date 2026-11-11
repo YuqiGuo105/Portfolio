@@ -35,6 +35,7 @@ import { useAdminSession } from "../../src/components/admin/AdminSessionContext"
 import { ScrollDepth, VisitCheckpoints, VisitorRecordView, VisitorContext, VisitorInspector, VisitorToolbar, alertFromVisitor, useDialogFocus } from "../../src/components/admin/VisitorWorkbench";
 import { eventTimestamp, outboundLinkDetails } from "../../src/lib/visitorWorkbench.mjs";
 import VisitorOverview from "../../src/components/admin/VisitorOverview";
+import VisitorGovernance from "../../src/components/admin/VisitorGovernance";
 
 const PAGE_SIZE = 50;
 const WINDOWS = [
@@ -292,6 +293,8 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
             </button>
           )}
         />
+
+        <VisitorGovernance api={api} />
 
         <VisitorOverview api={api} filters={filters} range={range} onWindow={selectWindow}
           onFilter={overviewFilter} onReset={resetQuery} />

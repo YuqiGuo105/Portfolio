@@ -76,6 +76,15 @@ function attachmentFilename(value) {
 }
 
 export const adminApi = {
+  visitorGovernance: {
+    overview({ signal } = {}) { return request('/api/admin/visitor-governance/overview', { signal }); },
+    archive() { return request('/api/admin/visitor-governance/archive', { method: 'POST', body: '{}' }); },
+    verify(batchId) { return request('/api/admin/visitor-governance/verify', { method: 'POST', body: JSON.stringify({ batchId }) }); },
+    export(batchId) { return download(`/api/admin/visitor-governance/export?batchId=${encodeURIComponent(batchId)}`); },
+    hold(batchId, reason, release = false) {
+      return request('/api/admin/visitor-governance/hold', { method: release ? 'DELETE' : 'POST', body: JSON.stringify({ batchId, reason }) });
+    },
+  },
   globeFlags: {
     list(status = "pending") {
       return request(`/api/admin/globe-flags?status=${encodeURIComponent(status)}`);

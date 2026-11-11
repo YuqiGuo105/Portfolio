@@ -4,7 +4,7 @@ import test from "node:test";
 
 const source = await readFile(new URL("../src/lib/agentServiceProxy.js", import.meta.url), "utf8");
 const rolesModule = new URL("../src/lib/managedAdminRoles.mjs", import.meta.url).href;
-const fixtureUser = { email: "admin@example.test", id: "test-owner" };
+const fixtureUser = { email: "admin@example.test", id: "42a1f734-31bf-4cd2-8e1d-0f6a3b2c9d80" };
 const mockedSource = source
   .replace('import { createClient } from "@supabase/supabase-js";',
     'const createClient = () => ({auth:{getUser: async () => globalThis.__adminGuardTestUser}});')
@@ -67,12 +67,26 @@ test("API guards enforce verified identity and managed roles", async (t) => {
   }
   await t.test("verified managed admin is accepted", async () => {
     globalThis.fetch = async () => ({ status: 200, ok: true, json: async () => ({ role: "ADMIN" }) });
-    assert.equal((await requireAdminUser(req, response())).roles, "EDITOR,PUBLISHER,ADMIN");
+    const auth = await requireAdminUser({ ...req,
+      headers: { ...req.headers, 'x-admin-actor': 'browser-actor' },
+      body: { userId: 'browser-user-id' },
+    }, response());
+    assert.equal(auth.roles, "EDITOR,PUBLISHER,ADMIN");
+    assert.equal(auth.userId, fixtureUser.id);
   });
   await t.test("anonymous public chat stays unprivileged", async () => {
     assert.deepEqual(await requireSupabaseUser({ headers: {} }, response(), { allowAnonymous: true }), {
       email: null, roles: "VIEWER", anonymous: true,
     });
+  });
+  await t.test("verified identity without a user ID never substitutes the email", async () => {
+    globalThis.__adminGuardTestUser = { data: { user: { email: fixtureUser.email } } };
+    globalThis.fetch = async () => ({ status: 200, ok: true, json: async () => ({ role: "ADMIN" }) });
+    try {
+      assert.equal((await requireAdminUser(req, response())).userId, undefined);
+    } finally {
+      globalThis.__adminGuardTestUser = { data: { user: fixtureUser } };
+    }
   });
   await t.test("forwarded identity overrides client-supplied admin claims", async () => {
     globalThis.fetch = async (_url, options) => {
