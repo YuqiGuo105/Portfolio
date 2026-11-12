@@ -343,7 +343,7 @@ export async function trackClick(clickEvent, targetUrl) {
   } catch { return false; }
 }
 
-export function startPageBehaviorTracking(page, { recordPageView = true } = {}) {
+export function startPageBehaviorTracking(page, { recordPageView = true, routeTransition = false } = {}) {
   if (typeof window === "undefined" || isBrowserAnalyticsDisabled(window.location.hostname)
       || isPrivateAnalyticsPage(page) || isPrivateAnalyticsPage(window.location.href)) {
     return () => {};
@@ -354,6 +354,8 @@ export function startPageBehaviorTracking(page, { recordPageView = true } = {}) 
   let peakScrollY = 0;
   let reported = 0;
   let stopped = false;
+  let previousScrollY = window.scrollY;
+  let awaitingRouteScroll = routeTransition && previousScrollY > 0;
   if (recordPageView) trackBehavior("page_view", { page });
 
   const sample = (leaving = false) => {
@@ -377,7 +379,13 @@ export function startPageBehaviorTracking(page, { recordPageView = true } = {}) 
 
   const onScroll = () => {
     if (stopped || reported === 100) return;
-    peakScrollY = Math.max(peakScrollY, window.scrollY);
+    const y = window.scrollY;
+    // Next can finish routing before its smooth scroll-to-top finishes. Those
+    // decreasing offsets belong to the transition, not reading the new page.
+    if (awaitingRouteScroll && y <= previousScrollY) { previousScrollY = y; return; }
+    awaitingRouteScroll = false;
+    previousScrollY = y;
+    peakScrollY = Math.max(peakScrollY, y);
     // Only read document geometry once per second, never in the scroll handler.
     if (timer === null) timer = window.setTimeout(sample, 1000);
   };
@@ -394,7 +402,7 @@ export function startPageBehaviorTracking(page, { recordPageView = true } = {}) 
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("pagehide", flushProgress);
   document.addEventListener("visibilitychange", onVisibilityChange);
-  if (window.scrollY > 0) onScroll();
+  if (!routeTransition && window.scrollY > 0) onScroll();
   return ({ discard = false } = {}) => {
     if (stopped) return;
     if (!discard) flushProgress();

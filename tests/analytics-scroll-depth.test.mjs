@@ -109,6 +109,33 @@ test('private navigation discards pending samples and route changes never read a
   assert.equal(h.requests.length, 1);
 }));
 
+test('new routes ignore inherited offsets and smooth scroll-to-top, then measure fresh scrolling', () => harness(async h => {
+  window.scrollY = 12000;
+  const stop = startPageBehaviorTracking('/', { routeTransition: true });
+  assert.equal(h.timers.size, 0);
+  for (const y of [4000, 3000, 1200, 400, 0]) { h.scroll(y); await h.tick(); }
+  assert.deepEqual(h.progress(), []); assert.equal(h.reads(), 0);
+  h.scroll(1000); await h.tick();
+  assert.deepEqual(h.progress(), [25]);
+  h.scroll(2200); stop();
+  assert.deepEqual(h.progress(), [25, 50]);
+}));
+
+test('leaving a new route before scroll restoration cannot flush inherited progress', () => harness(h => {
+  window.scrollY = 4000;
+  const stop = startPageBehaviorTracking('/', { routeTransition: true });
+  h.scroll(3000); stop();
+  assert.deepEqual(h.progress(), []); assert.equal(h.reads(), 0);
+}));
+
+test('fresh routes at the top and restored initial loads retain genuine progress', () => harness(async h => {
+  const route = startPageBehaviorTracking('/', { routeTransition: true });
+  h.scroll(1000); await h.tick(); route();
+  window.scrollY = 3000;
+  const restored = startPageBehaviorTracking('/'); await h.tick(); restored();
+  assert.deepEqual(h.progress(), [25, 75]);
+}));
+
 test('hidden tabs do not sample layout; non-scrollable pages never claim 100 percent', () => harness(h => {
   const stop = startPageBehaviorTracking('/');
   h.hidden(true); h.scroll(1000); h.tick(); assert.equal(h.reads(), 0);

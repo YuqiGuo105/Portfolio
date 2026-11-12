@@ -11,6 +11,9 @@ The scroll listener is passive, tracks only the peak offset, and reads document
 geometry at most once per second while scrolling. It emits at most four progress
 events per page tracker. A fast jump can emit only 75% or 100%. Public route exits
 flush before Next.js changes the old URL/DOM; private routes remain excluded.
+On client-side navigation, inherited offsets and the router's scroll-to-top
+restoration do not count as progress on the new page. Fresh downward
+scrolling resumes measurement; an initial load can still sample restored depth.
 
 ## Delivery contract
 

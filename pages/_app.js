@@ -110,15 +110,15 @@ function MyApp({ Component, pageProps }) {
 
   // One tracker owns page views and throttled scroll-depth checkpoints.
   useEffect(() => {
-    const track = (url) => {
+    const track = (url, options) => {
       cleanupTracking.current?.();
-      cleanupTracking.current = startPageBehaviorTracking(url);
+      cleanupTracking.current = startPageBehaviorTracking(url, options);
     };
 
     track(window.location.pathname);
 
     // Subsequent client-side navigations
-    const handleRouteChange = (url) => track(url);
+    const handleRouteChange = (url) => track(url, { routeTransition: true });
     const handleRouteStart = (url) => {
       // Flush against the old page before Next replaces its URL and geometry.
       if (isPrivateAnalyticsPage(url)) cleanupTracking.current?.({ discard: true });
