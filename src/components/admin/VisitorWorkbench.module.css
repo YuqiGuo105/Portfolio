@@ -79,6 +79,14 @@
 .timeline > li::before { content: ''; width: 8px; height: 8px; background: #168477; border-radius: 50%; position: absolute; left: -5px; top: 6px; }
 .timeline strong, .timeline time { display: block; }
 .timeline time { color: #64766d; font-size: 12px; }
+.root .timelinePage { display: grid; grid-template-columns: 80px minmax(0, 1fr) 14px; align-items: center; gap: 12px; width: 100%; margin: 10px 0 12px; color: #244b40; text-decoration: none; border-radius: 4px; }
+.root a.timelinePage:hover .timelinePageCopy strong { color: #087d6c; text-decoration: underline; text-underline-offset: 3px; }
+.timelineCover { position: relative; display: flex; align-items: center; justify-content: center; width: 80px; height: 60px; overflow: hidden; border: 1px solid #dce5df; border-radius: 4px; background: #f0f5f2; color: #657970; }
+.timelineCover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.timelineCover img[hidden] { display: none; }
+.timelinePageCopy { display: grid; min-width: 0; gap: 2px; }
+.timelinePageCopy strong { font-size: 14px; line-height: 1.4; font-weight: 650; }
+.timelinePageCopy small { color: #69776f; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
 .pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 14px; }
 .preview { padding: 12px 24px; background: #fff6dc; color: #5e4a1a; border-bottom: 1px solid #e9d79e; font: 13px/1.5 system-ui; }
 @media (max-width: 800px) { .context { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; } }
@@ -93,3 +101,4 @@
   .root .zoneSwitch button { height: 36px; }
 }
 @media (max-width: 420px) { .header, .body { padding: 16px; } .body dl { grid-template-columns: minmax(0,1fr); gap: 4px; } .body dd { margin-bottom: 8px; } .tabs { padding: 0 8px; gap: 0; } .tab { padding: 12px 7px; } }
+@media (max-width: 420px) { .root .timelinePage { grid-template-columns: 64px minmax(0, 1fr) 14px; gap: 10px; } .timelineCover { width: 64px; height: 48px; } }

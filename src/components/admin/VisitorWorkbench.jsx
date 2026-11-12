@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { BellPlus, Check, Copy, ExternalLink, Filter, List, SearchCheck, Save, Trash2, X } from 'lucide-react';
-import { alertFromVisitor, assessmentEvidence, eventTimestamp, mapLink, outboundLinkDetails, readSavedViews, referrerOrigin, sanitizeSavedView, sessionWindow, scrollDepthPercent } from '../../lib/visitorWorkbench.mjs';
+import { BellPlus, Check, Copy, ExternalLink, FileText, Filter, Folder, Home, List, SearchCheck, Save, Trash2, X } from 'lucide-react';
+import { alertFromVisitor, assessmentEvidence, eventTimestamp, mapLink, outboundLinkDetails, readSavedViews, referrerOrigin, sanitizeSavedView, sessionWindow, scrollDepthPercent, visitorContentReference } from '../../lib/visitorWorkbench.mjs';
 import styles from './VisitorWorkbench.module.css';
 
 export function CopyValue({ value, label }) {
@@ -126,6 +126,24 @@ export function useDialogFocus(ref, onClose) {
   }, [ref]);
 }
 
+function TimelinePageLink({ event }) {
+  const { href, path, title, type, coverUrl } = visitorContentReference(event);
+  const Icon = href === '/' ? Home : type === 'project' ? Folder : FileText;
+  const Tag = href ? 'a' : 'div';
+  return <Tag className={styles.timelinePage} href={href || undefined} target={href ? '_blank' : undefined} rel={href ? 'noopener noreferrer' : undefined}>
+    <span className={styles.timelineCover} aria-hidden="true">
+      <Icon size={22} />
+      {coverUrl && <img src={coverUrl} alt="" width="80" height="60" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={e => { e.currentTarget.hidden = true; }} />}
+    </span>
+    <span className={styles.timelinePageCopy}>
+      <span className={styles.label}>{type}</span>
+      <strong>{title}</strong>
+      {path && path !== title && <small>{path}</small>}
+    </span>
+    {href && <ExternalLink size={14} aria-hidden="true" />}
+  </Tag>;
+}
+
 export function VisitorInspector({ selection, api, hours, zone, onClose, onFilter, onAlert }) {
   const { item } = selection;
   const ref = useRef(null); useDialogFocus(ref, onClose);
@@ -167,7 +185,7 @@ export function VisitorInspector({ selection, api, hours, zone, onClose, onFilte
               return <li key={event.eventId || index}>
                 <time>{eventTimestamp(event.visit?.firstEventTime || event.eventTime, zone)}</time>
                 <strong>{event.visit ? 'Page visit' : outbound?.label || (event.eventName === 'engaged_time' ? 'Legacy duration event' : String(event.eventName || 'Event').replace(/_/g, ' '))}</strong>
-                <span>{event.pageUrl || event.pagePath || 'Page not recorded'}</span>
+                <TimelinePageLink event={event} />
                 <ScrollDepth event={event} /><VisitCheckpoints event={event} zone={zone} />
                 {event.targetUrl && <div className={styles.muted}>Target: {outbound?.href
                   ? <a className={styles.link} href={outbound.href} target="_blank" rel="noopener noreferrer">{outbound.href}</a>

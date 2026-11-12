@@ -12,7 +12,12 @@ export function createVisitorPreviewApi() {
     ['instagram', 'https://www.instagram.com/example/'],
     ['leetcode', 'https://leetcode.com/u/example/'],
   ];
-  const events = [...sampleHistory(now), ...Array.from({ length: 32 }, (_, index) => ({
+  const contentSamples = [
+    { pageUrl: '/', pageContent: null },
+    { pageUrl: '/work-single/7c3715bf-7722-4df5-9e83-5d7e9493ea2c', pageContent: { title: 'Portfolio Platform', type: 'project', coverUrl: '/assets/images/mcp-guide/claude-public-tools.png' } },
+    { pageUrl: '/blog-single/preview-article', pageContent: { title: 'Reliable event delivery and recovery', type: 'tech blog', coverUrl: '/assets/images/blog3.jpg' } },
+  ].map((entry, index) => ({ ...entry, eventId: `sample-content-${index}`, siteId: 'preview.local', sessionId: 'sample-content-session', eventName: 'page_view', eventTime: new Date(now - (4 - index) * 60000).toISOString(), deviceType: 'desktop', browser: 'Chrome', os: 'macOS', bot: false }));
+  const events = [...sampleHistory(now), ...contentSamples, ...Array.from({ length: 32 }, (_, index) => ({
     eventId: `sample-event-${index}`, siteId: 'preview.local', sessionId: index < 29 ? 'sample-jaipur-session' : 'sample-bot-session',
     anonymousId: 'sample-anonymous', eventTime: new Date(now - (33 - index) * 90000).toISOString(),
     serverTime: new Date(now - (33 - index) * 90000 + 1200).toISOString(),

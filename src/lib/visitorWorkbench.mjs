@@ -7,6 +7,34 @@ const OUTBOUND_PLATFORMS = [
   { id: 'leetcode', name: 'LeetCode', host: 'leetcode.com' },
 ];
 
+const PAGE_NAMES = { '/': 'Home', '/blogs': 'Blog index', '/works': 'Project index', '/works-list': 'Project index', '/mcp-guide': 'MCP guide', '/cv': 'Resume', '/resume': 'Resume', '/contact': 'Contact', '/analytics': 'Analytics dashboard' };
+
+function referenceUrl(value, internal = false) {
+  if (typeof value !== 'string' || !value.trim() || value.length > 2048 || /[\\\u0000-\u001f]/.test(value)) return null;
+  if (!value.startsWith('/') && !/^https?:\/\//i.test(value)) return null;
+  try {
+    const url = new URL(value, 'https://www.yuqi.site');
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
+    const ownSite = ['yuqi.site', 'www.yuqi.site'].includes(url.hostname) && !url.port;
+    if (internal) return ownSite && !url.pathname.startsWith('//') ? url.pathname : null;
+    return ownSite ? `${url.pathname}${url.search}` : url.href;
+  } catch { return null; }
+}
+
+export function visitorContentReference(event = {}) {
+  const content = event.pageContent || {};
+  const recorded = event.pageUrl || event.pagePath;
+  const path = referenceUrl(recorded, true);
+  const href = path || referenceUrl(content.canonicalUrl, true);
+  return {
+    href,
+    path: path || href || (typeof recorded === 'string' ? recorded : ''),
+    title: content.title || PAGE_NAMES[href] || href || 'Page not recorded',
+    type: content.type || 'Page',
+    coverUrl: referenceUrl(content.coverUrl),
+  };
+}
+
 export function outboundLinkDetails(event = {}) {
   if (event.eventName !== 'outbound_link_clicked') return null;
   const href = publicOutboundTarget(event.targetUrl);

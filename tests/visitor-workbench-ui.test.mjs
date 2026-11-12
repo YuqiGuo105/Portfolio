@@ -166,7 +166,7 @@ test('social clicks remain visible alongside the same-session visit with their e
   assert.equal(document.querySelectorAll('ol > li').length, 2);
   assert.match(document.body.textContent, /LinkedIn link/);
   assert.match(document.body.textContent, /Target: https:\/\/www\.linkedin\.com\/in\/example\//);
-  const destination = document.querySelector('ol > li a');
+  const destination = document.querySelector('ol > li a[href="https://www.linkedin.com/in/example/"]');
   assert.equal(destination.href, 'https://www.linkedin.com/in/example/');
   assert.equal(destination.target, '_blank');
   assert.equal(destination.rel, 'noopener noreferrer');
@@ -180,4 +180,36 @@ test('timeline names each social platform and does not link unsafe destinations'
   await render({ api });
   assert.deepEqual([...document.querySelectorAll('ol > li > strong')].map(el => el.textContent), ['GitHub link', 'Instagram link', 'LeetCode link', 'External link']);
   assert.equal(document.querySelectorAll('ol > li a').length, 3);
+});
+
+test('timeline shows clickable covers and titles using the single existing session request', async () => {
+  let calls = 0;
+  const api = { visitors: { list: async () => {
+    calls++;
+    return { items: [{ ...item, pageUrl: '/work-single/123', pageContent: { title: 'Portfolio Platform', type: 'project', coverUrl: '/cover.webp' } }], page: {} };
+  } } };
+  await render({ api });
+  const link = document.querySelector('ol a[href="/work-single/123"]');
+  assert.match(link.textContent, /Portfolio Platform/);
+  assert.equal(link.target, '_blank');
+  assert.equal(link.rel, 'noopener noreferrer');
+  const image = link.querySelector('img');
+  assert.equal(image.getAttribute('src'), '/cover.webp');
+  assert.equal(image.getAttribute('loading'), 'lazy');
+  assert.equal(image.getAttribute('decoding'), 'async');
+  assert.equal(image.getAttribute('referrerpolicy'), 'no-referrer');
+  assert.equal(image.getAttribute('width'), '80');
+  assert.equal(image.getAttribute('height'), '60');
+  await act(() => Simulate.error(image));
+  assert.equal(image.hidden, true);
+  assert.ok(link.querySelector('svg'), 'Broken images retain the page icon');
+  assert.equal(calls, 1);
+});
+
+test('timeline home and missing content remain navigable without broken cover images', async () => {
+  const api = { visitors: { list: async () => ({ items: [{ ...item, pageUrl: '/' }, { ...item, eventId: 'unknown', pageUrl: '/unknown' }], page: {} }) } };
+  await render({ api });
+  assert.match(document.querySelector('ol a[href="/"]').textContent, /Home/);
+  assert.ok(document.querySelector('ol a[href="/unknown"]'));
+  assert.equal(document.querySelectorAll('ol img').length, 0);
 });
