@@ -7,17 +7,20 @@ const asModule = source => `data:text/javascript;base64,${Buffer.from(source).to
 const policy = asModule(await readFile(new URL('../src/lib/analyticsPagePolicy.mjs', import.meta.url), 'utf8'));
 const source = await readFile(new URL('../src/lib/behaviorAnalytics.js', import.meta.url), 'utf8');
 const { startPageBehaviorTracking } = await import(asModule(`
-  import { isPrivateAnalyticsPage } from '${policy}';
+  import { isPrivateAnalyticsPage, publicOutboundTarget } from '${policy}';
   const isBrowserAnalyticsDisabled = () => false;
 ` + source.replace(/^import .+;\r?$/gm, '')));
 
-function harness(run) {
+async function harness(run) {
   const dom = new JSDOM('', { url: 'https://www.yuqi.site/' });
   const original = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
   const requests = [], timers = new Map(), listeners = [];
   let timerId = 0, reads = 0, height = 5000, hidden = false;
   Object.assign(globalThis, { window: dom.window, document: dom.window.document,
-    fetch: async (_url, options) => { requests.push(JSON.parse(options.body)); return { ok: true }; } });
+    fetch: async (_url, options) => {
+      const payload = JSON.parse(options.body); requests.push(payload);
+      return { ok: true, status: 200, json: async () => ({ ok: true, eventId: payload.eventId }) };
+    } });
   Object.defineProperty(document.documentElement, 'scrollHeight', { get: () => { reads++; return height; } });
   Object.defineProperty(document, 'visibilityState', { get: () => hidden ? 'hidden' : 'visible' });
   Object.defineProperty(window, 'innerHeight', { value: 1000, configurable: true });
@@ -29,10 +32,13 @@ function harness(run) {
     requests, timers, listeners, dom, reads: () => reads,
     height: value => { height = value; }, hidden: value => { hidden = value; },
     scroll: y => { window.scrollY = y; window.dispatchEvent(new window.Event('scroll')); },
-    tick: () => { const pending = [...timers.values()]; timers.clear(); pending.forEach(({ fn }) => fn()); },
+    tick: async () => {
+      const pending = [...timers.values()]; timers.clear(); pending.forEach(({ fn }) => fn());
+      await new Promise(resolve => setImmediate(resolve));
+    },
     progress: () => requests.filter(r => r.event === 'read_progress').map(r => r.properties.progressPercent),
   };
-  try { run(helpers); } finally { Object.assign(globalThis, original); dom.window.close(); }
+  try { await run(helpers); } finally { Object.assign(globalThis, original); dom.window.close(); }
 }
 
 test('no startup geometry work, no idle polling, passive scroll bursts share one delayed sample', () => harness(h => {
@@ -50,9 +56,9 @@ test('no startup geometry work, no idle polling, passive scroll bursts share one
   assert.ok(h.requests.every(r => r.event !== 'engaged_time'));
 }));
 
-test('checkpoints are monotonic, deduplicated and capped at four; bottom removes scroll work', () => harness(h => {
+test('checkpoints are monotonic, deduplicated and capped at four; bottom removes scroll work', () => harness(async h => {
   const stop = startPageBehaviorTracking('/');
-  for (const y of [100, 1000, 1200, 0, 2000, 2500, 3000, 1000, 4000]) { h.scroll(y); h.tick(); }
+  for (const y of [100, 1000, 1200, 0, 2000, 2500, 3000, 1000, 4000]) { h.scroll(y); await h.tick(); }
   assert.deepEqual(h.progress(), [25, 50, 75, 100]);
   const reads = h.reads(); h.scroll(0); h.tick();
   assert.equal(h.reads(), reads); assert.equal(h.timers.size, 0);

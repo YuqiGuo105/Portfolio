@@ -66,7 +66,7 @@ for (const endpoint of ['track', 'click']) {
       const res = response();
       await serve(request(headers), res);
       assert.equal(res.statusCode, 200);
-      assert.deepEqual(res.body, { ok: true, via: 'kafka' });
+      assert.deepEqual(res.body, { ok: true, via: 'kafka', ...(endpoint === 'track' ? { eventId: events[index].eventId } : {}) });
       assert.equal(events.length, index + 1);
       assert.equal(events[index].eventType, endpoint === 'track' ? 'page_view' : 'click');
     }

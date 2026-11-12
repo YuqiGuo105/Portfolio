@@ -47,7 +47,10 @@ beforeEach(() => {
   window.localStorage.clear(); window.sessionStorage.clear();
   document.cookie = 'yuqi_analytics_id=; Max-Age=0; Path=/; Secure';
   requests = [];
-  globalThis.fetch = async (url, options) => { requests.push({ url, ...options, body: JSON.parse(options.body) }); return { ok: true }; };
+  globalThis.fetch = async (url, options) => {
+    const body = JSON.parse(options.body); requests.push({ url, ...options, body });
+    return { ok: true, status: 200, json: async () => ({ ok: true, eventId: body.eventId }) };
+  };
   root = createRoot(document.getElementById('root'));
 });
 afterEach(async () => {
@@ -115,10 +118,11 @@ test('private routes, localhost, opt-out and browser privacy signals remain excl
   assert.equal(requests.length, 0);
 });
 
-test('network failure never cancels an external link or starts retry polling', async () => {
+test('network failure never cancels an external link while delivery waits for retry', async () => {
   globalThis.fetch = async () => { throw new Error('Offline'); };
   await render('footer');
   await click();
+  behavior.setAnalyticsConsent('denied');
 });
 
 test('outbound URLs keep host/path but reject credentials, unsafe schemes and invalid targets', () => {

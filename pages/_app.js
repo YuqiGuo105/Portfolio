@@ -120,12 +120,13 @@ function MyApp({ Component, pageProps }) {
     // Subsequent client-side navigations
     const handleRouteChange = (url) => track(url);
     const handleRouteStart = (url) => {
-      if (!isPrivateAnalyticsPage(url)) return;
-      cleanupTracking.current?.({ discard: true });
+      // Flush against the old page before Next replaces its URL and geometry.
+      if (isPrivateAnalyticsPage(url)) cleanupTracking.current?.({ discard: true });
+      else cleanupTracking.current?.();
       cleanupTracking.current = null;
     };
     const handleRouteError = (_error, url) => {
-      if (isPrivateAnalyticsPage(url) && !cleanupTracking.current) {
+      if (!cleanupTracking.current) {
         cleanupTracking.current = startPageBehaviorTracking(window.location.pathname, { recordPageView: false });
       }
     };

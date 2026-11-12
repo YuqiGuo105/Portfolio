@@ -10,10 +10,10 @@
 //   2. Awaits produceRawEvent(rawEvent). If Kafka accepts the message we
 //      respond immediately with { via: "kafka" } and NEVER open a Supabase
 //      connection on the hot path.
-//   3. Only if Kafka is not configured or the produce fails do we fall
-//      back to a direct supabase insert so no event is ever lost. That
-//      response is { via: "supabase-fallback" }.
-//   4. If both fail we return 500.
+//   3. If Kafka fails, persist the complete event to the existing durable
+//      outbox. Its relay uses the same eventId, so an ambiguous Kafka ack
+//      followed by replay is absorbed by the transactional consumer inbox.
+//   4. If neither durable destination accepts it, return 503 for client retry.
 // -----------------------------------------------------------------------------
 import { supabaseServer } from '../../src/supabase/supabaseServer';
 import { produceRawEvent } from '../../src/lib/kafkaProducer';
@@ -120,15 +120,16 @@ function geoFromHeaders(h) {
   return { _src: 'none' };
 }
 
-// Fallback path: direct write to Supabase visitor_logs. Only invoked when
-// the Kafka produce is skipped (not configured) or errors out — the
-// aggregator consumer is normally the sole writer for this table.
-async function fallbackSupabaseInsert(insertPayload) {
+async function fallbackOutboxInsert(rawEvent) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return { ok: false, skipped: 'supabase-not-configured' };
   }
   try {
-    const { error } = await supabaseServer.from('visitor_logs').insert([insertPayload]);
+    const { error } = await supabaseServer.from('analytics_event_outbox').upsert({
+      event_id: rawEvent.eventId,
+      partition_key: rawEvent.siteId,
+      payload: rawEvent,
+    }, { onConflict: 'event_id', ignoreDuplicates: true });
     if (error) throw error;
     return { ok: true };
   } catch (err) {
@@ -186,6 +187,15 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Unsupported event' });
   }
   const event = rawEventName;
+  if (body.eventId != null && (typeof body.eventId !== 'string'
+      || !/^[a-zA-Z0-9-]{12,100}$/.test(body.eventId))) {
+    return res.status(400).json({ error: 'Invalid event ID' });
+  }
+  // A browser retry must keep its identity, even if IP, headers or receipt time
+  // change. Scope untrusted IDs to their original anonymous browser session.
+  const eventId = body.eventId ? 'browser:' + crypto.createHash('sha256')
+    .update(JSON.stringify(['yuqi.site', String(body.anonymousId || '').slice(0, 100),
+      String(body.sessionId || '').slice(0, 100), body.eventId])).digest('hex') : uuidv7();
   const targetUrl = event === 'outbound_link_clicked'
     ? publicOutboundTarget(body.target) : safePath(body.target);
   if (event === 'outbound_link_clicked' && !targetUrl) {
@@ -214,11 +224,11 @@ export default async function handler(req, res) {
   const nowIso = new Date().toISOString();
 
   // RawEvent wire format expected by analytics-aggregator-service. The
-  // eventId is a UUIDv7 used both as the Kafka dedup key AND as the
+  // eventId is stable across HTTP retries and used both as the inbox key and
   // ON CONFLICT DO NOTHING key inside VisitorLogPersistService, so a
   // re-delivered batch never produces duplicate visitor_logs rows.
   const rawEvent = {
-    eventId:    uuidv7(),
+    eventId,
     schemaVersion: Number(body.schemaVersion) === 2 ? 2 : 1,
     siteId:     'yuqi.site',
     eventType:  event,
@@ -247,20 +257,6 @@ export default async function handler(req, res) {
     },
   };
 
-  // Legacy insert payload only used on the fallback path.
-  const insertPayload = {
-    ip: ipHash || 'redacted',
-    local_time: eventTime,
-    event,
-    ua: 'server-fallback',
-    country,
-    region,
-    city: null,
-    latitude: null,
-    longitude: null,
-    created_at: nowIso,
-  };
-
   try {
     // ---- Primary path: Kafka ----
     // produceRawEvent returns true on success, false when Kafka is not
@@ -268,32 +264,21 @@ export default async function handler(req, res) {
     // catches internally). false means "try the fallback".
     const kafkaOk = await produceRawEvent(rawEvent);
     if (kafkaOk) {
-      return res.status(200).json({ ok: true, via: 'kafka' });
+      return res.status(200).json({ ok: true, eventId: body.eventId || rawEvent.eventId, via: 'kafka' });
     }
 
-    // The legacy fallback cannot retain a destination/session or appear in the
-    // admin timeline. Never acknowledge an outbound click saved only there.
-    if (event === 'outbound_link_clicked') {
-      console.warn('[Track] outbound event ingestion unavailable');
+    // ---- Fallback: full payload, durable retry, no partial legacy write ----
+    const fb = await fallbackOutboxInsert(rawEvent);
+    if (fb.ok) {
+      return res.status(202).json({ ok: true, eventId: body.eventId || rawEvent.eventId, via: 'outbox' });
+    }
+    if (fb.skipped) {
+      console.warn('[Track] Kafka unavailable and Supabase not configured');
       return res.status(503).json({ ok: false, message: 'ingest_unavailable' });
     }
 
-    // ---- Fallback path: Supabase direct insert ----
-    // Only runs when Kafka is missing/unreachable. Under normal load
-    // Supabase sees zero writes from this endpoint.
-    const fb = await fallbackSupabaseInsert(insertPayload);
-    if (fb.ok) {
-      return res.status(200).json({ ok: true, via: 'supabase-fallback' });
-    }
-    if (fb.skipped) {
-      // Nothing to write to — surface an operational error so the
-      // dashboard can alert on it, but do not 500 the browser.
-      console.warn('[Track] Kafka unavailable and Supabase not configured');
-      return res.status(200).json({ ok: true, skipped: fb.skipped });
-    }
-
-    console.error('[Track] both Kafka produce and Supabase insert failed:', fb.error);
-    return res.status(500).json({ ok: false, message: 'ingest_failed' });
+    console.error('[Track] durable ingestion unavailable:', fb.error?.code || 'outbox_failed');
+    return res.status(503).json({ ok: false, message: 'ingest_failed' });
   } finally {
     console.log(`[Track] done in ${Date.now() - start}ms src=${_src}`);
   }

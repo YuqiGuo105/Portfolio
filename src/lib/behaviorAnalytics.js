@@ -5,6 +5,13 @@ const CONSENT_KEY = "yuqi_analytics_consent";
 const ANON_COOKIE = "yuqi_analytics_id";
 const SESSION_KEY = "yuqi_analytics_session";
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+const PENDING_KEY = "yuqi_analytics_pending_v1";
+const PENDING_TTL_MS = 6 * 60 * 60 * 1000;
+const MAX_PENDING = 32;
+const MAX_PENDING_BYTES = 32 * 1024;
+const MAX_DELIVERIES = 3;
+const deliveryQueues = new WeakMap();
+const byteLength = value => new TextEncoder().encode(value).byteLength;
 
 const ALLOWED_EVENTS = new Set([
   "page_view",
@@ -42,7 +49,8 @@ function privacySignalDenied() {
 export function getAnalyticsConsent() {
   if (typeof window === "undefined") return "unknown";
   if (privacySignalDenied()) return "denied";
-  const value = window.localStorage.getItem(CONSENT_KEY);
+  let value;
+  try { value = window.localStorage.getItem(CONSENT_KEY); } catch { return "denied"; }
   // First-party analytics is enabled by default for this owner-operated site;
   // explicit browser/user privacy signals always override that default.
   return value === "granted" || value === "denied" ? value : "granted";
@@ -52,6 +60,8 @@ export function setAnalyticsConsent(value) {
   if (typeof window === "undefined" || !["granted", "denied"].includes(value)) return;
   window.localStorage.setItem(CONSENT_KEY, value);
   if (value === "denied") {
+    deliveryQueues.get(window)?.clear();
+    window.sessionStorage.removeItem(PENDING_KEY);
     window.sessionStorage.removeItem(SESSION_KEY);
     document.cookie = `${ANON_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax; Secure`;
   }
@@ -143,14 +153,144 @@ function recaptchaToken(action, timeoutMs = 2500) {
   });
 }
 
-function deliverBehavior(payload, token) {
-  if (token) payload.recaptchaToken = token;
-  return fetch("/api/track", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    keepalive: true,
-  }).catch(() => {});
+// A small per-tab outbox survives same-tab navigation/reload. No idle polling:
+// only failed deliveries get a backoff timer; online/pageshow resume pending work.
+function deliveryQueue() {
+  const existing = deliveryQueues.get(window);
+  if (existing) return existing;
+  const owner = window;
+  const pending = new Map();
+  let timer = null;
+  const active = () => typeof window !== "undefined" && window === owner;
+  const permitted = () => active() && getAnalyticsConsent() === "granted";
+  const publicPage = () => !isPrivateAnalyticsPage(owner.location.href);
+  const visible = () => owner.document.visibilityState !== "hidden" && owner.navigator.onLine !== false;
+  const inFlight = () => [...pending.values()].filter(e => e.sending || e.waiting).length;
+  const prune = () => {
+    for (const [id, entry] of pending) {
+      if (Date.now() - Date.parse(entry.payload.localTime) > PENDING_TTL_MS) pending.delete(id);
+    }
+  };
+  const save = () => {
+    prune();
+    try {
+      if (!pending.size) owner.sessionStorage.removeItem(PENDING_KEY);
+      else owner.sessionStorage.setItem(PENDING_KEY, JSON.stringify([...pending.values()]
+        .map(({ payload, attempts, nextAt }) => ({ payload, attempts, nextAt }))));
+    } catch { /* Memory delivery still works when browser storage is unavailable. */ }
+  };
+  const clear = () => {
+    pending.clear();
+    if (timer !== null) owner.clearTimeout(timer);
+    timer = null;
+    save();
+  };
+  const schedule = () => {
+    if (timer !== null) owner.clearTimeout(timer);
+    timer = null;
+    if (!permitted()) { if (active()) clear(); return; }
+    prune();
+    if (!publicPage() || !visible() || inFlight() >= MAX_DELIVERIES) return;
+    const ready = [...pending.values()].filter(e => !e.sending && !e.waiting);
+    if (!ready.length) return;
+    const next = Math.min(...ready.map(e => e.nextAt || 0));
+    timer = owner.setTimeout(() => { timer = null; flush(); }, Math.max(1000, next - Date.now()));
+  };
+  const send = async (entry, token = null) => {
+    if (!permitted() || pending.get(entry.payload.eventId) !== entry) return;
+    entry.sending = true;
+    entry.waiting = false;
+    entry.attempts++;
+    let delay = Math.min(60000, 1000 * 2 ** Math.min(entry.attempts, 6)) + Math.floor(Math.random() * 500);
+    try {
+      const response = await fetch("/api/track", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...entry.payload, ...(token ? { recaptchaToken: token } : {}) }),
+        keepalive: true,
+        signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined,
+      });
+      const ack = response?.ok && response.status !== 204 ? await response.json() : null;
+      if ((response?.ok && ack?.ok === true && ack.eventId === entry.payload.eventId)
+          || response?.status === 204
+          || (response?.status >= 400 && response.status < 500 && ![408, 429].includes(response.status))) {
+        pending.delete(entry.payload.eventId);
+      } else if (response?.status === 429) {
+        const retryAfter = response.headers?.get?.("Retry-After");
+        const seconds = Number(retryAfter);
+        const retryMs = retryAfter && Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter) - Date.now();
+        if (Number.isFinite(retryMs) && retryMs > 0) delay = Math.max(delay, retryMs);
+      }
+    } catch { /* Keep the same event ID after network errors or lost acknowledgements. */ }
+    finally {
+      entry.sending = false;
+      entry.nextAt = Date.now() + delay;
+      save();
+      schedule();
+    }
+  };
+  const attempt = (entry, urgent = false) => {
+    if (!permitted()) { if (active()) clear(); return; }
+    if (entry.sending || (!urgent && entry.waiting) || pending.get(entry.payload.eventId) !== entry) return;
+    if (owner.navigator.onLine === false || !publicPage()) return;
+    if (!entry.waiting && inFlight() >= MAX_DELIVERIES) return;
+    // Navigation must not wait for the optional risk SDK. It is not an ingest gate.
+    const generation = (entry.generation || 0) + 1;
+    entry.generation = generation;
+    const token = urgent || entry.attempts ? null : recaptchaToken(entry.payload.event);
+    if (!token) { void send(entry); return; }
+    entry.waiting = true;
+    void token.then(value => {
+      if (entry.generation !== generation || pending.get(entry.payload.eventId) !== entry) return;
+      void send(entry, value);
+    });
+  };
+  const flush = (urgent = false) => {
+    if (!permitted()) { if (active()) clear(); return; }
+    prune();
+    for (const entry of pending.values()) {
+      if (urgent ? entry.waiting || !entry.attempts : visible() && entry.nextAt <= Date.now()) attempt(entry, urgent);
+    }
+    schedule();
+  };
+  try {
+    const raw = owner.sessionStorage.getItem(PENDING_KEY);
+    const saved = raw && byteLength(raw) <= MAX_PENDING_BYTES ? JSON.parse(raw) : [];
+    for (const entry of (Array.isArray(saved) ? saved : []).slice(0, MAX_PENDING)) {
+      const p = entry?.payload;
+      if (!p || !ALLOWED_EVENTS.has(p.event) || typeof p.eventId !== "string"
+          || !/^[a-zA-Z0-9-]{12,100}$/.test(p.eventId) || isPrivateAnalyticsPage(p.page)
+          || p.consentState !== "granted" || !Number.isFinite(Date.parse(p.localTime))
+          || Date.parse(p.localTime) > Date.now() || Date.now() - Date.parse(p.localTime) > PENDING_TTL_MS) continue;
+      delete p.recaptchaToken;
+      pending.set(p.eventId, { payload: p, attempts: Math.min(20, Math.max(0, Number(entry.attempts) || 0)),
+        nextAt: Math.min(Date.now() + PENDING_TTL_MS, Math.max(0, Number(entry.nextAt) || 0)) });
+    }
+  } catch { /* A malformed local queue is discarded. */ }
+  const queue = {
+    clear, flush,
+    enqueue(payload, urgent) {
+      prune();
+      const entry = { payload, attempts: 0, nextAt: 0 };
+      if (byteLength(JSON.stringify(entry)) > 8000) return false;
+      while (pending.size >= MAX_PENDING || (pending.size && byteLength(JSON.stringify([...pending.values()])) + byteLength(JSON.stringify(entry)) + 1024 > MAX_PENDING_BYTES)) {
+        const oldest = [...pending.values()].find(item => !item.sending && !item.waiting);
+        if (!oldest) return false;
+        pending.delete(oldest.payload.eventId);
+      }
+      pending.set(payload.eventId, entry);
+      save();
+      attempt(entry, urgent);
+      schedule();
+      return true;
+    },
+  };
+  deliveryQueues.set(owner, queue);
+  owner.addEventListener("online", () => flush());
+  owner.addEventListener("pageshow", () => flush());
+  owner.addEventListener("pagehide", () => flush(true));
+  owner.document.addEventListener("visibilitychange", () => flush(owner.document.visibilityState === "hidden"));
+  flush();
+  return queue;
 }
 
 export function trackBehavior(eventName, context = {}) {
@@ -170,26 +310,21 @@ export function trackBehavior(eventName, context = {}) {
   try {
     const identified = getAnalyticsConsent() === "granted";
     const payload = {
+      eventId: uuid(),
       schemaVersion: 2,
       event: eventName,
       localTime,
       consentState: getAnalyticsConsent(),
       page,
       target,
-      referrer: context.referrer ?? document.referrer ?? null,
+      referrer: publicOutboundTarget(context.referrer ?? document.referrer) || null,
       sessionId: identified ? getSessionId() : null,
       anonymousId: identified ? getAnonymousId() : null,
       properties: context.properties || {},
     };
 
-    const token = recaptchaToken(eventName);
-    if (token) {
-      void token.then((value) => deliverBehavior(payload, value));
-    } else {
-      void deliverBehavior(payload, null);
-    }
+    return deliveryQueue().enqueue(payload, context.leaving === true);
   } catch { return false; }
-  return true;
 }
 
 export async function trackClick(clickEvent, targetUrl) {
@@ -214,6 +349,7 @@ export function startPageBehaviorTracking(page, { recordPageView = true } = {}) 
     return () => {};
   }
   if (getAnalyticsConsent() !== "granted") return () => {};
+  deliveryQueue().flush();
   let timer = null;
   let peakScrollY = 0;
   let reported = 0;
@@ -233,9 +369,8 @@ export function startPageBehaviorTracking(page, { recordPageView = true } = {}) 
     const checkpoint = Math.floor(percentage / 25) * 25;
     peakScrollY = window.scrollY;
     if (checkpoint > reported) {
-      reported = checkpoint;
       // Skip intermediate checkpoints after a fast scroll: at most four events per page.
-      trackBehavior("read_progress", { page, properties: { progressPercent: checkpoint } });
+      if (trackBehavior("read_progress", { page, leaving, properties: { progressPercent: checkpoint } })) reported = checkpoint;
       if (reported === 100) window.removeEventListener("scroll", onScroll);
     }
   };
@@ -259,6 +394,7 @@ export function startPageBehaviorTracking(page, { recordPageView = true } = {}) 
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("pagehide", flushProgress);
   document.addEventListener("visibilitychange", onVisibilityChange);
+  if (window.scrollY > 0) onScroll();
   return ({ discard = false } = {}) => {
     if (stopped) return;
     if (!discard) flushProgress();

@@ -19,7 +19,8 @@ try {
       const path = new URL(request.url()).pathname;
       if (path === '/api/track') {
         tracked.push(request.postDataJSON());
-        return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+        return route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ ok: true, eventId: request.postDataJSON().eventId }) });
       }
       const modules = {
         '/behaviorAnalytics.js': behavior,

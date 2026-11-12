@@ -90,6 +90,7 @@ export async function produceRawEvent(rawEvent) {
 
     await producer.send({
       topic: TOPIC,
+      acks: -1,
       messages: [{ key, value }],
     });
     return true;

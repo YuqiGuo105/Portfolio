@@ -9,7 +9,7 @@ const withoutImports = source => source.replace(/^import .+;\r?$/gm, '');
 const policy = asModule(await readFile(new URL('../src/lib/analyticsPagePolicy.mjs', import.meta.url), 'utf8'));
 const behavior = await readFile(new URL('../src/lib/behaviorAnalytics.js', import.meta.url), 'utf8');
 const browserModule = await import(asModule(`
-  import { isPrivateAnalyticsPage } from '${policy}';
+  import { isPrivateAnalyticsPage, publicOutboundTarget } from '${policy}';
   const isBrowserAnalyticsDisabled = () => false;
   const getAnalyticsIdentity = () => { throw new Error('Public telemetry must not wait for auth'); };
 ` + withoutImports(behavior)));
@@ -45,7 +45,10 @@ test('browser: homepage request is queued before admin entry and its in-flight d
   const requests = [];
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
-  globalThis.fetch = async (url, options) => { requests.push({ url, ...options, body: JSON.parse(options.body) }); return { ok: true }; };
+  globalThis.fetch = async (url, options) => {
+    const body = JSON.parse(options.body); requests.push({ url, ...options, body });
+    return { ok: true, status: 200, json: async () => ({ ok: true, eventId: body.eventId }) };
+  };
   try {
     const cleanup = browserModule.startPageBehaviorTracking('/');
     // No auth/session promise or microtask is needed to queue the real page view.
@@ -69,7 +72,7 @@ test('browser: homepage request is queued before admin entry and its in-flight d
     discard({ discard: true });
     dom.reconfigure({ url: 'https://www.yuqi.site/admin/visitors' });
     browserModule.startPageBehaviorTracking('/admin/visitors')();
-    resolve({ ok: true });
+    resolve({ ok: true, status: 200, json: async () => ({ ok: true, eventId: requests[2].body.eventId }) });
     await settle();
     assert.equal(requests.length, 3);
     assert.equal(requests[2].body.page, '/');
