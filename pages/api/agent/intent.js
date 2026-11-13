@@ -22,6 +22,7 @@ import {
   methodGuard,
   requireSupabaseUser,
 } from "../../../src/lib/agentServiceProxy";
+import { moderateChatRequest } from '../../../src/lib/discovery/http';
 
 export default async function handler(req, res) {
   if (!methodGuard(req, res, ["POST"])) return;
@@ -30,6 +31,7 @@ export default async function handler(req, res) {
   // write tools because the resolved role will be VIEWER only).
   const auth = await requireSupabaseUser(req, res, { allowAnonymous: true });
   if (!auth) return;
+  if (!await moderateChatRequest(req, res)) return;
 
   await forwardJson(req, res, { path: "/api/intent", method: "POST", auth });
 }

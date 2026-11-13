@@ -1,0 +1,25 @@
+.root { min-height: 100vh; background: #f8faf9; color: #243b36; max-width: 1200px; padding: 40px; margin: 0 auto; font-family: Arial, sans-serif; }
+.root h1, .root h2, .root h3, .root button { color: #243b36; }
+.header, .sectionHeader, .actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.eyebrow { font-size: 11px; color: #6a7974; }
+.header h1 { font-size: 30px; margin: 8px 0; letter-spacing: 0; }
+.badge { font-size: 12px; padding: 8px 12px; background: #e0efe9; color: #286858; border-radius: 5px; }
+.tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid #d3dfdb; margin-top: 24px; gap: 24px; }
+.tabs button { border: 0; padding: 14px 0; background: transparent; border-bottom: 2px solid transparent; border-radius: 0; }
+.tabs button[aria-pressed='true'] { border-bottom-color: #208773; color: #146d5c; }
+.root button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; font-size: 14px; line-height: 1.5; letter-spacing: 0; min-height: 40px; }
+.band button { background: #fff; color: #226958; border: 1px solid #c5d6cf; padding: 10px 14px; border-radius: 6px; }
+.band button:disabled { opacity: .5; cursor: wait; }
+.band { padding: 28px 0; border-bottom: 1px solid #d3dfdb; }
+.band h2 { font-size: 20px; margin: 0; letter-spacing: 0; }
+.band a { color: #227766; font-size: 14px; }
+.band select { max-width: min(100%, 380px); border: 1px solid #bdcec7; padding: 10px; border-radius: 5px; background: white; color: #243b36; font-size: 14px; }
+.order { display: flex; flex-wrap: wrap; gap: 8px 32px; padding: 20px; margin: 18px 0 8px; background: #eef4f1; font-size: 14px; }
+.actions { justify-content: flex-start; }
+.band label { display: block; margin-top: 24px; font-size: 14px; }
+.band textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #b6cbc2; border-radius: 5px; margin: 8px 0 16px; color: #243b36; background: white; font: inherit; line-height: 1.6; }
+.band pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; background: #eaf0ed; font-size: 13px; }
+.verdict { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 20px 0; }
+.verdict strong { text-transform: capitalize; color: #236f5e; }
+.verdict small, .note { color: #687b73; font-size: 13px; }
+@media (max-width: 600px) { .root { padding: 24px 16px; } .tabs { gap: 16px; } .sectionHeader select { width: 100%; } .order { flex-direction: column; gap: 12px; padding-left: 32px; } }

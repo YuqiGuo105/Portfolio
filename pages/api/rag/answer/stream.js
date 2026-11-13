@@ -15,6 +15,7 @@ import { RESPONSE_LANGUAGE_POLICY } from "../../../../src/lib/responseLanguagePo
 import { localQwenEnabled } from "../../../../src/lib/localAssistant.mjs";
 import { streamLocalChat } from "../../../../src/lib/qwenLocalChat.mjs";
 import { isRateLimited } from "../../../../src/lib/rateLimiter";
+import { moderateChatRequest } from '../../../../src/lib/discovery/http';
 import {
   forwardRagSse,
   requireSupabaseUser,
@@ -164,6 +165,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  if (!await moderateChatRequest(req, res)) return;
   if (localQwenEnabled(req)) {
     const auth = await requireSupabaseUser(req, res, { allowAnonymous: true });
     if (!auth) return;

@@ -59,11 +59,13 @@ export function getAnalyticsConsent() {
 export function setAnalyticsConsent(value) {
   if (typeof window === "undefined" || !["granted", "denied"].includes(value)) return;
   window.localStorage.setItem(CONSENT_KEY, value);
+  document.cookie = `yuqi_analytics_optout=${value === 'denied' ? '1' : '0'}; Max-Age=31536000; Path=/; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`;
   if (value === "denied") {
     deliveryQueues.get(window)?.clear();
     window.sessionStorage.removeItem(PENDING_KEY);
     window.sessionStorage.removeItem(SESSION_KEY);
     document.cookie = `${ANON_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax; Secure`;
+    document.cookie = 'yuqi_home=; Max-Age=0; Path=/; SameSite=Lax';
   }
 }
 

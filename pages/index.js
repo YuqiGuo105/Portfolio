@@ -1,4 +1,5 @@
 import Link from "next/link";
+import HomeSections from "../src/components/discovery/HomeSections";
 import ContactForm from "../src/components/ContactForm";
 import TestimonialSlider from "../src/components/TestimonialSlider";
 import ParallaxPortrait from "../src/components/ParallaxPortrait";
@@ -65,7 +66,7 @@ const BlogSliderArrow = ({ className = "", onClick, direction }) => {
   );
 };
 
-const Index = ({ initialContent = {} }) => {
+const Index = ({ initialContent = {}, homeVariant = 'original' }) => {
   const [blogs, setBlogs] = useState(() => initialContent.blogs || []);
   const [error, setError] = useState(null);
   const [yearsOfExperience, setYearsOfExperience] = useState(1);
@@ -791,7 +792,8 @@ const Index = ({ initialContent = {} }) => {
           </div>
         </Modal>
 
-        <section className="section section-started">
+        <HomeSections variant={homeVariant}>
+        <section className="section section-started" id="home-intro">
           <div className="container">
             {/* Hero Started */}
             <div className="hero-started" id="tour-hero">
@@ -1067,6 +1069,7 @@ const Index = ({ initialContent = {} }) => {
             {/* Works */}
             <ProjectIsotop
               featuredOnly
+              variant={homeVariant}
               initialProjects={initialContent.projects}
               initialSystems={initialContent.systems}
             />
@@ -1699,6 +1702,7 @@ const Index = ({ initialContent = {} }) => {
           `}</style>
         </section>
 
+        </HomeSections>
         <LogInDialog
           open={showLogin}
           title="Log In Required"

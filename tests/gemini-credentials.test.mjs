@@ -5,6 +5,9 @@ import test from "node:test";
 const fixtureKey = "fixture-gemini-secret-never-public";
 const privatePayload = `https://provider.example.test/?key=${fixtureKey} private-request-body`;
 const dataModule = source => `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
+// Moderation has its own tests; these fixtures exercise downstream credential handling.
+const isolateModeration = source => source.replace(/import \{ moderateChatRequest \} from ['"][^'"]+discovery\/http['"];?/,
+  'const moderateChatRequest = async () => true;');
 
 async function loadHandlers() {
   const router = (await readFile(new URL("../pages/api/intent/route.js", import.meta.url), "utf8"))
@@ -28,8 +31,8 @@ async function loadHandlers() {
     .replace(/import \{\s*forwardRagSse,\s*requireSupabaseUser,\s*\} from "[^\"]+";/,
       'const requireSupabaseUser = async () => ({ roles: "VIEWER" }); const forwardRagSse = async (_req, res) => res.end("delegated");');
   return {
-    router: (await import(dataModule(router))).default,
-    rag: (await import(dataModule(rag))).default,
+    router: (await import(dataModule(isolateModeration(router)))).default,
+    rag: (await import(dataModule(isolateModeration(rag)))).default,
   };
 }
 

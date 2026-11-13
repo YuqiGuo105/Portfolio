@@ -49,6 +49,9 @@ export default function SearchOverlay({ isOpen, onClose }) {
   const [results, setResults] = useState([]);
   const [total, setTotal] = useState(0);
   const [retry, setRetry] = useState(0);
+  const [submittedQuery, setSubmittedQuery] = useState('');
+  const [querySuggestions, setQuerySuggestions] = useState([]);
+  const discovery = process.env.NEXT_PUBLIC_DISCOVERY_ENABLED === '1';
   const inputRef = useRef(null);
   const dialogRef = useRef(null);
   const closeRef = useRef(onClose);
@@ -59,7 +62,7 @@ export default function SearchOverlay({ isOpen, onClose }) {
 
   useEffect(() => {
     if (!isOpen) {
-      setQuery(""); setSource(""); setResults([]); setTotal(0); setError(false); setComposing(false);
+      setQuery(""); setSource(""); setResults([]); setTotal(0); setError(false); setComposing(false); setSubmittedQuery(''); setQuerySuggestions([]);
       return undefined;
     }
     const previousFocus = document.activeElement;
@@ -83,8 +86,9 @@ export default function SearchOverlay({ isOpen, onClose }) {
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen || !searchQuery || composing) {
+    if (!isOpen || !searchQuery || composing || (discovery && searchQuery.length < 2)) {
       setResults([]); setTotal(0); setError(false); setLoading(false);
+      setQuerySuggestions([]);
       return undefined;
     }
     const controller = new AbortController();
@@ -98,14 +102,25 @@ export default function SearchOverlay({ isOpen, onClose }) {
       }, 18000);
       const params = new URLSearchParams({ q: searchQuery, limit: "20" });
       if (source) params.set("source", source);
+      const enhanced = discovery && ['', 'project', 'blog'].includes(source);
+      const typeahead = enhanced && submittedQuery !== searchQuery;
+      if (enhanced && !typeahead) params.set('semantic', '1');
       try {
-        const response = await fetch(`/api/search?${params}`, { signal: controller.signal });
+        let response = await fetch(`${enhanced ? `/api/discovery/${typeahead ? 'suggest' : 'search'}` : '/api/search'}?${params}`, { signal: controller.signal });
+        if (!response.ok && enhanced && response.status !== 429) response = await fetch(`/api/search?${params}`, { signal: controller.signal });
         if (!response.ok) throw new Error("Search unavailable");
-        const payload = await response.json();
+        let payload = await response.json();
         if (disposed || controller.signal.aborted) return;
+        if (payload.suggestions) {
+          setQuerySuggestions(payload.suggestions.filter(item => item.kind === 'query'));
+          const rows = payload.suggestions.filter(item => item.url && (!source || item.kind === source)).map((item, index) => ({
+            id: item.id, sourceId: item.id, source: item.kind === 'project' ? 'Projects' : 'Blog', title: item.text, url: item.url, rank: index + 1,
+          }));
+          payload = { results: rows, total: rows.length, modelVersion: payload.modelVersion };
+        } else setQuerySuggestions([]);
         setResults(payload.results || []); setTotal(payload.total || 0);
         searchMeta.current = { requestId: payload.requestId, modelVersion: payload.modelVersion };
-        trackBehavior("search_performed", { properties: { component: "search", resultCount: payload.total || 0,
+        if (!typeahead) trackBehavior("search_performed", { properties: { component: "search", resultCount: payload.total || 0,
           modelVersion: payload.modelVersion, recommendationRequestId: payload.requestId } });
       } catch (err) {
         if (!disposed && !controller.signal.aborted) { setError(true); setResults([]); setTotal(0); }
@@ -115,9 +130,9 @@ export default function SearchOverlay({ isOpen, onClose }) {
       }
     }, 250);
     return () => { disposed = true; clearTimeout(timer); clearTimeout(deadline); controller.abort(); };
-  }, [searchQuery, source, isOpen, composing, retry]);
+  }, [searchQuery, source, isOpen, composing, retry, submittedQuery, discovery]);
 
-  const clearSearch = () => { setQuery(""); inputRef.current?.focus(); };
+  const clearSearch = () => { setQuery(""); setSubmittedQuery(''); inputRef.current?.focus(); };
   const chooseTab = (event, index) => {
     const direction = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
     if (!direction && event.key !== "Home" && event.key !== "End") return;
@@ -136,10 +151,14 @@ export default function SearchOverlay({ isOpen, onClose }) {
           <div className={styles.heading}><span className={styles.eyebrow}>YUQI GUO / PORTFOLIO</span><h2 id="portfolio-search-title">Search portfolio</h2></div>
           <div className={styles.searchBox}>
             <Search size={22} aria-hidden="true" />
-            <input ref={inputRef} value={query} onChange={event => setQuery(event.target.value)}
+            <input ref={inputRef} value={query} onChange={event => { setQuery(event.target.value); setSubmittedQuery(''); }}
               onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)}
               placeholder="Search anything..." aria-label="Search" maxLength={300} autoComplete="off" spellCheck={false}
-              onKeyDown={event => { if (event.key === "ArrowDown" && !event.nativeEvent.isComposing) { const result = dialogRef.current?.querySelector('[data-testid="search-result"]'); if (result) { event.preventDefault(); result.focus(); } } }} />
+              onKeyDown={event => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing && discovery) { event.preventDefault(); setSubmittedQuery(searchQuery); }
+                if (event.key === "ArrowDown" && !event.nativeEvent.isComposing) { const result = dialogRef.current?.querySelector('[data-testid="search-result"]'); if (result) { event.preventDefault(); result.focus(); } }
+              }} />
+            {discovery && searchQuery.length >= 2 && <button type="button" className={styles.iconButton} onClick={() => setSubmittedQuery(searchQuery)} aria-label="Search all content" title="Search all content"><ArrowRight size={18} aria-hidden="true" /></button>}
             {query && <button type="button" className={styles.iconButton} onClick={clearSearch} aria-label="Clear search" title="Clear search"><X size={17} aria-hidden="true" /></button>}
           </div>
           <button type="button" onClick={onClose} className={`${styles.iconButton} ${styles.close}`} aria-label="Close search" title="Close search"><X size={21} aria-hidden="true" /></button>
@@ -151,6 +170,7 @@ export default function SearchOverlay({ isOpen, onClose }) {
           </button>)}
         </div>
         <div className={styles.body} id="search-content" role="tabpanel" aria-labelledby={`search-tab-${SOURCE_OPTIONS.indexOf(selectedSource)}`} aria-busy={loading}>
+          {querySuggestions.length > 0 && <div className={styles.querySuggestions} aria-label="Suggested searches">{querySuggestions.map(item => <button type="button" key={item.text} onClick={() => { setQuery(item.text); setSubmittedQuery(item.text); }}><Search size={14} aria-hidden="true" />{item.text}</button>)}</div>}
           <p className={styles.srOnly} role="status" aria-live="polite">{loading ? "Searching" : error ? "Search unavailable" : searchQuery ? `${total} results` : "Search ready"}</p>
           {loading ? <div className={styles.loading} aria-hidden="true">
             <div className={styles.sectionLabel}>Searching</div>
@@ -171,7 +191,7 @@ export default function SearchOverlay({ isOpen, onClose }) {
           </div> : <>
             <div className={styles.resultsHeader}><span>{total} {total === 1 ? "result" : "results"}</span><span>Best matches</span></div>
             {results.map(item => <ResultRow key={`${item.source}-${item.id}`} item={item} onNavigate={() => {
-              trackBehavior("search_result_clicked", { target: item.url, properties: { component: "search", contentId: item.sourceId,
+              trackBehavior("search_result_clicked", { target: item.url, properties: { component: "search", contentId: searchMeta.current.modelVersion?.startsWith('discovery-') ? item.id : item.sourceId,
                 contentType: item.sourceTable, rank: item.rank, modelVersion: searchMeta.current.modelVersion,
                 recommendationRequestId: searchMeta.current.requestId } });
               onClose();

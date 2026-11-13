@@ -1,0 +1,9 @@
+.git
+.next*
+node_modules
+**/node_modules
+.env*
+**/.env*
+test-artifacts
+coverage
+scripts/site-history/data

@@ -51,6 +51,9 @@ jobs:
       - name: Contact form abuse protection
         run: npm run test:contact
 
+      - name: Discovery and shared moderation
+        run: npm run test:discovery
+
       - name: OAuth regression tests
         run: npm run test:oauth
 

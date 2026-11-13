@@ -106,9 +106,10 @@ const ERROR_MESSAGES = {
   verification_unavailable: 'Verification is temporarily unavailable. Your message has not been sent. Please try again.',
   rate_limited: 'Too many contact requests. Please try again later.',
   delivery_unavailable: 'We could not confirm delivery. Please wait before trying again.',
+  content_rejected: 'This message cannot be accepted. Please check the content and try again.',
 };
 
-export function createContactHandler({ isRateLimited, sendMail, env = process.env, fetchImpl = fetch,
+export function createContactHandler({ isRateLimited, sendMail, moderate, env = process.env, fetchImpl = fetch,
   audit = entry => console.info(JSON.stringify(entry)) } = {}) {
   const record = entry => {
     // Logging must not turn an accepted email into a retryable delivery error.
@@ -139,6 +140,14 @@ export function createContactHandler({ isRateLimited, sendMail, env = process.en
       if (source === 'web') {
         if (req.body.website) throw new ContactError('verification_failed');
         await verifyContactToken(req.body.turnstileToken, { env, fetchImpl });
+      }
+      if (moderate) {
+        const result = await moderate('contact', fields.message, { name: fields.name, email: fields.email });
+        if (result.decision === 'reject') throw new ContactError('content_rejected', 422);
+        if (result.decision !== 'allow') {
+          record({ event: 'contact_submission', requestId, source, outcome: 'pending_review' });
+          return res.status(202).json({ ok: true, status: 'pending_review', message: 'Your message was received and is waiting for review.', requestId });
+        }
       }
       await sendMail(fields);
       record({ event: 'contact_submission', requestId, source, outcome: 'sent' });

@@ -14,6 +14,7 @@ const ContactForm = () => {
   const [error, setError] = useState(false);
   const { name, email, message } = contactData;
   const [submitted, setSubmitted] = useState(false);
+  const [pendingReview, setPendingReview] = useState(false);
   const [notice, setNotice] = useState("");
   const [sending, setSending] = useState(false);
   const inFlight = useRef(false);
@@ -51,6 +52,7 @@ const ContactForm = () => {
       const result = await res.json();
 
       if (res.ok) {
+        setPendingReview(result.status === 'pending_review');
         setSubmitted(true);
         setContactData({ name: "", email: "", message: "", website: "" });
         setError(false);
@@ -133,7 +135,7 @@ const ContactForm = () => {
             </div>
             {submitted && (
               <div className="alert-success">
-                <p>Thanks, your message has been sent successfully.</p>
+                <p>{pendingReview ? 'Your message was received and is waiting for review.' : 'Thanks, your message has been sent successfully.'}</p>
               </div>
             )}
           </div>

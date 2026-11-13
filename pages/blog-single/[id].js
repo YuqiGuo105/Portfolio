@@ -1,4 +1,5 @@
 import Layout from "../../src/layout/Layout";
+import RelatedContent from "../../src/components/discovery/RelatedContent";
 import { useRouter } from 'next/router';
 import { useEffect } from 'react';
 import SeoHead, { absoluteUrl } from "../../src/components/SeoHead";
@@ -163,6 +164,7 @@ const BlogSingle = ({ blog }) => {
           </div>
         </div>
       </section>
+      <RelatedContent contentId={`blog:${blog.id}`} />
     </Layout>
     </>
   );

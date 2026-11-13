@@ -76,6 +76,7 @@ function attachmentFilename(value) {
 }
 
 export const adminApi = {
+  discovery: { request(options) { return request('/api/admin/discovery', options); } },
   visitorGovernance: {
     overview({ signal } = {}) { return request('/api/admin/visitor-governance/overview', { signal }); },
     archive() { return request('/api/admin/visitor-governance/archive', { method: 'POST', body: '{}' }); },

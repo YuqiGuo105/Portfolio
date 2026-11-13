@@ -14,6 +14,7 @@ import {
   methodGuard,
   requireSupabaseUser,
 } from "../../../src/lib/agentServiceProxy";
+import { moderateChatRequest } from '../../../src/lib/discovery/http';
 
 // Disable Next.js default JSON response so we can write SSE bytes ourselves.
 export const config = {
@@ -28,6 +29,7 @@ export default async function handler(req, res) {
 
   const auth = await requireSupabaseUser(req, res, { allowAnonymous: true });
   if (!auth) return;
+  if (!await moderateChatRequest(req, res)) return;
 
   await forwardSse(req, res, { auth });
 }

@@ -124,7 +124,7 @@ function ipHash(ip) {
   return crypto.createHmac('sha256', key).update(`globe-flag:${ip}`).digest('hex');
 }
 
-export function createFlagsHandler({ store, isRateLimited, geoOf = requestGeo }) {
+export function createFlagsHandler({ store, isRateLimited, moderate, geoOf = requestGeo }) {
   return async function handler(req, res) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     try {
@@ -143,6 +143,11 @@ export function createFlagsHandler({ store, isRateLimited, geoOf = requestGeo })
       const limited = await isRateLimited(ip, 'globe-flag', { limit: 3, windowMs: 60 * 60_000 }) ||
         await isRateLimited('all', 'globe-flag-global', { limit: 120, windowMs: 60 * 60_000 });
       if (limited) { res.setHeader('Retry-After', '3600'); return res.status(429).json({ error: 'rate_limited' }); }
+      if (moderate && flag.message) {
+        const result = await moderate('globe', flag.message);
+        if (result.decision === 'reject') throw new FlagError('message_not_allowed', 422);
+        flag.status = result.decision === 'allow' ? 'approved' : 'pending';
+      }
       const saved = await store().insert({ ...flag, ip_hash: ipHash(ip) });
       return res.status(201).json({ status: flag.status, flag: flag.status === 'approved' ? publicFlag(saved) : null });
     } catch (error) {

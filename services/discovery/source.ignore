@@ -1,0 +1,14 @@
+.git
+.vercel
+node_modules
+**/node_modules
+.next*
+.env*
+**/.env*
+test-artifacts
+public
+docs
+tests
+.github
+pages
+styles

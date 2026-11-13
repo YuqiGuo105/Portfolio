@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Layout from "../../src/layout/Layout";
+import RelatedContent from "../../src/components/discovery/RelatedContent";
 import { readTimeMachineFigure, timeMachineSteps } from "../../src/lib/architectureEvolution.mjs";
 import evolutionData from "../../docs/architecture/platform-evolution.json";
 import SeoHead, { absoluteUrl } from "../../src/components/SeoHead";
@@ -266,6 +267,7 @@ export default function WorkSingle({ project, evolution, nextProject }) {
           </div>
         </section>
 
+        <RelatedContent contentId={`project:${project.id}`} />
         {nextProject && (
           <section className="m-page-navigation">
             <div className="container">

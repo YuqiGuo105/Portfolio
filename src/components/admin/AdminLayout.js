@@ -70,6 +70,7 @@ const NAV_GROUPS = [
       { href: "/admin/conversations", label: "Conversations", icon: History },
       { href: "/admin/operations", label: "Operations timeline", icon: Route },
       { href: "/admin/cost-guardrails", label: "Cost guardrails", icon: ShieldCheck },
+      ...(process.env.NEXT_PUBLIC_DISCOVERY_ENABLED === '1' ? [{ href: '/admin/discovery', label: 'Discovery & safety', icon: ShieldCheck }] : []),
       { href: "/admin/agent", label: "Operate console", icon: Bot },
       { href: KIBANA_DASHBOARD, label: "OpenSearch", icon: Gauge, external: true },
     ],

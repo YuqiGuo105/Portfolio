@@ -8,6 +8,7 @@
 .gitignore
 .env
 .next
+.next-discovery*
 .next-visitor-governance
 .next-voice-local*
 .next-mr-pot-*

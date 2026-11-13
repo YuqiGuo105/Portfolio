@@ -1,0 +1,12 @@
+{
+  "name": "portfolio-discovery-worker",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "2.100.0",
+    "htmlparser2": "10.1.0",
+    "kafkajs": "2.2.4",
+    "redis": "4.7.1",
+    "ws": "8.21.3"
+  }
+}

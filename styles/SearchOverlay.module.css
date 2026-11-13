@@ -125,3 +125,5 @@
   .explore, .loading { padding: 24px 18px; }
 }
 @media (prefers-reduced-motion: reduce) { .panel, .skeleton span { animation: none; } .panel * { transition: none; } }
+.querySuggestions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+.querySuggestions button { display: inline-flex; align-items: center; gap: 8px; background: transparent; border: 0; padding: 8px; color: inherit; font: inherit; max-width: 100%; overflow-wrap: anywhere; }

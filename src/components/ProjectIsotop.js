@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import ProjectSystemCover, { supportsSystemCover } from "./projects/ProjectSystemCover";
+import { orderedProjects } from "../lib/discovery/core.mjs";
 import { supabase } from "../supabase/supabaseClient";
 import { PROJECT_CARD_COLUMNS, PROJECT_SYSTEM_COLUMNS, firstSystemByProject } from "../lib/publicContent.mjs";
 
@@ -15,11 +16,12 @@ const categoryKey = (category) => category.trim().replace(/\s+/g, "-");
 
 // `initialProjects` / `initialSystems` come from the page's getStaticProps, so the cards are in the
 // server-rendered HTML; the browser then refreshes them.
-const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjects = null, initialSystems = null }) => {
+const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjects = null, initialSystems = null, variant = 'original' }) => {
   const isotope = useRef();
   const [filterKey, setFilterKey] = useState("all");
   const [projects, setProjects] = useState(() => (Array.isArray(initialProjects) ? initialProjects : []));
   const [projectSystems, setProjectSystems] = useState(() => initialSystems || {});
+  const rankedProjects = useMemo(() => orderedProjects(projects, projectSystems, variant), [projects, projectSystems, variant]);
 
   const filters = useMemo(() => {
     const known = new Set(BASE_FILTERS.map(({ key }) => key));
@@ -130,7 +132,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjec
       </div>
 
       <div className="proj-grid row">
-        {projects.map((project) => {
+        {rankedProjects.map((project) => {
           const categoryClasses = project.category
             ? project.category.split(",").map(categoryKey).join(" ")
             : "";
