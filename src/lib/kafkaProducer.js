@@ -15,11 +15,17 @@
  */
 
 import { Kafka, logLevel } from 'kafkajs';
+import { createBreaker } from './circuitBreaker.mjs';
 
 const TOPIC = process.env.KAFKA_TOPIC_RAW || 'analytics.raw.events';
 
 let producerInstance = null;
 let connectPromise = null;
+
+// After a failed connect or send, Kafka is left alone for a short while. Without this, every
+// request during a broker outage waits out its own connection timeout before falling back, which
+// under heavy traffic holds a function open for seconds per tracked event.
+const breaker = createBreaker(Number(process.env.KAFKA_BREAKER_MS) > 0 ? Number(process.env.KAFKA_BREAKER_MS) : 30000);
 
 function buildKafka() {
   const brokers = (process.env.KAFKA_BROKERS || '').split(',').map(b => b.trim()).filter(Boolean);
@@ -65,8 +71,9 @@ async function getProducer() {
     producerInstance = p;
     return p;
   })().catch(err => {
-    // Reset so the next request retries.
+    // Reset so a later request retries, after the pause.
     connectPromise = null;
+    breaker.trip();
     console.warn('[KafkaProducer] connect failed (best-effort):', err.message);
     return null;
   });
@@ -80,6 +87,8 @@ async function getProducer() {
  * @returns {Promise<boolean>} true if produced, false if skipped/failed.
  */
 export async function produceRawEvent(rawEvent) {
+  // Recently failed: the caller's fallback takes the event straight away.
+  if (breaker.isOpen()) return false;
   try {
     const producer = await getProducer();
     if (!producer) return false; // Kafka not configured or unreachable
@@ -96,9 +105,10 @@ export async function produceRawEvent(rawEvent) {
     return true;
   } catch (err) {
     console.warn('[KafkaProducer] produce failed (best-effort):', err.message);
-    // Reset connection so next request attempts reconnect.
+    // Reset connection so a later request attempts to reconnect, after the pause.
     producerInstance = null;
     connectPromise = null;
+    breaker.trip();
     return false;
   }
 }

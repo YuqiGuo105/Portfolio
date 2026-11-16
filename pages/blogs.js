@@ -144,8 +144,10 @@ const Blogs = ({ initialBlogs = [] }) => {
   // Fetch all blogs
   useEffect(() => {
     const fetchBlogs = async () => {
-      // Server-rendered posts stay on screen while they refresh.
-      if (!initialBlogs.length) setLoading(true);
+      // Posts that came with the page (generated on the server at most five minutes ago) are not
+      // fetched again by every visitor's browser; only a page without them asks the database.
+      if (initialBlogs.length) { setLoading(false); return; }
+      setLoading(true);
       
       // Fetch technical blogs
       const { data: techBlogs, error: techError } = await supabase

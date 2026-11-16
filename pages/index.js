@@ -164,6 +164,11 @@ const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: bui
       const currentYear = new Date().getFullYear();
       setYearsOfExperience(Math.max(currentYear - startYear, 1));
 
+      // The lists are already in the page: the server generated them at most five minutes ago.
+      // The browser fetches them itself only when that copy is missing, so a burst of visitors
+      // does not turn every home page view into extra database queries.
+      if ((initialContent.blogs || []).length && (initialContent.lifeBlogs || []).length && (initialContent.experiences || []).length) return;
+
       /* tech blogs */
       const { data: tech, error: techErr } = await supabase
         .from("Blogs")
@@ -244,6 +249,8 @@ const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: bui
         clearInterval(timerRef.current);
       }
     };
+    // Runs once on arrival; the lists it checks are the ones the page was generated with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isProfileModalOpen, isPlaying, currentStoryIndex, stories.length]);
 
   useEffect(() => {

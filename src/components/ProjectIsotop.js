@@ -41,6 +41,9 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjec
   }, [projects]);
 
   useEffect(() => {
+    // Cards that came with the page (generated on the server at most five minutes ago) are not
+    // fetched again by every visitor's browser; only a page without them asks the database.
+    if (Array.isArray(initialProjects) && initialProjects.length) return;
     const fetchProjects = async () => {
       let query = supabase
         .from("Projects")
@@ -78,6 +81,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjec
       setProjectSystems(firstSystemByProject(systems));
     };
     fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [featuredOnly]);
 
   useEffect(() => {
