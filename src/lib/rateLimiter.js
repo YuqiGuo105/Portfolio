@@ -63,6 +63,11 @@ async function getClient() {
   return clientPromise;
 }
 
+// The shared connection, for other small pieces of shared state (the chat's waiting line).
+// Resolves to null when Valkey is not configured or cannot be reached.
+export const valkeyClient = () => getClient();
+export const valkeyConfigured = () => Boolean(getValkeyUrl());
+
 /**
  * Returns true when the caller has exceeded {@link RATE_LIMIT} requests
  * inside the current {@link RATE_WINDOW_MS} window. Callers should treat

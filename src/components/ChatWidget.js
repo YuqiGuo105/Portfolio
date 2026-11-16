@@ -17,6 +17,7 @@ import MrPotAvatar from "./MrPotAvatar"
 import { Mic, Plus, Upload, Phone } from "lucide-react"
 import { mergeEvidence } from "../lib/chatEvidence.mjs"
 import { postSSE } from "../lib/chatStream.mjs"
+import { ChatAdmissionNotice, useChatAdmission } from "./chat/ChatAdmission"
 import { ChatRequestError, chatRequestError, failAssistantMessage, chatStepsLabel } from "../lib/chatErrors.mjs"
 import { applyWebGuidePlan, normalizeWebGuidePlan } from "../lib/webGuide"
 import { primeVoiceAudio, releaseVoiceAudio } from "../lib/voice/audioActivation.mjs"
@@ -2329,6 +2330,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
     return id
   })
   const [chatDeviceId] = useState(() => getOrCreateChatDeviceId())
+  // First come, first served: a place in the chat, or a position in the line for one.
+  const { admission, ready: holdsPlace } = useChatAdmission(chatDeviceId)
 
   const [input, setInput] = useState("")
   useEffect(() => {
@@ -3736,6 +3739,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   const sendMessage = async (e) => {
     e?.preventDefault?.()
     touchSession()
+    // Without a place the question stays in the box; the notice above it says where they stand.
+    if (!(await holdsPlace())) return
 
     try {
       pageHighlightRef.current?.cleanup?.()
@@ -4211,6 +4216,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         </div>
       )}
 
+      <ChatAdmissionNotice admission={admission} />
       <form
         onSubmit={sendMessage}
         className="input-area shrink-0 px-3 py-1"

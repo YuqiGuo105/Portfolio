@@ -16,6 +16,7 @@ import { localQwenEnabled } from "../../../../src/lib/localAssistant.mjs";
 import { streamLocalChat } from "../../../../src/lib/qwenLocalChat.mjs";
 import { isRateLimited } from "../../../../src/lib/rateLimiter";
 import { moderateChatRequest } from '../../../../src/lib/discovery/http';
+import { chatAdmissionRuntime } from "../../../../src/lib/chat/admissionRuntime.mjs";
 import {
   forwardRagSse,
   requireSupabaseUser,
@@ -179,6 +180,9 @@ export default async function handler(req, res) {
   if (process.env.AGENT_SERVICE_URL) {
     const auth = await requireSupabaseUser(req, res, { allowAnonymous: true });
     if (!auth) return;
+    // First come, first served: only a visitor who holds a place reaches the assistant; everyone
+    // else is told their position in line or that today's places are taken (src/lib/chat/admission.mjs).
+    if (!await chatAdmissionRuntime().admit(req, res, auth)) return;
     await forwardRagSse(req, res, { auth });
     return;
   }
