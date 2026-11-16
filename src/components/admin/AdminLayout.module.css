@@ -249,3 +249,14 @@
 .bellWrap.bellWrap .bell { width: 38px; height: 38px; padding: 0; }
 .bellWrap.bellWrap .bellRefresh { height: auto; padding: 4px 8px; font-size: 12px; font-weight: 500; }
 .bellWrap.bellWrap :is(.bell, .bellRefresh)::before, .bellWrap.bellWrap :is(.bell, .bellRefresh)::after { content: none; display: none; }
+/* Clearing notifications. */
+.bellGroupHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-right: 10px; }
+.bellGroupHead .bellGroupTitle { flex: 1; justify-content: flex-start; gap: 8px; }
+.bellRow { display: flex; align-items: stretch; }
+.bellRow .bellItem { flex: 1; min-width: 0; padding-right: 6px; }
+.bellWrap.bellWrap :is(.bellClear, .bellClearAll) { min-height: 0; margin: 0; border: 0; background: transparent; box-shadow: none; color: #66717d; font-family: inherit; font-size: 12px; font-weight: 500; letter-spacing: 0; line-height: 1.2; text-transform: none; cursor: pointer; }
+.bellWrap.bellWrap :is(.bellClear, .bellClearAll)::before, .bellWrap.bellWrap :is(.bellClear, .bellClearAll)::after { content: none; display: none; }
+.bellWrap.bellWrap .bellClear { display: inline-flex; flex: none; width: 34px; align-items: center; justify-content: center; padding: 0; border-radius: 0; }
+.bellWrap.bellWrap .bellClearAll { padding: 4px 6px; border-radius: 5px; }
+.bellWrap.bellWrap :is(.bellClear, .bellClearAll):hover { background: #f6f8f9; color: #b42318; }
+.bellWrap.bellWrap :is(.bellClear, .bellClearAll):focus-visible { outline: 2px solid #23a18e; outline-offset: -2px; }

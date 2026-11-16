@@ -86,6 +86,11 @@ export const adminApi = {
       return request('/api/admin/visitor-governance/hold', { method: release ? 'DELETE' : 'POST', body: JSON.stringify({ batchId, reason }) });
     },
   },
+  // Notifications cleared from the bell in the top bar.
+  notifications: {
+    cleared() { return request('/api/admin/notification-dismissals'); },
+    clear(keys) { return request('/api/admin/notification-dismissals', { method: 'POST', body: JSON.stringify({ keys }) }); },
+  },
   referrals: {
     list() { return request('/api/admin/referrals'); },
     update(id, change) { return request('/api/admin/referrals', { method: 'POST', body: JSON.stringify({ id, ...change }) }); },

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createBreaker } from '../src/lib/circuitBreaker.mjs';
-import { ago, avatarOf, gatherNotifications, initials, rememberSeen, unseenCount } from '../src/lib/adminNotifications.mjs';
+import { ago, avatarOf, gatherNotifications, initials, rememberSeen, unseenCount, withoutKeys } from '../src/lib/adminNotifications.mjs';
+import { createDismissalHandler, memoryDismissalStore, validKeys } from '../src/lib/adminDismissals.mjs';
 
 const NOW = Date.parse('2026-11-16T07:00:00Z');
 const at = minutes => new Date(NOW - minutes * 60000).toISOString();
@@ -84,4 +85,56 @@ test('the tracking breaker leaves a failing broker alone for a while, then lets 
   clock += 29999; assert.equal(breaker.isOpen(), true);
   clock += 1; assert.equal(breaker.isOpen(), false, 'closes by itself');
   breaker.trip(); breaker.reset(); assert.equal(breaker.isOpen(), false);
+});
+
+// ── Clearing ────────────────────────────────────────────────────────────────
+
+test('a cleared notification is never listed again, and clearing updates the list at once', async () => {
+  const all = await gatherNotifications(api());
+  assert.equal(all.total, 5);
+  const after = await gatherNotifications(api(), undefined, ['audience:i1', 'failure:RAG_INDEX:12']);
+  assert.deepEqual(after.groups.map(group => group.id), ['referrals', 'flags', 'reviews']);
+  assert.equal(after.total, 3);
+  // The same thing locally, before the server is asked again.
+  const local = withoutKeys(all, ['audience:i1', 'failure:RAG_INDEX:12']);
+  assert.deepEqual(local.groups.map(group => group.id), ['referrals', 'flags', 'reviews']); assert.equal(local.total, 3);
+  assert.deepEqual(local.keys, after.keys);
+});
+
+test('"Clear all" covers the items a long group does not show', async () => {
+  const requests = Array.from({ length: 23 }, (_, index) => ({ id: `r${index}`, status: 'new', name: `Person ${index}`, created_at: at(index) }));
+  const state = await gatherNotifications(api({ referrals: async () => ({ requests }), alerts: async () => ({}), flags: async () => ({}), reviews: async () => ({}), failures: async () => [] }));
+  assert.equal(state.groups[0].allKeys.length, 23);
+  const one = withoutKeys(state, ['referral:r0']);
+  assert.equal(one.groups[0].total, 22); assert.equal(one.groups[0].items.length, 7); assert.equal(one.groups[0].more, 15);
+  assert.deepEqual(withoutKeys(state, state.groups[0].allKeys).groups, []);
+});
+
+const reply = () => ({ statusCode: 200, headers: {}, body: null, setHeader(key, value) { this.headers[key] = value; }, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
+const call = async (handler, req) => { const res = reply(); await handler({ method: 'GET', headers: {}, query: {}, ...req }, res); return res; };
+
+test('clearing is kept on the server, for the owner only', async () => {
+  const store = memoryDismissalStore();
+  const handler = createDismissalHandler({ store, authorize: async () => ({ userId: 'owner' }) });
+  assert.deepEqual((await call(handler, {})).body, { enabled: true, keys: [] });
+  const cleared = await call(handler, { method: 'POST', body: { keys: ['failure:OUTBOX_EVENT:17', 'failure:OUTBOX_EVENT:17', 'referral:8f0c'] } });
+  assert.deepEqual(cleared.body, { enabled: true, cleared: 2 });
+  assert.deepEqual((await call(handler, {})).body.keys.sort(), ['failure:OUTBOX_EVENT:17', 'referral:8f0c']);
+  assert.equal((await call(handler, { method: 'POST', body: { keys: [] } })).statusCode, 400);
+  assert.equal((await call(handler, { method: 'POST', body: { keys: ['<script>', 'no-colon', 42, 'x'.repeat(400)] } })).statusCode, 400);
+  assert.equal((await call(handler, { method: 'DELETE' })).statusCode, 405);
+
+  const denied = createDismissalHandler({ store, authorize: async (req, res) => { res.status(401).json({ error: 'unauthorized' }); return null; } });
+  const refused = await call(denied, { method: 'POST', body: { keys: ['referral:zzz'] } });
+  assert.equal(refused.statusCode, 401);
+  assert.ok(!(await store.list()).includes('referral:zzz'));
+});
+
+test('before the table exists the server says so, and an outage is an error, not a silent success', async () => {
+  const missing = createDismissalHandler({ store: { list: async () => null, add: async () => null }, authorize: async () => ({ userId: 'owner' }) });
+  assert.deepEqual((await call(missing, {})).body, { enabled: false, keys: [] });
+  assert.deepEqual((await call(missing, { method: 'POST', body: { keys: ['referral:a1'] } })).body, { enabled: false, cleared: 0 });
+  const down = createDismissalHandler({ store: { list: async () => { throw new Error('down'); }, add: async () => { throw new Error('down'); } }, authorize: async () => ({ userId: 'owner' }) });
+  assert.equal((await call(down, { method: 'POST', body: { keys: ['referral:a1'] } })).statusCode, 503);
+  assert.deepEqual(validKeys(['referral:a1', 'referral:a1', 'audience:i-9', 'bad key']), ['referral:a1', 'audience:i-9']);
 });

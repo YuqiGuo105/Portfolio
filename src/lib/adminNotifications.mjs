@@ -34,16 +34,18 @@ export const SOURCES = [
 ];
 
 // Runs every source side by side. Returns { groups: [{ id, label, href, items }], items, unchecked: [labels] }.
-export async function gatherNotifications(api, sources = SOURCES) {
+// `cleared` holds the keys of notifications the owner removed; those are never listed again.
+export async function gatherNotifications(api, sources = SOURCES, cleared = []) {
+  const gone = new Set(cleared);
   const settled = await Promise.allSettled(sources.map(source => Promise.resolve().then(() => source.load(api))));
   const groups = [], unchecked = [];
   settled.forEach((result, index) => {
     const source = sources[index];
     if (result.status !== 'fulfilled') { unchecked.push(source.label); return; }
     let items = [];
-    try { items = source.items(result.value).filter(item => item.key && !item.key.endsWith(':undefined')); } catch { unchecked.push(source.label); return; }
+    try { items = source.items(result.value).filter(item => item.key && !item.key.endsWith(':undefined') && !gone.has(item.key)); } catch { unchecked.push(source.label); return; }
     items.sort((a, b) => b.at - a.at);
-    if (items.length) groups.push({ id: source.id, label: source.label, href: source.href, items: items.slice(0, 8), more: Math.max(0, items.length - 8), total: items.length });
+    if (items.length) groups.push({ id: source.id, label: source.label, href: source.href, items: items.slice(0, 8), more: Math.max(0, items.length - 8), total: items.length, allKeys: items.map(item => item.key) });
   });
   groups.sort((a, b) => (b.items[0]?.at || 0) - (a.items[0]?.at || 0));
   return { groups, unchecked, keys: groups.flatMap(group => group.items.map(item => item.key)), total: groups.reduce((sum, group) => sum + group.total, 0) };
@@ -74,4 +76,15 @@ export function avatarOf(user) {
   const meta = user?.user_metadata || {};
   const url = [meta.avatar_url, meta.picture, ...(user?.identities || []).map(identity => identity?.identity_data?.avatar_url || identity?.identity_data?.picture)].find(value => typeof value === 'string' && /^https:\/\//.test(value));
   return { url: url || '', name: text(meta.full_name || meta.name, 80), email: text(user?.email, 120) };
+}
+
+// The list as it looks after some notifications are cleared, without asking the server again.
+export function withoutKeys(state, keys) {
+  const gone = new Set(keys);
+  const groups = state.groups.map(group => {
+    const allKeys = group.allKeys.filter(key => !gone.has(key));
+    const items = group.items.filter(item => !gone.has(item.key));
+    return { ...group, items, allKeys, total: allKeys.length, more: Math.max(0, allKeys.length - items.length) };
+  }).filter(group => group.total > 0);
+  return { ...state, groups, keys: groups.flatMap(group => group.items.map(item => item.key)), total: groups.reduce((sum, group) => sum + group.total, 0) };
 }

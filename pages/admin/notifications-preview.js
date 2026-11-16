@@ -11,6 +11,7 @@ export async function getServerSideProps({ req }) {
   return { props: {} };
 }
 
+const clearedKeys = new Set();
 const at = (minutes) => new Date(Date.now() - minutes * 60000).toISOString();
 const sample = {
   alerts: async () => ({ incidents: [
@@ -20,7 +21,9 @@ const sample = {
   referrals: async () => ({ requests: [{ id: "s3", status: "new", name: "Maya Lin (sample)", role_title: "Associate, Software Engineering", company: "Goldman Sachs", created_at: at(40) }] }),
   flags: async () => ({ flags: [{ id: "s4", emoji: "👋", message: "Hello from Lisbon (sample)", city: "Lisbon", country: "Portugal", created_at: at(300) }] }),
   reviews: async () => ({ reviews: [] }),
-  failures: async () => { throw new Error("made up: the monitoring service did not answer"); },
+  failures: async () => ({ items: Array.from({ length: 11 }, (_, index) => ({ kind: "OUTBOX_EVENT", id: `s-old-${index}`, lastError: "Quarantined at cutover (sample)", updatedAt: at(60 * 24 * 121 + index) })) }),
+  cleared: async () => ({ enabled: true, keys: [...clearedKeys] }),
+  clear: async (keys) => { keys.forEach((key) => clearedKeys.add(key)); return { enabled: true, cleared: keys.length }; },
 };
 const empty = { alerts: async () => ({}), referrals: async () => ({}), flags: async () => ({}), reviews: async () => ({}), failures: async () => [] };
 
