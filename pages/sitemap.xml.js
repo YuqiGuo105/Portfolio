@@ -20,6 +20,7 @@ const STATIC_ROUTES = [
   { path: '/works-list',  priority: '0.8', changefreq: 'weekly'  },
   { path: '/architecture', priority: '0.7', changefreq: 'monthly' },
   { path: '/cv',          priority: '0.5', changefreq: 'monthly' },
+  { path: '/talk',        priority: '0.5', changefreq: 'monthly' },
   { path: '/mcp-guide',   priority: '0.6', changefreq: 'monthly' },
   { path: '/content-usage', priority: '0.3', changefreq: 'yearly' },
   { path: '/privacy',      priority: '0.3', changefreq: 'yearly' },

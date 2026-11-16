@@ -9,6 +9,7 @@ import dynamic from "next/dynamic";
 import BrowserActionHost from "../src/components/BrowserActionHost";
 import { startPageBehaviorTracking } from "../src/lib/behaviorAnalytics";
 import { isPrivateAnalyticsPage } from "../src/lib/analyticsPagePolicy.mjs";
+import { employerUrl } from "../src/lib/currentRole.mjs";
 import "../styles/globals.css";
 import "../styles/carousel.css";
 import "../styles/chatWidget.css";
@@ -51,11 +52,6 @@ const SITE_PROFILE_JSON_LD = [
       description:
         "Software engineer specializing in backend systems, distributed platforms, and AI infrastructure.",
       knowsLanguage: ["English", "Chinese"],
-      worksFor: {
-        "@type": "Organization",
-        name: "Goldman Sachs",
-        url: "https://www.goldmansachs.com/",
-      },
       alumniOf: [
         {
           "@type": "CollegeOrUniversity",
@@ -100,6 +96,16 @@ const SITE_PROFILE_JSON_LD = [
     },
   },
 ];
+
+// The employer in structured data is the current one in the work history (pageProps.currentRole,
+// set by the home page); between jobs the property is left out instead of naming a past employer.
+function profileJsonLd(role) {
+  if (!role?.company) return SITE_PROFILE_JSON_LD;
+  const [page, ...rest] = SITE_PROFILE_JSON_LD;
+  const url = employerUrl(role.company);
+  const worksFor = { "@type": "Organization", name: role.company, ...(url ? { url } : {}) };
+  return [{ ...page, mainEntity: { ...page.mainEntity, ...(role.title ? { jobTitle: role.title } : {}), worksFor } }, ...rest];
+}
 
 function MyApp({ Component, pageProps }) {
   const router = useRouter();
@@ -160,7 +166,7 @@ function MyApp({ Component, pageProps }) {
             the homepage no longer emits two og:type / og:image sets. */}
         {isHomePage && (
           <>
-            {SITE_PROFILE_JSON_LD.map((entry) => (
+            {profileJsonLd(pageProps.currentRole).map((entry) => (
               <script
                 key={entry["@type"]}
                 type="application/ld+json"

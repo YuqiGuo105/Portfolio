@@ -1,0 +1,405 @@
+/* Referral requests review list. Self-contained so it reads the same inside the admin shell and
+   on the local preview page; .inbox.inbox outranks the public template's bare-element rules. */
+.inbox {
+  --ink: #17212b;
+  --muted: #66717d;
+  --line: #e3e7eb;
+  --soft: #f6f8f9;
+  --accent: #0f766e;
+  --accent-soft: #e6f5f2;
+  color: var(--ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.inbox.inbox :is(p, ul, ol, li, dl, dt, dd, h2, h3, h4, label) {
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  list-style: none;
+}
+
+.inbox.inbox :is(.tab, .rowButton, .action, .danger, .copy) {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.inbox.inbox :is(.tab, .rowButton, .action, .danger, .copy)::before,
+.inbox.inbox :is(.tab, .rowButton, .action, .danger, .copy)::after {
+  content: none;
+  display: none;
+}
+
+.inbox.inbox a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: none;
+}
+
+.inbox.inbox :is(button, a, textarea, select):focus-visible {
+  outline: 2px solid #23a18e !important;
+  outline-offset: 2px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+
+.tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  padding: 3px;
+  border: 1px solid #d8dee2;
+  border-radius: 7px;
+  background: #f5f7f8;
+}
+
+.inbox.inbox .tab {
+  min-height: 29px;
+  padding: 5px 11px;
+  border-radius: 5px;
+  color: #67727c;
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.inbox.inbox .tab[aria-selected="true"] {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(23, 33, 43, 0.12);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.count {
+  margin-left: 5px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.inbox.inbox .sort select {
+  width: auto;
+  height: 32px;
+  padding: 0 28px 0 10px;
+  border: 1px solid #cfd6db;
+  border-radius: 6px;
+  background: #ffffff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2366717d' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  appearance: none;
+}
+
+.list {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.item + .item {
+  border-top: 1px solid var(--line);
+}
+
+.inbox.inbox .rowButton {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 200px 18px;
+  gap: 4px 16px;
+  align-items: center;
+  width: 100%;
+  padding: 14px 16px;
+  color: var(--ink);
+  text-align: left;
+}
+
+.inbox.inbox .rowButton:hover {
+  background: #f4f9f8;
+}
+
+.who strong {
+  display: block;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.when {
+  text-align: right;
+}
+
+.who span,
+.when {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 23px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pill[data-tone="strong"] { background: #e6f5f2; color: #0b6a62; }
+.pill[data-tone="promising"] { background: #edf2fb; color: #2f558d; }
+.pill[data-tone="unclear"] { background: #f0f2f3; color: #59646d; }
+.pill[data-tone="weak"] { background: #fff0ee; color: #ae4138; }
+.pill[data-tone="flag"] { background: #fff7df; color: #7c5b0e; }
+.pill[data-tone="status"] { border: 1px solid #d8dee2; background: #ffffff; color: #4a5660; }
+
+.chevron {
+  color: #8b969e;
+  transition: transform 140ms ease;
+}
+
+.rowButton[aria-expanded="true"] .chevron {
+  transform: rotate(90deg);
+}
+
+.detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 20px 28px;
+  padding: 4px 16px 20px;
+}
+
+.block + .block {
+  margin-top: 18px;
+}
+
+.inbox.inbox .blockTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  color: #2c3741;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.note {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.inbox.inbox .note ul {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+  padding-left: 16px;
+}
+
+.inbox.inbox .note li {
+  list-style: disc;
+}
+
+.inbox.inbox .noteLabel {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.inbox.inbox .caveat {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.paste {
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--accent);
+  white-space: pre-wrap;
+}
+
+.plain {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.inbox.inbox .facts {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 5px 12px;
+  font-size: 13px;
+}
+
+.inbox.inbox .facts dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.inbox.inbox .facts dd {
+  overflow-wrap: anywhere;
+}
+
+.inbox.inbox .ownerNote {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  min-height: 70px;
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid #cfd6db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.inbox.inbox .action,
+.inbox.inbox .danger,
+.inbox.inbox .copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #cfd6db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #35414b;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.inbox.inbox .action:hover,
+.inbox.inbox .copy:hover {
+  border-color: #8d999f;
+  color: #17212b;
+}
+
+.inbox.inbox .action[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: #0b6a62;
+}
+
+.inbox.inbox .danger {
+  border-color: #e9b7b3;
+  background: #fff8f7;
+  color: #a73931;
+}
+
+.inbox.inbox :is(.action, .danger, .copy)[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.inbox.inbox .copy {
+  min-height: 28px;
+  padding: 0 9px;
+}
+
+.empty,
+.banner {
+  padding: 28px 16px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.banner {
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border: 1px solid #edc5c1;
+  border-radius: 7px;
+  background: #fff7f6;
+  color: #9f3932;
+  text-align: left;
+}
+
+@media (max-width: 860px) {
+  .inbox.inbox .rowButton { grid-template-columns: minmax(0, 1fr) 18px; }
+  .signal { grid-column: 1; }
+  .when { grid-column: 1; text-align: left; }
+  .chevron { grid-column: 2; grid-row: 1; }
+  .detail { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron { transition: none; }
+}
+
+/* Where the public form is open right now, and the owner's switch. */
+.inbox.inbox .offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 18px;
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 7px;
+  background: var(--soft);
+}
+.inbox.inbox .offer[data-open="no"] {
+  border-left-color: #b7791f;
+}
+.inbox.inbox .offerText {
+  flex: 1 1 320px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.inbox.inbox .offerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

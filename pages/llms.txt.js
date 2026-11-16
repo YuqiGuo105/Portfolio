@@ -8,6 +8,7 @@
 
 import { supabaseServer } from '../src/supabase/supabaseServer';
 import { SITE_URL } from '../src/components/SeoHead';
+import { currentRole } from '../src/lib/currentRole.mjs';
 
 const oneLine = (value, max = 180) => {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -17,11 +18,11 @@ const oneLine = (value, max = 180) => {
 const entry = (title, url, description) =>
   `- [${oneLine(title, 120)}](${url})${description ? `: ${oneLine(description)}` : ''}`;
 
-export function buildLlmsTxt({ projects = [], articles = [] } = {}) {
+export function buildLlmsTxt({ projects = [], articles = [], company = '' } = {}) {
   const lines = [
     '# Yuqi Guo — Software Engineer Portfolio',
     '',
-    '> Portfolio of Yuqi Guo (郭育奇), a backend software engineer at Goldman Sachs working on distributed systems, event-driven microservices and AI agent platforms. The site itself runs on a production microservice platform (Next.js edge, Spring Boot services on Cloud Run, Kafka, PostgreSQL, OpenSearch, pgvector) and exposes its content over the Model Context Protocol.',
+    `> Portfolio of Yuqi Guo (郭育奇), a backend software engineer${company ? ` at ${oneLine(company, 80)}` : ''} working on distributed systems, event-driven microservices and AI agent platforms. The site itself runs on a production microservice platform (Next.js edge, Spring Boot services on Cloud Run, Kafka, PostgreSQL, OpenSearch, pgvector) and exposes its content over the Model Context Protocol.`,
     '',
     'Prefer the MCP endpoint below for structured, citable answers; the HTML pages are written for people.',
     '',
@@ -31,6 +32,7 @@ export function buildLlmsTxt({ projects = [], articles = [] } = {}) {
     entry('System design', `${SITE_URL}/architecture`, 'Container diagram, UML data flows and the design patterns used by the platform'),
     entry('Résumé', `${SITE_URL}/cv`, 'Education and work history'),
     entry('Blog', `${SITE_URL}/blogs`, 'Engineering write-ups and life notes'),
+    entry('Talk', `${SITE_URL}/talk`, 'Send a message, request a referral, or chat live on TalkNest'),
     entry('RSS feed', `${SITE_URL}/rss.xml`, 'Latest articles'),
     '',
     '## MCP access',
@@ -61,6 +63,7 @@ export function buildLlmsTxt({ projects = [], articles = [] } = {}) {
 export async function getServerSideProps({ res }) {
   let projects = [];
   let articles = [];
+  let company = '';
   try {
     const [projectsRes, articlesRes] = await Promise.all([
       supabaseServer
@@ -77,6 +80,9 @@ export async function getServerSideProps({ res }) {
     ]);
     if (!projectsRes.error && Array.isArray(projectsRes.data)) projects = projectsRes.data.filter((row) => row.title);
     if (!articlesRes.error && Array.isArray(articlesRes.data)) articles = articlesRes.data.filter((row) => row.title);
+    // The employer named in the summary is the current one in the work history; none is named when unknown.
+    const { data: history } = await supabaseServer.from('experience').select('id,name,subname,date,text');
+    company = currentRole(history)?.company || '';
   } catch (error) {
     // eslint-disable-next-line no-console
     console.warn('[llms.txt] supabase enumeration failed:', error && error.message);
@@ -84,7 +90,7 @@ export async function getServerSideProps({ res }) {
 
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
-  res.write(buildLlmsTxt({ projects, articles }));
+  res.write(buildLlmsTxt({ projects, articles, company }));
   res.end();
   return { props: {} };
 }

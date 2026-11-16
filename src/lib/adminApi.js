@@ -86,6 +86,13 @@ export const adminApi = {
       return request('/api/admin/visitor-governance/hold', { method: release ? 'DELETE' : 'POST', body: JSON.stringify({ batchId, reason }) });
     },
   },
+  referrals: {
+    list() { return request('/api/admin/referrals'); },
+    update(id, change) { return request('/api/admin/referrals', { method: 'POST', body: JSON.stringify({ id, ...change }) }); },
+    remove(id) { return request('/api/admin/referrals', { method: 'POST', body: JSON.stringify({ id, action: 'delete' }) }); },
+    resume(id) { return request('/api/admin/referrals', { method: 'POST', body: JSON.stringify({ id, action: 'resume' }) }); },
+    offer(change) { return request('/api/admin/referrals', { method: 'POST', body: JSON.stringify(change) }); },
+  },
   globeFlags: {
     list(status = "pending") {
       return request(`/api/admin/globe-flags?status=${encodeURIComponent(status)}`);

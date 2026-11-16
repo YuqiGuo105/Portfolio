@@ -30,6 +30,7 @@ import {
   orEmpty,
   publicServerClient,
 } from "../src/lib/publicContent.mjs";
+import { currentRole, sameCompany } from "../src/lib/currentRole.mjs";
 
 Modal.setAppElement('#__next');
 
@@ -43,8 +44,20 @@ export async function getStaticProps() {
     orEmpty(() => loadLifeBlogCards(client, { ascending: true }), [], "life blogs"),
     orEmpty(() => loadExperiences(client), [], "experience"),
   ]);
+  // Where a referral can be asked for follows the work history too (see src/lib/referral/availability.mjs).
+  const { referralRuntime } = await import("../src/lib/referral/runtime.mjs");
+  const { publicAvailability } = await import("../src/lib/referral/availability.mjs");
+  const runtime = referralRuntime();
+  const referral = publicAvailability(await runtime.availability.get().catch(() => null));
+  // The local preview has no database: its stand-in work history supplies the employer there.
+  const previewRole = runtime.preview ? (await runtime.roles.get()).role : null;
   return {
-    props: { initialContent: { projects: featured.projects, systems: featured.systems, blogs, lifeBlogs, experiences } },
+    props: {
+      initialContent: { projects: featured.projects, systems: featured.systems, blogs, lifeBlogs, experiences },
+      // The employer named in the introduction and in structured data: the open-ended row of the work history.
+      currentRole: previewRole || currentRole(experiences),
+      referral,
+    },
     revalidate: LIST_REVALIDATE_SECONDS,
   };
 }
@@ -66,11 +79,13 @@ const BlogSliderArrow = ({ className = "", onClick, direction }) => {
   );
 };
 
-const Index = ({ initialContent = {}, homeVariant = 'original' }) => {
+const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: builtRole = null, referral = null }) => {
   const [blogs, setBlogs] = useState(() => initialContent.blogs || []);
   const [error, setError] = useState(null);
   const [yearsOfExperience, setYearsOfExperience] = useState(1);
   const [experiences, setExperiences] = useState(() => initialContent.experiences || []);
+  // The page's own copy of the work history is refreshed after load, so the employer shown follows it.
+  const role = experiences.length ? currentRole(experiences) : builtRole;
   const [companiesCount, setCompaniesCount] = useState(
     () => new Set((initialContent.experiences || []).map((e) => e.name)).size
   );
@@ -863,7 +878,7 @@ const Index = ({ initialContent = {}, homeVariant = 'original' }) => {
                 <div className="description">
                   <p>
                     {" "}
-                    I am a Software Engineer at <strong>Goldman Sachs</strong>, specializing in{" "}
+                    I am a {role?.title || "Software Engineer"}{role ? <> at <strong>{role.company}</strong></> : null}, specializing in{" "}
                     <strong>Microservices</strong> and <strong>Distributed Systems</strong>.
                   </p>
 
@@ -935,15 +950,27 @@ const Index = ({ initialContent = {}, homeVariant = 'original' }) => {
                 {/* Section Profile */}
                 <div className="profile-box">
                   <div className="text">
+                    {/* The first paragraph was written for one employer. With any other current
+                        employer in the work history, a general sentence built from that row is
+                        shown instead, so this never names a company I have left. */}
+                    {sameCompany(role?.company, "Goldman Sachs") ? (
                     <p>
                       Hello, my name is Yuqi Guo, and I am currently a Software
                       Development Engineer in the Global Banking and Markets
-                      division at <strong>Goldman Sachs</strong>, focusing on the
+                      division at <strong>{role.company}</strong>, focusing on the
                       Margins team. My role involves designing and developing
                       robust backend systems to ensure accurate and efficient
                       margin calculations, leveraging technologies like Spring
                       Boot, REST APIs, and microservices.
                     </p>
+                    ) : (
+                    <p data-role-intro="general">
+                      Hello, my name is Yuqi Guo
+                      {role ? <>, and I am currently a {role.title || "Software Engineer"} at <strong>{role.company}</strong>{role.team ? <> ({role.team})</> : null}</> : <>, a backend software engineer</>}.
+                      I design and build backend systems: microservices, event-driven
+                      pipelines and the platforms that run them.
+                    </p>
+                    )}
 
                     <p>
                       I hold a Master's degree in Computer Science from Syracuse
@@ -1753,7 +1780,7 @@ const Index = ({ initialContent = {}, homeVariant = 'original' }) => {
         )}
 
         <DashboardPanels />
-          <ContactForm />
+          <ContactForm referral={referral} />
         <GuideHighlights />
         <SiteTour />
       </Layout>

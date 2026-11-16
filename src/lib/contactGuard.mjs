@@ -63,7 +63,8 @@ export function contactFields(body) {
   return { name, email, message };
 }
 
-export async function verifyContactToken(token, { env = process.env, fetchImpl = fetch, now = Date.now } = {}) {
+// `action` is the Turnstile action the widget was rendered with; a token minted for one form cannot be replayed on another.
+export async function verifyContactToken(token, { env = process.env, fetchImpl = fetch, now = Date.now, action = 'contact_submit' } = {}) {
   if (typeof token !== 'string' || !token || token.length > 2048) throw new ContactError('verification_required');
   const secret = env.TURNSTILE_SECRET_KEY;
   if (!secret || (env.NODE_ENV === 'production' && /^[123]x0{10,}/.test(secret))) {
@@ -86,7 +87,7 @@ export async function verifyContactToken(token, { env = process.env, fetchImpl =
     }
     const hosts = new Set((env.TURNSTILE_ALLOWED_HOSTS || 'yuqi.site,www.yuqi.site').split(',').map(host => host.trim().toLowerCase()));
     const age = now() - Date.parse(result.challenge_ts);
-    if (!hosts.has(String(result.hostname || '').toLowerCase()) || result.action !== 'contact_submit'
+    if (!hosts.has(String(result.hostname || '').toLowerCase()) || result.action !== action
       || !Number.isFinite(age) || age < -30000 || age > 300000) {
       throw new ContactError('verification_failed');
     }
@@ -110,7 +111,7 @@ const ERROR_MESSAGES = {
 };
 
 export function createContactHandler({ isRateLimited, sendMail, moderate, env = process.env, fetchImpl = fetch,
-  audit = entry => console.info(JSON.stringify(entry)) } = {}) {
+  verifyToken = verifyContactToken, audit = entry => console.info(JSON.stringify(entry)) } = {}) {
   const record = entry => {
     // Logging must not turn an accepted email into a retryable delivery error.
     try { audit(entry); } catch { /* The mail result remains authoritative. */ }
@@ -139,7 +140,7 @@ export function createContactHandler({ isRateLimited, sendMail, moderate, env = 
       }
       if (source === 'web') {
         if (req.body.website) throw new ContactError('verification_failed');
-        await verifyContactToken(req.body.turnstileToken, { env, fetchImpl });
+        await verifyToken(req.body.turnstileToken, { env, fetchImpl });
       }
       if (moderate) {
         const result = await moderate('contact', fields.message, { name: fields.name, email: fields.email });

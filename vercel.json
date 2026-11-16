@@ -1,7 +1,8 @@
 {
   "functions": {
     "pages/api/rag/transcribe.js": { "maxDuration": 60 },
-    "pages/api/mcp/playground.js": { "maxDuration": 30 }
+    "pages/api/mcp/playground.js": { "maxDuration": 30 },
+    "pages/api/cron/referral-worker.js": { "maxDuration": 60 }
   },
   "rewrites": [
     {
@@ -32,6 +33,10 @@
     {
       "path": "/api/cron/story-cleanup",
       "schedule": "15 4 * * *"
+    },
+    {
+      "path": "/api/cron/referral-worker",
+      "schedule": "45 4 * * *"
     }
   ]
 }

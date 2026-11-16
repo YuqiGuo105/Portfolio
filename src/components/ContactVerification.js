@@ -28,7 +28,8 @@ function loadTurnstile() {
   return loading;
 }
 
-export default function ContactVerification({ active, resetKey, onToken }) {
+// `action` names the form the token is minted for; the server only accepts a token for its own form.
+export default function ContactVerification({ active, resetKey, onToken, action = 'contact_submit' }) {
   const container = useRef(null);
   const callback = useRef(onToken);
   callback.current = onToken;
@@ -37,16 +38,20 @@ export default function ContactVerification({ active, resetKey, onToken }) {
   const [retry, setRetry] = useState(0);
   const [appearance, setAppearance] = useState(null);
   const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-  const enabled = active || nearby;
+  // Local preview (`npm run dev:talk`): the server skips verification, so no widget is loaded.
+  const preview = process.env.NEXT_PUBLIC_TALK_PREVIEW === '1';
+  const enabled = !preview && (active || nearby);
+
+  useEffect(() => { if (preview) callback.current('local-preview'); }, [preview, resetKey]);
 
   useEffect(() => {
-    if (!window.IntersectionObserver) return;
+    if (preview || !window.IntersectionObserver) return;
     const observer = new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) { setNearby(true); observer.disconnect(); }
     }, { rootMargin: '200px' });
     observer.observe(container.current);
     return () => observer.disconnect();
-  }, []);
+  }, [preview]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -73,7 +78,7 @@ export default function ContactVerification({ active, resetKey, onToken }) {
     loadTurnstile().then(api => {
       if (cancelled) return;
       widget = api.render(container.current, {
-        sitekey, action: 'contact_submit', ...appearance,
+        sitekey, action, ...appearance,
         'response-field': false,
         callback: token => { if (!cancelled) { setError(false); callback.current(token); } },
         'expired-callback': () => { if (!cancelled) callback.current(''); },
@@ -82,7 +87,11 @@ export default function ContactVerification({ active, resetKey, onToken }) {
       });
     }).catch(() => { if (!cancelled) setError(true); });
     return () => { cancelled = true; if (widget !== undefined) window.turnstile?.remove(widget); };
-  }, [enabled, resetKey, retry, sitekey, appearance]);
+  }, [enabled, resetKey, retry, sitekey, appearance, action]);
+
+  if (preview) return <div className={styles.verification} data-contact-verification>
+    <div className={styles.feedback}><span className={styles.status} role="status"><CircleAlert size={16} aria-hidden="true" /><span>Local preview: verification is skipped and nothing is emailed.</span></span></div>
+  </div>;
 
   return <div className={styles.verification} data-contact-verification data-size={error ? undefined : appearance?.size}>
     <div ref={container} className={error ? styles.failedWidget : undefined} aria-hidden={error || undefined} />

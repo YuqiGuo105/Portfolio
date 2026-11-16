@@ -169,6 +169,19 @@ export const writerApi = {
   lifeBlogs: makeContentResource('LIFE_BLOG'),
   projects: makeContentResource('PROJECT'),
 
+  // Work history rows (the `experience` table), which everything that names the employer follows.
+  // Saving and publishing are separate calls here: a save never notifies anyone, and publishing is
+  // what queues the search index and the assistant's knowledge index for that row.
+  experience: {
+    list: () => request('GET', '/api/admin/content?type=EXPERIENCE&limit=200&offset=0'),
+    get: async (id) => flattenContentDetail(await request('GET', `/api/admin/content/EXPERIENCE/${encodeURIComponent(id)}`)),
+    save: (id, data, idempotencyKey) => (id
+      ? request('PUT', `/api/admin/content/EXPERIENCE/${encodeURIComponent(id)}`, { data, publish: false, changeNote: 'Edited in Work history' })
+      : request('POST', '/api/admin/content/EXPERIENCE', { data, publish: false, changeNote: 'Added in Work history' }, idempotencyKey)),
+    publish: (id, { changeNote = 'Updated in Work history', notifySubscribers = false } = {}) => request(
+      'POST', `/api/admin/content/EXPERIENCE/${encodeURIComponent(id)}/publish`, { changeNote, notifySubscribers }),
+  },
+
   // Admin-service exposes a single content endpoint keyed by sourceType.
   // Use this for dashboard counts and for any new code that doesn't need the
   // legacy per-type Spring Page shape.

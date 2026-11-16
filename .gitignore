@@ -9,6 +9,7 @@
 .env
 .next
 .next-discovery*
+.next-talk*
 .next-visitor-governance
 .next-voice-local*
 .next-mr-pot-*

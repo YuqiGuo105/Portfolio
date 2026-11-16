@@ -1,0 +1,780 @@
+/* Talk hub: one place to message, ask for a referral, or chat live.
+   The site template styles bare elements (button, label, input, p, a…) heavily, so every rule here
+   is anchored on .hub.hub to outrank those element rules in both skins. */
+
+.root {
+  --ink: #213c36;
+  --muted: #5b6b66;
+  --line: #a4afaa;
+  --soft-line: #cdd4d0;
+  --surface: #ffffff40;
+  --raised: #ffffff8c;
+  --accent: #245449;
+  --accent-hover: #173f36;
+  --on-accent: #ffffff;
+  --tint: #2454490f;
+  --warn: #8a4410;
+  --warn-tint: #b45f1a1a;
+  --error: #a3312a;
+  position: relative;
+  z-index: 1;
+  container-type: inline-size;
+  text-align: left;
+}
+
+:global(body.dark-skin) .root {
+  --ink: #e3eee8;
+  --muted: #a3b3ad;
+  --line: #566962;
+  --soft-line: #37443f;
+  --surface: #ffffff05;
+  --raised: #ffffff0d;
+  --accent: #b5dfcb;
+  --accent-hover: #d1eddf;
+  --on-accent: #163c30;
+  --tint: #b5dfcb14;
+  --warn: #f0b98a;
+  --warn-tint: #f0b98a1f;
+  --error: #ff9c94;
+}
+
+/* .hub wraps the parts built here. The message form keeps its own stylesheet and sits outside it. */
+.hub {
+  color: var(--ink);
+  font-family: "Rubik", system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Reset what the template puts on bare elements. */
+.hub.hub :is(p, ul, ol, li, dl, dt, dd, h2, h3, h4, fieldset, legend, label) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0;
+  list-style: none;
+}
+
+.hub.hub :is(.primary, .secondary, .textButton, .intent, .step) {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.hub.hub :is(.primary, .secondary, .textButton, .intent, .step)::before,
+.hub.hub :is(.primary, .secondary, .textButton, .intent, .step)::after {
+  content: none;
+}
+
+.hub.hub a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: none;
+}
+
+.hub.hub :is(button, a, input, textarea, summary):focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+/* ── Intent switcher ─────────────────────────────────────────── */
+
+.hub.hub .question {
+  margin-bottom: 12px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.intents {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hub.hub .intent {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 2px;
+  align-content: start;
+  min-height: 78px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.hub.hub .intent:hover {
+  border-color: var(--accent);
+}
+
+.hub.hub .intent[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--tint);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.intentIcon {
+  grid-row: span 2;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.intentTitle {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.intentHint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.panel {
+  margin-top: 26px;
+}
+
+.hub.hub .panelTitle {
+  margin-bottom: 6px;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.hub.hub .lead {
+  max-width: 70ch;
+  margin-bottom: 20px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* ── Fields ──────────────────────────────────────────────────── */
+
+.hub.hub .field {
+  display: block;
+  margin-bottom: 20px;
+}
+
+.hub.hub .label {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
+  cursor: default;
+}
+
+.optional {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.hub.hub .hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.hub.hub .input,
+.hub.hub .textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 48px;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+  transition: border-color 120ms ease;
+}
+
+.hub.hub .textarea {
+  height: auto;
+  min-height: 132px;
+  resize: vertical;
+}
+
+.hub.hub .input:focus,
+.hub.hub .textarea:focus {
+  border-color: var(--accent);
+  color: var(--ink);
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+.hub.hub .input[aria-invalid="true"],
+.hub.hub .textarea[aria-invalid="true"] {
+  border-color: var(--error);
+}
+
+.hub.hub .input::placeholder,
+.hub.hub .textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+.hub.hub .error {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin-top: 6px;
+  color: var(--error);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.error svg {
+  flex: 0 0 14px;
+  margin-top: 2px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 20px;
+}
+
+.counter {
+  float: right;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+
+.hub.hub .primary,
+.hub.hub .secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 22px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.hub.hub .primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.hub.hub .primary:hover:not([disabled]) {
+  background: var(--accent-hover);
+}
+
+.hub.hub .secondary {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--ink);
+}
+
+.hub.hub .secondary:hover:not([disabled]) {
+  border-color: var(--accent);
+  background: var(--tint);
+}
+
+.hub.hub .primary[disabled],
+.hub.hub .secondary[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hub.hub .textButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.hub.hub .textButton[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 20px;
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.actionsEnd {
+  justify-content: flex-end;
+}
+
+.hub.hub .notice {
+  margin-top: 16px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.spinner {
+  animation: talk-spin 1s linear infinite;
+}
+
+@keyframes talk-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Explainers (referral intro on the home page, live chat) ─── */
+
+.explain {
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.hub.hub .explain .panelTitle {
+  margin-bottom: 8px;
+}
+
+.hub.hub .explain p {
+  max-width: 64ch;
+  font-size: 15px;
+}
+
+.hub.hub .explain p + p {
+  margin-top: 10px;
+}
+
+.hub.hub .checklist {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+  font-size: 15px;
+}
+
+.hub.hub .checklist li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.checklist svg {
+  margin-top: 3px;
+  color: var(--accent);
+}
+
+.hub.hub .sequence {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+  counter-reset: talk-step;
+  font-size: 15px;
+}
+
+.hub.hub .sequence li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  counter-increment: talk-step;
+}
+
+.hub.hub .sequence li::before {
+  content: counter(talk-step);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.explainActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 20px;
+  margin-top: 18px;
+}
+
+.hub.hub .small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ── Referral steps ──────────────────────────────────────────── */
+
+.hub.hub .steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 26px;
+}
+
+.hub.hub .step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 0 10px;
+  border-bottom: 2px solid var(--soft-line);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.hub.hub .step[data-state="current"],
+.hub.hub .step[data-state="done"] {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+}
+
+.hub.hub .step[data-state="current"] {
+  font-weight: 500;
+}
+
+.hub.hub .step[disabled] {
+  cursor: default;
+}
+
+.stepNumber {
+  display: grid;
+  flex: 0 0 22px;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.step[data-state="done"] .stepNumber {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.hub.hub .stepHeading {
+  margin-bottom: 4px;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.hub.hub .stepHeading:focus {
+  outline: none;
+}
+
+/* File picker */
+
+.file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.file[data-invalid="true"] {
+  border-color: var(--error);
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.fileInput:focus-visible + .secondary {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.fileName {
+  display: flex;
+  flex: 1 1 200px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 15px;
+}
+
+.fileName span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* How do we know each other */
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.hub.hub .choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.hub.hub .choice:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--tint);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.hub.hub .choice:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.choice input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* Introduction step: notes on the left, the third-person version on the right. */
+
+.hub.hub .voiceNote {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border-left: 3px solid var(--accent);
+  background: var(--tint);
+  font-size: 15px;
+}
+
+.hub.hub .voiceNote q {
+  quotes: "“" "”";
+  font-weight: 500;
+}
+
+.introGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 0 24px;
+  align-items: start;
+}
+
+.helperActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  margin: -6px 0 20px;
+}
+
+.hub.hub .voice {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.voice svg {
+  flex: 0 0 15px;
+  margin-top: 2px;
+}
+
+.hub.hub .voice[data-voice="third_person"] { color: var(--accent); }
+.hub.hub .voice[data-voice="mixed"] { color: var(--warn); }
+.hub.hub .voice[data-voice="first_person"] { color: var(--error); }
+
+.tips {
+  margin: -6px 0 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--soft-line);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.hub.hub .tips ul {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+  padding-left: 18px;
+}
+
+.hub.hub .tips li {
+  list-style: disc;
+}
+
+/* Review */
+
+.hub.hub .review {
+  display: grid;
+  gap: 0;
+  margin: 16px 0 20px;
+  border-top: 1px solid var(--soft-line);
+}
+
+.reviewGroup {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--soft-line);
+}
+
+.hub.hub .reviewGroup h4 {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.hub.hub .reviewGroup dl {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.hub.hub .reviewGroup dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hub.hub .reviewGroup dd {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.hub.hub .consent {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin: 4px 0 18px;
+  font-size: 14px;
+  line-height: 1.55;
+  cursor: pointer;
+}
+
+.consent input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+/* Done */
+
+.done {
+  padding: 24px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--tint);
+}
+
+.hub.hub .done .panelTitle {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.hub.hub .done p {
+  max-width: 64ch;
+  margin-top: 8px;
+  font-size: 15px;
+}
+
+.reference {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Narrow containers (phones, and the home page column) ────── */
+
+@container (max-width: 620px) {
+  .intents { grid-template-columns: 1fr; gap: 8px; }
+  .hub.hub .intent { min-height: 0; }
+  .row { grid-template-columns: 1fr; }
+  .introGrid { grid-template-columns: 1fr; }
+  .hub.hub .step { justify-content: center; }
+  .stepLabel { display: none; }
+  .step[data-state="current"] .stepLabel { display: inline; }
+  .hub.hub .steps { grid-template-columns: repeat(4, auto); justify-content: stretch; }
+  .hub.hub .step[data-state="current"] { justify-content: flex-start; }
+  .reviewGroup { grid-template-columns: minmax(0, 1fr) auto; }
+  .reviewGroup dl { grid-column: 1 / -1; grid-row: 2; }
+  .actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .hub.hub .actions .primary, .hub.hub .actions .secondary { width: 100%; }
+  .explain { padding: 18px 16px; }
+  .done { padding: 20px 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+  .hub.hub .intent { transition: none; }
+}

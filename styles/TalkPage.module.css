@@ -1,0 +1,54 @@
+/* /talk: a working page, so the form starts on the first screen instead of under a poster-size title. */
+.page {
+  padding: 170px 0 120px;
+}
+
+.inner {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.page .title {
+  margin: 0 0 14px;
+  font-family: "Sorts Mill Goudy", Georgia, serif;
+  font-size: clamp(46px, 7vw, 84px);
+  font-weight: 400;
+  line-height: 1.05;
+}
+
+.page .lead {
+  max-width: 60ch;
+  margin: 0 0 38px;
+  font-family: "Rubik", system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.55;
+  opacity: 0.82;
+}
+
+.page .direct {
+  margin: 44px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid rgba(128, 140, 136, 0.45);
+  font-family: "Rubik", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.page .direct a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 767px) {
+  .page {
+    padding: 118px 0 72px;
+  }
+
+  .page .lead {
+    margin-bottom: 28px;
+    font-size: 16px;
+  }
+}

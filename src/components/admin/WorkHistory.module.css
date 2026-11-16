@@ -1,0 +1,67 @@
+/* Work history: the list of roles and the "I changed jobs" form.
+   The site template styles bare elements (headings, labels, buttons, fields), so every rule is
+   anchored on .wrap.wrap to outrank it, as the referral review list does. */
+.wrap {
+  --ink: #17212b;
+  --muted: #66717d;
+  --line: #e3e7eb;
+  --accent: #0f766e;
+  display: grid;
+  gap: 22px;
+  max-width: 860px;
+  color: var(--ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+}
+.wrap.wrap :is(p, ul, li, h2, label) { margin: 0; padding: 0; color: inherit; font: inherit; list-style: none; letter-spacing: 0; text-transform: none; }
+.wrap.wrap :is(.primary, .secondary) { all: unset; box-sizing: border-box; cursor: pointer; font-family: inherit; }
+.wrap.wrap :is(.primary, .secondary)::before, .wrap.wrap :is(.primary, .secondary)::after { content: none; display: none; }
+.wrap.wrap :is(.primary, .secondary) {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 14px;
+  border: 1px solid #cfd6db; border-radius: 6px; background: #fff; color: #35414b; font-size: 13px; font-weight: 600; line-height: 1; white-space: nowrap;
+}
+.wrap.wrap .primary { border-color: #232a30; background: #232a30; color: #fff; }
+.wrap.wrap .primary:hover { background: #39444d; }
+.wrap.wrap .secondary:hover { border-color: #8d999f; color: var(--ink); }
+.wrap.wrap :is(.primary, .secondary):disabled { opacity: 0.5; cursor: not-allowed; }
+.wrap.wrap :is(button, input, textarea):focus-visible { outline: 2px solid #23a18e !important; outline-offset: 2px; }
+
+.wrap.wrap .now { padding: 13px 15px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 7px; background: #f6f8f9; }
+.wrap.wrap .now[data-none="yes"] { border-left-color: #b7791f; }
+.wrap.wrap .now p + p { margin-top: 4px; color: var(--muted); font-size: 13px; }
+.wrap.wrap .now strong, .wrap.wrap .row strong { font-weight: 600; color: var(--ink); }
+
+.wrap.wrap .card { padding: 18px 20px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.wrap.wrap .card h2 { margin-bottom: 4px; font-size: 16px; font-weight: 600; line-height: 1.3; }
+.wrap.wrap .card > p { margin-bottom: 14px; color: var(--muted); font-size: 13px; }
+.wrap.wrap .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+.wrap.wrap .full { grid-column: 1 / -1; }
+.wrap.wrap .field label { display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; }
+.wrap.wrap .field :is(input, textarea) {
+  display: block; box-sizing: border-box; width: 100%; height: auto; min-height: 36px; margin: 0; padding: 7px 10px;
+  border: 1px solid #cdd5dc; border-radius: 6px; background: #fff; color: var(--ink); font: inherit; box-shadow: none;
+}
+.wrap.wrap .field textarea { height: 78px; min-height: 78px; resize: vertical; }
+.wrap.wrap .field [aria-invalid="true"] { border-color: #b42318; }
+.wrap.wrap .hint { margin-top: 4px; color: var(--muted); font-size: 12.5px; }
+.wrap.wrap .error { margin-top: 4px; color: #b42318; font-size: 12.5px; }
+.wrap.wrap .check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; font-weight: 400; cursor: pointer; }
+.wrap.wrap .check input { width: auto; height: auto; margin: 3px 0 0; appearance: auto; }
+.wrap.wrap .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.wrap.wrap .plan { margin-top: 14px; padding: 10px 12px; border-radius: 6px; background: #f6f8f9; font-size: 13px; }
+.wrap.wrap .plan li { margin: 2px 0; }
+.wrap.wrap .steps { margin-top: 14px; font-size: 13px; }
+.wrap.wrap .steps li { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0; }
+.wrap.wrap .steps svg { flex: none; margin-top: 2px; }
+.wrap.wrap .steps [data-ok="yes"] { color: #0f5132; }
+.wrap.wrap .steps [data-ok="no"] { color: #b42318; }
+.wrap.wrap .steps [data-ok="skip"] { color: #8a5a00; }
+.wrap.wrap .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: center; padding: 11px 0; border-top: 1px solid #eef1f4; }
+.wrap.wrap .row:first-child { border-top: 0; }
+.wrap.wrap .row span { color: var(--muted); font-size: 13px; }
+.wrap.wrap .row .tag { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: #e6f5f2; color: #0f5132; font-size: 12px; font-weight: 600; }
+.wrap.wrap .edit { grid-column: 1 / -1; padding: 12px 0 4px; }
+@media (max-width: 640px) { .wrap.wrap .grid { grid-template-columns: 1fr; } }
