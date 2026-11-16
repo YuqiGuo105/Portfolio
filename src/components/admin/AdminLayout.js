@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import AdminTokenGate from "./AdminTokenGate";
 import { useAdminSession } from "./AdminSessionContext";
+import AdminNotifications from "./AdminNotifications";
+import { avatarOf, initials } from "../../lib/adminNotifications.mjs";
 import { supabase } from "../../supabase/supabaseClient";
 import styles from "./AdminLayout.module.css";
 import { ADMIN_API_DOCS_PATH } from "../../lib/adminApiDocs.mjs";
@@ -102,6 +104,13 @@ function AdminShell({ children }) {
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
   const adminSession = useAdminSession();
+  // The signed-in account's own picture (Google supplies one), with initials when there is none.
+  const [account, setAccount] = useState({ url: "", name: "", email: "" });
+  useEffect(() => {
+    let live = true;
+    supabase.auth.getSession().then(({ data }) => { if (live) setAccount(avatarOf(data?.session?.user)); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
   const activeGroup = NAV_GROUPS.find(group => group.items.some(item =>
     !item.external && (item.exact ? router.pathname === item.href : router.pathname.startsWith(item.href))));
   const activeItem = activeGroup?.items.find(item =>
@@ -224,9 +233,17 @@ function AdminShell({ children }) {
               <ChevronRight size={14} aria-hidden="true" />
               <strong>{activeItem?.label || 'Admin'}</strong>
             </nav>
-            <div className={styles.identity}>
-              <ShieldCheck size={16} aria-hidden="true" />
-              <span>{adminSession?.email || 'Admin workspace'}</span>
+            <div className={styles.topbarRight}>
+              <AdminNotifications />
+              <div className={styles.identity} title={account.name || adminSession?.email || account.email || undefined}>
+                {/* The provider's own picture URL (for example Google's); a plain <img> avoids configuring remote image hosts. */}
+                {account.url
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img className={styles.avatar} src={account.url} alt="" width={28} height={28} referrerPolicy="no-referrer" onError={() => setAccount((current) => ({ ...current, url: "" }))} />
+                  : <span className={styles.avatarInitials} aria-hidden="true">{initials(account.name, adminSession?.email || account.email)}</span>}
+                <span>{adminSession?.email || account.email || 'Admin workspace'}</span>
+                <ShieldCheck size={15} aria-hidden="true" />
+              </div>
             </div>
           </div>
           <div className={styles.content}>{children}</div>
