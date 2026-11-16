@@ -10,6 +10,21 @@ const isolateModeration = source => source.replace(/import \{ moderateChatReques
   'const moderateChatRequest = async () => true;');
 
 async function loadHandlers() {
+  // Keep the real HTTP gate, but never connect credential tests to the shared queue.
+  const admissionModule = dataModule(`
+    import { admitChatMessage } from ${JSON.stringify(new URL("../src/lib/chat/admissionHttp.mjs", import.meta.url).href)};
+    let result = { allowed: true };
+    export const calls = [];
+    export function reset(next = { allowed: true }) { result = next; calls.length = 0; }
+    export function chatAdmissionRuntime() {
+      return { admit(req, res, auth) {
+        calls.push(auth);
+        return admitChatMessage(req, res, {
+          admission: { act: async () => result }, ipOf: () => "203.0.113.1", auth,
+        });
+      } };
+    }
+  `);
   const router = (await readFile(new URL("../pages/api/intent/route.js", import.meta.url), "utf8"))
     .replace('import { loadManifest, manifestForLLM } from "../../../src/lib/intentManifest.js";',
       'const loadManifest = async () => ({ version: "fixture", tools: [] }); const manifestForLLM = () => [];')
@@ -28,11 +43,13 @@ async function loadHandlers() {
       'const streamLocalChat = async () => { throw new Error("Unexpected local override"); };')
     .replace('import { isRateLimited } from "../../../../src/lib/rateLimiter";',
       'const isRateLimited = async () => false;')
+    .replace('"../../../../src/lib/chat/admissionRuntime.mjs"', JSON.stringify(admissionModule))
     .replace(/import \{\s*forwardRagSse,\s*requireSupabaseUser,\s*\} from "[^\"]+";/,
       'const requireSupabaseUser = async () => ({ roles: "VIEWER" }); const forwardRagSse = async (_req, res) => res.end("delegated");');
   return {
     router: (await import(dataModule(isolateModeration(router)))).default,
     rag: (await import(dataModule(isolateModeration(rag)))).default,
+    admission: await import(admissionModule),
   };
 }
 
@@ -120,9 +137,26 @@ test("Gemini routes keep provider credentials and failures server-side", async t
   }
   await t.test("configured production RAG delegates to the authenticated Agent proxy", async child => {
     process.env.AGENT_SERVICE_URL = "https://agent.example.test";
+    handlers.admission.reset();
     child.mock.method(globalThis, "fetch", async () => { throw new Error("Local provider must not be called"); });
     const res = response();
     await handlers.rag({ method: "POST", body: { question: "hello" } }, res);
     assert.equal(res.stream, "delegated");
+    assert.deepEqual(handlers.admission.calls, [{ roles: "VIEWER" }]);
+  });
+  await t.test("queued production RAG stops before forwarding or calling a model", async child => {
+    process.env.AGENT_SERVICE_URL = "https://agent.example.test";
+    handlers.admission.reset({ allowed: false, status: "queued", position: 2, ahead: 1, eta: 30 });
+    child.after(() => handlers.admission.reset());
+    let requests = 0;
+    child.mock.method(globalThis, "fetch", async () => { requests++; throw new Error("Provider must not be called"); });
+    const res = response();
+    await handlers.rag({ method: "POST", body: { question: "hello" } }, res);
+    assert.equal(res.code, 429);
+    assert.deepEqual(res.body.admission, { status: "queued", position: 2, ahead: 1, eta: 30 });
+    assert.equal(res.stream, "");
+    assert.equal(res.ended, false);
+    assert.equal(requests, 0);
+    assert.deepEqual(handlers.admission.calls, [{ roles: "VIEWER" }]);
   });
 });
