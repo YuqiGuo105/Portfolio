@@ -18,8 +18,14 @@ export function form(overrides = {}) {
   };
 }
 export const AI_NOTE = {
-  recommendation: 'strong', fit: 82, summary: 'Five years of Java payments work with a Kafka migration that matches the posting.',
-  strengths: ['Led a Kafka ledger migration.'], concerns: ['No on-call evidence.'], followUps: ['Which team owned on-call?'],
+  assessment: {
+    employer: { score: 30, meetsBar: false, reason: 'Employment is described, but no major-company evidence.', evidence: ['Form: backend engineer at Northwind.'], links: [] },
+    openSource: { score: 82, meetsBar: true, reason: 'Original public event-driven platform with failure recovery and upstream reliability fixes.',
+      evidence: ['Resume p.2: built the public ledger with Kafka outbox, idempotent consumers, integration tests and recovery drills.'], links: ['https://github.com/example/ledger'] },
+    contests: { score: 0, meetsBar: false, reason: 'No LeetCode contest results supplied.', evidence: [], links: [] },
+  },
+  summary: 'Substantial open-source reliability engineering is the strongest submitted evidence; references still need review.',
+  strengths: ['Public ledger with idempotent consumption and recovery tests.'], concerns: ['Project claims are not independently verified.'], followUps: ['Which upstream fixes were merged?'],
   consistency: 'consistent', flags: [],
 };
 export const request = (body = form()) => ({ method: 'POST', headers: { origin: 'https://www.yuqi.site', host: 'www.yuqi.site', 'content-type': 'application/json' },

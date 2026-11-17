@@ -13,6 +13,7 @@ import { sameCompany } from '../currentRole.mjs';
 import { ReferralError, idempotencyKey, referralFields } from './fields.mjs';
 import { resumeMeta } from './resume.mjs';
 import { resumePath } from './storage.mjs';
+import { currentScreening, gradeEvidence, linkedInProfile } from './rubric.mjs';
 import { referralRow, validStatus } from './store.mjs';
 
 export const REFERRAL_ACTION = 'referral_submit';
@@ -182,6 +183,25 @@ export function createReferralAdminHandler({ authorize, store, storage, availabi
         return res.status(200).json({ offer: await offer() });
       }
       if (!UUID.test(String(id || ''))) return res.status(400).json({ error: 'invalid_request', message: 'A request id is required.' });
+      if (action === 'linkedin_badge') {
+        const { confirmed, reviewNote, expectedUpdatedAt } = req.body;
+        if (typeof confirmed !== 'boolean' || typeof reviewNote !== 'string' || reviewNote.trim().length < 10 || reviewNote.length > 600
+          || typeof expectedUpdatedAt !== 'string') return res.status(400).json({ error: 'invalid_request', message: 'Record whether the official badge was visible and what you checked.' });
+        const row = await store.get(id);
+        if (!row) return res.status(404).json({ error: 'not_found', message: 'That request no longer exists.' });
+        if (row.state !== 'ready' || !currentScreening(row.screening) || row.screening.source !== 'ai' || row.updated_at !== expectedUpdatedAt) {
+          return res.status(409).json({ error: 'stale_screening', message: 'Refresh the request or screen it under the current policy first.' });
+        }
+        const profileUrl = linkedInProfile(row.profile_url);
+        if (!profileUrl) return res.status(400).json({ error: 'invalid_profile', message: 'A LinkedIn member profile is required for badge verification.' });
+        const badge = { confirmed, profileUrl, note: reviewNote.trim(), checkedAt: new Date().toISOString(), checkedBy: String(user.userId || user.id || '') };
+        if (!badge.checkedBy) return res.status(403).json({ error: 'unauthorized', message: 'An identified administrator is required.' });
+        const screening = { ...row.screening, ...gradeEvidence(row.screening.criteria, { profileUrl, badge,
+          blocked: row.screening.flags?.some(flag => flag !== 'incomplete') || row.screening.consistency === 'conflicts' }) };
+        const updated = await store.update(id, { screening, fit: screening.score, recommendation: screening.recommendation }, { expectedUpdatedAt, expectedState: 'ready' });
+        if (!updated) return res.status(409).json({ error: 'stale_screening', message: 'The request changed. Refresh before recording the badge check.' });
+        return res.status(200).json(updated);
+      }
       if (action === 'delete') {
         const removed = await store.remove(id);
         if (removed?.resume_path) await storage.remove([removed.resume_path]);
@@ -198,7 +218,7 @@ export function createReferralAdminHandler({ authorize, store, storage, availabi
       if (action === 'status' && validStatus(status)) patch = { status };
       else if (action === 'note' && typeof note === 'string' && note.length <= 2000) patch = { owner_note: note.trim() || null };
       else if (action === 'rescreen') patch = { state: 'queued', attempts: 0, lease_until: null };
-      else return res.status(400).json({ error: 'invalid_request', message: 'Use status, note, resume, rescreen or delete.' });
+      else return res.status(400).json({ error: 'invalid_request', message: 'Use status, note, resume, rescreen, linkedin_badge or delete.' });
       if (action === 'rescreen') {
         const row = await store.get(id);
         if (!row) return res.status(404).json({ error: 'not_found', message: 'That request no longer exists.' });

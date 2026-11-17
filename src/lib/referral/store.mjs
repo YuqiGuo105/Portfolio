@@ -94,8 +94,11 @@ export function supabaseReferralStore(client) {
       if (error) fail();
       return data;
     },
-    async update(id, patch) {
-      return rows(await table().update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id).select('*'))[0] || null;
+    async update(id, patch, { expectedUpdatedAt, expectedState } = {}) {
+      let query = table().update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
+      if (expectedUpdatedAt) query = query.eq('updated_at', expectedUpdatedAt);
+      if (expectedState) query = query.eq('state', expectedState);
+      return rows(await query.select('*'))[0] || null;
     },
     async remove(id) {
       return rows(await table().delete().eq('id', id).select('id, resume_path'))[0] || null;
@@ -187,7 +190,11 @@ export function memoryReferralStore(seed = [], now = Date.now) {
         .sort((a, b) => b.created_at.localeCompare(a.created_at)).map(copy);
     },
     async get(id) { return copy(rows.get(id)); },
-    async update(id, patch) { const row = rows.get(id); if (!row) return null; Object.assign(row, patch, { updated_at: iso(now()) }); return copy(row); },
+    async update(id, patch, { expectedUpdatedAt, expectedState } = {}) {
+      const row = rows.get(id);
+      if (!row || (expectedUpdatedAt && row.updated_at !== expectedUpdatedAt) || (expectedState && row.state !== expectedState)) return null;
+      Object.assign(row, patch, { updated_at: iso(now()) }); return copy(row);
+    },
     async remove(id) { const row = rows.get(id); if (!row) return null; rows.delete(id); return { id, resume_path: row.resume_path }; },
     async queueDepth() { return [...rows.values()].filter(row => ['queued', 'screening'].includes(row.state)).length; },
     async accepting() { return digests.accepting !== false; },

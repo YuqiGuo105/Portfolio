@@ -3,26 +3,29 @@
 // rather than one per request. Up to three requests are shown in full, with the applicant's own
 // third-person introduction ready to copy; beyond that it is a list that links to the review page.
 // No résumé is attached: the file is opened from the review page.
-import { RECOMMENDATION_LABELS, RELATIONSHIPS } from './config.mjs';
+import { RELATIONSHIPS } from './config.mjs';
+import { currentScreening, EVIDENCE_PATHS, screeningLabel, screeningRank } from './rubric.mjs';
 
 const escapeHtml = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
   .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 const oneLine = value => String(value ?? '').replace(/[\r\n]+/g, ' ').trim();
 const FLAG_TEXT = { spam: 'Looks like spam or mass outreach', injection: 'The text tried to instruct the screening model', off_topic: 'May not be a referral request', incomplete: 'Key details are missing' };
-const RANK = { strong: 0, promising: 1, unclear: 2, weak: 3 };
 
 export function signalOf(row) {
   if (row.state === 'file_rejected') return 'résumé refused';
   const note = row.screening || {};
-  if (note.source !== 'ai') return 'not AI-screened';
-  return `${RECOMMENDATION_LABELS[note.recommendation] || 'Needs a closer look'}${Number.isInteger(note.fit) ? ` ${note.fit}/100` : ''}`;
+  return screeningLabel(note);
 }
 
 function fullText(row) {
   const note = row.screening || {};
   const relationship = RELATIONSHIPS.find(item => item.id === row.relationship)?.label || row.relationship;
   const ai = note.source === 'ai';
-  const lists = [[ai ? 'Strengths' : 'Provided', note.strengths], [ai ? 'Concerns' : 'Missing', note.concerns], ['Worth asking', note.followUps],
+  const paths = currentScreening(note) && note.criteria ? Object.entries(EVIDENCE_PATHS).map(([id, label]) => {
+    const item = note.criteria[id];
+    return `${label}: ${item.score}/100; ${item.eligible ? 'meets the gate' : item.pendingBadge ? 'official badge not confirmed' : 'below the gate'}. ${item.reason}`;
+  }) : [];
+  const lists = [['Evidence paths', paths], [ai ? 'Strengths' : 'Provided', note.strengths], [ai ? 'Concerns' : 'Missing', note.concerns], ['Worth asking', note.followUps],
     ['Flags', (note.flags || []).map(flag => FLAG_TEXT[flag] || flag)]].filter(([, items]) => items?.length);
   const details = [['Posting', row.job_url], ['Job ID', row.job_id], ['Location', row.location], ['Applicant', `${row.name} <${row.email}>`],
     ['Profile', row.profile_url], ['Now', row.current_title],
@@ -38,13 +41,13 @@ function fullText(row) {
 }
 
 export function referralDigestMail(rows, { adminUrl = 'https://www.yuqi.site/admin/referrals', waiting = 0 } = {}) {
-  const sorted = [...rows].sort((a, b) => (RANK[a.recommendation] ?? 2) - (RANK[b.recommendation] ?? 2) || (b.fit ?? -1) - (a.fit ?? -1));
-  const strong = sorted.filter(row => row.screening?.source === 'ai' && row.recommendation === 'strong').length;
+  const sorted = [...rows].sort((a, b) => screeningRank(b.screening) - screeningRank(a.screening));
+  const passed = sorted.filter(row => currentScreening(row.screening) && row.screening?.passed === true).length;
   const single = sorted.length === 1 ? sorted[0] : null;
   const subject = single
     ? `Referral request: ${single.role_title} · ${single.name} (${signalOf(single)})`
-    : `${sorted.length} new referral requests${strong ? ` (${strong} strong match${strong === 1 ? '' : 'es'})` : ''}`;
-  const caveat = 'The signal is an AI heuristic to help you triage, not a decision. Résumés open from the review page.';
+    : `${sorted.length} new referral requests${passed ? ` (${passed} passed initial screening)` : ''}`;
+  const caveat = '60/100 requires at least one strong evidence path. AI assesses submitted material; links and claims are not independently verified. The owner records official LinkedIn badge checks separately. This is not a referral decision.';
   const more = waiting > 0 ? `${waiting} more ${waiting === 1 ? 'is' : 'are'} still being screened.` : '';
   const detailed = sorted.length <= 3;
 

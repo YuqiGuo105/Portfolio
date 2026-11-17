@@ -63,7 +63,7 @@ test('the résumé is sized for free, reserved in the ledger, then read once', a
   assert.match(f.calls[1].body.systemInstruction.parts[0].text, /Never use or infer age, gender/);
   // Reserved before the paid call, from the counted tokens; settled with the provider's own usage.
   assert.equal(f.ledger.length, 1); assert.equal(f.ledger[0].provider, 'google'); assert.equal(f.ledger[0].operation, 'referral:screen');
-  assert.ok(f.ledger[0].micros >= 1400 * INPUT_RATE && f.ledger[0].micros < 2000);
+  assert.ok(f.ledger[0].micros >= 1400 * INPUT_RATE && f.ledger[0].micros < 4000);
   assert.equal(f.ledger[0].settled, Math.ceil(1500 * INPUT_RATE + 300 * OUTPUT_RATE));
   assert.deepEqual({ source: note.source, model: note.model, resumeRead: note.resumeRead, recommendation: note.recommendation, fit: note.fit, consistency: note.consistency },
     { source: 'ai', model: TEXT_MODEL, resumeRead: true, recommendation: 'strong', fit: 82, consistency: 'consistent' });
@@ -91,8 +91,8 @@ test('a refused reservation means no paid call and a plain completeness note', a
 for (const [label, reply] of [
   ['an error status', () => new Response('unavailable', { status: 503 })],
   ['a truncated answer', () => Response.json({ candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [{ text: '{' }] } }] })],
-  ['an unknown recommendation', () => answer({ ...AI_NOTE, recommendation: 'hire now' })],
-  ['an out-of-range score', () => answer({ ...AI_NOTE, fit: 140 })],
+  ['a missing evidence path', () => answer({ ...AI_NOTE, assessment: { employer: AI_NOTE.assessment.employer } })],
+  ['an out-of-range score', () => answer({ ...AI_NOTE, assessment: { ...AI_NOTE.assessment, openSource: { ...AI_NOTE.assessment.openSource, score: 140 } } })],
   ['text that is not JSON', () => Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'Sure! Here you go' }] } }] })],
 ]) test(`${label} falls back to the completeness note and still settles the reservation`, async () => {
   const f = fixture({ reply });
@@ -118,7 +118,7 @@ test('a note is cleaned before anyone sees it', () => {
   assert.equal(note.recommendation, 'unclear');
   assert.equal(normalizeScreening({ ...AI_NOTE, flags: ['incomplete'] }, { resumeRead: true }).recommendation, 'strong');
   assert.equal(normalizeScreening({ ...AI_NOTE, consistency: 'consistent' }, { resumeRead: false }).consistency, 'not_checked');
-  for (const bad of [null, {}, { ...AI_NOTE, summary: '' }, { ...AI_NOTE, fit: 71.5 }]) assert.throws(() => normalizeScreening(bad, { resumeRead: true }));
+  for (const bad of [null, {}, { ...AI_NOTE, summary: '' }, { ...AI_NOTE, assessment: { ...AI_NOTE.assessment, openSource: { ...AI_NOTE.assessment.openSource, score: 71.5 } } }]) assert.throws(() => normalizeScreening(bad, { resumeRead: true }));
 });
 
 test('the completeness note names what was provided and never scores fit', () => {
@@ -126,7 +126,7 @@ test('the completeness note names what was provided and never scores fit', () =>
   assert.equal(thin.fit, null); assert.equal(thin.recommendation, 'unclear'); assert.deepEqual(thin.flags, ['incomplete']);
   assert.equal(thin.strengths.length, 0); assert.equal(thin.concerns.length, 4);
   const full = rulesScreening(request);
-  assert.equal(full.concerns.length, 0); assert.deepEqual(full.flags, []); assert.match(full.summary, /Nothing here judges the applicant's fit/);
+  assert.equal(full.concerns.length, 0); assert.deepEqual(full.flags, []); assert.match(full.summary, /No evidence score or pass decision/);
 });
 
 test('the model is asked to assess, never to write the introduction', async () => {
@@ -143,4 +143,20 @@ test('a request over the daily allowance gets the completeness note without any 
   const note = await f.ai.screen(request, resume, { skipAi: 'daily_cap' });
   assert.equal(note.source, 'rules'); assert.match(note.summary, /today's AI screening allowance is used up/);
   assert.equal(f.calls.length, 0); assert.equal(f.ledger.length, 0);
+});
+
+test('the model cannot set the final score or confirm a LinkedIn badge', () => {
+  const note = normalizeScreening({ ...AI_NOTE, fit: 100, score: 100, passed: true, recommendation: 'strong',
+    linkedinBadge: { confirmed: true, checkedBy: 'model', checkedAt: new Date().toISOString() },
+    assessment: { ...AI_NOTE.assessment, openSource: { ...AI_NOTE.assessment.openSource, score: 40, meetsBar: false } } }, { resumeRead: true });
+  assert.equal(note.score, 40); assert.equal(note.passed, false); assert.equal(note.linkedinBadge, null);
+});
+
+test('the rubric rejects padding and asks for substantive evidence rather than job matching', async () => {
+  const f = fixture(); await f.ai.screen(request, resume);
+  const instruction = f.calls[1].body.systemInstruction.parts[0].text;
+  for (const phrase of ['NOT job-description matching', 'official LinkedIn verification badge', 'typo-only', 'Stars and merged PRs are supporting evidence', 'Solved-problem counts', 'never add weak paths together']) assert.ok(instruction.includes(phrase));
+  assert.equal(f.calls[1].body.generationConfig.maxOutputTokens, 1600);
+  const blocked = normalizeScreening({ ...AI_NOTE, consistency: 'conflicts' }, { resumeRead: true });
+  assert.equal(blocked.passed, false); assert.equal(blocked.score, 59);
 });

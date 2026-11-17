@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createReferralWorker } from '../src/lib/referral/worker.mjs';
 import { referralDigestMail } from '../src/lib/referral/mail.mjs';
-import { rulesScreening } from '../src/lib/referral/screening.mjs';
+import { normalizeScreening, rulesScreening } from '../src/lib/referral/screening.mjs';
 import { MAX_ATTEMPTS, memoryReferralStore, referralRow, requestFromRow } from '../src/lib/referral/store.mjs';
 import { memoryResumeStorage, resumePath } from '../src/lib/referral/storage.mjs';
 import { referralFields } from '../src/lib/referral/fields.mjs';
 import { AI_NOTE, INTRO, form, pdf } from './referral-fixtures.mjs';
 
-const aiNote = { source: 'ai', model: 'test-model', resumeRead: true, ...AI_NOTE };
+const aiNote = normalizeScreening(AI_NOTE, { resumeRead: true });
 
 function fixture({ screen, enabled = true, limited = () => false, sendMail, env = {} } = {}) {
   let clock = Date.parse('2026-11-16T12:00:00Z');
@@ -46,12 +46,12 @@ test('a queued request is checked, screened, saved and announced in one digest',
   assert.match(row.resume_sha256, /^[0-9a-f]{64}$/); assert.ok(row.notified_at); assert.ok(row.resume_path);
   assert.equal(f.screened[0].bytes, pdf().length); assert.equal(f.screened[0].options.skipAi, null);
   const [mail] = f.mails;
-  assert.match(mail.subject, /^Referral request: Associate, Software Engineering · Alex Chen \(Strong match 82\/100\)$/);
+  assert.match(mail.subject, /^Referral request: Associate, Software Engineering · Alex Chen \(Pass · 82\/100\)$/);
   assert.equal(mail.replyTo, 'alex@example.com');
   assert.equal('attachments' in mail, false, 'the résumé is opened from the review page, never attached');
   // The introduction reaches the owner exactly as the applicant wrote it.
   assert.ok(mail.text.includes(`Their introduction, in their own words:\n${INTRO}`));
-  assert.match(mail.text, /an AI heuristic to help you triage, not a decision/);
+  assert.match(mail.text, /not a referral decision/);
   // Nothing left to do: a second run claims nothing and sends nothing.
   const again = await f.worker.run();
   assert.equal(again.claimed, 0); assert.equal(f.mails.length, 1);
@@ -139,10 +139,10 @@ test('a busy hour sends a handful of digests, not an email per request', async (
     await f.worker.run({ batch: 8 });
   }
   assert.equal(f.mails.length, 3);
-  assert.match(f.mails[1].subject, /^8 new referral requests \(8 strong matches\)$/);
+  assert.match(f.mails[1].subject, /^8 new referral requests \(8 passed initial screening\)$/);
   assert.equal('replyTo' in f.mails[1], false);
   assert.equal(f.mails[1].text.includes('Their introduction, in their own words'), false, 'a long digest is a list');
-  assert.match(f.mails[1].text, /- Applicant 1-0 — Associate, Software Engineering — Strong match 82\/100/);
+  assert.match(f.mails[1].text, /- Applicant 1-0 — Associate, Software Engineering — Pass · 82\/100/);
   // The rest wait for the next hour's first digest rather than being dropped.
   f.advance(3600000);
   await f.worker.run();
@@ -207,12 +207,13 @@ test('the digest escapes everything and shows up to three requests in full', () 
   const row = (overrides = {}) => ({ state: 'ready', name: 'Alex <b>Chen</b>', email: 'alex@example.com', role_title: 'Engineer "Platform" & Data', job_url: 'https://higher.gs.com/roles/1',
     relationship: 'school', intro: INTRO, why_role: '<script>alert(1)</script>', reference: 'R-TEST', recommendation: 'promising', fit: 61, years_experience: 1,
     screening: { source: 'ai', recommendation: 'promising', fit: 61, summary: 'Thin but relevant.', strengths: ['One <i>good</i> project.'], concerns: [], followUps: [], flags: ['injection'] }, ...overrides });
-  const mail = referralDigestMail([row(), row({ name: 'Sam', recommendation: 'strong', fit: 90, screening: { source: 'ai', recommendation: 'strong', fit: 90, summary: 'Strong.' } }),
+  const mail = referralDigestMail([row(), row({ name: 'Sam', recommendation: 'strong', fit: 82, screening: aiNote }),
     row({ name: 'Rules Only', recommendation: 'unclear', fit: null, screening: { source: 'rules', summary: 'Completeness check only.' } })]);
-  assert.equal(/[\r\n]/.test(mail.subject), false); assert.equal(mail.subject, '3 new referral requests (1 strong match)');
+  assert.equal(/[\r\n]/.test(mail.subject), false); assert.equal(mail.subject, '3 new referral requests (1 passed initial screening)');
   assert.equal(mail.html.includes('<script>'), false); assert.equal(mail.html.includes('<b>Chen</b>'), false); assert.match(mail.html, /Alex &lt;b&gt;Chen&lt;\/b&gt;/);
   // Strongest first; a request no model judged is labelled as such.
-  assert.ok(mail.text.indexOf('Sam — ') < mail.text.indexOf('Alex <b>Chen</b> — ')); assert.match(mail.text, /Signal: not AI-screened/);
+  assert.ok(mail.text.indexOf('Sam — ') < mail.text.indexOf('Alex <b>Chen</b> — ')); assert.match(mail.text, /Signal: Not AI-screened/);
+  assert.match(mail.text, /Previous scoring policy - screen again/);
   assert.match(mail.text, /The text tried to instruct the screening model/); assert.match(mail.text, /Experience: 1 year\n/);
   assert.deepEqual(requestFromRow({ ...row(), years_experience: 3 }).years, 3);
 });

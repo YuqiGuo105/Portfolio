@@ -1,7 +1,8 @@
 # Talk page and referral requests
 
 `/talk` is the one place to reach Yuqi: send a message, ask for a referral, or open a live chat on
-TalkNest. The home page's Contact section shows the same three choices in compact form.
+TalkNest. The home page's Contact section keeps Message and Live chat as two compact tabs;
+an independent Request a referral link opens `/talk?intent=referral`.
 
 | Choice | What happens |
 |---|---|
@@ -93,20 +94,45 @@ The worker first checks the stored file (`inspectResume`): it must be a real PDF
 password-protected, with no scripts, launch actions or embedded files. A file that fails is deleted
 before anyone can open it and the request is marked "résumé refused"; the request still arrives.
 
-Screening then produces a note **for the owner only**: a rough match signal (strong, promising,
-needs a closer look, weak) with a 0 to 100 heuristic, a summary, strengths, concerns, follow-up
-questions, whether the introduction agrees with the résumé, and flags (spam, off topic, missing
-details, text that tried to instruct the model). It decides nothing. No request is rejected, hidden
-or delayed because of it, and applicants are never shown it.
+The `evidence-v1` policy is **not job matching**. It produces a private 0-100 evidence score with
+a pass mark of **60**. At least one of three independent paths must qualify:
 
-The model is limited to role-relevant evidence, may not use or infer protected characteristics,
-treats everything the applicant wrote as untrusted data, and must ground every statement in the
-form or the résumé. Its answer is validated before it is stored: wrong shapes are discarded, long
-text is cut, and a request flagged as spam, off topic or steering the model is never presented as
-a strong match. The applicant's email address and profile link are not sent to the model; the
-résumé file is.
+1. Substantial engineering employment at a major established technology or financial-services
+   company, **and an official LinkedIn verification badge confirmed by the owner**.
+2. Strong original open-source engineering or substantive merged upstream work. A real Kafka /
+   microservices platform can qualify through ownership, failure handling, tests, deployment and
+   measurable impact. Stars, technology lists, tutorial clones and trivial PR counts are not enough.
+3. Strong LeetCode weekly/biweekly performance, supported by rating, dated rankings and consistency.
+   Solved-problem counts and practice streaks do not qualify. There is no arbitrary fixed rating,
+   star or PR cutoff; the AI must explain the substantive quality.
 
-- Model: the same `gemini-2.5-flash-lite` constant as discovery, thinking disabled, 900 output tokens.
+The model supplies a score, gate assessment, reason, evidence quotations and supporting links for
+each path. `rubric.mjs` computes the final result: the strongest path wins, **not the sum**. A path
+without substantive evidence, the required reference, or its required badge confirmation is capped
+at 59 in the final score. Spam, prompt injection, off-topic requests and conflicting evidence cannot
+pass. The model cannot set the final score or attest a badge. A score is a screening heuristic, not
+a probability. No request is automatically declined, hidden or referred; the owner decides.
+
+All material is untrusted. The prompt excludes protected characteristics and rejects padding.
+Malformed model responses fall back to an unscored completeness note. Evidence and URLs come from
+the submitted form or resume, **not independent web retrieval**. The UI and email make this limit
+explicit. Contact email and the separately entered profile URL are still excluded from model input.
+
+LinkedIn verification is recorded in the authenticated review panel. The owner opens the supplied
+LinkedIn member profile, checks the official badge and records its type and what was checked.
+Premium, OAuth sign-in, a URL and an applicant's own assertion do not count. A badge may verify
+identity, workplace or education; it does not by itself certify the entire work history
+([LinkedIn Help](https://www.linkedin.com/help/linkedin/answer/a1357905)). The server stores the
+owner ID, timestamp, note and profile URL with the screening JSON, then recalculates the score.
+Conditional updates reject stale reviews and concurrent rescreening. Rescreening clears a previous
+badge confirmation and asks for a fresh check. No third-party badge-verification API is connected.
+
+Existing job-fit notes are labelled as previous-policy results and excluded from score ranking;
+use "Screen again" to reevaluate them. No bulk re-screen, database migration or retention change
+is required. The legacy `fit` column mirrors the new score for storage compatibility; only a note
+with the `evidence-v1` rubric can be displayed as a current score.
+
+- Model: the same `gemini-2.5-flash-lite` constant as discovery, thinking disabled, 1,600 output tokens.
 - Off by default. It runs only with `REFERRAL_AI_ENABLED=1` and a key in `REFERRAL_GOOGLE_API_KEY`
   (or `DISCOVERY_GOOGLE_API_KEY` / `GEMINI_API_KEY`).
 - Every paid call reserves its cost in the shared monthly ledger first (`docs/AI_SPEND_GUARD.md`)
@@ -114,9 +140,10 @@ résumé file is.
 - A PDF's token count cannot be bounded from its size, so the free `countTokens` endpoint is asked
   first. Above 20,000 prompt tokens, or with no count, the file is not sent and only the form
   answers are screened.
-- Expected spend is roughly $0.001 a request, so the default daily allowance is about four cents.
+- One generation per screening, no external scraping, and no extra call for badge confirmation.
+  The increased output allowance is included in the existing reservation before generation.
 - When the model is off, over a limit, slow or returns something malformed, the note is a plain
-  completeness check that says so and makes no claim about fit.
+  completeness check with no score and no pass decision.
 
 ## What is kept, and for how long
 
@@ -131,8 +158,9 @@ the file under its original name. Only files the worker has checked can be opene
 
 ## Review
 
-`/admin/referrals` (Audience → Referral requests) lists requests by status, newest or strongest
-match first: the applicant's introduction with one click to copy, the note, the details, a
+`/admin/referrals` (Audience → Referral requests) lists requests by status, newest or highest
+evidence score first: the applicant's introduction with one click to copy, the three evidence paths,
+the official-badge check, the note, the details, a
 download button for the résumé, a status (new, reviewing, referred, declined, archived), a private
 note, "Screen again" and delete.
 

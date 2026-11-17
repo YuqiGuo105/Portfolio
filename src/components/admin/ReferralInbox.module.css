@@ -403,3 +403,14 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+.evidenceScore { margin-bottom: 20px; }
+.evidencePath { padding: 12px 0; border-bottom: 1px solid var(--line, #d5dfda); }
+.evidencePath summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; cursor: pointer; font-size: 14px; line-height: 1.5; }
+.evidencePath summary > span:first-child { flex: 1 1 200px; }
+.evidencePath summary strong { white-space: nowrap; }
+.evidencePath summary::-webkit-details-marker { display: none; }
+.evidenceChevron { flex: 0 0 15px; }
+.evidencePath[open] > summary .evidenceChevron { transform: rotate(90deg); }
+.evidencePath p, .evidencePath li { overflow-wrap: anywhere; }
+.evidencePath label { display: block; margin-top: 12px; }
+.evidencePath summary:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

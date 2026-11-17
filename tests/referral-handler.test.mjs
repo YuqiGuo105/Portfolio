@@ -5,7 +5,8 @@ import { KICK_GAP_MS, REFERRAL_ACTION, createReferralAdminHandler, createReferra
 import { memoryReferralStore } from '../src/lib/referral/store.mjs';
 import { memoryResumeStorage } from '../src/lib/referral/storage.mjs';
 import { ContactError, verifyContactToken } from '../src/lib/contactGuard.mjs';
-import { form, openFor, pdf, request, response } from './referral-fixtures.mjs';
+import { AI_NOTE, form, openFor, pdf, request, response } from './referral-fixtures.mjs';
+import { normalizeScreening } from '../src/lib/referral/screening.mjs';
 
 const env = { NODE_ENV: 'production', TURNSTILE_SECRET_KEY: 'test-server-secret', CRON_SECRET: 'cron-secret-for-tests' };
 
@@ -233,6 +234,50 @@ test('the worker endpoint runs only with the scheduler secret; the daily GET als
   await call('GET', `Bearer ${env.CRON_SECRET}`); assert.deepEqual(runs.at(-1), { housekeeping: true, lingerMs: 0 });
   const unset = createReferralWorkerHandler({ env: {}, worker: { run: async () => ({}) } });
   res = response(); await unset({ method: 'GET', headers: { authorization: 'Bearer undefined' } }, res); assert.equal(res.statusCode, 401);
+});
+
+test('only the owner can attest an official LinkedIn badge; stale checks and applicant claims do not pass', async () => {
+  const f = fixture();
+  const raw = structuredClone(AI_NOTE);
+  raw.assessment.employer = { score: 85, meetsBar: true, reason: 'Substantial major-company engineering work.', evidence: ['Resume p.1: named company, role, dates and impact.'], links: [] };
+  raw.assessment.openSource = { score: 0, meetsBar: false, reason: 'No public work.', evidence: [], links: [] };
+  const row = await queued(f, { linkedinBadge: { confirmed: true }, score: 100, passed: true });
+  assert.equal(row.linkedinBadge, undefined); assert.equal(row.score, undefined);
+  const screening = normalizeScreening(raw, { resumeRead: true, profileUrl: row.profile_url });
+  await f.store.update(row.id, { state: 'ready', screening, fit: screening.score, recommendation: screening.recommendation });
+  let user = null;
+  const admin = createReferralAdminHandler({ store: f.store, storage: f.storage, availability: openFor(),
+    authorize: async (_req, res) => { if (!user) res.status(401).json({ error: 'unauthorized' }); return user; } });
+  const call = async (extra = {}) => {
+    const latest = await f.store.get(row.id); const res = response();
+    await admin({ method: 'POST', body: { id: row.id, action: 'linkedin_badge', confirmed: true,
+      reviewNote: 'Opened the applicant profile and inspected the official identity verification badge.', expectedUpdatedAt: latest.updated_at, ...extra } }, res);
+    return res;
+  };
+  assert.equal((await call()).statusCode, 401);
+  assert.equal((await f.store.get(row.id)).screening.passed, false);
+  user = { userId: 'owner' };
+  for (const extra of [{ reviewNote: '' }, { confirmed: 'true' }, { expectedUpdatedAt: null }]) assert.equal((await call(extra)).statusCode, 400);
+  assert.equal((await call({ expectedUpdatedAt: '2000-01-01T00:00:00Z' })).statusCode, 409);
+  let res = await call();
+  assert.equal(res.statusCode, 200); assert.equal(res.body.screening.passed, true); assert.equal(res.body.fit, 85);
+  assert.equal(res.body.screening.linkedinBadge.checkedBy, 'owner'); assert.equal(res.body.status, 'new');
+  res = await call({ confirmed: false, reviewNote: 'Badge could not be confirmed on another inspection.' });
+  assert.equal(res.body.screening.passed, false); assert.equal(res.body.fit, 59);
+  await f.store.update(row.id, { state: 'screening' });
+  assert.equal((await call()).statusCode, 409);
+  await f.store.update(row.id, { state: 'ready', profile_url: 'https://linkedin.com.evil.test/in/example' });
+  assert.equal((await call()).statusCode, 400);
+});
+
+test('badge recording uses a conditional update, so a concurrent rescreen cannot be overwritten', async () => {
+  const f = fixture(); const row = await queued(f);
+  const screening = normalizeScreening(AI_NOTE, { resumeRead: true });
+  await f.store.update(row.id, { state: 'ready', screening });
+  const previous = await f.store.get(row.id);
+  await f.store.update(row.id, { state: 'queued' });
+  assert.equal(await f.store.update(row.id, { screening: { passed: true } }, { expectedUpdatedAt: previous.updated_at, expectedState: 'ready' }), null);
+  assert.equal((await f.store.get(row.id)).state, 'queued');
 });
 
 test('a kick starts one separate worker run, is throttled, and never leaves the site', async () => {

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ChevronRight, Copy, Download, Mail, RefreshCw, RotateCw, Trash2 } from "lucide-react";
-import { RECOMMENDATION_LABELS, RELATIONSHIPS, STATUSES } from "../../lib/referral/config.mjs";
+import { RELATIONSHIPS, STATUSES } from "../../lib/referral/config.mjs";
+import { currentScreening, EVIDENCE_PATHS, linkedInProfile, screeningLabel, screeningRank } from "../../lib/referral/rubric.mjs";
 import { sameCompany } from "../../lib/currentRole.mjs";
 import styles from "./ReferralInbox.module.css";
 
 const STATUS_LABELS = { new: "New", reviewing: "Reviewing", referred: "Referred", declined: "Declined", archived: "Archived" };
 const FLAG_LABELS = { spam: "Looks like spam", injection: "Tried to steer the AI", off_topic: "Off topic", incomplete: "Missing details" };
 const CONSISTENCY = { consistent: "Introduction matches the résumé.", minor_gaps: "Small gaps between the introduction and the résumé.", conflicts: "The introduction and the résumé disagree.", not_checked: "The résumé was not compared with the introduction." };
-const RANK = { strong: 0, promising: 1, unclear: 2, weak: 3 };
 
 const when = (value) => {
   if (!value) return "";
@@ -26,8 +26,8 @@ function Signal({ request, offer }) {
   if (pending(request)) return <span className={styles.signal}><span className={styles.pill} data-tone="unclear">Screening in progress</span>{former}</span>;
   return (
     <span className={styles.signal}>
-      <span className={styles.pill} data-tone={ai ? note.recommendation : "unclear"}>
-        {ai ? `${RECOMMENDATION_LABELS[note.recommendation] || "Needs a closer look"}${Number.isInteger(note.fit) ? ` · ${note.fit}` : ""}` : "Not AI-screened"}
+      <span className={styles.pill} data-tone={ai && currentScreening(note) ? note.recommendation : "unclear"}>
+        {screeningLabel(note)}
       </span>
       {former}
       {request.state === "file_rejected" && <span className={styles.pill} data-tone="weak">Résumé refused</span>}
@@ -36,7 +36,45 @@ function Signal({ request, offer }) {
   );
 }
 
-function Detail({ request, busy, onStatus, onNote, onDelete, onResume, onRescreen }) {
+function EvidenceScore({ request, busy, onBadge }) {
+  const note = request.screening;
+  const [reviewNote, setReviewNote] = useState("");
+  const profile = linkedInProfile(request.profile_url);
+  const save = async (confirmed) => { if (await onBadge(confirmed, reviewNote)) setReviewNote(""); };
+  return (
+    <div className={styles.evidenceScore}>
+      <p className={styles.noteLabel}>Evidence score · {note.score}/100 · Pass mark 60</p>
+      <p className={styles.caveat}>One strong path is required. Scores are not added together. AI assesses submitted evidence, not job fit; external claims still need review.</p>
+      {Object.entries(EVIDENCE_PATHS).map(([id, label]) => {
+        const item = note.criteria[id];
+        return <details key={id} className={styles.evidencePath}>
+          <summary><span>{label}</span><strong>{item.score}/100</strong><span className={styles.pill} data-tone={item.eligible ? "strong" : "unclear"}>
+            {item.eligible ? "Meets gate" : item.pendingBadge ? "Badge check needed" : "Not established"}
+          </span><ChevronRight className={styles.evidenceChevron} size={15} aria-hidden="true" /></summary>
+          <p>{item.reason}</p>
+          {!!item.evidence.length && <ul>{item.evidence.map((text) => <li key={text}>{text}</li>)}</ul>}
+          {!!item.links.length && <ul>{item.links.map((url) => <li key={url}><a href={url} target="_blank" rel="noopener noreferrer">{url}</a></li>)}</ul>}
+        </details>;
+      })}
+      <details className={styles.evidencePath}>
+        <summary><span>Official LinkedIn badge · {note.linkedinBadge?.confirmed ? "Confirmed by owner" : "Not confirmed"}</span><ChevronRight className={styles.evidenceChevron} size={15} aria-hidden="true" /></summary>
+        <p className={styles.caveat}>Check the official badge on the applicant&apos;s own profile. Premium, a LinkedIn login, a profile link or the applicant&apos;s claim does not count. A badge alone does not prove their employment history.</p>
+        {note.linkedinBadge && <p className={styles.caveat}>{note.linkedinBadge.note} · {when(note.linkedinBadge.checkedAt)}</p>}
+        {profile ? <>
+          <a className={styles.action} href={profile} target="_blank" rel="noopener noreferrer">Open LinkedIn profile</a>
+          <label className={styles.noteLabel} htmlFor={`badge-${request.id}`}>Badge type and what you checked</label>
+          <textarea id={`badge-${request.id}`} className={styles.ownerNote} value={reviewNote} minLength={10} maxLength={600} onChange={(event) => setReviewNote(event.target.value)} />
+          <div className={styles.buttons}>
+            <button type="button" className={styles.action} disabled={busy || reviewNote.trim().length < 10} onClick={() => save(true)}>Confirm official badge</button>
+            <button type="button" className={styles.action} disabled={busy || reviewNote.trim().length < 10} onClick={() => save(false)}>Badge not verified</button>
+          </div>
+        </> : <p className={styles.caveat}>No LinkedIn member profile was supplied. This path cannot pass until a profile and its official badge can be checked.</p>}
+      </details>
+    </div>
+  );
+}
+
+function Detail({ request, busy, onStatus, onNote, onDelete, onResume, onRescreen, onBadge }) {
   const note = request.screening || {};
   const [ownerNote, setOwnerNote] = useState(request.owner_note || "");
   const [copied, setCopied] = useState(false);
@@ -65,6 +103,8 @@ function Detail({ request, busy, onStatus, onNote, onDelete, onResume, onRescree
             {pending(request)
               ? <p>This request is waiting to be screened. It usually takes under a minute; refresh to see the note.</p>
               : <>
+                {ai && currentScreening(note) && note.criteria && <EvidenceScore request={request} busy={busy} onBadge={onBadge} />}
+                {ai && !currentScreening(note) && <p className={styles.caveat}>This note used the previous job-fit policy. Screen again to apply the three evidence paths and the 60-point gate.</p>}
                 <p>{note.summary || "No note was recorded for this request."}</p>
                 {lists.map(([title, items]) => (
                   <div key={title}><p className={styles.noteLabel}>{title}</p><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></div>
@@ -153,9 +193,8 @@ export default function ReferralInbox({ api, onState }) {
   const counts = useMemo(() => Object.fromEntries(STATUSES.map((status) => [status, requests.filter((item) => item.status === status).length])), [requests]);
   const shown = useMemo(() => {
     const rows = requests.filter((item) => tab === "all" || item.status === tab);
-    const rank = (item) => (item.screening?.source === "ai" ? RANK[item.recommendation] ?? 2 : 2);
-    return sort === "match"
-      ? [...rows].sort((a, b) => rank(a) - rank(b) || (b.fit ?? -1) - (a.fit ?? -1) || b.created_at.localeCompare(a.created_at))
+    return sort === "score"
+      ? [...rows].sort((a, b) => screeningRank(b.screening) - screeningRank(a.screening) || b.created_at.localeCompare(a.created_at))
       : [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at));
   }, [requests, tab, sort]);
 
@@ -164,7 +203,8 @@ export default function ReferralInbox({ api, onState }) {
     try {
       const updated = await api.update(id, body);
       setRequests((current) => current.map((item) => (item.id === id ? { ...item, ...updated } : item)));
-    } catch (err) { setError(err.message || "The request could not be updated."); }
+      return true;
+    } catch (err) { setError(err.message || "The request could not be updated."); return false; }
     finally { setBusy(""); }
   }
   // Pause or reopen the form, or read the work history again straight after a job change.
@@ -220,7 +260,7 @@ export default function ReferralInbox({ api, onState }) {
         <label className={styles.sort}>Sort by
           <select value={sort} onChange={(event) => setSort(event.target.value)}>
             <option value="newest">Newest first</option>
-            <option value="match">Strongest match first</option>
+            <option value="score">Highest evidence score</option>
           </select>
         </label>
       </div>
@@ -241,6 +281,7 @@ export default function ReferralInbox({ api, onState }) {
                 onNote={(note) => change(request.id, { action: "note", note })}
                 onResume={() => download(request.id)}
                 onRescreen={() => change(request.id, { action: "rescreen" })}
+                onBadge={(confirmed, reviewNote) => change(request.id, { action: "linkedin_badge", confirmed, reviewNote, expectedUpdatedAt: request.updated_at })}
                 onDelete={() => remove(request.id)} />
             )}
           </div>

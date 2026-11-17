@@ -33,7 +33,7 @@ export default function ReferralsPreview() {
           <div>
             <h1 className={ui.title}>Referral requests <span className={`${ui.status} ${ui.statusPending}`} style={{ marginLeft: 8, verticalAlign: "middle" }}>Local preview</span></h1>
             <p className={ui.subtitle}>
-              This is what /admin/referrals will show. The four entries marked “sample” are made up and have no résumé file; anything you send from{" "}
+              This is what /admin/referrals will show. Entries marked “sample” are made up and have no résumé file; anything you send from{" "}
               <Link href="/talk?intent=referral"><a style={{ color: "#0f766e" }}>the form on /talk</a></Link> on this machine appears here too, with its file.
               {outbox.aiEnabled ? " AI screening is on and uses the shared monthly budget." : " AI screening is off in this preview, so your own test requests get a completeness check instead of an AI note."}
             </p>
