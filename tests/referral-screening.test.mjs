@@ -6,7 +6,7 @@ import { inspectResume } from '../src/lib/referral/resume.mjs';
 import { quoteRequest } from '../services/voice/modelGateway.mjs';
 import { TEXT_MODEL } from '../src/lib/discovery/provider.mjs';
 import { SpendDenied } from '../src/lib/voice/spendGuard.mjs';
-import { AI_NOTE, form, pdf } from './referral-fixtures.mjs';
+import { ADDITIONAL_ROLES, AI_NOTE, form, pdf } from './referral-fixtures.mjs';
 
 // As the worker passes it: the form's fields plus the company stored with the request.
 const request = { ...referralFields(form()), company: 'Goldman Sachs' };
@@ -44,6 +44,17 @@ test('screening is off unless it is switched on and has a key', async () => {
     const note = await f.ai.screen(request, resume);
     assert.equal(note.source, 'rules'); assert.equal(note.fit, null); assert.equal(f.calls.length, 0); assert.equal(f.ledger.length, 0);
   }
+});
+
+test('three openings share one model call and one budget reservation', async () => {
+  const f = fixture();
+  const note = await f.ai.screen({ ...request, additionalRoles: ADDITIONAL_ROLES }, resume);
+  const generated = f.calls.filter(call => call.url.endsWith(':generateContent'));
+  assert.equal(generated.length, 1); assert.equal(f.ledger.length, 1); assert.equal(note.source, 'ai');
+  const payload = JSON.parse(generated[0].body.contents[0].parts.find(part => part.text).text);
+  assert.equal(payload.roles.length, 3);
+  assert.equal(payload.roles[2].role, 'Data Engineer');
+  assert.equal(payload.roles[1].pastedRequirements, ADDITIONAL_ROLES[0].requirements);
 });
 
 test('the résumé is sized for free, reserved in the ledger, then read once', async () => {

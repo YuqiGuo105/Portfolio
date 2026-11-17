@@ -5,7 +5,7 @@ import { KICK_GAP_MS, REFERRAL_ACTION, createReferralAdminHandler, createReferra
 import { memoryReferralStore } from '../src/lib/referral/store.mjs';
 import { memoryResumeStorage } from '../src/lib/referral/storage.mjs';
 import { ContactError, verifyContactToken } from '../src/lib/contactGuard.mjs';
-import { AI_NOTE, form, openFor, pdf, request, response } from './referral-fixtures.mjs';
+import { ADDITIONAL_ROLES, AI_NOTE, form, openFor, pdf, request, response } from './referral-fixtures.mjs';
 import { normalizeScreening } from '../src/lib/referral/screening.mjs';
 
 const env = { NODE_ENV: 'production', TURNSTILE_SECRET_KEY: 'test-server-secret', CRON_SECRET: 'cron-secret-for-tests' };
@@ -26,6 +26,22 @@ function fixture(options = {}) {
   return { submit, complete, upload, store, storage, order, logs, limits, kicks };
 }
 const send = async (handler, body) => { const res = response(); await handler(request(body), res); return res; };
+
+test('three roles share one request, upload and worker kick; retries preserve all roles', async () => {
+  const f = fixture(), body = form({ additionalRoles: ADDITIONAL_ROLES });
+  const accepted = await send(f.submit, body);
+  assert.equal(accepted.statusCode, 201);
+  f.upload(accepted);
+  await send(f.complete, { idempotencyKey: body.idempotencyKey });
+  const retry = await send(f.submit, { ...body, turnstileToken: '' });
+  assert.equal(retry.body.reference, accepted.body.reference);
+  const rows = await f.store.list();
+  assert.equal(rows.length, 1); assert.deepEqual(rows[0].additional_roles, ADDITIONAL_ROLES);
+  assert.equal(rows[0].role_title, body.roleTitle); assert.equal(f.kicks.length, 1);
+  const invalid = await send(f.submit, form({ additionalRoles: [...ADDITIONAL_ROLES, ADDITIONAL_ROLES[0]] }));
+  assert.equal(invalid.statusCode, 400); assert.equal(invalid.body.code, 'invalid_roles');
+  assert.equal((await f.store.list()).length, 1);
+});
 
 test('a request is accepted with one insert and an upload link; no model call, no email', async () => {
   const f = fixture(); const body = form();

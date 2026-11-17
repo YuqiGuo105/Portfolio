@@ -7,7 +7,7 @@ import { normalizeScreening, rulesScreening } from '../src/lib/referral/screenin
 import { MAX_ATTEMPTS, memoryReferralStore, referralRow, requestFromRow } from '../src/lib/referral/store.mjs';
 import { memoryResumeStorage, resumePath } from '../src/lib/referral/storage.mjs';
 import { referralFields } from '../src/lib/referral/fields.mjs';
-import { AI_NOTE, INTRO, form, pdf } from './referral-fixtures.mjs';
+import { ADDITIONAL_ROLES, AI_NOTE, INTRO, form, pdf } from './referral-fixtures.mjs';
 
 const aiNote = normalizeScreening(AI_NOTE, { resumeRead: true });
 
@@ -56,6 +56,25 @@ test('a queued request is checked, screened, saved and announced in one digest',
   const again = await f.worker.run();
   assert.equal(again.claimed, 0); assert.equal(f.mails.length, 1);
   assert.equal(f.logs[0].event, 'referral_worker'); assert.equal(JSON.stringify(f.logs).includes('alex@example.com'), false);
+});
+
+test('the worker and both email formats retain three roles without extra screenings or digests', async () => {
+  let seen;
+  const f = fixture({ screen: async request => { seen = request; return aiNote; } });
+  const id = await f.add({ additionalRoles: ADDITIONAL_ROLES });
+  const summary = await f.worker.run();
+  assert.equal(summary.screened, 1); assert.equal(summary.notified, 1); assert.equal(f.mails.length, 1);
+  assert.deepEqual(seen.additionalRoles, ADDITIONAL_ROLES);
+  const row = await f.store.get(id);
+  assert.deepEqual(requestFromRow(row).additionalRoles, ADDITIONAL_ROLES);
+  const [mail] = f.mails;
+  assert.match(mail.subject, /3 roles/);
+  for (const role of ADDITIONAL_ROLES) for (const format of ['text', 'html']) {
+    assert.ok(mail[format].includes(role.roleTitle)); assert.ok(mail[format].includes(role.jobUrl));
+    assert.ok(mail[format].includes(role.requirements));
+  }
+  const { additional_roles: _extra, ...legacy } = row;
+  assert.deepEqual(requestFromRow(legacy).additionalRoles, []);
 });
 
 test('overlapping workers never screen the same request twice', async () => {

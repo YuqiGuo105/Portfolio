@@ -6,6 +6,10 @@ export function pdf(extra = '', { pad = 300 } = {}) {
     + `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\n${extra}\n% ${'x'.repeat(pad)}\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n`, 'latin1');
 }
 export const INTRO = 'Alex Chen is a backend engineer with five years of experience building payment services in Java. At Northwind, Alex led the migration of the ledger service to Kafka and cut settlement delay from hours to minutes. Alex is interested in the Platform role because of its scale.';
+export const ADDITIONAL_ROLES = [
+  { roleTitle: 'Platform Engineer', jobUrl: 'https://higher.gs.com/roles/234567', jobId: '234567', location: 'Dallas', requirements: 'Distributed services and reliability.' },
+  { roleTitle: 'Data Engineer', jobUrl: 'https://higher.gs.com/roles/345678', jobId: '345678', location: 'New York', requirements: 'Data pipelines and testing.' },
+];
 export function form(overrides = {}) {
   return {
     name: 'Alex Chen', email: 'Alex@Example.com', profileUrl: 'https://www.linkedin.com/in/alex-example',

@@ -8,7 +8,8 @@ import { test, beforeEach, afterEach, after } from 'node:test';
 import { JSDOM } from 'jsdom';
 import * as config from '../src/lib/referral/config.mjs';
 import * as fields from '../src/lib/referral/fields.mjs';
-import { pdf } from './referral-fixtures.mjs';
+import * as roles from '../src/lib/referral/roles.mjs';
+import { ADDITIONAL_ROLES, pdf } from './referral-fixtures.mjs';
 
 const require = createRequire(import.meta.url);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -45,6 +46,7 @@ async function load(relative, overrides = {}) {
     if (name.endsWith('.css')) local[name] = { __esModule: true, default: classNames };
     else if (name.endsWith('config.mjs')) local[name] = config;
     else if (name.endsWith('fields.mjs')) local[name] = fields;
+    else if (name.endsWith('roles.mjs')) local[name] = roles;
     else if (overrides[path.basename(name)]) local[name] = overrides[path.basename(name)];
     else local[name] = await load(path.relative(root, path.resolve(path.dirname(file), name.endsWith('.js') ? name : `${name}.js`)));
   }
@@ -178,7 +180,7 @@ async function attach(file) {
 const resumeFile = () => new dom.window.File([pdf()], 'Alex Chen Resume.pdf', { type: 'application/pdf' });
 async function reachIntro() {
   await type('referral-roleTitle', 'Associate, Software Engineering');
-  await type('referral-jobUrl', 'https://higher.gs.com/roles/123456');
+  if (!document.getElementById('referral-jobUrl').value) await type('referral-jobUrl', 'https://higher.gs.com/roles/123456');
   await click(button('Continue'));
   await type('referral-name', 'Alex Chen'); await type('referral-email', 'alex@example.com');
   await attach(resumeFile());
@@ -201,6 +203,30 @@ test('each step names what is missing before moving on', async () => {
   await click(button('Continue'));
   assert.deepEqual(errors().sort(), ['Attach your résumé as a PDF.', 'Choose the option that fits best.', 'Enter a whole number of years, or leave this empty.',
     'Enter an email address I can reply to.', 'Enter your full name.']);
+});
+
+async function addExtraRoles() {
+  await type('referral-jobUrl', ['https://higher.gs.com/roles/123456', ...ADDITIONAL_ROLES.map(role => role.jobUrl)].join(', '));
+}
+
+test('one links field accepts three comma-separated postings and rejects a fourth or duplicate', async () => {
+  await render(React.createElement(ReferralWizard, { company: 'Goldman Sachs' }));
+  await addExtraRoles();
+  assert.equal(button('Add another role'), undefined);
+  assert.match(container.textContent, /separated by commas/);
+  await type('referral-roleTitle', 'Associate, Software Engineering');
+  const links = document.getElementById('referral-jobUrl').value;
+  await type('referral-jobUrl', `${links}, https://higher.gs.com/roles/4`);
+  await click(button('Continue'));
+  assert.match(errors().join(' '), /no more than three/);
+  await type('referral-jobUrl', 'https://higher.gs.com/roles/123456, https://higher.gs.com/roles/123456?utm_source=linkedin');
+  await click(button('Continue'));
+  assert.match(errors().join(' '), /already included/);
+  assert.equal(document.activeElement.id, 'referral-jobUrl');
+  await type('referral-jobUrl', `https://higher.gs.com/roles/123456， ${ADDITIONAL_ROLES[1].jobUrl}`);
+  await click(button('Continue'));
+  assert.match($('h3').textContent, /About you/);
+  assert.deepEqual(requests, []);
 });
 
 test('only a PDF of 2 MB or less can be attached', async () => {
@@ -280,6 +306,46 @@ test('sending saves the answers, uploads the file straight to storage, then conf
   assert.match(container.textContent, /Request received/); assert.match(container.textContent, /R-TEST00000001/);
   assert.match(container.textContent, /A referral is not guaranteed/);
   assert.equal(window.sessionStorage.getItem('talk:referral:v1'), null); assert.equal(window.sessionStorage.getItem('talk:referral:key:v1'), null);
+});
+
+test('three roles survive reload, appear in review and share one submission and resume', async () => {
+  await render(React.createElement(ReferralWizard, { company: 'Goldman Sachs' }));
+  await addExtraRoles();
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 450)); });
+  const links = document.getElementById('referral-jobUrl').value;
+  assert.equal(JSON.parse(window.sessionStorage.getItem('talk:referral:v1')).jobUrl, links);
+  await act(async () => mount.unmount()); mount = createRoot(container);
+  await render(React.createElement(ReferralWizard, { company: 'Goldman Sachs' }));
+  assert.equal(document.getElementById('referral-jobUrl').value, links);
+  await reachReview();
+  for (const role of ADDITIONAL_ROLES) assert.ok(container.textContent.includes(role.jobUrl));
+  assert.deepEqual(requests, []);
+  await agree(); await act(async () => onToken('token-three-roles')); await submitForm();
+  assert.deepEqual(requests.map(item => item.method), ['POST', 'PUT', 'POST']);
+  assert.deepEqual(requests[0].body.additionalRoles.map(role => role.jobUrl), ADDITIONAL_ROLES.map(role => role.jobUrl));
+  assert.deepEqual(requests[0].body.additionalRoles.map(role => role.roleTitle), ['Opening 2', 'Opening 3']);
+  assert.equal(fields.referralFields(requests[0].body).additionalRoles.length, 2);
+  assert.match(container.textContent, /Request received/);
+});
+
+test('a server error on the third role returns to that field without dropping other roles', async () => {
+  await render(React.createElement(ReferralWizard, { company: 'Goldman Sachs' }));
+  await addExtraRoles(); await reachReview(); await agree();
+  respond = () => Response.json({ error: 'Check this posting.', code: 'invalid_field', field: 'additionalRoles.1.jobUrl' }, { status: 400 });
+  await act(async () => onToken('token-three-roles')); await submitForm();
+  assert.match($('h3').textContent, /Which roles/);
+  assert.deepEqual(errors(), ['Check this posting.']);
+  assert.equal(document.activeElement.id, 'referral-jobUrl');
+  assert.ok(document.getElementById('referral-jobUrl').value.includes(ADDITIONAL_ROLES[0].jobUrl));
+  assert.equal(document.getElementById('referral-roleTitle').value, 'Associate, Software Engineering');
+});
+
+test('an older multi-role draft keeps its links and titles in the comma-separated form', async () => {
+  window.sessionStorage.setItem('talk:referral:v1', JSON.stringify({ roleTitle: 'Associate', jobUrl: 'https://higher.gs.com/roles/123456', additionalRoles: ADDITIONAL_ROLES }));
+  await render(React.createElement(ReferralWizard, { company: 'Goldman Sachs' }));
+  assert.equal(roles.postingLinks(document.getElementById('referral-jobUrl').value).length, 3);
+  await reachReview(); await agree(); await act(async () => onToken('token-legacy')); await submitForm();
+  assert.deepEqual(requests[0].body.additionalRoles, ADDITIONAL_ROLES);
 });
 
 test('a failed upload is retried on its own, with the same key and no second verification', async () => {
@@ -385,7 +451,7 @@ test('the standalone hub names whichever company the page was given, on the tab 
   assert.doesNotMatch(container.textContent, /Goldman/);
 
   await render(React.createElement(ReferralWizard, { company: 'Northwind Labs' }));
-  assert.match($('#referral-step-title').textContent, /Which role at Northwind Labs\?/);
+  assert.match($('#referral-step-title').textContent, /Which roles at Northwind Labs\?/);
   assert.doesNotMatch(container.textContent, /Goldman/);
 });
 

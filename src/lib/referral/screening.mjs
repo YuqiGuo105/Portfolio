@@ -14,6 +14,7 @@ import { TEXT_MODEL } from '../discovery/provider.mjs';
 import { RELATIONSHIPS } from './config.mjs';
 import { introVoice } from './fields.mjs';
 import { gradeEvidence, SCREENING_POLICY } from './rubric.mjs';
+import { requestRoles } from './roles.mjs';
 
 // USD per million tokens for TEXT_MODEL, the same figures the model gateway quotes with.
 export const INPUT_RATE = 0.10;
@@ -30,6 +31,7 @@ const CONSISTENCY = ['consistent', 'minor_gaps', 'conflicts', 'not_checked'];
 const SCREEN_INSTRUCTION = company => `You help Yuqi Guo, a software engineer, triage requests for an employee referral at ${company}. `
   + 'You receive the applicant\'s form answers and, when attached, their résumé as a PDF. Write a brief, factual note for Yuqi only. '
   + 'The applicant never sees it and you do not decide anything: Yuqi reads every request himself.\n'
+  + '- A request can list up to three openings. Produce one evidence assessment of the applicant, not a separate score for each role.\n'
   + '- This is NOT job-description matching. Assess exactly three independent professional-evidence paths. No points for keyword overlap, a polished introduction, school prestige, knowing Yuqi, or years alone.\n'
   + '- employer: substantial engineering employment at a major established technology or financial-services company. Name the employer, role, dates and actual work; a famous client, course, certificate, job offer or unsupported name-drop is not employment. '
   + 'The server separately requires an official LinkedIn verification badge checked by the owner. You CANNOT verify the badge. Never say it is verified, even if the applicant claims it is, logs in with LinkedIn, has Premium, or includes a profile URL.\n'
@@ -86,8 +88,8 @@ export function normalizeScreening(value, { resumeRead, profileUrl = '' }) {
 export function rulesScreening(request, { reason = 'off' } = {}) {
   const provided = [], missing = [];
   const check = (present, yes, no) => (present ? provided : missing).push(present ? yes : no);
-  check(!!request.requirements, 'Pasted the key requirements from the posting.', 'No requirements pasted from the posting.');
-  check(!!request.jobId, 'Gave the job or requisition ID.', 'No job or requisition ID.');
+  check(requestRoles(request).some(role => role.requirements), 'Pasted key requirements for the openings.', 'No requirements pasted from the postings.');
+  check(requestRoles(request).some(role => role.jobId), 'Gave a job or requisition ID.', 'No job or requisition ID.');
   check(!!request.profileUrl, 'Linked a public profile.', 'No LinkedIn or portfolio link.');
   check(!!request.whyRole, 'Explained why this role.', 'Did not say why this role.');
   check(request.relationship !== 'not_yet', `Connection: ${RELATIONSHIPS.find(item => item.id === request.relationship)?.label || 'stated'}.`, 'Has not met Yuqi yet.');
@@ -102,8 +104,9 @@ export function rulesScreening(request, { reason = 'off' } = {}) {
 }
 
 const formPayload = request => ({
-  company: request.company || null, role: request.roleTitle, jobId: request.jobId || null, location: request.location || null,
-  pastedRequirements: request.requirements || null, applicantName: request.name, currentTitle: request.currentTitle || null,
+  company: request.company || null, roles: requestRoles(request).map(role => ({
+    role: role.roleTitle, jobId: role.jobId || null, location: role.location || null, pastedRequirements: role.requirements || null,
+  })), applicantName: request.name, currentTitle: request.currentTitle || null,
   yearsOfExperience: request.years, relationshipToYuqi: RELATIONSHIPS.find(item => item.id === request.relationship)?.label,
   relationshipNote: request.relationshipNote || null, thirdPersonIntroduction: request.intro, whyThisRole: request.whyRole || null,
 });

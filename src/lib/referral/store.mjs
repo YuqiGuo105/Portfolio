@@ -17,6 +17,7 @@ export function referralRow({ key, reference, request, resume, path, company }) 
     idempotency_key: key, reference, state: 'awaiting_upload', status: 'new', company,
     name: request.name, email: request.email, profile_url: request.profileUrl || null,
     role_title: request.roleTitle, job_url: request.jobUrl, job_id: request.jobId || null, location: request.location || null,
+    additional_roles: request.additionalRoles || [],
     requirements: request.requirements || null, relationship: request.relationship, relationship_note: request.relationshipNote || null,
     current_title: request.currentTitle || null, years_experience: request.years, intro: request.intro, why_role: request.whyRole || null,
     resume_path: path, resume_filename: resume.filename, resume_bytes: resume.size,
@@ -29,7 +30,7 @@ export function requestFromRow(row) {
     name: row.name, email: row.email, profileUrl: row.profile_url || '', roleTitle: row.role_title, jobUrl: row.job_url,
     jobId: row.job_id || '', location: row.location || '', requirements: row.requirements || '', relationship: row.relationship,
     relationshipNote: row.relationship_note || '', currentTitle: row.current_title || '', years: row.years_experience ?? null,
-    intro: row.intro, whyRole: row.why_role || '', company: row.company || '',
+    intro: row.intro, whyRole: row.why_role || '', company: row.company || '', additionalRoles: row.additional_roles || [],
   };
 }
 

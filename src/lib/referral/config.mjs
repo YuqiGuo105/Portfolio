@@ -7,6 +7,7 @@
 export const RESUME_MAX_BYTES = 2 * 1024 * 1024;
 export const INTRO_MIN = 200;
 export const INTRO_MAX = 1500;
+export const MAX_REFERRAL_ROLES = 3;
 
 export const LIMITS = Object.freeze({
   name: 120, email: 320, profileUrl: 300, roleTitle: 140, jobUrl: 500, jobId: 60, location: 100,

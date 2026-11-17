@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { ReferralError, firstPersonWords, hasPlaceholder, httpsUrl, idempotencyKey, introTemplate, introVoice, referralFields } from '../src/lib/referral/fields.mjs';
 import { inspectResume, resumeMeta, safeFilename } from '../src/lib/referral/resume.mjs';
 import { RESUME_MAX_BYTES } from '../src/lib/referral/config.mjs';
-import { INTRO, form, pdf } from './referral-fixtures.mjs';
+import { ADDITIONAL_ROLES, INTRO, form, pdf } from './referral-fixtures.mjs';
+import { expandPostingLinks, postingLinks } from '../src/lib/referral/roles.mjs';
 
 const code = fn => { try { fn(); } catch (error) { assert.ok(error instanceof ReferralError, String(error)); return `${error.code}:${error.field}`; } return 'ok'; };
 
@@ -12,9 +13,43 @@ test('a complete form is normalised and carries nothing the applicant did not ty
   assert.equal(fields.email, 'alex@example.com');
   assert.equal(fields.years, 5);
   assert.equal(fields.jobUrl, 'https://higher.gs.com/roles/123456');
-  assert.deepEqual(Object.keys(fields).sort(), ['currentTitle', 'email', 'intro', 'jobId', 'jobUrl', 'location', 'name', 'profileUrl',
+  assert.deepEqual(Object.keys(fields).sort(), ['additionalRoles', 'currentTitle', 'email', 'intro', 'jobId', 'jobUrl', 'location', 'name', 'profileUrl',
     'relationship', 'relationshipNote', 'requirements', 'roleTitle', 'whyRole', 'years']);
 });
+
+test('one to three roles are normalized without retaining arbitrary nested fields', () => {
+  assert.deepEqual(referralFields(form()).additionalRoles, []);
+  for (const count of [1, 2]) {
+    const roles = ADDITIONAL_ROLES.slice(0, count);
+    const result = referralFields(form({ additionalRoles: roles.map(role => ({ ...role, roleTitle: ` ${role.roleTitle} `, admin: true })) }));
+    assert.deepEqual(result.additionalRoles, roles);
+  }
+});
+
+test('comma-separated links expand without splitting titles or losing encoded URL characters', () => {
+  const links = ['https://higher.gs.com/roles/123456', 'https://higher.gs.com/roles/2?location=New%20York%2CNY', 'https://higher.gs.com/roles/3'];
+  for (const separator of [', ', '，', '\n']) {
+    const parsed = referralFields(expandPostingLinks(form({ roleTitle: 'Associate, Software Engineering', jobUrl: links.join(separator) })));
+    assert.equal(parsed.roleTitle, 'Associate, Software Engineering');
+    assert.equal(parsed.jobUrl, links[0]);
+    assert.deepEqual(parsed.additionalRoles.map(role => role.jobUrl), links.slice(1));
+  }
+  assert.deepEqual(postingLinks(' , ，\n '), []);
+  assert.equal(code(() => referralFields(expandPostingLinks(form({ jobUrl: `${links[0]}, javascript:alert(1)` })))), 'invalid_field:additionalRoles.0.jobUrl');
+});
+
+for (const [label, extra, expected] of [
+  ['a fourth role', [...ADDITIONAL_ROLES, ADDITIONAL_ROLES[0]], 'invalid_roles:additionalRoles'],
+  ['a non-array', {}, 'invalid_roles:additionalRoles'],
+  ['null', null, 'invalid_roles:additionalRoles'],
+  ['an empty role', [{}], 'missing_field:additionalRoles.0.roleTitle'],
+  ['a null role', [null], 'invalid_field:additionalRoles.0.roleTitle'],
+  ['an unsafe extra URL', [{ ...ADDITIONAL_ROLES[0], jobUrl: 'javascript:alert(1)' }], 'invalid_field:additionalRoles.0.jobUrl'],
+  ['oversized requirements', [{ ...ADDITIONAL_ROLES[0], requirements: 'x'.repeat(1501) }], 'too_long:additionalRoles.0.requirements'],
+  ['the primary URL with tracking', [{ ...ADDITIONAL_ROLES[0], jobUrl: 'https://higher.gs.com/roles/123456/?utm_source=linkedin#apply' }], 'duplicate_role:additionalRoles.0.jobUrl'],
+  ['a repeated requisition ID', [{ ...ADDITIONAL_ROLES[0], jobId: '123456' }], 'duplicate_role:additionalRoles.0.jobId'],
+  ['two identical extra roles', [ADDITIONAL_ROLES[0], ADDITIONAL_ROLES[0]], 'duplicate_role:additionalRoles.1.jobUrl'],
+]) test(`rejects ${label}`, () => assert.equal(code(() => referralFields(form({ additionalRoles: extra }))), expected));
 
 test('optional fields may be left empty', () => {
   const fields = referralFields(form({ profileUrl: '', jobId: '', location: '', requirements: '', relationshipNote: '', currentTitle: '', years: '', whyRole: '' }));

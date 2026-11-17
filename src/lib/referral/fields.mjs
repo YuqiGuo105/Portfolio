@@ -1,6 +1,7 @@
 // Validation for a referral request. Pure and shared: the form uses it for inline hints and the
 // server runs the same rules again, so the two can never disagree about what is acceptable.
-import { INTRO_MAX, INTRO_MIN, LIMITS, RELATIONSHIPS } from './config.mjs';
+import { INTRO_MAX, INTRO_MIN, LIMITS, MAX_REFERRAL_ROLES, RELATIONSHIPS } from './config.mjs';
+import { requestRoles, roleFieldKey } from './roles.mjs';
 
 export class ReferralError extends Error {
   constructor(code, status = 400, field = null) { super(code); this.code = code; this.status = status; this.field = field; }
@@ -52,28 +53,53 @@ export function introTemplate({ name = '', roleTitle = '', company = '' } = {}) 
     + `${who.split(/\s+/)[0]} is interested in the ${roleTitle.trim() || '[role]'} role${company ? ` at ${company}` : ''} because [one specific reason].`;
 }
 
+function fieldText(body, key, max, { required = false, multiline = false, field = key } = {}) {
+  const raw = body[key];
+  if (raw === undefined || raw === null || raw === '') {
+    if (required) throw new ReferralError('missing_field', 400, field);
+    return '';
+  }
+  if (typeof raw !== 'string' || raw.length > max * 2) throw new ReferralError('invalid_field', 400, field);
+  const value = (multiline ? clean(raw) : clean(raw).replace(/\s+/g, ' ')).trim();
+  if (value.length > max) throw new ReferralError('too_long', 400, field);
+  if (required && !value) throw new ReferralError('missing_field', 400, field);
+  return value;
+}
+
+export function parseReferralRoles(body) {
+  if (body.additionalRoles !== undefined && (!Array.isArray(body.additionalRoles) || body.additionalRoles.length >= MAX_REFERRAL_ROLES)) {
+    throw new ReferralError('invalid_roles', 400, 'additionalRoles');
+  }
+  const urls = new Set(), ids = new Set();
+  return requestRoles(body).map((role, index) => {
+    if (!role || typeof role !== 'object' || Array.isArray(role)) throw new ReferralError('invalid_field', 400, roleFieldKey(index, 'roleTitle'));
+    const text = (key, options = {}) => fieldText(role, key, LIMITS[key], { ...options, field: roleFieldKey(index, key) });
+    const roleTitle = text('roleTitle', { required: true });
+    if (role.jobUrl === undefined || role.jobUrl === '') throw new ReferralError('missing_field', 400, roleFieldKey(index, 'jobUrl'));
+    const jobUrl = httpsUrl(role.jobUrl, LIMITS.jobUrl);
+    if (!jobUrl) throw new ReferralError('invalid_field', 400, roleFieldKey(index, 'jobUrl'));
+    const canonical = new URL(jobUrl);
+    canonical.hash = '';
+    for (const key of [...canonical.searchParams.keys()]) if (/^(utm_|gclid$|fbclid$)/i.test(key)) canonical.searchParams.delete(key);
+    canonical.searchParams.sort();
+    canonical.pathname = canonical.pathname.replace(/\/$/, '') || '/';
+    if (urls.has(canonical.href)) throw new ReferralError('duplicate_role', 400, roleFieldKey(index, 'jobUrl'));
+    urls.add(canonical.href);
+    const jobId = text('jobId');
+    if (jobId && ids.has(jobId.toLowerCase())) throw new ReferralError('duplicate_role', 400, roleFieldKey(index, 'jobId'));
+    if (jobId) ids.add(jobId.toLowerCase());
+    return { roleTitle, jobUrl, jobId, location: text('location'), requirements: text('requirements', { multiline: true }) };
+  });
+}
+
 // Fields the applicant typed. Throws ReferralError naming the first field that needs attention.
 export function referralFields(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new ReferralError('invalid_fields');
-  const text = (key, max, { required = false, multiline = false } = {}) => {
-    const raw = body[key];
-    if (raw === undefined || raw === null || raw === '') {
-      if (required) throw new ReferralError('missing_field', 400, key);
-      return '';
-    }
-    if (typeof raw !== 'string' || raw.length > max * 2) throw new ReferralError('invalid_field', 400, key);
-    const value = (multiline ? clean(raw) : clean(raw).replace(/\s+/g, ' ')).trim();
-    if (value.length > max) throw new ReferralError('too_long', 400, key);
-    if (required && !value) throw new ReferralError('missing_field', 400, key);
-    return value;
-  };
+  const text = (key, max, options) => fieldText(body, key, max, options);
   const name = text('name', LIMITS.name, { required: true });
   const email = text('email', LIMITS.email, { required: true }).toLowerCase();
   if (!EMAIL.test(email)) throw new ReferralError('invalid_field', 400, 'email');
-  const roleTitle = text('roleTitle', LIMITS.roleTitle, { required: true });
-  if (body.jobUrl === undefined || body.jobUrl === '') throw new ReferralError('missing_field', 400, 'jobUrl');
-  const jobUrl = httpsUrl(body.jobUrl, LIMITS.jobUrl);
-  if (!jobUrl) throw new ReferralError('invalid_field', 400, 'jobUrl');
+  const [role, ...additionalRoles] = parseReferralRoles(body);
   let profileUrl = '';
   if (body.profileUrl) {
     profileUrl = httpsUrl(body.profileUrl, LIMITS.profileUrl);
@@ -92,9 +118,7 @@ export function referralFields(body) {
   if (introVoice(intro) === 'first_person') throw new ReferralError('intro_not_third_person', 400, 'intro');
   if (body.consent !== true) throw new ReferralError('consent_required', 400, 'consent');
   return {
-    name, email, profileUrl, roleTitle, jobUrl,
-    jobId: text('jobId', LIMITS.jobId), location: text('location', LIMITS.location),
-    requirements: text('requirements', LIMITS.requirements, { multiline: true }),
+    name, email, profileUrl, ...role, additionalRoles,
     relationship, relationshipNote: text('relationshipNote', LIMITS.relationshipNote),
     currentTitle: text('currentTitle', LIMITS.currentTitle), years, intro,
     whyRole: text('whyRole', LIMITS.whyRole, { multiline: true }),

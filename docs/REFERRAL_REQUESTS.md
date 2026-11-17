@@ -7,15 +7,28 @@ an independent Request a referral link opens `/talk?intent=referral`.
 | Choice | What happens |
 |---|---|
 | Send a message | The existing guarded contact form (`src/lib/contactGuard.mjs`): Turnstile, honeypot, rate limit, shared moderation, email. |
-| Ask for a referral | A four-step form: the role, about you, a third-person introduction, review. |
+| Ask for a referral | A four-step form: up to three roles, about you, a third-person introduction, review. |
 | Chat or call live | Explains TalkNest and links to it with `?connect=Yuqi%20Guo`, so TalkNest opens that conversation after sign-in. |
 
 ## What a referral request contains
 
-Role title, posting link, optional job ID, location and pasted requirements; name, email, optional
+One to three posting links at the current employer, entered in one field separated by commas
+(Chinese commas and pasted newlines also work). The first is the applicant's first choice;
+the title, optional job ID, location and pasted requirements describe that first choice. Extra links
+are labeled Opening 2 and Opening 3 without guessing their titles. Duplicate posting URLs
+or requisition IDs are refused. One request shares the applicant details, resume, introduction and
+one AI evidence assessment, irrespective of the number of roles.
+
+Applicant details: name, email, optional
 profile link, current title and years of experience; how the applicant knows Yuqi; a résumé PDF
 (2 MB at most); an introduction of the applicant **in third person** (200 to 1,500 characters);
 optionally why they want the role.
+
+The first opening keeps the existing `role_title`, `job_url`, `job_id`, `location` and `requirements`
+columns; up to two others are stored in `additional_roles` (JSONB). Existing single-role requests
+and older clients remain readable. Apply the additive `referral_additional_roles` migration before
+deploying this version; it preserves the existing service-only access and RLS. The local preview
+uses its in-memory store and does not apply a production migration.
 
 The introduction is third person because a referral form asks the referrer to describe the
 candidate. **The applicant writes it, or pastes one they already have. No model writes or rewrites

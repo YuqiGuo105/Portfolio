@@ -3,6 +3,7 @@ import { Check, ChevronRight, Copy, Download, Mail, RefreshCw, RotateCw, Trash2 
 import { RELATIONSHIPS, STATUSES } from "../../lib/referral/config.mjs";
 import { currentScreening, EVIDENCE_PATHS, linkedInProfile, screeningLabel, screeningRank } from "../../lib/referral/rubric.mjs";
 import { sameCompany } from "../../lib/currentRole.mjs";
+import { storedRoles } from "../../lib/referral/roles.mjs";
 import styles from "./ReferralInbox.module.css";
 
 const STATUS_LABELS = { new: "New", reviewing: "Reviewing", referred: "Referred", declined: "Declined", archived: "Archived" };
@@ -76,6 +77,7 @@ function EvidenceScore({ request, busy, onBadge }) {
 
 function Detail({ request, busy, onStatus, onNote, onDelete, onResume, onRescreen, onBadge }) {
   const note = request.screening || {};
+  const roles = storedRoles(request);
   const [ownerNote, setOwnerNote] = useState(request.owner_note || "");
   const [copied, setCopied] = useState(false);
   const relationship = RELATIONSHIPS.find((item) => item.id === request.relationship)?.label || request.relationship;
@@ -117,15 +119,22 @@ function Detail({ request, busy, onStatus, onNote, onDelete, onResume, onRescree
               </>}
           </div>
         </div>
-        {request.why_role && <div className={styles.block}><h4 className={styles.blockTitle}>Why this role</h4><p className={styles.plain}>{request.why_role}</p></div>}
-        {request.requirements && <div className={styles.block}><h4 className={styles.blockTitle}>Requirements they pasted</h4><p className={styles.plain}>{request.requirements}</p></div>}
+        {request.why_role && <div className={styles.block}><h4 className={styles.blockTitle}>{roles.length > 1 ? "Why these roles" : "Why this role"}</h4><p className={styles.plain}>{request.why_role}</p></div>}
       </div>
       <div>
+        {roles.map((role, index) => <div className={styles.block} key={index}>
+          <h4 className={styles.blockTitle}>Role {index + 1}{index === 0 ? " · First choice" : ""}</h4>
+          <dl className={styles.facts}>
+            <dt>Title</dt><dd>{role.roleTitle}</dd>
+            <dt>Posting</dt><dd><a href={role.jobUrl} target="_blank" rel="noopener noreferrer">{role.jobId ? `Job ${role.jobId}` : "Open the posting"}</a></dd>
+            {role.location && <><dt>Location</dt><dd>{role.location}</dd></>}
+          </dl>
+          {role.requirements && <p className={styles.plain}>{role.requirements}</p>}
+        </div>)}
         <div className={styles.block}>
           <h4 className={styles.blockTitle}>Details</h4>
           <dl className={styles.facts}>
             {request.company && <><dt>Company</dt><dd>{request.company}</dd></>}
-            <dt>Posting</dt><dd><a href={request.job_url} target="_blank" rel="noopener noreferrer">{request.job_id ? `Job ${request.job_id}` : "Open the posting"}</a>{request.location ? ` · ${request.location}` : ""}</dd>
             <dt>Email</dt><dd><a href={`mailto:${request.email}?subject=${encodeURIComponent(`Your referral request: ${request.role_title}`)}`}>{request.email}</a></dd>
             {request.profile_url && <><dt>Profile</dt><dd><a href={request.profile_url} target="_blank" rel="noopener noreferrer">{request.profile_url.replace(/^https:\/\/(www\.)?/, "")}</a></dd></>}
             {request.current_title && <><dt>Now</dt><dd>{request.current_title}</dd></>}
@@ -270,7 +279,7 @@ export default function ReferralInbox({ api, onState }) {
         {shown.map((request) => (
           <div key={request.id} className={styles.item}>
             <button type="button" className={styles.rowButton} aria-expanded={open === request.id} onClick={() => setOpen(open === request.id ? "" : request.id)}>
-              <span className={styles.who}><strong>{request.name}</strong><span>{request.role_title}</span></span>
+              <span className={styles.who}><strong>{request.name}</strong><span>{request.role_title}{request.additional_roles?.length ? ` + ${request.additional_roles.length} more` : ""}</span></span>
               <Signal request={request} offer={offer} />
               <span className={styles.when}>{tab === "all" && <span className={styles.pill} data-tone="status" style={{ marginRight: 8 }}>{STATUS_LABELS[request.status]}</span>}{when(request.created_at)}</span>
               <ChevronRight size={16} className={styles.chevron} aria-hidden="true" />

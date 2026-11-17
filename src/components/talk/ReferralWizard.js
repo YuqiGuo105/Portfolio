@@ -2,24 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Check, CircleAlert, CircleCheck, FileText, LoaderCircle } from "lucide-react";
 import ContactVerification from "../ContactVerification";
-import { INTRO_MAX, INTRO_MIN, LIMITS, RELATIONSHIPS, RESUME_MAX_BYTES } from "../../lib/referral/config.mjs";
-import { firstPersonWords, hasPlaceholder, httpsUrl, introTemplate, introVoice } from "../../lib/referral/fields.mjs";
+import { INTRO_MAX, INTRO_MIN, LIMITS, MAX_REFERRAL_ROLES, RELATIONSHIPS, RESUME_MAX_BYTES } from "../../lib/referral/config.mjs";
+import { firstPersonWords, hasPlaceholder, httpsUrl, introTemplate, introVoice, parseReferralRoles } from "../../lib/referral/fields.mjs";
+import { expandPostingLinks, postingLinks, requestRoles, ROLE_FIELDS } from "../../lib/referral/roles.mjs";
 import styles from "./Talk.module.css";
 
 const STEPS = [
-  { id: "role", label: "The role" },
+  { id: "role", label: "The roles" },
   { id: "you", label: "About you" },
   { id: "intro", label: "Introduction" },
   { id: "review", label: "Review and send" },
 ];
+const EMPTY_ROLE = { roleTitle: "", jobUrl: "", jobId: "", location: "", requirements: "" };
 const EMPTY = {
-  roleTitle: "", jobUrl: "", jobId: "", location: "", requirements: "",
+  ...EMPTY_ROLE, additionalRoles: [],
   name: "", email: "", profileUrl: "", currentTitle: "", years: "", relationship: "", relationshipNote: "",
   intro: "", whyRole: "",
 };
 // Which step holds each field, so a server-side complaint can take the applicant to the right place.
 const FIELD_STEP = {
-  roleTitle: 0, jobUrl: 0, jobId: 0, location: 0, requirements: 0,
+  roleTitle: 0, jobUrl: 0, jobId: 0, location: 0, requirements: 0, additionalRoles: 0,
   name: 1, email: 1, profileUrl: 1, currentTitle: 1, years: 1, relationship: 1, relationshipNote: 1, resume: 1,
   intro: 2, whyRole: 2, consent: 3,
 };
@@ -32,8 +34,18 @@ function validate(step, data, resume) {
   const errors = {};
   if (step === 0) {
     if (!data.roleTitle.trim()) errors.roleTitle = "Enter the role title as it appears on the posting.";
-    if (!data.jobUrl.trim()) errors.jobUrl = "Paste the link to the posting.";
-    else if (!httpsUrl(data.jobUrl, LIMITS.jobUrl)) errors.jobUrl = "Use the full https:// link to the posting.";
+    const links = postingLinks(data.jobUrl);
+    if (!links.length) errors.jobUrl = "Paste the link to the posting.";
+    else if (links.length > MAX_REFERRAL_ROLES) errors.jobUrl = "Enter no more than three posting links, separated by commas.";
+    else if (links.some(link => !httpsUrl(link, LIMITS.jobUrl))) errors.jobUrl = "Use the full https:// link to the posting.";
+    if (!Object.keys(errors).length) try { parseReferralRoles(expandPostingLinks(data)); } catch (error) {
+      const field = error.field?.startsWith("additionalRoles") ? "jobUrl" : error.field || "jobUrl";
+      errors[field] = error.code === "duplicate_role" ? "This opening is already included. Choose another posting or remove this role."
+        : error.code === "invalid_roles" ? "Choose between one and three openings."
+        : field.endsWith("jobUrl") ? "Use the full https:// link to the posting."
+        : field.endsWith("roleTitle") ? "Enter the role title as it appears on the posting."
+        : "Please check this field and its length.";
+    }
   }
   if (step === 1) {
     if (!data.name.trim()) errors.name = "Enter your full name.";
@@ -84,6 +96,7 @@ export default function ReferralWizard({ company }) {
   // "", "saving", "uploading" or "finishing": which part of sending is under way.
   const [phase, setPhase] = useState("");
   const heading = useRef(null);
+  const pendingFocus = useRef(null);
   const moved = useRef(false);
   const inFlight = useRef(false);
   // One key per request, generated once and kept for this tab: sending it again never creates a second request.
@@ -95,7 +108,14 @@ export default function ReferralWizard({ company }) {
   useEffect(() => {
     try {
       const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null");
-      if (saved && typeof saved === "object") setData((current) => ({ ...current, ...Object.fromEntries(Object.entries(saved).filter(([key, value]) => key in EMPTY && typeof value === "string")) }));
+      if (saved && typeof saved === "object") setData((current) => ({ ...current,
+        ...Object.fromEntries(Object.entries(saved).filter(([key, value]) => key in EMPTY && key !== "additionalRoles" && typeof value === "string")),
+        jobUrl: typeof saved.jobUrl === "string" ? [...new Set([saved.jobUrl, ...(Array.isArray(saved.additionalRoles) && postingLinks(saved.jobUrl).length <= 1
+          ? saved.additionalRoles.map(role => typeof role?.jobUrl === "string" ? role.jobUrl : "").filter(Boolean) : [])])].join(", ") : "",
+        additionalRoles: Array.isArray(saved.additionalRoles) ? saved.additionalRoles.slice(0, MAX_REFERRAL_ROLES - 1)
+          .filter(role => role && typeof role === "object" && !Array.isArray(role))
+          .map(role => Object.fromEntries(ROLE_FIELDS.map(key => [key, typeof role[key] === "string" ? role[key].slice(0, LIMITS[key]) : ""]))) : [],
+      }));
     } catch { /* Storage is optional. */ }
   }, []);
   useEffect(() => {
@@ -117,6 +137,13 @@ export default function ReferralWizard({ company }) {
     heading.current?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   }, [step, done]);
 
+  // Wait for validation errors and step changes to render before moving keyboard focus.
+  useEffect(() => {
+    if (!pendingFocus.current) return;
+    document.getElementById(pendingFocus.current)?.focus();
+    pendingFocus.current = null;
+  }, [data, errors, step]);
+
   // Changing an answer after the server accepted the form starts a new request, so what is sent
   // is always what is on screen. The half-finished one is discarded by the server after a day.
   const forgetTicket = () => {
@@ -127,7 +154,7 @@ export default function ReferralWizard({ company }) {
   const set = (key) => (event) => {
     const value = event.target.value;
     forgetTicket();
-    setData((current) => ({ ...current, [key]: value }));
+    setData((current) => ({ ...current, [key]: value, ...(key === "jobUrl" ? { additionalRoles: [] } : {}) }));
     if (errors[key]) setErrors(({ [key]: _removed, ...rest }) => rest);
   };
   const input = (key, extra = {}) => ({
@@ -139,7 +166,8 @@ export default function ReferralWizard({ company }) {
   const go = (target) => { moved.current = true; setNotice(""); setStep(target); setReached((current) => Math.max(current, target)); };
   const focusFirst = (found) => {
     const first = Object.keys(found)[0];
-    requestAnimationFrame(() => document.getElementById(first === "relationship" ? "referral-relationship-0" : `referral-${first}`)?.focus());
+    pendingFocus.current = first === "relationship" ? "referral-relationship-0"
+      : first.startsWith("additionalRoles") ? "referral-jobUrl" : `referral-${first}`;
   };
   const next = () => {
     const found = validate(step, data, resume);
@@ -195,7 +223,7 @@ export default function ReferralWizard({ company }) {
       setPhase("saving");
       const response = await fetch("/api/referral", {
         method: "POST", headers: json,
-        body: JSON.stringify({ ...data, years: data.years === "" ? "" : Number(data.years), consent: true, website, turnstileToken: token, company,
+        body: JSON.stringify({ ...expandPostingLinks(data), years: data.years === "" ? "" : Number(data.years), consent: true, website, turnstileToken: token, company,
           idempotencyKey: requestKey.current, resume: { name: resume.name, size: resume.size, type: "application/pdf" } }),
       });
       const result = await response.json().catch(() => ({}));
@@ -224,10 +252,11 @@ export default function ReferralWizard({ company }) {
       moved.current = true;
       setDone({ reference: result.reference || ticket.current.reference, email: data.email.trim() });
     } catch (error) {
-      if (error.field && error.field in FIELD_STEP && FIELD_STEP[error.field] < 3) {
+      const fieldStep = error.field?.startsWith("additionalRoles.") ? 0 : FIELD_STEP[error.field];
+      if (error.field && fieldStep < 3) {
         if (error.field === "resume") setResume(null);
-        setErrors({ [error.field]: error.message });
-        go(FIELD_STEP[error.field]); focusFirst({ [error.field]: true });
+        setErrors({ [error.field.startsWith("additionalRoles") ? "jobUrl" : error.field]: error.message });
+        go(fieldStep); focusFirst({ [error.field]: true });
       } else setNotice(error instanceof TypeError ? "The connection dropped. Press “Send request” to try again; everything you entered is still here." : error.message);
     } finally {
       inFlight.current = false; setSending(false); setPhase("");
@@ -248,6 +277,7 @@ export default function ReferralWizard({ company }) {
   const voice = data.intro.trim() ? introVoice(data.intro) : null;
   const firstPerson = [...new Set(firstPersonWords(data.intro))].slice(0, 5);
   const relationshipLabel = RELATIONSHIPS.find((item) => item.id === data.relationship)?.label || "";
+  const roles = requestRoles(expandPostingLinks(data));
 
   return (
     <form className={styles.hub} onSubmit={submit} noValidate aria-busy={sending} data-referral-form>
@@ -268,26 +298,27 @@ export default function ReferralWizard({ company }) {
 
       {step === 0 && (
         <section aria-labelledby="referral-step-title">
-          <h3 className={styles.stepHeading} id="referral-step-title" ref={heading} tabIndex={-1}>Which role at {company}?</h3>
-          <p className={styles.lead}>I can refer you to one specific opening, so start with the posting.</p>
-          <Field id="referral-roleTitle" label="Role title" error={errors.roleTitle}>
-            <input type="text" {...input("roleTitle")} maxLength={LIMITS.roleTitle} placeholder="Software Engineer, Payments" autoComplete="off" />
+          <h3 className={styles.stepHeading} id="referral-step-title" ref={heading} tabIndex={-1}>Which roles at {company}?</h3>
+          <p className={styles.lead}>You can request a referral for up to three openings. Start with your first choice.</p>
+          <Field id="referral-roleTitle" label="Role title" hint="Your first-choice opening." error={errors.roleTitle}>
+            <input type="text" {...input("roleTitle", { hint: true })} maxLength={LIMITS.roleTitle} placeholder="Software Engineer, Payments" autoComplete="off" />
           </Field>
-          <Field id="referral-jobUrl" label="Link to the posting" hint="The page on the company’s careers site." error={errors.jobUrl}>
-            <input type="url" inputMode="url" {...input("jobUrl", { hint: true })} maxLength={LIMITS.jobUrl} placeholder="https://" autoComplete="off" />
+          <Field id="referral-jobUrl" label="Links to the postings" hint="Up to 3 links from the company’s careers site, separated by commas. Put your first choice first." error={errors.jobUrl}>
+            <textarea {...input("jobUrl", { hint: true })} className={styles.textarea} maxLength={(LIMITS.jobUrl + 2) * MAX_REFERRAL_ROLES}
+              rows={3} style={{ minHeight: 100 }} placeholder="https://higher.gs.com/roles/123, https://higher.gs.com/roles/456" autoComplete="off" spellCheck={false} />
           </Field>
           <div className={styles.row}>
-            <Field id="referral-jobId" label="Job or requisition ID" optional>
-              <input type="text" {...input("jobId")} maxLength={LIMITS.jobId} autoComplete="off" />
+            <Field id="referral-jobId" label="Job or requisition ID" optional hint="First choice." error={errors.jobId}>
+              <input type="text" {...input("jobId", { hint: true })} maxLength={LIMITS.jobId} autoComplete="off" />
             </Field>
-            <Field id="referral-location" label="Location" optional>
-              <input type="text" {...input("location")} maxLength={LIMITS.location} placeholder="New York, NY" autoComplete="off" />
+            <Field id="referral-location" label="Location" optional hint="First choice." error={errors.location}>
+              <input type="text" {...input("location", { hint: true })} maxLength={LIMITS.location} placeholder="New York, NY" autoComplete="off" />
             </Field>
           </div>
-          <Field id="referral-requirements" label="Key requirements from the posting" optional
-            hint="Paste the three to six lines that matter most. It helps me judge the match."
+          <Field id="referral-requirements" label="Key requirements from the posting" optional error={errors.requirements}
+            hint="Paste the three to six lines that matter most for your first choice."
             counter={data.requirements.length > LIMITS.requirements - 200 ? `${data.requirements.length}/${LIMITS.requirements}` : null}>
-            <textarea {...input("requirements", { hint: true })} className={styles.textarea} maxLength={LIMITS.requirements} rows={5} />
+            <textarea {...input("requirements", { hint: true })} className={styles.textarea} maxLength={LIMITS.requirements} rows={4} />
           </Field>
         </section>
       )}
@@ -363,7 +394,7 @@ export default function ReferralWizard({ company }) {
               <button type="button" className={styles.textButton} onClick={useTemplate}>Start from a fill-in template</button>
             </div>
           )}
-          <Field id="referral-whyRole" label="Why this role?" optional
+          <Field id="referral-whyRole" label={roles.length > 1 ? "Why these roles?" : "Why this role?"} optional
             counter={data.whyRole.length > LIMITS.whyRole - 150 ? `${data.whyRole.length}/${LIMITS.whyRole}` : null}>
             <textarea {...input("whyRole")} className={styles.textarea} maxLength={LIMITS.whyRole} rows={3} style={{ minHeight: 88 }} />
           </Field>
@@ -375,16 +406,16 @@ export default function ReferralWizard({ company }) {
           <h3 className={styles.stepHeading} id="referral-step-title" ref={heading} tabIndex={-1}>Check it, then send</h3>
           <p className={styles.lead}>This is what I will receive.</p>
           <div className={styles.review}>
-            <div className={styles.reviewGroup}>
-              <h4>The role</h4>
+            {roles.map((role, index) => <div className={styles.reviewGroup} key={index}>
+              <h4>Role {index + 1}{index === 0 ? " · First choice" : ""}</h4>
               <dl>
-                <div><dt>Role</dt><dd>{data.roleTitle} at {company}</dd></div>
-                <div><dt>Posting</dt><dd>{data.jobUrl}</dd></div>
-                {(data.jobId || data.location) && <div><dt>ID and location</dt><dd>{[data.jobId, data.location].filter(Boolean).join(" · ")}</dd></div>}
-                {data.requirements && <div><dt>Requirements you pasted</dt><dd>{data.requirements}</dd></div>}
+                <div><dt>Role</dt><dd>{role.roleTitle} at {company}</dd></div>
+                <div><dt>Posting</dt><dd>{role.jobUrl}</dd></div>
+                {(role.jobId || role.location) && <div><dt>ID and location</dt><dd>{[role.jobId, role.location].filter(Boolean).join(" · ")}</dd></div>}
+                {role.requirements && <div><dt>Requirements you pasted</dt><dd>{role.requirements}</dd></div>}
               </dl>
-              <button type="button" className={styles.textButton} onClick={() => go(0)}>Edit<span className={styles.srOnly}> the role</span></button>
-            </div>
+              <button type="button" className={styles.textButton} onClick={() => go(0)}>Edit<span className={styles.srOnly}> role {index + 1}</span></button>
+            </div>)}
             <div className={styles.reviewGroup}>
               <h4>About you</h4>
               <dl>
@@ -400,7 +431,7 @@ export default function ReferralWizard({ company }) {
               <h4>Introduction</h4>
               <dl>
                 <div><dt>In third person</dt><dd>{data.intro}</dd></div>
-                {data.whyRole && <div><dt>Why this role</dt><dd>{data.whyRole}</dd></div>}
+                {data.whyRole && <div><dt>{roles.length > 1 ? "Why these roles" : "Why this role"}</dt><dd>{data.whyRole}</dd></div>}
               </dl>
               <button type="button" className={styles.textButton} onClick={() => go(2)}>Edit<span className={styles.srOnly}> the introduction</span></button>
             </div>

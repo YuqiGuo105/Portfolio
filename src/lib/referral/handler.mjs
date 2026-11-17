@@ -25,6 +25,8 @@ const MESSAGES = {
   invalid_fields: 'Please check the form and try again.',
   missing_field: 'This field is required.',
   invalid_field: 'This field does not look right.',
+  invalid_roles: 'Choose between one and three openings.',
+  duplicate_role: 'This opening is already included. Choose a different posting or remove this role.',
   too_long: 'This is longer than the form allows.',
   intro_too_short: 'Add a little more to the introduction: at least a short paragraph.',
   intro_placeholder: 'Replace the parts in [brackets] with your own details.',
