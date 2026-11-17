@@ -4,7 +4,6 @@ import { useRouter } from "next/router";
 import { Handshake, Mail, MessagesSquare } from "lucide-react";
 import MessageForm from "./MessageForm";
 import LiveChatPanel from "./LiveChatPanel";
-import ReferralIntro from "./ReferralIntro";
 import { TALK_PATH } from "./links";
 import styles from "./Talk.module.css";
 
@@ -12,11 +11,12 @@ import styles from "./Talk.module.css";
 const ReferralWizard = dynamic(() => import("./ReferralWizard"), { ssr: false });
 
 export const INTENTS = [
-  { id: "message", title: "Send a message", hint: "A note to my inbox. I reply by email.", icon: Mail },
-  { id: "referral", title: "Ask for a referral", hint: "About five minutes.", icon: Handshake },
-  { id: "chat", title: "Chat or call live", hint: "On TalkNest, my chat and calling app.", icon: MessagesSquare },
+  { id: "message", title: "Send a message", label: "Message", hint: "A note to my inbox. I reply by email.", icon: Mail },
+  { id: "referral", title: "Ask for a referral", label: "Referral", hint: "About five minutes.", icon: Handshake },
+  { id: "chat", title: "Chat or call live", label: "Live chat", hint: "On TalkNest, my chat and calling app.", icon: MessagesSquare },
 ];
 const known = (value) => INTENTS.some((item) => item.id === value);
+const CONTACT_INTENTS = INTENTS.filter(({ id }) => id !== "referral");
 // The referral tab names the company it is for, or says that requests are closed.
 const hintFor = (item, referral) => (item.id !== "referral" ? item.hint : referral?.company ? `At ${referral.company}. About five minutes.` : "Not open right now.");
 
@@ -37,14 +37,15 @@ function ReferralClosed({ reason, onMessage }) {
   );
 }
 
-// One place for the three ways to reach Yuqi. `mode="section"` is the compact version in the home
-// page's Contact section; `mode="page"` is /talk, where the referral form itself lives.
+// The home section offers message/chat; its separate referral link opens the full /talk form.
 // `referral` comes from the page's static props: { company, reason } (src/lib/referral/availability.mjs).
 export default function TalkHub({ mode = "section", initialIntent = "message", referral = null }) {
   const router = useRouter();
-  const [intent, setIntent] = useState(known(initialIntent) ? initialIntent : "message");
+  const choices = mode === "section" ? CONTACT_INTENTS : INTENTS;
+  const startingIntent = choices.some(({ id }) => id === initialIntent) ? initialIntent : "message";
+  const [intent, setIntent] = useState(startingIntent);
   // A panel stays mounted once opened, so switching tabs never discards a half-written form.
-  const [opened, setOpened] = useState(() => new Set([known(initialIntent) ? initialIntent : "message"]));
+  const [opened, setOpened] = useState(() => new Set([startingIntent]));
   const tabs = useRef({});
 
   const show = (id) => {
@@ -68,11 +69,11 @@ export default function TalkHub({ mode = "section", initialIntent = "message", r
   };
 
   const onKeyDown = (event) => {
-    const index = INTENTS.findIndex((item) => item.id === intent);
-    const next = { ArrowRight: index + 1, ArrowDown: index + 1, ArrowLeft: index - 1, ArrowUp: index - 1, Home: 0, End: INTENTS.length - 1 }[event.key];
+    const index = choices.findIndex((item) => item.id === intent);
+    const next = { ArrowRight: index + 1, ArrowDown: index + 1, ArrowLeft: index - 1, ArrowUp: index - 1, Home: 0, End: choices.length - 1 }[event.key];
     if (next === undefined) return;
     event.preventDefault();
-    const target = INTENTS[(next + INTENTS.length) % INTENTS.length].id;
+    const target = choices[(next + choices.length) % choices.length].id;
     choose(target);
     tabs.current[target]?.focus();
   };
@@ -80,9 +81,9 @@ export default function TalkHub({ mode = "section", initialIntent = "message", r
   return (
     <div className={styles.root} data-talk-hub={mode}>
       <div className={styles.hub}>
-        <p className={styles.question} id={`talk-question-${mode}`}>What would you like to do?</p>
+        <p className={mode === "section" ? styles.srOnly : styles.question} id={`talk-question-${mode}`}>What would you like to do?</p>
         <div className={styles.intents} role="tablist" aria-labelledby={`talk-question-${mode}`} onKeyDown={onKeyDown}>
-          {INTENTS.map(({ id, title, icon: Icon, ...item }) => (
+          {choices.map(({ id, title, label, icon: Icon, ...item }) => (
             <button
               key={id}
               type="button"
@@ -91,23 +92,25 @@ export default function TalkHub({ mode = "section", initialIntent = "message", r
               ref={(node) => { tabs.current[id] = node; }}
               className={styles.intent}
               aria-selected={intent === id}
+              aria-label={title}
+              aria-describedby={`talk-hint-${mode}-${id}`}
               aria-controls={`talk-panel-${id}`}
               tabIndex={intent === id ? 0 : -1}
               onClick={() => choose(id)}
             >
               <Icon size={20} className={styles.intentIcon} aria-hidden="true" />
-              <span className={styles.intentTitle}>{title}</span>
-              <span className={styles.intentHint}>{hintFor({ id, ...item }, referral)}</span>
+              <span className={styles.intentTitle}>{mode === "section" ? label : title}</span>
+              <span id={`talk-hint-${mode}-${id}`} className={`${styles.intentHint} ${mode === "section" ? styles.srOnly : ""}`}>{hintFor({ id, ...item }, referral)}</span>
             </button>
           ))}
         </div>
       </div>
-      {INTENTS.map(({ id }) => (
+      {choices.map(({ id }) => (
         <div key={id} className={styles.panel} role="tabpanel" id={`talk-panel-${id}`} aria-labelledby={`talk-tab-${id}`} hidden={intent !== id}>
           {opened.has(id) && id === "message" && <MessageForm />}
           {opened.has(id) && id === "referral" && (!referral?.company
             ? <ReferralClosed reason={referral?.reason} onMessage={() => { choose("message"); tabs.current.message?.focus(); }} />
-            : mode === "page" ? <ReferralWizard key={referral.company} company={referral.company} /> : <ReferralIntro company={referral.company} />)}
+            : <ReferralWizard key={referral.company} company={referral.company} />)}
           {opened.has(id) && id === "chat" && <LiveChatPanel onMessage={() => { choose("message"); tabs.current.message?.focus(); }} />}
         </div>
       ))}

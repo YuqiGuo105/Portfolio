@@ -58,6 +58,7 @@ const Verification = { __esModule: true, default: function Verification({ onToke
 } };
 const Message = { __esModule: true, default: () => React.createElement('form', { 'data-message-form': '' }) };
 const TalkHub = (await load('src/components/talk/TalkHub.js', { MessageForm: Message })).default;
+const ContactForm = (await load('src/components/ContactForm.js', { TalkHub: { __esModule: true, default: TalkHub } })).default;
 const ReferralWizard = (await load('src/components/talk/ReferralWizard.js', { ContactVerification: Verification })).default;
 
 const nativeFetch = globalThis.fetch;
@@ -92,33 +93,47 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => mount.unmount()); globalThis.fetch = nativeFetch; });
 after(() => dom.window.close());
 
-test('the hub offers three choices as tabs and opens the message form first', async () => {
+test('Contact Me exposes a direct referral link without switching tabs or making requests', async () => {
+  for (const referral of [OPEN, { company: null, reason: 'paused' }]) {
+    await render(React.createElement(ContactForm, { referral }));
+    assert.equal($('#contact-section .m-titles > #tour-contact').textContent, 'Contact Me');
+    assert.equal(all('#contact-section .contact-details .numbers-item').length, 3);
+    assert.ok($('#contact-section .vertical-line.contact-form-column [data-talk-hub="section"]'));
+    const link = all('#contact-section a').find(node => node.textContent === 'Request a referral');
+    assert.ok(link);
+    assert.equal(link.getAttribute('href'), '/talk?intent=referral');
+    assert.equal(link.getAttribute('target'), null);
+    assert.equal(all('[role="tab"]')[0].getAttribute('aria-selected'), 'true');
+    assert.equal($('[data-wizard]'), null);
+    assert.deepEqual(requests, []);
+  }
+});
+
+test('the home hub offers only message and live chat, with the message form first', async () => {
   await render(React.createElement(TalkHub, { mode: 'section', referral: OPEN }));
   const tabs = all('[role="tab"]');
-  assert.deepEqual(tabs.map(tab => tab.querySelector('.intentTitle').textContent), ['Send a message', 'Ask for a referral', 'Chat or call live']);
-  assert.deepEqual(tabs.map(tab => tab.getAttribute('aria-selected')), ['true', 'false', 'false']);
-  assert.deepEqual(tabs.map(tab => tab.tabIndex), [0, -1, -1]);
+  assert.deepEqual(tabs.map(tab => tab.querySelector('.intentTitle').textContent), ['Message', 'Live chat']);
+  assert.deepEqual(tabs.map(tab => tab.getAttribute('aria-label')), ['Send a message', 'Chat or call live']);
+  assert.deepEqual(tabs.map(tab => tab.getAttribute('aria-selected')), ['true', 'false']);
+  assert.deepEqual(tabs.map(tab => tab.tabIndex), [0, -1]);
   assert.ok($('#talk-panel-message [data-message-form]'));
-  assert.equal($('#talk-panel-referral').hidden, true); assert.equal($('#talk-panel-referral').children.length, 0);
+  assert.equal($('#talk-panel-referral'), null);
   for (const tab of tabs) assert.equal(document.getElementById(tab.getAttribute('aria-controls')).getAttribute('aria-labelledby'), tab.id);
 });
 
-test('on the home page the referral tab explains the request and links to the form on /talk', async () => {
-  await render(React.createElement(TalkHub, { mode: 'section', referral: OPEN }));
-  await click(all('[role="tab"]')[1]);
-  assert.equal($('#talk-panel-referral').hidden, false); assert.equal($('#talk-panel-message').hidden, true);
-  assert.match($('#talk-panel-referral').textContent, /Ask me for a referral at Goldman Sachs/);
-  assert.match($('#talk-panel-referral').textContent, /it never decides anything, and a referral is not guaranteed/);
-  assert.equal($('#talk-panel-referral a').getAttribute('href'), '/talk?intent=referral');
+test('the home hub cannot open a removed referral panel through initial intent or query', async () => {
+  router.query = { intent: 'referral' };
+  await render(React.createElement(TalkHub, { mode: 'section', initialIntent: 'referral', referral: OPEN }));
+  assert.equal($('#talk-panel-referral'), null);
+  assert.equal($('#talk-panel-message').hidden, false);
   assert.equal($('[data-wizard]'), null);
   assert.deepEqual(router.replaced, [], 'the home page keeps its own address');
-  // The half-opened message form is still mounted, so nothing typed there is lost.
   assert.ok($('#talk-panel-message [data-message-form]'));
 });
 
 test('the live chat tab sets expectations, opens TalkNest safely and offers the message form instead', async () => {
   await render(React.createElement(TalkHub, { mode: 'section', referral: OPEN }));
-  await click(all('[role="tab"]')[2]);
+  await click(all('[role="tab"]')[1]);
   const link = $('#talk-panel-chat a');
   const url = new URL(link.getAttribute('href'));
   assert.equal(url.origin, 'https://talknest-refresh.onrender.com'); assert.equal(url.searchParams.get('connect'), 'Yuqi Guo');
@@ -134,7 +149,8 @@ test('arrow keys move between the choices', async () => {
   await act(async () => Simulate.keyDown(list, { key: 'ArrowRight' }));
   assert.equal(all('[role="tab"]')[1].getAttribute('aria-selected'), 'true');
   await act(async () => Simulate.keyDown(list, { key: 'ArrowLeft' })); await act(async () => Simulate.keyDown(list, { key: 'ArrowLeft' }));
-  assert.equal(all('[role="tab"]')[2].getAttribute('aria-selected'), 'true');
+  assert.equal(all('[role="tab"]')[1].getAttribute('aria-selected'), 'true');
+  assert.equal(document.activeElement.id, 'talk-tab-chat');
   await act(async () => Simulate.keyDown(list, { key: 'Home' }));
   assert.equal(all('[role="tab"]')[0].getAttribute('aria-selected'), 'true');
 });
@@ -142,6 +158,7 @@ test('arrow keys move between the choices', async () => {
 test('/talk?intent=referral opens the form itself and keeps the address in step with the tab', async () => {
   router.query = { intent: 'referral' };
   await render(React.createElement(TalkHub, { mode: 'page', referral: OPEN }));
+  assert.deepEqual(all('[role="tab"]').map(tab => tab.querySelector('.intentTitle').textContent), ['Send a message', 'Ask for a referral', 'Chat or call live']);
   assert.equal(all('[role="tab"]')[1].getAttribute('aria-selected'), 'true');
   assert.ok($('#talk-panel-referral [data-wizard]'));
   await click(all('[role="tab"]')[2]);
@@ -359,12 +376,12 @@ test('typed answers survive a reload in the same tab', async () => {
 
 // ── Following the current employer ──────────────────────────────────────────
 
-test('the hub names whichever company the page was given, on the tab, the home panel and the form', async () => {
+test('the standalone hub names whichever company the page was given, on the tab and the form', async () => {
   const referral = { company: 'Northwind Labs', reason: null };
-  await render(React.createElement(TalkHub, { mode: 'section', referral }));
+  await render(React.createElement(TalkHub, { mode: 'page', referral }));
   assert.equal(all('[role="tab"]')[1].querySelector('.intentHint').textContent, 'At Northwind Labs. About five minutes.');
   await click(all('[role="tab"]')[1]);
-  assert.match($('#talk-panel-referral').textContent, /Ask me for a referral at Northwind Labs/);
+  assert.ok($('#talk-panel-referral [data-wizard]'));
   assert.doesNotMatch(container.textContent, /Goldman/);
 
   await render(React.createElement(ReferralWizard, { company: 'Northwind Labs' }));

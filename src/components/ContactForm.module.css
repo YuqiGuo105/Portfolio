@@ -1,3 +1,25 @@
+.referralLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  min-height: 44px;
+  margin-top: 24px;
+  padding: 8px 0;
+  color: inherit;
+  font-family: "Rubik", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-decoration: none;
+}
+
+.referralLink svg { flex-shrink: 0; }
+.referralLink span { overflow-wrap: anywhere; }
+.referralLink:hover span { text-decoration: underline; text-underline-offset: 4px; }
+.referralLink:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 4px; }
+
 .form {
   --contact-ink: #213c36;
   --contact-line: #a4afaa;

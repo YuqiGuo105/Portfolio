@@ -144,6 +144,56 @@
   margin-top: 26px;
 }
 
+/* Match the site's coral accents without changing the standalone /talk page. */
+.root[data-talk-hub="section"] {
+  --tab-ink: #243033;
+  --tab-muted: #626b6c;
+  --tab-active: #a64025;
+  --tab-line: #f17c57;
+  --tab-tint: #ffffff60;
+  --tab-hover: #ffffff30;
+  --tab-border: #24303326;
+}
+:global(body.dark-skin) .root[data-talk-hub="section"] {
+  --tab-ink: #eff2f3;
+  --tab-muted: #b0b8bb;
+  --tab-active: #ffac91;
+  --tab-line: #ff956f;
+  --tab-tint: #ff956f12;
+  --tab-hover: #ffffff08;
+  --tab-border: #eff2f326;
+}
+
+.root[data-talk-hub="section"] .intents {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-bottom: 1px solid var(--tab-border);
+}
+.root[data-talk-hub="section"] .hub .intent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 12px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tab-muted);
+  box-shadow: none;
+}
+.root[data-talk-hub="section"] .hub .intent[aria-selected="true"] {
+  border-bottom-color: var(--tab-line);
+  color: var(--tab-active);
+  background: var(--tab-tint);
+}
+.root[data-talk-hub="section"] .hub .intent:hover:not([aria-selected="true"]) { color: var(--tab-ink); background: var(--tab-hover); }
+.root[data-talk-hub="section"] .intentIcon { flex: 0 0 18px; width: 18px; height: 18px; margin: 0; color: inherit; }
+.root[data-talk-hub="section"] .intentTitle { font-size: 14px; }
+
 .hub.hub .panelTitle {
   margin-bottom: 6px;
   font-family: inherit;

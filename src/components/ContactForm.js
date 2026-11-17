@@ -1,7 +1,10 @@
+import Link from "next/link";
+import { ArrowRight, Handshake } from "lucide-react";
 import TalkHub from "./talk/TalkHub";
+import { referralHref } from "./talk/links";
+import styles from "./ContactForm.module.css";
 
-// The home page's Contact section: direct contact details on the left, and on the right the Talk
-// hub (send a message, ask for a referral, chat live). The same hub is the whole of /talk.
+// Keep direct contact and referral links separate from the message/live-chat switcher.
 const ContactForm = ({ referral = null }) => (
   <section className="section section-bg" id="contact-section">
     <div className="container">
@@ -32,6 +35,13 @@ const ContactForm = ({ referral = null }) => (
               </a>
             </div>
           </div>
+          <Link href={referralHref} prefetch={false}>
+            <a className={styles.referralLink}>
+              <Handshake size={20} aria-hidden="true" />
+              <span>Request a referral</span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </a>
+          </Link>
         </div>
         <div className="col-md-9 vertical-line contact-form-column">
           <TalkHub mode="section" referral={referral} />
