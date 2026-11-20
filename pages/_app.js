@@ -10,13 +10,13 @@ import BrowserActionHost from "../src/components/BrowserActionHost";
 import { startPageBehaviorTracking } from "../src/lib/behaviorAnalytics";
 import { isPrivateAnalyticsPage } from "../src/lib/analyticsPagePolicy.mjs";
 import { employerUrl } from "../src/lib/currentRole.mjs";
+import { hasChatWidget, isHomePageRoute } from "../src/lib/chatPagePolicy.mjs";
 import "../styles/globals.css";
 import "../styles/carousel.css";
 import "../styles/chatWidget.css";
 
 const SITE_URL = "https://www.yuqi.site";
 const ChatWidget = dynamic(() => import("../src/components/ChatWidget"), { ssr: false });
-const CHAT_PAGES = new Set(["/", "/blogs", "/blog", "/works", "/works-list", "/work-single", "/blog-single", "/cv", "/analytics", "/site-history", "/404", "/architecture", "/mcp-guide", "/terminal", "/work-single/[id]", "/blog-single/[id]", "/life-blog/[id]"]);
 const HOME_KEYWORDS = "Yuqi Guo, 郭育奇, software engineer, backend engineer, distributed systems, system design, AI platform, portfolio";
 const PROFILE_IMAGE_PATH = "/assets/images/yuqi-guo-profile-512.png";
 const PROFILE_IMAGE_URL = `${SITE_URL}${PROFILE_IMAGE_PATH}`;
@@ -110,7 +110,7 @@ function profileJsonLd(role) {
 function MyApp({ Component, pageProps }) {
   const router = useRouter();
   const cleanupTracking = useRef(null);
-  const isHomePage = router.pathname === "/";
+  const isHomePage = isHomePageRoute(router.pathname);
   const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
   const loadRecaptcha = recaptchaSiteKey && !isPrivateAnalyticsPage(router.asPath);
 
@@ -246,7 +246,7 @@ function MyApp({ Component, pageProps }) {
       <MobilePullToRefresh />
       <Component {...pageProps} />{" "}
       <BrowserActionHost />
-      {CHAT_PAGES.has(router.pathname) && <ChatWidget />}
+      {hasChatWidget(router.pathname) && <ChatWidget />}
       {/* ` or ⌘K opens the site terminal on every public page. */}
       {!router.pathname.startsWith("/admin") && <TerminalLauncher />}
     </Fragment>

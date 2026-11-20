@@ -14,6 +14,7 @@ import { recordPublicRunEvent } from "../lib/publicRunReplay.mjs"
 import { normalizeBrowserPlan } from "../lib/browserActions.mjs"
 import VoiceInput from "./VoiceInput"
 import MrPotAvatar from "./MrPotAvatar"
+import { isHomePageRoute } from "../lib/chatPagePolicy.mjs"
 import { Mic, Plus, Upload, Phone } from "lucide-react"
 import { mergeEvidence } from "../lib/chatEvidence.mjs"
 import { postSSE } from "../lib/chatStream.mjs"
@@ -6221,7 +6222,7 @@ export default function ChatWidget() {
     const openChatParam = router.query?.openChat
     if (!openChatParam) return
 
-    if (router.pathname !== "/") {
+    if (!isHomePageRoute(router.pathname)) {
       router.replace({ pathname: "/", query: { openChat: openChatParam } }, undefined, { shallow: true })
       return
     }
@@ -6229,7 +6230,8 @@ export default function ChatWidget() {
     setOpen(true)
 
     const { openChat, ...rest } = router.query || {}
-    router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true })
+    if (router.pathname === "/home/[variant]") delete rest.variant
+    router.replace({ pathname: "/", query: rest }, undefined, { shallow: true })
   }, [router])
 
   const startDrag = (e) => {
