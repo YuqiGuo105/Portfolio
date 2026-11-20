@@ -36,6 +36,7 @@ import { ScrollDepth, VisitCheckpoints, VisitorRecordView, VisitorContext, Visit
 import { eventTimestamp, outboundLinkDetails } from "../../src/lib/visitorWorkbench.mjs";
 import VisitorOverview from "../../src/components/admin/VisitorOverview";
 import VisitorGovernance from "../../src/components/admin/VisitorGovernance";
+import VisitorBotDiagnostics from "../../src/components/admin/VisitorBotDiagnostics";
 
 const PAGE_SIZE = 50;
 const WINDOWS = [
@@ -293,6 +294,8 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
             </button>
           )}
         />
+
+        <VisitorBotDiagnostics api={api} filters={filters} range={range} synthetic={storageScope === 'local-preview'} />
 
         <VisitorGovernance api={api} />
 

@@ -2,6 +2,7 @@ import { validateSessionRequest } from './visitorSessionRequest.mjs';
 import { sampleHistory, previewOverview } from './visitorOverviewPreview.mjs';
 import { groupVisitorEvents } from './visitorWorkbench.mjs';
 import { createVisitorGovernancePreview } from './visitorGovernancePreview.mjs';
+import { diagnosticPreviewEvents } from './visitorBotDiagnosticsPreview.mjs';
 
 // Synthetic fixtures only. Never contains production visitor data or credentials.
 export function createVisitorPreviewApi() {
@@ -17,7 +18,7 @@ export function createVisitorPreviewApi() {
     { pageUrl: '/work-single/7c3715bf-7722-4df5-9e83-5d7e9493ea2c', pageContent: { title: 'Portfolio Platform', type: 'project', coverUrl: '/assets/images/mcp-guide/claude-public-tools.png' } },
     { pageUrl: '/blog-single/preview-article', pageContent: { title: 'Reliable event delivery and recovery', type: 'tech blog', coverUrl: '/assets/images/blog3.jpg' } },
   ].map((entry, index) => ({ ...entry, eventId: `sample-content-${index}`, siteId: 'preview.local', sessionId: 'sample-content-session', eventName: 'page_view', eventTime: new Date(now - (4 - index) * 60000).toISOString(), deviceType: 'desktop', browser: 'Chrome', os: 'macOS', bot: false }));
-  const events = [...sampleHistory(now), ...contentSamples, ...Array.from({ length: 32 }, (_, index) => ({
+  const baseEvents = [...sampleHistory(now), ...contentSamples, ...Array.from({ length: 32 }, (_, index) => ({
     eventId: `sample-event-${index}`, siteId: 'preview.local', sessionId: index < 29 ? 'sample-jaipur-session' : 'sample-bot-session',
     anonymousId: 'sample-anonymous', eventTime: new Date(now - (33 - index) * 90000).toISOString(),
     serverTime: new Date(now - (33 - index) * 90000 + 1200).toISOString(),
@@ -29,9 +30,10 @@ export function createVisitorPreviewApi() {
     userAgent: index < 29 ? 'Sample Safari iPhone' : 'Sample Googlebot/2.1',
     properties: { ...(index % 3 === 2 ? { action: socialLinks[Math.floor(index / 3) % socialLinks.length][0], component: 'footer' } : {}), ...(index % 3 === 1 ? { progressPercent: [25, 50, 75, 100][Math.floor(index / 3) % 4] } : {}), ...(index < 29 ? {} : { botAssessmentProvider: 'GOOGLE_RECAPTCHA_ENTERPRISE', botAssessmentStatus: 'VALID', botAssessmentHumanScore: 0.1, botAssessmentReasons: ['AUTOMATION'], botAssessmentVerifiedBot: true }) },
   }))].sort((a, b) => a.eventTime.localeCompare(b.eventTime));
+  const events = [...baseEvents, ...diagnosticPreviewEvents(now)].sort((a, b) => a.eventTime.localeCompare(b.eventTime));
   const rules = [{ ruleId: 1, siteId: 'preview.local', name: 'Sample visitor alert', eventType: 'page_view', geoLevel: 'GLOBAL', geoAreaId: '', threshold: 1, comparator: '>=', granularity: '5m', cooldownSeconds: 1800, filters: { bot: 'EXCLUDE' }, enabled: false }];
   const pending = new Map();
-  const governance = createVisitorGovernancePreview(events, now);
+  const governance = createVisitorGovernancePreview(baseEvents, now);
   function matches(item, f) {
     if (f.bot === 'EXCLUDE' && item.bot !== false || f.bot === 'ONLY' && item.bot !== true) return false;
     const to = f.to ? Date.parse(f.to) : now;
