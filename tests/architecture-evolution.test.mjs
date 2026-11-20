@@ -26,6 +26,14 @@ test('the time machine data is internally consistent', () => {
     assert.deepEqual(validateEvolution(data), [])
 })
 
+test('the README keeps architecture and data flows without the history section', () => {
+    const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8')
+    assert.match(readme, /## Architecture/)
+    assert.match(readme, /### Data flows/)
+    assert.match(readme, /public\/diagrams\/overview\.svg/)
+    assert.doesNotMatch(readme, /How it evolved|architecture#evolution|diagrams\/time-machine/)
+})
+
 test('the platform starts as a monolith and grows into services, Kafka and an outbox', () => {
     const start = evolutionAt(data, 0)
     assert.deepEqual(start.nodes.map((node) => node.id).sort(), ['next', 'postgres', 'visitors'])
@@ -165,7 +173,7 @@ test('articles opt into the time machine with a figure that links to a step', ()
 
 test('which article shows which step lives in the article, not in the page or the data file', () => {
     assert.equal(data.projects, undefined)
-    assert.ok(data.milestones.some((item) => item.id === data.featured), 'the README step exists')
+    assert.ok(data.milestones.some((item) => item.id === data.featured), 'the featured step exists')
     const page = readFileSync(new URL('../pages/work-single/[id].js', import.meta.url), 'utf8')
     assert.match(page, /evolution: timeMachineSteps\(content, evolutionData\)\.length \? evolutionData : null/)
     assert.match(page, /querySelectorAll\("figure\.time-machine"\)/)
