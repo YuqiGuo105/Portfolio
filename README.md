@@ -26,10 +26,10 @@ A modern Next.js portfolio application for showcasing projects, blogs, CV, visit
 
 ## Highlights
 
-- **Transactional outbox, fenced.** Publishing writes the new version, its outbox event, two indexing jobs and an audit row in one PostgreSQL transaction, with no dual write to Kafka. Relays replay rows until Kafka acknowledges them, claiming work with `FOR UPDATE SKIP LOCKED`, a lease and a version bump, so a relay that outlived its lease cannot overwrite a newer claim. ([flow ②](#workflow-publish-content))
-- **Visitor analytics counted once.** Each page event gets a UUIDv7 id at the edge and goes to Kafka, or straight to PostgreSQL with the same id when Kafka is down. A batch consumer drops duplicates with Redis `SETNX`, claims each event in a durable inbox and updates sessions and 5-minute / daily rollups in the same transaction, then acknowledges Kafka: exactly once in effect. ([flow ④](#workflow-track-visitor))
-- **One policy point for AI tools.** Every MCP call, public or admin, passes one tool gateway: a typed registry, RBAC and risk levels, `Idempotency-Key` checks, explicit confirmation for writes, sanitized results and audited execution. ([flow ⑤](#workflow-execute-mcp))
-- **Grounded answers inside a daily budget.** Mr. Pot reserves its daily model budget atomically in Redis before each run, retrieves evidence from the pgvector chunks that publishing writes, and answers without evidence rather than failing when retrieval is down. ([flow ①](#workflow-ask-agent))
+- **Reliable publishing.** A transactional outbox delivers content updates to Kafka with fenced retries. ([flow ②](#workflow-publish-content))
+- **Replay-safe analytics.** Stable event IDs, a durable inbox and transactional rollups prevent double counting. ([flow ④](#workflow-track-visitor))
+- **Governed AI tools.** One MCP gateway enforces RBAC, idempotency, write confirmation and audit logging. ([flow ⑤](#workflow-execute-mcp))
+- **Budgeted AI answers.** Mr. Pot retrieves portfolio evidence and reserves model budget before each run. ([flow ①](#workflow-ask-agent))
 
 ---
 
