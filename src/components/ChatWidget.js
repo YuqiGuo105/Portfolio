@@ -14,7 +14,8 @@ import { recordPublicRunEvent } from "../lib/publicRunReplay.mjs"
 import { normalizeBrowserPlan } from "../lib/browserActions.mjs"
 import VoiceInput from "./VoiceInput"
 import MrPotAvatar from "./MrPotAvatar"
-import { isHomePageRoute } from "../lib/chatPagePolicy.mjs"
+import { hasLiveVoiceRoute, isHomePageRoute } from "../lib/chatPagePolicy.mjs"
+import { createChatPosition } from "../lib/chatPosition.mjs"
 import { Mic, Plus, Upload, Phone } from "lucide-react"
 import { mergeEvidence } from "../lib/chatEvidence.mjs"
 import { postSSE } from "../lib/chatStream.mjs"
@@ -2358,7 +2359,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   }, [liveVoiceOpen])
   useEffect(() => () => releaseVoiceAudio(liveVoiceAudioRef.current), [])
   const liveVoiceEnabled = (process.env.NEXT_PUBLIC_VOICE_ENABLED === "true" || (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_GEMINI_LIVE_PREVIEW === "true"))
-    && ["/", "/blogs", "/architecture", "/mcp-guide", "/terminal", "/work-single/[id]", "/blog-single/[id]", "/admin/mr-pot-voice"].includes(routerPathname)
+    && hasLiveVoiceRoute(routerPathname)
   const pendingUploadsRef = useRef(new Map())
 
   useEffect(() => {
@@ -3966,8 +3967,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           ? {
             width: `${widgetSize.w}px`,
             height: `${widgetSize.h}px`,
-            maxWidth: `${widgetSize.w}px`,
-            maxHeight: "none",
+            maxWidth: `min(${widgetSize.w}px, calc(100vw - 24px))`,
+            maxHeight: "calc(var(--cw-viewport-height, 100vh) - 16px)",
           }
           : {}),
         ...(liveVoiceOpen ? { visibility: "hidden", opacity: 0, pointerEvents: "none" } : {}),
@@ -4484,7 +4485,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         /* ===== AG-UI Chat Agent Styles ===== */
         #__chat_widget_root .bot-container {
           height: min(62vh, 500px);
-          max-height: 500px;
+          max-height: min(500px, calc(var(--cw-viewport-height, 100vh) - 16px));
           background: linear-gradient(145deg, #ffffff 0%, #f8fafc 60%, #f1f5f9 100%) !important;
           position: relative;
           border: 1px solid rgba(99, 102, 241, 0.18) !important;
@@ -6133,18 +6134,9 @@ export default function ChatWidget() {
   const [guideQuestion, setGuideQuestion] = useState(null)
   const [tourActive, setTourActive] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const [offset, setOffset] = useState(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("chatWidgetOffset")
-        if (saved) return JSON.parse(saved)
-      } catch {}
-    }
-    return { x: 0, y: 0 }
-  })
-
   const rootRef = useRef(null)
-  const offsetRef = useRef(offset)
+  const positionRef = useRef(null)
+  const dragCleanupRef = useRef(() => {})
   const dragRef = useRef({ dragging: false })
   const tourCollapsedRef = useRef(false)
   const pageHighlightRef = useRef({ cleanup: () => {}, scrollToPhrase: () => false, hasHighlights: false })
@@ -6162,9 +6154,18 @@ export default function ChatWidget() {
     const el = ensureRoot()
     rootRef.current = el
     el.style.pointerEvents = "auto"
-    el.style.transform = `translate(${offset.x}px, ${offset.y}px)`
+    const position = createChatPosition(el, window)
+    positionRef.current = position
     setMounted(true)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      dragCleanupRef.current()
+      position.dispose()
+      positionRef.current = null
+      el.style.pointerEvents = "none"
+    }
+  }, [])
+
+  useEffect(() => { positionRef.current?.refresh() }, [mounted, open, tourActive])
 
   useEffect(() => {
     const collapseForTour = () => {
@@ -6210,14 +6211,6 @@ export default function ChatWidget() {
   }, [])
 
   useEffect(() => {
-    offsetRef.current = offset
-    if (rootRef.current) {
-      rootRef.current.style.transform = `translate(${offset.x}px, ${offset.y}px)`
-      localStorage.setItem("chatWidgetOffset", JSON.stringify(offset))
-    }
-  }, [offset])
-
-  useEffect(() => {
     if (!router?.isReady) return
     const openChatParam = router.query?.openChat
     if (!openChatParam) return
@@ -6235,27 +6228,45 @@ export default function ChatWidget() {
   }, [router])
 
   const startDrag = (e) => {
+    if (e.button != null && e.button !== 0) return
+    dragCleanupRef.current()
     dragRef.current.dragging = false
     const point = e.touches ? e.touches[0] : e
     const startX = point.clientX
     const startY = point.clientY
-    const { x, y } = offsetRef.current
+    const { x, y } = positionRef.current?.getOffset() || { x: 0, y: 0 }
     const moveEvent = e.touches ? "touchmove" : "mousemove"
     const upEvent = e.touches ? "touchend" : "mouseup"
 
+    let frame = 0
+    let next = { x, y }
+    const applyMove = () => {
+      frame = 0
+      positionRef.current?.moveTo(next)
+    }
     const onMove = (ev) => {
       const mp = ev.touches ? ev.touches[0] : ev
       const dx = mp.clientX - startX
       const dy = mp.clientY - startY
       if (Math.abs(dx) > 2 || Math.abs(dy) > 2) dragRef.current.dragging = true
-      setOffset({ x: x + dx, y: y + dy })
+      next = { x: x + dx, y: y + dy }
+      if (!frame) frame = window.requestAnimationFrame(applyMove)
     }
     const onUp = () => {
       window.removeEventListener(moveEvent, onMove)
       window.removeEventListener(upEvent, onUp)
+      window.removeEventListener("blur", onUp)
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+        applyMove()
+      }
+      positionRef.current?.persist()
+      dragCleanupRef.current = () => {}
     }
     window.addEventListener(moveEvent, onMove)
     window.addEventListener(upEvent, onUp)
+    window.addEventListener("blur", onUp)
+    dragCleanupRef.current = onUp
   }
 
   const handleOpen = () => {

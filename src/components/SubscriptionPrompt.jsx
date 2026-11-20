@@ -3,10 +3,11 @@ import { useRouter } from "next/router";
 import { loadSubscriber } from "../lib/notificationsClient";
 import { startSubscriptionPrompt, subscriptionPromptOnCooldown, subscriptionPromptPreviewMode } from "../lib/subscriptionPrompt.mjs";
 import SubscribeDialog from "./SubscribeDialog";
+import { isHomePageRoute } from "../lib/chatPagePolicy.mjs";
 
 export default function SubscriptionPrompt({ isDark }) {
   const router = useRouter();
-  const page = router.asPath.split(/[?#]/)[0];
+  const page = isHomePageRoute(router.pathname) ? "/" : router.asPath.split(/[?#]/)[0];
   const preview = subscriptionPromptPreviewMode(process.env.NODE_ENV, router.query.subscriptionPreview);
   const [open, setOpen] = useState(false);
 
@@ -30,7 +31,7 @@ export default function SubscriptionPrompt({ isDark }) {
     const onNavigate = () => { stop(); setOpen(false); };
     router.events.on("routeChangeStart", onNavigate);
     return () => { stop(); router.events.off("routeChangeStart", onNavigate); };
-  }, [page, router.events, preview]);
+  }, [page, router.asPath, router.events, preview]);
 
   return <SubscribeDialog open={open} onClose={() => setOpen(false)} isDark={isDark} invitation />;
 }

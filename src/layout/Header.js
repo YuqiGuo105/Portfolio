@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import dynamic from "next/dynamic";
 import styles from "./Header.module.css";
+import { isHomePageRoute } from "../lib/chatPagePolicy.mjs";
 
 const NotificationBell = dynamic(() => import("../components/NotificationBell"), { ssr: false });
 const SubscribeDialog = dynamic(() => import("../components/SubscribeDialog"), { ssr: false });
@@ -169,7 +170,7 @@ const Header = ({ onOpenSearch }) => {
             <NotificationBell className={styles.action} onOpenSubscribe={() => setSubscribeOpen(true)} isDark={!day} />
             {/* subscribe button — only shown when NOT already subscribed (Bell handles that case) */}
             <SubscribeDialog open={subscribeOpen} onClose={() => setSubscribeOpen(false)} isDark={!day} />
-            {router.pathname === "/" && <SubscriptionPrompt isDark={!day} />}
+            {isHomePageRoute(router.pathname) && <SubscriptionPrompt isDark={!day} />}
             {/* switcher btn */}
             <button
               type="button"
