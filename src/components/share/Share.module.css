@@ -1,0 +1,92 @@
+/* Scoped specificity keeps the public template's element styles out of the sheet. */
+.sheet {
+  --ink: #202a2d; --muted: #65716f; --line: #bcc7c1; --soft-line: #e3e8e4;
+  --paper: #ffffff; --raised: #f3f6f4; --accent: #245449; --accent-hover: #173f36;
+  --on-accent: #ffffff; --tint: #e8f0ec; --coral: #ef7659;
+}
+:global(body.dark-skin) .sheet {
+  --ink: #edf1ef; --muted: #aeb8b4; --line: #53635b; --soft-line: #37413e;
+  --paper: #202725; --raised: #29322e; --accent: #b5dfcb; --accent-hover: #d1eddf;
+  --on-accent: #163c30; --tint: #34473e; --coral: #ff9277;
+}
+.sheet.backdrop {
+  position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; padding: 20px;
+  background: rgb(17 24 23 / 54%); animation: fade 140ms ease-out;
+}
+.sheet.sheet .panel {
+  display: flex; flex-direction: column; width: min(480px, 100%);
+  max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px); min-height: 0;
+  padding: 24px 28px 0; border: 1px solid var(--soft-line); border-radius: 8px;
+  background: var(--paper); color: var(--ink); font: 400 15px/1.5 "Rubik", system-ui, sans-serif;
+  letter-spacing: 0; text-align: left; box-shadow: 0 24px 70px rgb(10 20 17 / 22%); overflow: hidden;
+}
+.sheet.sheet [hidden] { display: none !important; }
+.sheet.sheet .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }
+.sheet.sheet .heading { margin: 0; padding: 0; color: var(--ink); font: 400 28px/1.2 "Sorts Mill Goudy", Georgia, serif; letter-spacing: 0; text-transform: none; }
+.sheet.sheet .heading > span { color: var(--coral); }
+.sheet.sheet .iconButton, .sheet.sheet .copy {
+  display: grid; place-items: center; flex: none; width: 40px; height: 40px;
+  margin: 0; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer;
+}
+.sheet.sheet .iconButton:hover { background: var(--raised); color: var(--ink); }
+.sheet.sheet .subject { display: flex; align-items: center; gap: 12px; margin: 20px 0; flex: none; min-width: 0; }
+.sheet.sheet .subject > div { min-width: 0; }
+.sheet.sheet .portrait { flex: none; width: 48px; height: 48px; object-fit: cover; border-radius: 50%; border: 1px solid var(--soft-line); }
+.sheet.sheet .subjectIcon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; background: var(--tint); color: var(--accent); border-radius: 6px; }
+.sheet.sheet .what { margin: 0; padding: 0; color: var(--ink); font: 500 16px/1.35 "Rubik", system-ui, sans-serif; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sheet.sheet .note { margin: 4px 0 0; padding: 0; color: var(--muted); font: 400 12px/1.5 "Rubik", system-ui, sans-serif; overflow-wrap: anywhere; }
+.sheet.sheet .tabs { display: grid; grid-template-columns: 1fr 1fr; flex: none; border-bottom: 1px solid var(--soft-line); }
+.sheet.sheet .tabs > button {
+  display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px;
+  margin: 0 0 -1px; padding: 0 8px; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  background: transparent; color: var(--muted); font: 500 14px/1 "Rubik", system-ui, sans-serif; letter-spacing: 0; cursor: pointer;
+}
+.sheet.sheet .tabs > button:hover { color: var(--ink); background: var(--raised); }
+.sheet.sheet .tabs > button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.sheet.sheet .body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.sheet.sheet .linkPanel { padding: 24px 0 20px; }
+.sheet.sheet .codeArea { display: flex; align-items: center; flex-direction: column; }
+.sheet.sheet .code { display: block; flex: none; width: 188px; height: 188px; max-width: 100%; border: 1px solid var(--soft-line); border-radius: 4px; background: #fff; }
+.sheet.sheet .codeTitle { margin: 14px 0 2px; padding: 0; color: var(--ink); font: 500 14px/1.4 "Rubik", system-ui, sans-serif; }
+.sheet.sheet .destination { max-width: 100%; margin: 0; padding: 0; color: var(--muted); font: 400 12px/1.5 "Rubik", system-ui, sans-serif; overflow-wrap: anywhere; text-align: center; }
+.sheet.sheet .linkRow { display: flex; align-items: center; gap: 8px; margin-top: 22px; padding: 4px 4px 4px 12px; border: 1px solid var(--soft-line); border-radius: 6px; background: var(--raised); color: var(--muted); }
+.sheet.sheet .linkRow > svg { flex: none; }
+.sheet.sheet .link { flex: 1; min-width: 0; width: 0; height: 40px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); font: 400 13px/1 "Rubik", system-ui, sans-serif; text-overflow: ellipsis; box-shadow: none; }
+.sheet.sheet .copy { background: var(--paper); color: var(--accent); border: 1px solid var(--soft-line); }
+.sheet.sheet .copy:hover { background: var(--tint); border-color: var(--line); }
+.sheet.sheet .quote { margin: 0 0 18px; padding: 0 0 0 12px; border-left: 2px solid var(--coral); color: var(--muted); font: 400 14px/1.5 "Rubik", system-ui, sans-serif; overflow-wrap: anywhere; max-height: 84px; overflow-y: auto; }
+.sheet.sheet .imagePanel { padding: 20px 0 10px; }
+.sheet.sheet .picture { position: relative; width: 224px; max-width: 100%; aspect-ratio: 4 / 5; margin: 0 auto; border: 1px solid var(--soft-line); background: #f7f5f2; overflow: hidden; box-shadow: 0 4px 14px rgb(20 35 29 / 8%); }
+.sheet.sheet .canvas { display: block; width: 100%; height: 100%; }
+.sheet.sheet .picture:not([data-state="ready"]) .canvas { visibility: hidden; }
+.sheet.sheet .pictureState { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #245449; }
+.sheet.sheet .pictureState p { margin: 0; color: #5b6b66; font: 400 13px/1.4 "Rubik", system-ui, sans-serif; }
+.sheet.sheet .imageMeta { margin: 10px 0 0; padding: 0; text-align: center; color: var(--muted); font: 400 11px/1.5 "Rubik", system-ui, sans-serif; }
+.sheet.sheet .footer { flex: none; padding: 18px 0 8px; border-top: 1px solid var(--soft-line); }
+.sheet.sheet .actions { display: flex; gap: 10px; }
+.sheet.sheet .primary, .sheet.sheet .secondary {
+  display: inline-flex; flex: 1; align-items: center; justify-content: center; gap: 8px; min-width: 0; height: 44px;
+  margin: 0; padding: 0 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink);
+  font: 500 14px/1 "Rubik", system-ui, sans-serif; letter-spacing: 0; text-transform: none; cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.sheet.sheet .primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.sheet.sheet .primary:hover { border-color: var(--accent-hover); background: var(--accent-hover); }
+.sheet.sheet .secondary:hover { background: var(--raised); border-color: var(--accent); }
+.sheet.sheet .pictureState .secondary { flex: none; height: 38px; background: #ffffff; color: #245449; border-color: #bcc7c1; }
+.sheet.sheet .primary:disabled, .sheet.sheet .secondary:disabled { opacity: 0.5; cursor: default; }
+.sheet.sheet button:focus-visible, .sheet.sheet .link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sheet.sheet .status { min-height: 20px; margin: 8px 0 0; padding: 0; color: var(--accent); font: 400 12px/1.5 "Rubik", system-ui, sans-serif; text-align: center; overflow-wrap: anywhere; }
+
+@keyframes fade { from { opacity: 0; } }
+@media (max-width: 540px) {
+  .sheet.backdrop { place-items: end center; padding: 12px 8px max(8px, env(safe-area-inset-bottom)); }
+  .sheet.sheet .panel { width: 100%; max-height: calc(100vh - 28px); max-height: calc(100dvh - 28px); padding: 16px 20px 0; }
+  .sheet.sheet .heading { font-size: 26px; }
+  .sheet.sheet .subject { margin: 14px 0; }
+  .sheet.sheet .linkPanel { padding-top: 18px; }
+  .sheet.sheet .link { font-size: 16px; }
+  .sheet.sheet .code { width: 176px; height: 176px; }
+  .sheet.sheet .picture { width: 208px; }
+}
+@media (prefers-reduced-motion: reduce) { .sheet.backdrop { animation: none; } .sheet.sheet button { transition: none; } }

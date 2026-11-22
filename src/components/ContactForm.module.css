@@ -20,6 +20,68 @@
 .referralLink:hover span { text-decoration: underline; text-underline-offset: 4px; }
 .referralLink:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 4px; }
 
+.sectionHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px 24px;
+  margin-bottom: 40px;
+}
+
+.sectionHeading :global(.m-title) {
+  margin-bottom: 0;
+}
+
+.sectionHeading .shareCard {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 44px;
+  margin: 0;
+  padding: 10px 16px;
+  border: 1px solid #a4afaa;
+  border-radius: 6px;
+  background: transparent;
+  color: #245449;
+  font-family: "Rubik", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-decoration: none;
+  text-transform: none;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.sectionHeading .shareCard::before,
+.sectionHeading .shareCard::after {
+  content: none;
+  display: none;
+}
+
+.sectionHeading .shareCard:hover {
+  background: #2454490a;
+  border-color: currentColor;
+}
+
+.sectionHeading .shareCard:focus-visible {
+  outline: 2px solid currentColor !important;
+  outline-offset: 3px;
+}
+
+:global(body.dark-skin) .sectionHeading .shareCard {
+  border-color: #566962;
+  color: #b5dfcb;
+}
+
+:global(body.dark-skin) .sectionHeading .shareCard:hover {
+  background: #b5dfcb0d;
+  border-color: currentColor;
+}
+
 .form {
   --contact-ink: #213c36;
   --contact-line: #a4afaa;
@@ -164,4 +226,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation: none; }
+  .sectionHeading .shareCard { transition: none; }
 }

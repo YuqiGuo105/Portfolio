@@ -1,0 +1,177 @@
+/* The public contact card (/card).
+   Anchored on .root.root because the site template styles bare elements heavily. */
+
+.root {
+  --ink: #1c2528;
+  --muted: #5b6b66;
+  --line: #a4afaa;
+  --soft-line: #d5dad6;
+  --paper: #f7f5f2;
+  --raised: #ffffff;
+  --accent: #245449;
+  --accent-hover: #173f36;
+  --on-accent: #ffffff;
+  --tint: #2454490f;
+  --warn: #8a4410;
+  --warn-tint: #b45f1a1a;
+  color: var(--ink);
+  font-family: "Rubik", system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.55;
+  text-align: left;
+}
+
+:global(body.dark-skin) .root {
+  --ink: #e3eee8;
+  --muted: #a3b3ad;
+  --line: #566962;
+  --soft-line: #37443f;
+  --paper: #18211f;
+  --raised: #202b28;
+  --accent: #b5dfcb;
+  --accent-hover: #d1eddf;
+  --on-accent: #163c30;
+  --tint: #b5dfcb14;
+  --warn: #f0b98a;
+  --warn-tint: #f0b98a1f;
+}
+
+.root.root p, .root.root li, .root.root dd, .root.root dt { margin: 0; padding: 0; color: inherit; font-family: inherit; font-size: inherit; line-height: inherit; }
+.root.root a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.root.root a:hover { color: var(--accent-hover); }
+.root.root a:focus-visible, .root.root button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ── Contact card: a page of its own, made to be opened on a phone ──
+   One rounded card: a band in the colours of the portrait's sunset, the face centred on its
+   lower edge, then the name, "Save to contacts" and one list of tappable rows. */
+.root.card {
+  min-height: 100vh;
+  padding: 16px 14px 40px;
+  background: var(--paper);
+  --sky: linear-gradient(180deg, #b7cdd2 0%, #ead3a4 52%, #eea062 100%);
+}
+:global(body.dark-skin) .root.card { --sky: linear-gradient(180deg, #34484e 0%, #6c5a3c 55%, #8a4f2c 100%); }
+
+.root.root .cardInner { max-width: 440px; margin: 0 auto; }
+
+.root.root .cardMain {
+  overflow: hidden;
+  border: 1px solid var(--soft-line);
+  border-radius: 24px;
+  background: var(--raised);
+  box-shadow: 0 1px 2px rgba(20, 30, 27, 0.04), 0 12px 32px rgba(20, 30, 27, 0.07);
+}
+
+.root.root .banner { height: 112px; padding: 14px 18px; background: var(--sky); }
+.root.root .home {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  color: #1c2528;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  backdrop-filter: blur(6px);
+}
+.root.root .home:hover { background: rgba(255, 255, 255, 0.8); color: #1c2528; text-decoration: none; }
+
+.root.root .who { display: grid; justify-items: center; padding: 0 20px; text-align: center; }
+
+.root.root .portrait {
+  display: block;
+  width: 112px;
+  height: 112px;
+  margin-top: -56px;
+  border: 4px solid var(--raised);
+  border-radius: 50%;
+  background: var(--raised);
+  object-fit: cover;
+  box-shadow: 0 6px 18px rgba(20, 30, 27, 0.16);
+}
+
+.root.root .name {
+  margin: 14px 0 0;
+  padding: 0;
+  color: var(--ink);
+  font-family: "Sorts Mill Goudy", Georgia, serif;
+  font-size: 36px;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.root.root .also {
+  margin-top: 4px;
+  color: var(--muted);
+  font-family: "PingFang SC", "Noto Sans CJK SC", "Rubik", sans-serif;
+  font-size: 15px;
+  line-height: 1.3;
+}
+.root.root .role { margin-top: 8px; color: var(--muted); font-size: 15px; line-height: 1.4; }
+
+.root.root .cardBody { padding: 20px 16px 16px; }
+
+.root.root .notice {
+  margin: 0 0 14px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: var(--warn-tint);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.root.root .saveRow { display: flex; gap: 10px; }
+.root.root .saveRow .primary { flex: 1; }
+.root.root .saveRow .secondary { flex: none; width: 52px; padding: 0; }
+
+.root.root .primary,
+.root.root .secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 52px;
+  margin: 0;
+  padding: 0 20px;
+  border-radius: 14px;
+  font: 500 16px/1.2 "Rubik", system-ui, sans-serif;
+  letter-spacing: 0;
+  text-decoration: none;
+  text-transform: none;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+.root.root .primary { border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); }
+.root.root .primary:hover { border-color: var(--accent-hover); background: var(--accent-hover); color: var(--on-accent); }
+.root.root .primary:active, .root.root .secondary:active { transform: scale(0.98); }
+.root.root .secondary { border: 1px solid var(--soft-line); background: var(--paper); color: var(--ink); }
+.root.root .secondary:hover { border-color: var(--accent); background: var(--tint); color: var(--ink); }
+
+.root.root .fine { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.45; text-align: center; }
+
+.root.root .list { margin: 18px 0 0; padding: 0; overflow: hidden; border-radius: 16px; background: var(--paper); list-style: none; }
+.root.root .list li { margin: 0; padding: 0; border: 0; list-style: none; }
+.root.root .list li + li .item { box-shadow: inset 0 1px 0 var(--soft-line); }
+.root.root .list .item { display: flex; align-items: center; gap: 13px; min-height: 58px; padding: 9px 14px; color: var(--ink); text-decoration: none; transition: background-color 120ms ease; }
+.root.root .list .item:hover { background: var(--tint); color: var(--ink); }
+.root.root .list .item:focus-visible { outline-offset: -3px; }
+.root.root .rowIcon { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px; background: var(--raised); color: var(--accent); box-shadow: 0 0 0 1px var(--soft-line); }
+.root.root .rowText { display: grid; min-width: 0; text-align: left; }
+.root.root .rowLabel { color: var(--muted); font-size: 12px; line-height: 1.3; }
+.root.root .rowValue { overflow: hidden; color: var(--ink); font-size: 16px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+
+/* On a computer: the card, and beside it a code that adds the contact to a phone. */
+.root.root .scan { display: none; }
+@media (min-width: 860px) and (hover: hover) {
+  .root.card { display: grid; align-items: center; padding: 48px 32px; }
+  .root.root .cardInner { display: grid; grid-template-columns: 420px 260px; gap: 56px; align-items: center; justify-content: center; max-width: none; }
+  .root.root .cardInner:not(:has(.scan)) { display: block; max-width: 420px; }
+  .root.root .scan { display: grid; gap: 14px; justify-items: center; text-align: center; }
+  .root.root .scan svg { width: 260px; height: 260px; padding: 12px; border: 1px solid var(--soft-line); border-radius: 24px; background: #ffffff; box-shadow: 0 12px 32px rgba(20, 30, 27, 0.07); }
+  .root.root .scan strong { display: block; margin-bottom: 4px; font-size: 16px; font-weight: 500; }
+  .root.root .scan span { display: block; max-width: 240px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+}
+

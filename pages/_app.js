@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import SeoHead from "../src/components/SeoHead";
 import MobilePullToRefresh from "../src/components/MobilePullToRefresh";
 import TerminalLauncher from "../src/components/TerminalLauncher";
+import ShareHost from "../src/components/share/ShareHost";
 import dynamic from "next/dynamic";
 import BrowserActionHost from "../src/components/BrowserActionHost";
 import { startPageBehaviorTracking } from "../src/lib/behaviorAnalytics";
@@ -249,6 +250,7 @@ function MyApp({ Component, pageProps }) {
       {hasChatWidget(router.pathname) && <ChatWidget />}
       {/* ` or ⌘K opens the site terminal on every public page. */}
       {!router.pathname.startsWith("/admin") && <TerminalLauncher />}
+      {!router.pathname.startsWith("/admin") && <ShareHost />}
     </Fragment>
   );
 }

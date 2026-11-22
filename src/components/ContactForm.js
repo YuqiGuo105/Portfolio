@@ -1,15 +1,18 @@
 import Link from "next/link";
-import { ArrowRight, Handshake } from "lucide-react";
+import { ArrowRight, Handshake, Share2 } from "lucide-react";
 import TalkHub from "./talk/TalkHub";
 import { referralHref } from "./talk/links";
 import styles from "./ContactForm.module.css";
 
 // Keep direct contact and referral links separate from the message/live-chat switcher.
-const ContactForm = ({ referral = null }) => (
+const ContactForm = ({ referral = null, shareCardHref }) => (
   <section className="section section-bg" id="contact-section">
     <div className="container">
-      <div className="m-titles">
+      <div className={`m-titles ${styles.sectionHeading}`}>
         <h2 className="m-title" id="tour-contact">Contact Me</h2>
+        {shareCardHref && <Link href={shareCardHref}><a className={styles.shareCard}>
+          <Share2 size={18} aria-hidden="true" /><span>Share card</span>
+        </a></Link>}
       </div>
       <div className="row row-custom contact-layout">
         <div className="col-md-3 align-right contact-details">

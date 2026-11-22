@@ -1787,7 +1787,7 @@ const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: bui
         )}
 
         <DashboardPanels />
-          <ContactForm referral={referral} />
+          <ContactForm referral={referral} shareCardHref="/card" />
         <GuideHighlights />
         <SiteTour />
       </Layout>
