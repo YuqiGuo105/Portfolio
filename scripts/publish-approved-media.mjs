@@ -27,6 +27,7 @@ const run = args => execFileSync('gcloud', [...args, '--project', project], { en
 const secret = name => run(['secrets', 'versions', 'access', 'latest', '--secret', name]);
 const adminSecret = secret('ADMIN_SECRET');
 const recoveryToken = secret('MEDIA_RECOVERY_TOKEN');
+const internalToken = secret('INTERNAL_API_TOKEN');
 const call = async (suffix, body) => {
   const response = await fetch(`${admin}/api/admin/media${suffix}`, {
     method: body === undefined ? 'GET' : 'POST',
@@ -70,7 +71,7 @@ if (mode === 'upload') {
     const current = await api.get(state[demo.id].assetId);
     if (current.status !== 'READY') {
       wake = fetch(`${admin}/api/internal/media/recover`, { method: 'POST',
-        headers: { 'X-Media-Recovery-Token': recoveryToken }, signal: AbortSignal.timeout(900000) })
+        headers: { 'X-Media-Recovery-Token': recoveryToken, 'X-Internal-Token': internalToken }, signal: AbortSignal.timeout(900000) })
         .then(r => { assert.ok(r.ok, `Recovery HTTP ${r.status}`); }).catch(e => ({ error: e.message }));
     }
     const ready = await waitUntilProcessed(api, current.id, { intervalMs: 3000, timeoutMs: 900000 });
@@ -79,7 +80,10 @@ if (mode === 'upload') {
     await save();
     const manifest = await fetch(`${mediaBase}/${ready.manifest.basePath}/${ready.manifest.hls}`);
     assert.ok(manifest.ok && (await manifest.text()).startsWith('#EXTM3U'), 'Published HLS must be readable');
-    if (wake) await wake;
+    if (wake) {
+      const result = await wake;
+      assert.ok(!result?.error, `Recovery delivery failed: ${result?.error || ''}`);
+    }
     console.log(`${demo.id}: READY; public HLS verified`);
   }
 } else {
