@@ -1,0 +1,47 @@
+.root { max-width: 1160px; color: #25343b; font: 14px/1.5 system-ui, sans-serif; letter-spacing: 0; }
+.root * { box-sizing: border-box; }
+.root h1 { font: 650 28px/1.3 system-ui, sans-serif; margin: 4px 0; color: inherit; }
+.root h2 { font: 650 18px/1.4 system-ui, sans-serif; color: inherit; margin: 0 0 14px; }
+.root p { font: inherit; color: #60717b; margin: 8px 0; }
+.root button, .root input { font: inherit; letter-spacing: 0; }
+.root button { display: inline-flex; gap: 8px; align-items: center; justify-content: center; min-height: 42px; border: 1px solid #ccd9dc; border-radius: 5px; background: white; color: #365c58; padding: 9px 13px; cursor: pointer; }
+.root button:disabled { opacity: .55; cursor: default; }
+.root button:focus-visible, .root a:focus-visible, .root input:focus-visible { outline: 2px solid #267b70; outline-offset: 3px; }
+.root svg { flex: 0 0 auto; }
+.root a { color: #216c60; }
+.back { display: inline-flex; gap: 7px; align-items: center; margin-bottom: 20px; }
+.header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 24px; }
+.root .eyebrow, .label { font-size: 11px; font-weight: 600; color: #73848c; margin: 0; }
+.current { display: grid; grid-template-columns: 176px minmax(0,1fr); gap: 22px; padding: 24px 0; border-block: 1px solid #dce5e7; align-items: center; }
+.current img, .poster { width: 176px; aspect-ratio: 16/9; object-fit: cover; border-radius: 5px; background: #eef3f4; }
+.poster { display: grid; place-items: center; color: #7b929b; }
+.current h2 { margin: 5px 0; overflow-wrap: anywhere; }
+.current p { overflow-wrap: anywhere; }
+.workspace { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 32px; padding-top: 28px; }
+.task { min-width: 0; }
+.create, .upload { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+.create label, .upload label { width: 100%; display: grid; gap: 8px; font-weight: 600; }
+.root input { width: 100%; min-width: 0; padding: 12px; border: 1px solid #c9d8dc; border-radius: 5px; background: #fff; color: #25343b; }
+.root input[type=file] { font-size: 13px; padding: 16px 12px; }
+.root .primary { color: #fff; background: #256b5e; border-color: #256b5e; }
+.steps { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); list-style: none; padding: 16px 0; margin: 0 0 20px; border-bottom: 1px solid #dce5e7; }
+.steps li { display: flex; gap: 8px; align-items: center; color: #637780; font-size: 13px; }
+.steps li > span { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid #c9d8dc; border-radius: 50%; font-size: 11px; }
+.steps li[data-done=true] { color: #23735f; }
+.progress { display: flex; gap: 12px; align-items: center; margin: 18px 0; }
+.progress progress { min-width: 0; width: 100%; accent-color: #23735f; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0; }
+.root .error { background: #fff0ed; color: #a04432; padding: 12px; border-radius: 4px; overflow-wrap: anywhere; }
+.message { padding: 14px 0; }
+.details { border-top: 1px solid #dce5e7; padding-top: 16px; color: #627680; font-size: 12px; }
+.details summary { cursor: pointer; }
+.details dd { margin: 3px 0 12px; overflow-wrap: anywhere; }
+.history { padding-left: 24px; border-left: 1px solid #dce5e7; min-width: 0; }
+.history h2 { font-size: 14px; }
+.history button { display: grid; gap: 3px; justify-items: start; justify-content: stretch; width: 100%; text-align: left; border: 0; border-bottom: 1px solid #e4ebed; border-radius: 0; padding: 14px 0; }
+.history button[aria-current=true] { box-shadow: -3px 0 #267b70; padding-left: 12px; background: #f3f8f6; }
+.history strong { color: #324650; font-size: 13px; overflow-wrap: anywhere; }
+.history span { font-size: 12px; color: #54736b; }
+.history time { font-size: 11px; color: #7a8991; }
+@media (max-width: 1050px) { .workspace { grid-template-columns: minmax(0,1fr); } .history { border-left: 0; padding: 24px 0 0; border-top: 1px solid #dce5e7; } }
+@media (max-width: 480px) { .current { grid-template-columns: 96px minmax(0,1fr); gap: 12px; } .current img, .poster { width: 96px; } .current h2 { font-size: 16px; } .steps li { gap: 5px; font-size: 12px; } .root .primary { width: 100%; } }

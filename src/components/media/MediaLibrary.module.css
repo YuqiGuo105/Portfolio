@@ -1,5 +1,7 @@
 .library { color: #25313b; font: 14px/1.5 system-ui, sans-serif; letter-spacing: 0; }
 .library * { box-sizing: border-box; }
+.library .introLink { margin: 0 0 20px; }
+.introLink a { display: inline-flex; align-items: center; gap: 8px; color: #256b5e; min-height: 40px; font-weight: 600; }
 .header, .detailHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .header { margin-bottom: 24px; }
 .library h1 { font: 650 26px/1.3 system-ui, sans-serif; margin: 0 0 6px; color: #25313b; }

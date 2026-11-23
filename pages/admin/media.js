@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Upload, RefreshCw, Film, Image as ImageIcon, Search, X, RotateCcw } from 'lucide-react';
 import AdminLayout from '../../src/components/admin/AdminLayout';
 import { writerApi } from '../../src/lib/writerApi';
@@ -107,6 +108,7 @@ export function MediaLibraryContent({ previewAssets = null, api = writerApi.medi
   return <div className={styles.library}>
     <header className={styles.header}><div><h1>Media</h1><p>{assets.length} assets{readOnly ? ' / Local review' : ''}</p></div>
       <button type="button" className={styles.iconButton} disabled={loading} onClick={load} aria-label="Refresh media" title="Refresh media"><RefreshCw size={18} /></button></header>
+    {!readOnly && <p className={styles.introLink}><Link href="/admin/media-intro"><a><Film size={17} />Manage homepage Introduction</a></Link></p>}
     {!readOnly && <div className={styles.dropzone} data-dragging={dragging}
       onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
       onDrop={event => { event.preventDefault(); setDragging(false); startUpload(event.dataTransfer.files?.[0]); }}>

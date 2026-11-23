@@ -201,6 +201,12 @@ export const writerApi = {
   },
   // Image and video uploads through the media pipeline (admin-service /api/admin/media).
   media: {
+    presentation: () => request('GET', '/api/admin/media/presentations/yuqi-intro'),
+    presentationJobs: () => request('GET', '/api/admin/media/presentation-jobs'),
+    preparePresentationJob: body => request('POST', '/api/admin/media/presentation-jobs', body),
+    presentationJob: id => request('GET', `/api/admin/media/presentation-jobs/${encodeURIComponent(id)}`),
+    uploadPresentationJob: (id, body) => request('POST', `/api/admin/media/presentation-jobs/${encodeURIComponent(id)}/upload`, body),
+    cancelPresentationJob: id => request('POST', `/api/admin/media/presentation-jobs/${encodeURIComponent(id)}/cancel`, {}),
     start: (upload) => request('POST', '/api/admin/media/uploads', upload),
     resume: (id, uploadId) => request('POST', `/api/admin/media/${id}/upload-parts`, { uploadId }),
     complete: (id, uploadId) => request('POST', `/api/admin/media/${id}/upload-complete`, { uploadId }),

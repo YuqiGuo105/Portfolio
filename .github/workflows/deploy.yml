@@ -60,6 +60,9 @@ jobs:
       - name: OAuth regression tests
         run: npm run test:oauth
 
+      - name: Media upload and Introduction handoff
+        run: node --test tests/media*.test.mjs
+
       - name: Voice and private-history regression tests
         run: npm run test:voice
 
