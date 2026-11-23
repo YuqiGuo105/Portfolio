@@ -1291,7 +1291,7 @@ const DashboardPanels = () => {
 
         .dashboard-container {
           display: grid;
-          grid-template-columns: 1fr 2fr;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
           gap: 1.5rem;
           margin: 0 auto;
           padding: 0 1.5rem;
@@ -2435,7 +2435,7 @@ const DashboardPanels = () => {
           }
 
           .dashboard-container {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr);
             padding: 0 1rem;
           }
 
@@ -2472,7 +2472,7 @@ const DashboardPanels = () => {
           }
 
           .dashboard-container {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr);
             gap: 1.75rem;
           }
 

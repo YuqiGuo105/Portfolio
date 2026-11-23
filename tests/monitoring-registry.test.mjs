@@ -71,6 +71,9 @@ test('summary queries are all publicly scoped and browser polling count is uncha
   assert.match(component,/30_000|30000/);
   assert.match(component,/service checks every \$\{checkCadence\}/);
   assert.doesNotMatch(component,/service checks every 60/);
+  for (const match of component.matchAll(/\.dashboard-container\s*\{([^}]+)\}/g)) {
+    assert.match(match[1], /grid-template-columns: minmax\(0, 1fr\)/);
+  }
 });
 test('changing a service template invalidates cached metrics immediately', async () => {
   let catalog = parsePublicRegistry(yaml()).catalog;
