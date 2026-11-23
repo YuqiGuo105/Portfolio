@@ -33,3 +33,22 @@ test('production never uses local catalog and lookup failure is harmless', async
   const client = { from() { throw new Error('offline'); } };
   assert.deepEqual(await loadMediaCatalog(client, { NEXT_PUBLIC_MEDIA_BASE_URL: 'https://example.com' }), { demos: [], intro: null });
 });
+
+test('asset-backed introduction resolves only processed full HLS, poster and levels', () => {
+  const row = { placement_key: 'yuqi-intro', presentation: { version: 2, playback: 'asset', id: 'yuqi-intro',
+    title: 'Introduction', chapters: [{ seconds: 0, title: 'Start' }] }, manifest: {
+    basePath: 'media/video/v1', hls: 'master.m3u8', durationSeconds: 60, width: 1280, height: 720,
+    poster: { path: 'poster.jpg' }, mp4: { path: 'short-loop.mp4' },
+    renditions: [{ width: 640, height: 360, playlist: '360p/index.m3u8' }, { width: 1280, height: 720, playlist: '720p/index.m3u8' }],
+  } };
+  const demo = publishedDemo(row, 'https://media.example');
+  assert.equal(demo.hls, 'https://media.example/media/video/v1/master.m3u8');
+  assert.equal(demo.src, demo.hls);
+  assert.deepEqual(demo.qualities.map(q => q.height), [360, 720]);
+  assert.equal(JSON.stringify(demo).includes('short-loop'), false);
+  for (const broken of ['../original.mp4', 'https://untrusted.example/a', '/master.m3u8', '']) {
+    assert.equal(publishedDemo({ ...row, manifest: { ...row.manifest, hls: broken } }, 'https://media.example'), null);
+  }
+  assert.equal(publishedDemo({ ...row, placement_key: 'other' }, 'https://media.example'), null);
+  assert.equal(publishedDemo({ ...row, manifest: { ...row.manifest, renditions: [] } }, 'https://media.example'), null);
+});

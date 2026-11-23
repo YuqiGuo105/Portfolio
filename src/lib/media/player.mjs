@@ -1,13 +1,24 @@
+import { playbackSnapshot, restorePlayback } from './rendition.mjs';
+
 const NATIVE_HLS = 'application/vnd.apple.mpegurl';
 
 /** Owns one video element. No playlist, segment or HLS runtime is requested until play. */
-export function createMediaPlayer(video, { loadHls = () => import('hls.js'), onState = () => {}, onLevels = () => {},
+export function createMediaPlayer(video, { loadHls = () => import('hls.js'), onState = () => {}, onLevels = () => {}, nativeLevels = [],
   preferNative = typeof window !== 'undefined' && !(window.MediaSource || window.ManagedMediaSource) } = {}) {
   let disposed = false;
   let hls;
   let starting;
   let networkRetry = false;
   let mediaRetry = false;
+  let native = false;
+  let restoreNative;
+  let nativeSnapshot;
+  const startNative = () => {
+    native = true;
+    onLevels(nativeLevels.map((level, index) => ({ index, height: level.height })));
+    video.src = video.dataset.hls;
+    play();
+  };
   const play = () => {
     if (!disposed) video.play()?.catch(() => { if (!disposed) onState('ready'); });
   };
@@ -34,13 +45,13 @@ export function createMediaPlayer(video, { loadHls = () => import('hls.js'), onS
           return;
         }
         if (preferNative && video.canPlayType(NATIVE_HLS)) {
-          video.src = video.dataset.hls;
-          play();
+          startNative();
           return;
         }
         const { default: Hls } = await loadHls();
         if (disposed) return;
         if (!Hls.isSupported()) {
+          if (video.canPlayType(NATIVE_HLS)) { startNative(); return; }
           const fallback = video.canPlayType(NATIVE_HLS) ? video.dataset.hls : video.dataset.mp4;
           if (!fallback) throw new Error('Unsupported video');
           video.src = fallback;
@@ -77,16 +88,35 @@ export function createMediaPlayer(video, { loadHls = () => import('hls.js'), onS
       return starting;
     },
     setQuality(index) {
+      if (disposed) return;
       if (hls) {
+        if (index !== -1 && !hls.levels[index]) return;
         hls.config.capLevelToPlayerSize = index === -1;
         hls.autoLevelCapping = -1;
         hls.currentLevel = index;
+      } else if (native) {
+        const src = index === -1 ? video.dataset.hls : nativeLevels[index]?.src;
+        if (!src || video.src === src) return;
+        nativeSnapshot = playbackSnapshot(video, nativeSnapshot);
+        video.removeEventListener('loadedmetadata', restoreNative);
+        restoreNative = () => {
+          const snapshot = nativeSnapshot;
+          nativeSnapshot = undefined;
+          restorePlayback(video, { ...snapshot,
+            playing: snapshot.playing && (typeof document === 'undefined' || !document.hidden) });
+        };
+        video.addEventListener('loadedmetadata', restoreNative, { once: true });
+        video.pause();
+        video.src = src;
+        video.load();
       }
     },
     dispose() {
       disposed = true;
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('error', fail);
+      if (restoreNative) video.removeEventListener('loadedmetadata', restoreNative);
+      nativeSnapshot = undefined;
       hls?.destroy();
       hls = undefined;
       video.pause();

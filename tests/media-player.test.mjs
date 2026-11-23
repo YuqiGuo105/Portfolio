@@ -90,3 +90,28 @@ test('native HLS avoids importing hls.js and can be reattached after navigation'
   assert.equal(video.plays, 2);
   second.dispose();
 });
+
+test('native HLS can select a rendition and return to Auto without losing paused progress', async () => {
+  const video = new Video();
+  video.canPlayType = () => 'probably';
+  video.currentTime = 4; video.duration = 60; video.paused = true; video.playbackRate = 1.25;
+  const player = createMediaPlayer(video, { preferNative: true,
+    nativeLevels: [{ height: 360, src: 'https://media.example/360p/index.m3u8' }] });
+  await player.start();
+  player.setQuality(0);
+  assert.equal(video.src, 'https://media.example/360p/index.m3u8');
+  video.currentTime = 0;
+  video.dispatchEvent(new Event('loadedmetadata'));
+  assert.equal(video.currentTime, 4);
+  assert.equal(video.playbackRate, 1.25);
+  assert.equal(video.plays, 1);
+  player.setQuality(-1);
+  assert.equal(video.src, video.dataset.hls);
+  video.currentTime = 0;
+  player.setQuality(0);
+  video.dispatchEvent(new Event('loadedmetadata'));
+  assert.equal(video.currentTime, 4, 'rapid quality changes retain the original playback snapshot');
+  player.dispose();
+  player.setQuality(0);
+  assert.equal(video.src, '');
+});

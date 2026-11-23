@@ -20,7 +20,7 @@ export default function DemoVideo({ demo, autoStart = false }) {
   const video = useRef(null);
   const captionTrack = useRef(null);
   const frame = useRef(null);
-  const quality = useVideoQuality(video, demo);
+  const quality = useVideoQuality(video, demo, started, () => { setError(true); setPlaying(false); });
   const chapters = demo.chapters || [];
   const activeChapter = Math.max(0, chapters.findLastIndex(chapter => chapter.seconds <= time));
   const segments = chapters.length ? chapters : [{ seconds: 0, title: demo.title }];
@@ -57,7 +57,8 @@ export default function DemoVideo({ demo, autoStart = false }) {
     setStarted(true);
     if (video.current) {
       if (seconds !== null && video.current.readyState >= 1) video.current.currentTime = seconds;
-      if (video.current.error) video.current.load();
+      if (demo.hls && (error || video.current.error)) quality.retry();
+      else if (video.current.error) video.current.load();
       video.current.play().catch(() => {});
     }
   }
@@ -96,7 +97,7 @@ export default function DemoVideo({ demo, autoStart = false }) {
   return <figure className={styles.figure}>
     <div ref={frame} className={styles.frame} role="group" aria-label={`${demo.title} player`} tabIndex={0} onKeyDown={keyboard}>
       <div className={styles.picture}>
-      {started ? <video ref={video} src={quality.source} poster={demo.poster}
+      {started ? <video ref={video} src={quality.source} data-hls={demo.hls} poster={demo.poster}
         crossOrigin="anonymous" playsInline preload="metadata" muted={muted} aria-label={`${demo.title} video`} onClick={toggle}
         onLoadedMetadata={() => {
           setError(false);
