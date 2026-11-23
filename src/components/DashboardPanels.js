@@ -171,7 +171,7 @@ const Sparkline = ({ data, title, color = "#6366f1", unit = "", height = 90 }) =
   const line = points.map((d, i) => `${i === 0 ? "M" : "L"} ${sx(d.t).toFixed(1)} ${sy(d.v).toFixed(1)}`).join(" ");
   const area = `${line} L ${sx(maxX).toFixed(1)} ${h - pad} L ${sx(minX).toFixed(1)} ${h - pad} Z`;
   const last = ys[ys.length - 1];
-  const gid = `sparkgrad-${title.replace(/\s+/g, "")}`;
+  const gid = `sparkgrad-${title.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   return (
     <div className="spark">
       <div className="spark-head">
