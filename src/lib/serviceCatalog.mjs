@@ -17,10 +17,10 @@ export const SERVICE_CATALOG = Object.freeze({
   "portfolio-mcp-server": { name: "MCP Server", purpose: "Public portfolio tools and authenticated administrator MCP access.", repo: "portfolio-mcp-server", stack: ["Node.js", "MCP", "OAuth"], monitoring: "probe", intervalSeconds: 120 },
 });
 
-export function getServiceMetadata(job) {
-  if (typeof job !== "string" || !Object.hasOwn(SERVICE_CATALOG, job)) return null;
-  const metadata = SERVICE_CATALOG[job];
-  return { monitoring: "jvm", intervalSeconds: 60, ...metadata, repositoryUrl: `${github}${metadata.repo}` };
+export function getServiceMetadata(job, catalog = SERVICE_CATALOG) {
+  if (typeof job !== "string" || !Object.hasOwn(catalog, job)) return null;
+  const metadata = catalog[job];
+  return { monitoring: "jvm", intervalSeconds: 60, ...metadata, repositoryUrl: metadata.repo ? `${github}${metadata.repo}` : null };
 }
 
 export function metricNumber(value, digits = 1, suffix = "") {

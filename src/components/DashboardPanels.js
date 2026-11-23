@@ -734,6 +734,12 @@ const DashboardPanels = () => {
   }, [isWeatherLoading, weather.temperature, temperatureUnit]);
 
   const monitoredServices = metrics?.services || [];
+  const checkIntervals = monitoredServices.map(service => service.metadata?.intervalSeconds).filter(Number.isFinite);
+  const minimumCheckInterval = checkIntervals.length ? Math.min(...checkIntervals) : null;
+  const maximumCheckInterval = checkIntervals.length ? Math.max(...checkIntervals) : null;
+  const checkCadence = minimumCheckInterval === maximumCheckInterval
+    ? `${minimumCheckInterval}s`
+    : `${minimumCheckInterval}\u2013${maximumCheckInterval}s`;
   const visibleMonitoredServices = showAllMonitoredServices
     ? monitoredServices
     : monitoredServices.slice(0, MONITOR_SERVICE_VISIBLE_LIMIT);
@@ -1021,7 +1027,7 @@ const DashboardPanels = () => {
             <span className="badge">{metrics?.stale ? "cached" : "live"}</span>
           </header>
           <p className="card-subtitle">
-            Prometheus &amp; Grafana Cloud. Refreshes every 30s; service checks every 60–120s.
+            Prometheus &amp; Grafana Cloud. Refreshes every 30s{checkIntervals.length > 0 ? `; service checks every ${checkCadence}` : ""}.
           </p>
 
           {/* Summary tiles */}

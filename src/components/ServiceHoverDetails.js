@@ -8,6 +8,7 @@ const detailCache = new Map();
 const FRESH_MS = 60_000;
 const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 const formatTime = value => value ? new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Not reported";
+const metadataFor = service => service?.metadata || getServiceMetadata(service?.job);
 
 function RequestHistory({ points = [], probe = false }) {
   const valid = points.filter(p => typeof p.v === "number" && Number.isFinite(p.v));
@@ -32,7 +33,7 @@ function Metric({ label, compactLabel, value, title }) {
 }
 
 function DetailContent({ service, summaryAt, payload, loading, failed, retry }) {
-  const meta = getServiceMetadata(service.job);
+  const meta = metadataFor(service);
   const m = payload?.metrics || {};
   const probe = meta.monitoring === "probe";
   const heapPct = m.heapMaxBytes > 0 && m.heapUsedBytes != null ? m.heapUsedBytes / m.heapMaxBytes * 100 : service.heapPct;
@@ -80,7 +81,7 @@ export function useServiceHoverDetails(services, summaryAt) {
   const floating = useRef(null), trigger = useRef(null), timers = useRef({});
   const activeRef = useRef(null), pointerFocus = useRef(false), ignoreFocus = useRef(false);
   const service = services.find(item => item.job === active?.job);
-  const meta = getServiceMetadata(active?.job);
+  const meta = metadataFor(service);
   const clearTimers = useCallback(() => { clearTimeout(timers.current.open); clearTimeout(timers.current.close); }, []);
   const close = useCallback((restore = false) => {
     clearTimers(); activeRef.current = null; setActive(null);
@@ -88,7 +89,7 @@ export function useServiceHoverDetails(services, summaryAt) {
   }, [clearTimers]);
   const open = (svc, element, pinned = false) => {
     clearTimers();
-    if (!getServiceMetadata(svc.job)) return;
+    if (!metadataFor(svc)) return;
     trigger.current = element;
     const next = { job: svc.job, pinned };
     activeRef.current = next; setActive(next);
@@ -212,7 +213,7 @@ export function useServiceHoverDetails(services, summaryAt) {
       <header className={styles.header}><span className={styles.glyph}><Server size={19} /></span><div><h4>{service.name}</h4><span className={styles.status} data-up={isUp}>{status} <span>Cloud Run · {meta.monitoring === "probe" ? "HTTP health" : "JVM"}</span></span></div><button className={styles.close} type="button" onClick={() => close(true)} aria-label="Close service details" title="Close service details"><X size={17} /></button></header>
       <div className={styles.body}><DetailContent service={service} summaryAt={summaryAt} payload={current.payload} loading={current.loading} failed={current.failed} retry={() => { detailCache.delete(active.job); setAttempt(value => value + 1); }} /></div>
       <footer className={styles.links}>
-        <a href={meta.repositoryUrl} target="_blank" rel="noopener noreferrer" aria-label="Source code on GitHub" title={`Open ${meta.repo} on GitHub`}><Github size={15} />GitHub<ArrowUpRight size={13} /></a>
+        {meta.repositoryUrl && <a href={meta.repositoryUrl} target="_blank" rel="noopener noreferrer" aria-label="Source code on GitHub" title={`Open ${meta.repo} on GitHub`}><Github size={15} />GitHub<ArrowUpRight size={13} /></a>}
         <a href={GRAFANA_PUBLIC_URL} target="_blank" rel="noopener noreferrer" title="Open the full platform Grafana dashboard"><Activity size={15} />Grafana<ArrowUpRight size={13} /></a>
         <a href="/architecture" target="_blank" rel="noopener noreferrer">Architecture<ArrowUpRight size={13} /></a>
       </footer>

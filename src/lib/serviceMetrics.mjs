@@ -1,12 +1,13 @@
-import { getServiceMetadata } from "./serviceCatalog.mjs";
+import { getServiceMetadata, SERVICE_CATALOG } from "./serviceCatalog.mjs";
 
 const PROM_BASE = "https://loyalcaravan951.grafana.net/api/datasources/proxy/uid/grafanacloud-prom/api/v1";
 const TTL = 60_000;
 const ERROR_TTL = 15_000;
 const MAX_STALE = 300_000;
 
-export function serviceQueries(job) {
-  const meta = getServiceMetadata(job);
+export function serviceQueries(job, catalog = SERVICE_CATALOG) {
+  if (typeof job !== 'string' || !/^[a-z][a-z0-9-]{0,62}$/.test(job)) throw new Error('Unknown service');
+  const meta = getServiceMetadata(job, catalog);
   if (!meta) throw new Error("Unknown service");
   const probe = meta.monitoring === "probe";
   const selector = `job="${job}"`;
@@ -67,12 +68,13 @@ async function queryPrometheus(path, params, token, fetchImpl, timeoutMs) {
 export function createServiceMetricsHandler({
   fetchImpl = fetch, getToken = () => process.env.GRAFANA_RENDER_TOKEN,
   now = Date.now, timeoutMs = 4500,
+  getCatalog = async () => SERVICE_CATALOG,
 } = {}) {
   // Cache is bounded by the service catalog; same-job requests share work.
   const cache = new Map(), pending = new Map(), cooldowns = new Map();
 
-  async function load(job, token) {
-    const captured = now(), end = Math.floor(captured / 1000), queries = serviceQueries(job);
+  async function load(job, token, catalog) {
+    const captured = now(), end = Math.floor(captured / 1000), queries = serviceQueries(job, catalog);
     const [instant, range] = await Promise.allSettled([
       queryPrometheus("query", { query: queries.instant, time: String(end) }, token, fetchImpl, timeoutMs),
       queryPrometheus("query_range", { query: queries.range, start: String(end - 3600), end: String(end), step: "120" }, token, fetchImpl, timeoutMs),
@@ -100,10 +102,20 @@ export function createServiceMetricsHandler({
     res.setHeader("Cache-Control", "no-store");
     if (req.method !== "GET") { res.setHeader("Allow", "GET"); return res.status(405).json({ error: "Method not allowed" }); }
     const { job, ...extra } = req.query || {};
-    if (!getServiceMetadata(job) || Object.keys(extra).length) return res.status(400).json({ error: "Select a known platform service" });
+    if (typeof job !== 'string' || !/^[a-z][a-z0-9-]{0,62}$/.test(job) || Object.keys(extra).length) return res.status(400).json({ error: "Select a known platform service" });
+    let catalog;
+    try { catalog = await getCatalog(); } catch { return res.status(503).json({ error: 'Monitoring registry unavailable' }); }
+    const meta = getServiceMetadata(job, catalog);
+    if (!meta) return res.status(400).json({ error: "Select a known platform service" });
+    const cacheKey = `${job}:${meta.monitoring}:${meta.intervalSeconds}`;
+    const activeKeys = new Set(Object.keys(catalog).map(id => {
+      const current = getServiceMetadata(id, catalog);
+      return `${id}:${current.monitoring}:${current.intervalSeconds}`;
+    }));
+    for (const map of [cache, cooldowns]) for (const key of map.keys()) if (!activeKeys.has(key)) map.delete(key);
     const token = getToken();
     if (!token) return res.status(503).json({ error: "Service metrics are temporarily unavailable" });
-    const entry = cache.get(job);
+    const entry = cache.get(cacheKey);
     const send = (payload, status) => {
       res.setHeader("X-Cache", status);
       if (!payload.stale) {
@@ -113,22 +125,22 @@ export function createServiceMetricsHandler({
       return res.status(200).json(payload);
     };
     if (entry && now() - entry.fetched < (entry.payload.partial ? ERROR_TTL : TTL)) return send(entry.payload, "HIT");
-    if ((cooldowns.get(job) || 0) > now()) {
+    if ((cooldowns.get(cacheKey) || 0) > now()) {
       if (entry && now() - entry.fetched < MAX_STALE) return send({ ...entry.payload, stale: true }, "STALE");
       res.setHeader("Retry-After", "15");
       return res.status(503).json({ error: "Service metrics are temporarily unavailable" });
     }
-    if (!pending.has(job) && pending.size >= 4) {
+    if (!pending.has(cacheKey) && pending.size >= 4) {
       res.setHeader("Retry-After", "5");
       return res.status(429).json({ error: "Metrics are busy. Try again shortly." });
     }
     try {
-      if (!pending.has(job)) pending.set(job, load(job, token).then(payload => {
-        cache.set(job, { payload, fetched: now() });
-        cooldowns.delete(job);
+      if (!pending.has(cacheKey)) pending.set(cacheKey, load(job, token, catalog).then(payload => {
+        cache.set(cacheKey, { payload, fetched: now() });
+        cooldowns.delete(cacheKey);
         return payload;
-      }).catch(error => { cooldowns.set(job, now() + ERROR_TTL); throw error; }).finally(() => pending.delete(job)));
-      return send(await pending.get(job), "MISS");
+      }).catch(error => { cooldowns.set(cacheKey, now() + ERROR_TTL); throw error; }).finally(() => pending.delete(cacheKey)));
+      return send(await pending.get(cacheKey), "MISS");
     } catch {
       if (entry && now() - entry.fetched < MAX_STALE) return send({ ...entry.payload, stale: true }, "STALE");
       res.setHeader("Retry-After", "15");
