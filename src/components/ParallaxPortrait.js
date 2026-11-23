@@ -24,7 +24,7 @@ const CROP = "50% 100%";
 // Where his boots touch the sand, in % of the frame: the person layer ends at 93% of the art, which
 // that bottom-anchored crop puts at about 92.5% of the slot. Both layers pivot here.
 const GROUND = "50% 92%";
-// Touch devices follow the device tilt; everything else follows the mouse.
+// Touch devices follow the device tilt after opt-in; everything else follows the mouse.
 const TOUCH_MEDIA = "(hover: none), (pointer: coarse)";
 const TILT_RANGE = 18; // degrees of phone tilt for a full swing
 const EASE = 0.12; // share of the remaining distance covered per frame
@@ -35,8 +35,7 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
   const frameRef = useRef(null);
   const bgRef = useRef(null);
   const fgRef = useRef(null);
-  const [needsMotionPermission, setNeedsMotionPermission] = useState(false);
-  const [motionOn, setMotionOn] = useState(false);
+  const [needsMotionOptIn, setNeedsMotionOptIn] = useState(false);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -133,57 +132,42 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
       window.addEventListener("blur", recentre);
     }
 
-    // Listen straight away (Android delivers tilt without asking). Only if no reading arrives and the
-    // browser offers requestPermission (iOS Safari and Chrome) show the opt-in button.
+    // Sensor access always starts at the portrait button, including Android without a permission API.
     const DOE = window.DeviceOrientationEvent;
-    let gotReading = false;
-    const onFirstOrientation = (e) => {
-      if (e.beta == null) return;
-      gotReading = true;
-      setMotionOn(true);
-    };
-    window.addEventListener("deviceorientation", onOrientation, { passive: true });
-    window.addEventListener("deviceorientation", onFirstOrientation, { passive: true, once: true });
     const mustAsk = touch && DOE && typeof DOE.requestPermission === "function";
+    setNeedsMotionOptIn(touch && !!DOE);
     Object.assign(dbg, { coarse: !!touch, hasDOE: !!DOE, needsPermission: !!mustAsk, secure: window.isSecureContext });
     showDebug();
+    let disposed = false;
     let asking = false;
     let answered = false;
     const ask = async () => {
-      if (asking || answered || gotReading) return;
+      if (disposed || !touch || !DOE || asking || answered) return;
       asking = true;
       try {
-        // Resolves "granted" or "denied" once the visitor answers.
-        dbg.permission = await DOE.requestPermission();
+        const permission = mustAsk ? await DOE.requestPermission() : "granted";
+        if (disposed) return;
+        dbg.permission = permission;
         answered = true;
-        document.removeEventListener("touchend", ask);
-        document.removeEventListener("click", ask);
-        setNeedsMotionPermission(false);
+        if (permission === "granted") {
+          window.addEventListener("deviceorientation", onOrientation, { passive: true });
+        }
+        setNeedsMotionOptIn(false);
       } catch (err) {
-        // Not counted as a gesture (e.g. the touch was a scroll): the next tap asks again.
+        if (disposed) return;
+        // A failed request can be retried only by activating the portrait button again.
         dbg.permission = `error: ${err?.name || err}`;
+      } finally {
+        asking = false;
       }
       showDebug();
-      asking = false;
     };
-    const askTimer = setTimeout(() => {
-      if (mustAsk && !gotReading) setNeedsMotionPermission(true);
-    }, 1200);
-    // iOS (Safari and Chrome alike) only grants motion access from a user gesture: a tap anywhere on
-    // the page asks until the visitor answers; the button is the visible way to do the same.
-    if (mustAsk) {
-      document.addEventListener("touchend", ask, { passive: true });
-      document.addEventListener("click", ask, { passive: true });
-    }
     frame.__enableMotion = ask;
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(raf);
-      clearTimeout(askTimer);
-      document.removeEventListener("touchend", ask);
-      document.removeEventListener("click", ask);
       debugBox?.remove();
-      window.removeEventListener("deviceorientation", onFirstOrientation);
       io?.disconnect();
       window.removeEventListener("deviceorientation", onOrientation);
       window.removeEventListener("pointermove", onPointerMove);
@@ -251,7 +235,7 @@ export default function ParallaxPortrait({ border = "0", radius = 380, alt }) {
           decoding="async"
           style={layer}
         />
-      {needsMotionPermission && !motionOn && (
+      {needsMotionOptIn && (
         <button
           type="button"
           onClick={(e) => {
