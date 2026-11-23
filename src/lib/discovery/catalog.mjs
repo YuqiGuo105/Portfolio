@@ -1,5 +1,6 @@
 import { Parser } from 'htmlparser2';
-import { publicServerClient } from '../publicContent.mjs';
+import { publicServerClient, PROJECT_SYSTEM_COLUMNS, firstSystemByProject } from '../publicContent.mjs';
+import { projectCoverData } from '../projectCover.mjs';
 import { digest } from './provider.mjs';
 
 export function plainText(html, max = 6000) {
@@ -13,13 +14,14 @@ export function plainText(html, max = 6000) {
   return text.replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
-export function catalogItem(row, type) {
+export function catalogItem(row, type, system = null) {
   if (!/^[a-f0-9-]{36}$/i.test(row.id || '') || !row.title) return null;
   const tags = Array.isArray(row.tags) ? row.tags.join(', ') : row.tags || row.technology || row.category || '';
   const title = plainText(row.title, 200), description = plainText(row.summary || row.description || row.content, 400);
   let image = null;
   try { const url = new URL(row.image_url); if (url.protocol === 'https:' && !url.username && !url.password) image = url.href; } catch { /* No cover. */ }
   return { id: `${type}:${row.id}`, contentId: row.id, type, title, description, tags: plainText(tags, 400), image,
+    coverSystem: type === 'project' ? projectCoverData(system) : null,
     url: `/${type === 'project' ? 'work' : 'blog'}-single/${row.id}`,
     text: `${title}. ${plainText(tags, 400)}. ${plainText(row.content || description, 5000)}` };
 }
@@ -37,8 +39,20 @@ export function createCatalogLoader({ client = publicServerClient(), now = Date.
         client.from('Blogs').select('id,title,description,content,tags,category,image_url').limit(200).abortSignal(AbortSignal.timeout(4000)),
       ]);
       if (projects.error || blogs.error) throw new Error('Public catalog unavailable');
-      const items = [...projects.data.map(row => catalogItem(row, 'project')), ...blogs.data.map(row => catalogItem(row, 'blog'))].filter(Boolean);
-      cached = { items, version: digest(JSON.stringify(items)).slice(0, 20) }; until = now() + 60000;
+      let systems = {};
+      let coversAvailable = true;
+      if (projects.data.length) {
+        // A cover outage must not hide otherwise readable articles. Retry sooner in that case.
+        try {
+          const result = await client.from('project_subsystems').select(PROJECT_SYSTEM_COLUMNS)
+            .in('project_id', projects.data.map(row => row.id)).eq('active', true)
+            .order('sort_order', { ascending: true }).abortSignal(AbortSignal.timeout(1500));
+          if (!result.error) systems = firstSystemByProject(result.data);
+          else coversAvailable = false;
+        } catch { coversAvailable = false; }
+      }
+      const items = [...projects.data.map(row => catalogItem(row, 'project', systems[row.id])), ...blogs.data.map(row => catalogItem(row, 'blog'))].filter(Boolean);
+      cached = { items, version: digest(JSON.stringify(items)).slice(0, 20) }; until = now() + (coversAvailable ? 60000 : 5000);
       return cached;
     })();
     try { return await pending; } finally { pending = null; }

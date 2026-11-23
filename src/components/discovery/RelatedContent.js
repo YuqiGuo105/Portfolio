@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, FileText } from 'lucide-react';
 import { trackBehavior } from '../../lib/behaviorAnalytics';
 import styles from './RelatedContent.module.css';
+import ProjectSystemCover, { supportsSystemCover } from '../projects/ProjectSystemCover';
 
 export default function RelatedContent({ contentId }) {
   const root = useRef(null), [payload, setPayload] = useState(null);
@@ -35,7 +36,9 @@ export default function RelatedContent({ contentId }) {
       <h2 className={styles.heading}>Read next</h2>
       <div className={styles.grid}>{payload.items.map((item, index) => <a key={item.id} href={item.url} className={styles.item}
         onClick={() => trackBehavior('recommendation_click', { target: item.url, properties: { component: 'read-next', contentId: item.id, contentType: item.type, rank: index + 1, recommendationRequestId: payload.requestId, modelVersion: payload.modelVersion } })}>
-        <span className={styles.cover}>{item.image ? <img src={item.image} alt="" loading="lazy" decoding="async" /> : <FileText size={28} aria-hidden="true" />}</span>
+        <span className={styles.cover}>{supportsSystemCover(item.coverSystem)
+          ? <ProjectSystemCover system={item.coverSystem} thumbnail />
+          : item.image ? <img src={item.image} alt="" loading="lazy" decoding="async" /> : <FileText size={28} aria-hidden="true" />}</span>
         <div className={styles.copy}><span className={styles.meta}>{item.type === 'project' ? 'Project' : 'Article'} · {item.reason}</span><h3>{item.title}</h3><p>{item.description}</p></div>
         <ArrowUpRight size={18} className={styles.arrow} aria-hidden="true" />
       </a>)}</div>

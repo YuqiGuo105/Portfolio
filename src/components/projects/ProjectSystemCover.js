@@ -77,13 +77,13 @@ export function supportsSystemCover(system) {
   return Boolean(databasePreset(system));
 }
 
-export default function ProjectSystemCover({ system }) {
+export default function ProjectSystemCover({ system, thumbnail = false }) {
   const preset = databasePreset(system);
   if (!preset) return null;
 
   return (
     <div
-      className={styles.cover}
+      className={`${styles.cover}${thumbnail ? ` ${styles.thumbnail}` : ''}`}
       data-theme={preset.theme}
       data-layout={preset.layout}
       role="img"
@@ -103,7 +103,7 @@ export default function ProjectSystemCover({ system }) {
         ))}
       </div>
 
-      <svg className={styles.links} viewBox="0 0 1000 360" aria-hidden="true">
+      <svg className={styles.links} viewBox="0 0 1000 360" preserveAspectRatio={thumbnail ? 'none' : undefined} aria-hidden="true">
         {preset.paths.map((path, index) => (
           <path key={`${path.kind}-${index}`} d={path.d} data-kind={path.kind} />
         ))}
