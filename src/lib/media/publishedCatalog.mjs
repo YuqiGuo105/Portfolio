@@ -28,7 +28,9 @@ export function publishedDemo(row, baseUrl) {
   const src = publicPath(p.src, base);
   const poster = publicPath(p.poster, base);
   if (!src || !poster || !p.id || !(Number(p.seconds) > 0)) return null;
-  const qualities = (p.qualities || []).filter(q => [360, 480, 720, 1080].includes(q.height))
+  const qualities = (p.qualities || []).filter(q => hls
+    ? Number.isInteger(q.height) && q.height > 0
+    : [360, 480, 720, 1080].includes(q.height))
     .map(q => ({ height: q.height, src: publicPath(q.src, base), bytes: Number(q.bytes) || 0 })).filter(q => q.src);
   const href = /^\/(?:work-single|blog-single)\/[a-f0-9-]+$/.test(p.href || '') ? p.href : null;
   if (p.id !== 'yuqi-intro' && (!href || !/^(?:project|blog):[a-f0-9-]+$/.test(p.contentId || ''))) return null;

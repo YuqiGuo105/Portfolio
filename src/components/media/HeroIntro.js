@@ -8,7 +8,7 @@ export function HeroIntroButton({ intro, onPlay, buttonRef }) {
   return <button ref={buttonRef} type="button" className={styles.launch}
     onClick={onPlay} aria-controls="hero-intro-player">
     <span className={styles.playIcon}><Play size={21} fill="currentColor" aria-hidden="true" /></span>
-    <span>Watch the {intro.seconds}-second intro</span>
+    <span>Watch the {Math.max(1, Math.round(intro.seconds))}-second intro</span>
   </button>;
 }
 

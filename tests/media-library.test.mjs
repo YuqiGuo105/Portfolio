@@ -45,6 +45,12 @@ test('asset-backed introduction resolves only processed full HLS, poster and lev
   assert.equal(demo.hls, 'https://media.example/media/video/v1/master.m3u8');
   assert.equal(demo.src, demo.hls);
   assert.deepEqual(demo.qualities.map(q => q.height), [360, 720]);
+  const small = publishedDemo({ ...row, manifest: { ...row.manifest,
+    renditions: [{ width: 384, height: 216, playlist: '216p/index.m3u8' }] } }, 'https://media.example');
+  assert.deepEqual(small.qualities.map(q => q.height), [216], 'keep actual source size below the standard ladder');
+  const portrait = publishedDemo({ ...row, manifest: { ...row.manifest,
+    renditions: [{ width: 540, height: 960, playlist: '540p/index.m3u8' }] } }, 'https://media.example');
+  assert.deepEqual(portrait.qualities.map(q => q.height), [540], 'portrait quality uses the short side');
   assert.equal(JSON.stringify(demo).includes('short-loop'), false);
   for (const broken of ['../original.mp4', 'https://untrusted.example/a', '/master.m3u8', '']) {
     assert.equal(publishedDemo({ ...row, manifest: { ...row.manifest, hls: broken } }, 'https://media.example'), null);
