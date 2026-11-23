@@ -687,6 +687,7 @@ const DashboardPanels = () => {
     let mounted = true;
 
     const fetchMetrics = async () => {
+      if (document.hidden) return;
       try {
         const res = await fetch("/api/metrics");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1017,10 +1018,10 @@ const DashboardPanels = () => {
         <div className="dashboard-card-5 grafana-card" id="platform-monitoring">
           <header>
             <h3>Platform Monitoring</h3>
-            <span className="badge">live</span>
+            <span className="badge">{metrics?.stale ? "cached" : "live"}</span>
           </header>
           <p className="card-subtitle">
-            Real-time metrics for the microservices platform — powered by Prometheus &amp; Grafana Cloud. Auto-refreshes every 30s.
+            Prometheus &amp; Grafana Cloud. Refreshes every 30s; service checks every 60–120s.
           </p>
 
           {/* Summary tiles */}
@@ -1035,7 +1036,7 @@ const DashboardPanels = () => {
               <span className="monitor-tile-value">
                 {metrics ? metrics.summary.requestsPerSec.toFixed(2) : "—"}
               </span>
-              <span className="monitor-tile-label">Requests / sec</span>
+              <span className="monitor-tile-label">JVM requests / sec</span>
             </div>
             <div className="monitor-tile">
               <span className="monitor-tile-value">
@@ -1046,7 +1047,7 @@ const DashboardPanels = () => {
                     )}%`
                   : "—"}
               </span>
-              <span className="monitor-tile-label">Avg Heap</span>
+              <span className="monitor-tile-label">Avg JVM Heap</span>
             </div>
             <div className="monitor-tile">
               <span className="monitor-tile-value">
@@ -1054,7 +1055,7 @@ const DashboardPanels = () => {
                   ? metrics.services.reduce((a, s) => a + (s.threads || 0), 0)
                   : "—"}
               </span>
-              <span className="monitor-tile-label">Live Threads</span>
+              <span className="monitor-tile-label">JVM Threads</span>
             </div>
           </div>
 
@@ -1097,9 +1098,14 @@ const DashboardPanels = () => {
                 <div className="monitor-service-head">
                   <span className={`status-dot ${svc.up ? "up" : svc.noMetrics ? "idle" : "down"}`} aria-hidden="true" />
                   <span className="monitor-service-name">{svc.name}</span>
-                  <span className="monitor-service-status">{svc.up ? "UP" : svc.noMetrics ? "IDLE" : "DOWN"}</span>
+                  <span className="monitor-service-status">{svc.up ? "UP" : svc.noMetrics ? "NO DATA" : "CHECK FAILED"}</span>
                 </div>
-                {svc.up ? (
+                {svc.monitoring === "probe" ? (
+                  <div className="monitor-service-metrics probe-metrics">
+                    <div className="msm"><span className="msm-label">Health check</span><span className="msm-value">{svc.responseMs == null ? "N/A" : `${svc.responseMs} ms`}</span></div>
+                    <div className="msm-row"><span>HTTP {svc.httpStatus || "N/A"}</span><span>Every {svc.intervalSeconds}s</span></div>
+                  </div>
+                ) : svc.up ? (
                   <div className="monitor-service-metrics">
                     <div className="msm">
                       <span className="msm-label">Heap</span>
@@ -1116,12 +1122,12 @@ const DashboardPanels = () => {
                     <div className="msm-row">
                       <span>Uptime {formatUptime(svc.uptimeSeconds)}</span>
                       <span>{svc.threads ?? "—"} thr</span>
-                      <span>{(svc.reqPerSec || 0).toFixed(2)}/s</span>
+                      <span>{svc.reqPerSec == null ? "N/A" : `${svc.reqPerSec.toFixed(2)}/s`}</span>
                     </div>
                   </div>
                 ) : (
                   <div className="monitor-service-metrics dim">
-                    <span className="msm-idle">{svc.noMetrics ? "No samples · may be idle" : "No successful scrape · investigate"}</span>
+                    <span className="msm-idle">{svc.noMetrics ? "No recent samples" : "Metrics check failed · investigate"}</span>
                   </div>
                 )}
               </div>
@@ -1884,6 +1890,7 @@ const DashboardPanels = () => {
         .dashboard-card-5 {
           grid-column: 1 / -1;
           width: 100%;
+          min-width: 0;
           max-width: 1500px;
           background: var(--card-bg);
           border: 1px solid var(--card-border);
@@ -1969,13 +1976,13 @@ const DashboardPanels = () => {
         /* Grafana-style gauges + charts */
         .monitor-visuals {
           display: grid;
-          grid-template-columns: minmax(240px, 0.9fr) 2fr;
+          grid-template-columns: minmax(240px, 0.9fr) minmax(0, 2fr);
           gap: 14px;
         }
 
         .monitor-gauges {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 8px;
           padding: 12px;
           border-radius: 12px;
@@ -1983,14 +1990,16 @@ const DashboardPanels = () => {
           border: 1px solid var(--card-border);
         }
 
-        .gauge {
+        .monitor-gauges :global(.gauge) {
           display: flex;
+          min-width: 0;
           flex-direction: column;
           align-items: center;
           gap: 2px;
         }
 
-        .gauge-svg {
+        .monitor-gauges :global(.gauge-svg) {
+          display: block;
           width: 100%;
           height: auto;
         }
@@ -2006,7 +2015,7 @@ const DashboardPanels = () => {
           font-weight: 600;
         }
 
-        .gauge-label {
+        .monitor-gauges :global(.gauge-label) {
           font-size: 0.72rem;
           color: var(--text-muted);
           text-transform: uppercase;
@@ -2015,11 +2024,12 @@ const DashboardPanels = () => {
 
         .monitor-charts {
           display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
+          min-width: 0;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 10px;
         }
 
-        .spark {
+        .monitor-charts :global(.spark) {
           display: flex;
           flex-direction: column;
           gap: 6px;
@@ -2030,14 +2040,14 @@ const DashboardPanels = () => {
           min-width: 0;
         }
 
-        .spark-head {
+        .monitor-charts :global(.spark-head) {
           display: flex;
           align-items: baseline;
           justify-content: space-between;
           gap: 8px;
         }
 
-        .spark-title {
+        .monitor-charts :global(.spark-title) {
           font-size: 0.72rem;
           color: var(--text-muted);
           white-space: nowrap;
@@ -2045,18 +2055,19 @@ const DashboardPanels = () => {
           text-overflow: ellipsis;
         }
 
-        .spark-last {
+        .monitor-charts :global(.spark-last) {
           font-size: 0.82rem;
           font-weight: 700;
           font-variant-numeric: tabular-nums;
         }
 
-        .spark-svg {
+        .monitor-charts :global(.spark-svg) {
+          display: block;
           width: 100%;
           height: 64px;
         }
 
-        .spark-empty {
+        .monitor-charts :global(.spark-empty) {
           height: 64px;
           display: flex;
           align-items: center;
@@ -2069,7 +2080,7 @@ const DashboardPanels = () => {
         /* Per-service grid */
         .monitor-grid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 12px;
         }
 
@@ -2107,6 +2118,7 @@ const DashboardPanels = () => {
 
         .monitor-service {
           display: flex;
+          min-width: 0;
           flex-direction: column;
           gap: 10px;
           padding: 14px;
@@ -2189,6 +2201,7 @@ const DashboardPanels = () => {
         }
 
         .monitor-service-status {
+          flex-shrink: 0;
           font-size: 0.62rem;
           font-weight: 700;
           letter-spacing: 0.05em;
@@ -2251,6 +2264,15 @@ const DashboardPanels = () => {
           font-variant-numeric: tabular-nums;
           width: 38px;
           text-align: right;
+        }
+
+        .probe-metrics .msm {
+          justify-content: space-between;
+        }
+
+        .probe-metrics .msm-label,
+        .probe-metrics .msm-value {
+          width: auto;
         }
 
         .msm-row {
@@ -2430,7 +2452,7 @@ const DashboardPanels = () => {
           }
 
           .monitor-grid {
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
           .monitor-visuals {

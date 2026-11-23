@@ -7,31 +7,12 @@
 // PNG carries the full Grafana chrome. Instead we run a handful of PromQL
 // queries here (token stays server-side) and render our own clean UI client-side.
 
+import { monitoringServices } from "../../src/lib/monitoringSummary.mjs";
+
 const PROM_BASE =
   "https://loyalcaravan951.grafana.net/api/datasources/proxy/uid/grafanacloud-prom/api/v1";
 const CACHE_SECONDS = 30;
 const QUERY_TIMEOUT_MS = 8000;
-
-// Friendly display names for each service job/application label.
-const SERVICE_LABELS = {
-  "portfolio-admin-service": "Admin",
-  "portfolio-notification-service": "Notification",
-  "portfolio-agent-service": "AI Agent",
-  "portfolio-mcp-gateway": "MCP Gateway",
-  "knowledge-service": "Knowledge",
-  "portfolio-search-indexer": "Search Indexer",
-  "portfolio-rag-indexer": "RAG Indexer",
-  "analytics-aggregator-service": "Analytics Aggregator",
-  "analytics-alerts-service": "Analytics Alerts",
-  "portfolio-application-copilot": "Career Workflow Service",
-};
-
-// Event-driven consumers that scale to zero between Kafka messages.
-// When up=0 these are idle, not down.
-const EVENT_DRIVEN_JOBS = new Set([
-  "portfolio-search-indexer",
-  "portfolio-rag-indexer",
-]);
 
 let cache = { payload: null, fetchedAtMs: 0 };
 
@@ -93,19 +74,8 @@ async function promRange(query, token, windowSeconds = 3600, step = 120) {
   }
 }
 
-// Turn a Prometheus vector result into a map keyed by the `job` label.
-function byJob(result) {
-  const map = {};
-  for (const series of result) {
-    const job = series.metric?.job || series.metric?.application;
-    if (!job) continue;
-    const value = Number.parseFloat(series.value?.[1]);
-    if (!Number.isNaN(value)) map[job] = value;
-  }
-  return map;
-}
-
 export default async function handler(req, res) {
+  if (req.method !== "GET") { res.setHeader("Allow", "GET"); return res.status(405).end(); }
   const token = process.env.GRAFANA_RENDER_TOKEN;
   if (!token) {
     res.status(503).json({ error: "GRAFANA_RENDER_TOKEN not configured" });
@@ -121,8 +91,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [up, heapPct, uptime, threads, reqRate, errRate] = await Promise.all([
-      promQuery(`max by (job) (max_over_time(up[3m]))`, token),
+    const [up, heapPct, uptime, threads, reqRate, errRate, sampleAt, probe, probeAt, probeDuration, probeStatus] = await Promise.all([
+      promQuery(`min by (job) (up)`, token),
       promQuery(
         `sum by (job) (jvm_memory_used_bytes{area="heap"}) / sum by (job) (jvm_memory_max_bytes{area="heap"}) * 100`,
         token
@@ -134,45 +104,27 @@ export default async function handler(req, res) {
         `sum by (job) (rate(http_server_requests_seconds_count{outcome=~"SERVER_ERROR|CLIENT_ERROR"}[5m]))`,
         token
       ),
+      promQuery(`max by (job) (timestamp(up))`, token),
+      promQuery(`min by (job) (probe_success)`, token),
+      promQuery(`max by (job) (timestamp(probe_success))`, token),
+      promQuery(`max by (job) (probe_duration_seconds) * 1000`, token),
+      promQuery(`max by (job) (probe_http_status_code)`, token),
     ]);
 
     if (up.length === 0) {
-      if (cache.payload) {
+      if (cache.payload && now - cache.fetchedAtMs < 300_000) {
         res.setHeader("Cache-Control", "public, s-maxage=30, stale-while-revalidate=300");
         res.setHeader("X-Cache", "STALE-ON-METRICS-GAP");
-        res.status(200).json(cache.payload);
+        res.status(200).json({ ...cache.payload, stale: true });
         return;
       }
       throw new Error("Grafana Cloud returned no availability samples");
     }
 
-    const upMap = byJob(up);
-    const heapMap = byJob(heapPct);
-    const uptimeMap = byJob(uptime);
-    const threadsMap = byJob(threads);
-    const reqMap = byJob(reqRate);
-    const errMap = byJob(errRate);
-
-    const jobs = Object.keys(SERVICE_LABELS);
-    const services = jobs.map((job) => {
-      const isUp = upMap[job] === 1;
-      // Event-driven consumers: up=0 or missing means idle (scaled to zero), not broken
-      const noMetrics = !isUp && EVENT_DRIVEN_JOBS.has(job);
-      return {
-        job,
-        name: SERVICE_LABELS[job] || job,
-        up: isUp,
-        noMetrics,
-        heapPct: heapMap[job] != null ? Math.round(heapMap[job] * 10) / 10 : null,
-        uptimeSeconds: uptimeMap[job] != null ? Math.round(uptimeMap[job]) : null,
-        threads: threadsMap[job] != null ? Math.round(threadsMap[job]) : null,
-        reqPerSec: reqMap[job] != null ? Math.round(reqMap[job] * 100) / 100 : 0,
-        errPerSec: errMap[job] != null ? Math.round(errMap[job] * 100) / 100 : 0,
-      };
-    });
+    const services = monitoringServices({ up, heapPct, uptime, threads, reqRate, errRate, sampleAt, probe, probeAt, probeDuration, probeStatus }, Math.floor(now / 1000));
 
     const upCount = services.filter((s) => s.up).length;
-    const idleCount = services.filter((s) => s.noMetrics).length;
+    const unknownCount = services.filter((s) => s.noMetrics).length;
     const totalReq = services.reduce((sum, s) => sum + (s.reqPerSec || 0), 0);
 
     // Aggregate gauges (instant) + time-series (range) for a Grafana-like view.
@@ -217,8 +169,8 @@ export default async function handler(req, res) {
       summary: {
         total: services.length,
         up: upCount,
-        idle: idleCount,
-        down: services.length - upCount - idleCount,
+        unknown: unknownCount,
+        down: services.length - upCount - unknownCount,
         requestsPerSec: Math.round(totalReq * 100) / 100,
       },
       gauges: {
@@ -239,9 +191,9 @@ export default async function handler(req, res) {
     res.setHeader("X-Cache", "MISS");
     res.status(200).json(payload);
   } catch (err) {
-    if (cache.payload) {
+    if (cache.payload && now - cache.fetchedAtMs < 300_000) {
       res.setHeader("X-Cache", "STALE-ON-ERROR");
-      res.status(200).json(cache.payload);
+      res.status(200).json({ ...cache.payload, stale: true });
       return;
     }
     res.status(502).json({ error: "Failed to query metrics", message: err?.message });

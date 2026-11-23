@@ -12,12 +12,15 @@ export const SERVICE_CATALOG = Object.freeze({
   "analytics-aggregator-service": { name: "Analytics Aggregator", purpose: "Deduplicates visitor events and builds session and geographic rollups.", repo: "portfolio-analytics-platform", module: "analytics-aggregator-service", stack: ["Spring Boot", "Kafka", "Valkey"] },
   "analytics-alerts-service": { name: "Analytics Alerts", purpose: "Evaluates visitor analytics rules and prepares operational alerts.", repo: "portfolio-analytics-platform", module: "analytics-alerts-service", stack: ["Spring Boot", "PostgreSQL", "Alerts"] },
   "portfolio-application-copilot": { name: "Career Workflow Service", purpose: "Private application workflows with owner-reviewed actions.", repo: "portfolio-application-copilot", stack: ["Spring Boot", "PostgreSQL", "Valkey"] },
+  "portfolio-media-service": { name: "Media Service", purpose: "Private uploads, background transcoding, and published video renditions.", repo: "portfolio-admin-service", module: "media-service", stack: ["Spring Boot", "FFmpeg", "Cloud Storage"], intervalSeconds: 120 },
+  "portfolio-voice-relay": { name: "Voice Relay", purpose: "Relays real-time voice sessions and applies shared usage limits.", repo: "Portfolio", module: "services/voice", stack: ["Node.js", "WebSocket", "Voice"], monitoring: "probe", intervalSeconds: 120 },
+  "portfolio-mcp-server": { name: "MCP Server", purpose: "Public portfolio tools and authenticated administrator MCP access.", repo: "portfolio-mcp-server", stack: ["Node.js", "MCP", "OAuth"], monitoring: "probe", intervalSeconds: 120 },
 });
 
 export function getServiceMetadata(job) {
   if (typeof job !== "string" || !Object.hasOwn(SERVICE_CATALOG, job)) return null;
   const metadata = SERVICE_CATALOG[job];
-  return { ...metadata, repositoryUrl: `${github}${metadata.repo}` };
+  return { monitoring: "jvm", intervalSeconds: 60, ...metadata, repositoryUrl: `${github}${metadata.repo}` };
 }
 
 export function metricNumber(value, digits = 1, suffix = "") {

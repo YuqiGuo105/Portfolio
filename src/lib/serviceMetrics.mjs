@@ -6,12 +6,19 @@ const ERROR_TTL = 15_000;
 const MAX_STALE = 300_000;
 
 export function serviceQueries(job) {
-  if (!getServiceMetadata(job)) throw new Error("Unknown service");
+  const meta = getServiceMetadata(job);
+  if (!meta) throw new Error("Unknown service");
+  const probe = meta.monitoring === "probe";
   const selector = `job="${job}"`;
   const http = `http_server_requests_seconds_count{${selector}}`;
   const rate = `sum(rate(${http}[5m]))`;
-  const expressions = {
-    up: `max(max_over_time(up{${selector}}[3m]))`,
+  const expressions = probe ? {
+    up: `min(probe_success{${selector}})`,
+    sampleAtSeconds: `max(timestamp(probe_success{${selector}}))`,
+    responseMs: `max(probe_duration_seconds{${selector}})*1000`,
+    httpStatus: `max(probe_http_status_code{${selector}})`,
+  } : {
+    up: `min(up{${selector}})`,
     sampleAtSeconds: `max(timestamp(up{${selector}}))`,
     cpuPct: `avg(process_cpu_usage{${selector}} >= 0)*100`,
     systemCpuPct: `avg(system_cpu_usage{${selector}} >= 0)*100`,
@@ -32,7 +39,7 @@ export function serviceQueries(job) {
   // One bounded query returns scalars, with no URI, instance or user labels.
   const instant = Object.entries(expressions).map(([field, query]) =>
     `label_replace((${query}),"field","${field}","","")`).join(" or ");
-  return { instant, range: rate, fields: Object.keys(expressions) };
+  return { instant, range: probe ? `max(probe_duration_seconds{${selector}})*1000` : rate, fields: Object.keys(expressions), probe, intervalSeconds: meta.intervalSeconds };
 }
 
 const nonnegative = value => {
@@ -61,7 +68,7 @@ export function createServiceMetricsHandler({
   fetchImpl = fetch, getToken = () => process.env.GRAFANA_RENDER_TOKEN,
   now = Date.now, timeoutMs = 4500,
 } = {}) {
-  // At most 10 cache entries; concurrent requests for the same job share work.
+  // Cache is bounded by the service catalog; same-job requests share work.
   const cache = new Map(), pending = new Map(), cooldowns = new Map();
 
   async function load(job, token) {
@@ -76,13 +83,17 @@ export function createServiceMetricsHandler({
       const field = sample.metric?.field;
       if (Object.hasOwn(metrics, field)) metrics[field] = nonnegative(sample.value?.[1]);
     }
+    if (metrics.sampleAtSeconds == null || end - metrics.sampleAtSeconds > Math.max(180, queries.intervalSeconds * 2) || metrics.sampleAtSeconds > end + 30) {
+      for (const field of queries.fields) if (field !== "sampleAtSeconds") metrics[field] = null;
+    }
     const values = range.status === "fulfilled" ? range.value[0]?.values : [];
     const requests = Array.isArray(values) ? values.slice(0, 31).flatMap(([t, v]) =>
       Number.isFinite(Number(t)) && Number(t) >= end - 3600 && Number(t) <= end
         ? [{ t: Number(t) * 1000, v: nonnegative(v) }] : []) : [];
     const partial = range.status === "rejected";
     return { job, capturedAt: new Date(captured).toISOString(), stale: false, partial,
-      windowSeconds: 300, historySeconds: 3600, metrics, requests };
+      windowSeconds: 300, historySeconds: 3600, metrics, requests: queries.probe ? [] : requests,
+      ...(queries.probe ? { probeHistory: requests } : {}) };
   }
 
   return async function handler(req, res) {

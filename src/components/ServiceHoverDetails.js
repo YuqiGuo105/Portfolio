@@ -9,7 +9,7 @@ const FRESH_MS = 60_000;
 const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 const formatTime = value => value ? new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Not reported";
 
-function RequestHistory({ points = [] }) {
+function RequestHistory({ points = [], probe = false }) {
   const valid = points.filter(p => typeof p.v === "number" && Number.isFinite(p.v));
   if (valid.length < 2) return <div className={styles.noHistory}>No recent HTTP samples</div>;
   const start = points[0].t, span = points[points.length - 1].t - start || 1;
@@ -21,7 +21,7 @@ function RequestHistory({ points = [] }) {
     previous = p;
     return `${command}${(4 + (p.t - start) / span * 392).toFixed(1)},${(53 - p.v / ceiling * 44).toFixed(1)}`;
   }).join(" ");
-  return <svg className={styles.chart} viewBox="0 0 400 58" preserveAspectRatio="none" role="img" aria-label="This service's HTTP request rate over the last hour">
+  return <svg className={styles.chart} viewBox="0 0 400 58" preserveAspectRatio="none" role="img" aria-label={probe ? "Health check response time over the last hour" : "This service's HTTP request rate over the last hour"}>
     <path d="M0 15H400 M0 35H400 M0 55H400" className={styles.gridline} />
     <path d={path} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
   </svg>;
@@ -34,21 +34,26 @@ function Metric({ label, compactLabel, value, title }) {
 function DetailContent({ service, summaryAt, payload, loading, failed, retry }) {
   const meta = getServiceMetadata(service.job);
   const m = payload?.metrics || {};
+  const probe = meta.monitoring === "probe";
   const heapPct = m.heapMaxBytes > 0 && m.heapUsedBytes != null ? m.heapUsedBytes / m.heapMaxBytes * 100 : service.heapPct;
   const heap = m.heapUsedBytes == null ? "N/A" : `${memorySize(m.heapUsedBytes)} / ${memorySize(m.heapMaxBytes)}`;
   return <>
     <p className={styles.purpose}>{meta.purpose}</p>
     <p className={styles.stack}>{meta.stack.join(" · ")}</p>
-    <dl className={styles.primary} aria-busy={loading}>
+    {probe ? <dl className={styles.primary} aria-busy={loading}>
+      <Metric label="Check response" value={metricNumber(payload ? m.responseMs : service.responseMs, 1, " ms")} />
+      <Metric label="HTTP status" value={metricNumber(payload ? m.httpStatus : service.httpStatus, 0)} />
+      <Metric label="Check interval" value={`${meta.intervalSeconds}s`} />
+    </dl> : <dl className={styles.primary} aria-busy={loading}>
       <Metric label="Mean response" value={metricNumber(m.meanLatencyMs, 1, " ms")} title="5-minute request-weighted mean, not P95; includes health and metrics endpoints" />
       <Metric label="Heap used" value={metricNumber(heapPct, 1, "%")} />
       <Metric label="Requests / sec" value={metricNumber(m.reqPerSec ?? service.reqPerSec, 2)} title="5-minute average; includes monitoring traffic" />
-    </dl>
+    </dl>}
     <div className={styles.history}>
-      <div className={styles.historyHeading}><span><Activity size={14} />HTTP requests</span><span>Last hour · 2m samples</span></div>
-      {loading && !payload ? <div className={styles.noHistory}>Loading Grafana samples...</div> : <RequestHistory points={payload?.requests} />}
+      <div className={styles.historyHeading}><span><Activity size={14} />{probe ? "Health check latency" : "HTTP requests"}</span><span>Last hour · 2m samples</span></div>
+      {loading && !payload ? <div className={styles.noHistory}>Loading Grafana samples...</div> : <RequestHistory points={probe ? payload?.probeHistory : payload?.requests} probe={probe} />}
     </div>
-    <dl className={styles.detailGrid} aria-busy={loading}>
+    {!probe && <dl className={styles.detailGrid} aria-busy={loading}>
       <Metric label={m.cpuPct != null || m.systemCpuPct == null ? "Process CPU" : "System CPU"} compactLabel={m.cpuPct != null || m.systemCpuPct == null ? "CPU" : "System CPU"} value={metricNumber(m.cpuPct ?? m.systemCpuPct, 1, "%")} title={m.cpuPct != null || m.systemCpuPct == null ? "Process CPU: average across sampled processes; N/A if unavailable" : "System CPU reported by the JVM; not container CPU utilization"} />
       <Metric label="5xx / sec · 5m" compactLabel="5xx / sec" value={metricNumber(m.serverErrorsPerSec, 3)} />
       <Metric label="Heap used / limit" compactLabel="Heap" value={heap} title="Heap used / limit: summed across sampled JVMs; positive pool limits only" />
@@ -57,11 +62,11 @@ function DetailContent({ service, summaryAt, payload, loading, failed, retry }) 
       <Metric label="GC mean pause · 5m" compactLabel="GC pause" value={metricNumber(m.gcMeanPauseMs, 1, " ms")} title="GC mean pause over 5 minutes; N/A when no garbage collections were observed" />
       <Metric label="Process uptime" compactLabel="Uptime" value={processAge(m.uptimeSeconds ?? service.uptimeSeconds)} title="Oldest sampled process age, not service availability" />
       <Metric label="DB pool active / max" compactLabel="DB pool" value={`${metricNumber(m.poolActive, 0)} / ${metricNumber(m.poolMax, 0)}`} title="DB pool active / max: reported HikariCP connections; N/A for services without this metric" />
-    </dl>
+    </dl>}
     {failed && <div className={styles.notice} role="status"><span>Extra metrics unavailable. Summary retained.</span><button type="button" onClick={retry} aria-label="Retry service metrics" title="Retry service metrics"><RotateCw size={14} /></button></div>}
     {payload?.stale && <p className={styles.notice}>Cached sample. Grafana is temporarily unavailable.</p>}
     {payload?.partial && <p className={styles.notice}>Request history is temporarily unavailable.</p>}
-    <p className={styles.footnote}>HTTP includes monitoring traffic. N/A means no reported sample.</p>
+    <p className={styles.footnote}>{probe ? "Health endpoint only. Does not test AI responses, voice calls, or tool execution." : "HTTP includes monitoring traffic. N/A means no reported sample."}</p>
     <div className={styles.observed}><Clock3 size={12} /><span>{payload ? "Queried" : "Summary"} {formatTime(payload?.capturedAt || summaryAt)}{m.sampleAtSeconds ? ` · Scraped ${formatTime(m.sampleAtSeconds * 1000)}` : ""}</span></div>
   </>;
 }
@@ -187,7 +192,9 @@ export function useServiceHoverDetails(services, summaryAt) {
   });
 
   const current = detail.job === active?.job ? detail : { loading: true };
-  const isUp = current.payload?.metrics?.up == null ? service?.up : current.payload.metrics.up === 1;
+  const check = current.payload ? current.payload.metrics?.up : service?.noMetrics ? null : service?.up ? 1 : 0;
+  const isUp = check === 1 && !current.payload?.stale;
+  const status = current.payload?.stale ? "CACHED" : check == null ? "NO DATA" : isUp ? "UP" : "CHECK FAILED";
   const popover = active && service && meta ? createPortal(
     <section id="service-hover-details" ref={floating} className={styles.popover} role="dialog" aria-modal="false" aria-label={`${service.name} service details`}
       style={{ top: position.top, left: position.left, visibility: position.ready ? "visible" : "hidden" }}
@@ -202,7 +209,7 @@ export function useServiceHoverDetails(services, summaryAt) {
           const next = cards[cards.indexOf(trigger.current) + 1]; close(true); next?.focus();
         }
       }}>
-      <header className={styles.header}><span className={styles.glyph}><Server size={19} /></span><div><h4>{service.name}</h4><span className={styles.status} data-up={isUp}>{isUp ? "UP" : "NO RECENT SCRAPE"} <span>Cloud Run · JVM</span></span></div><button className={styles.close} type="button" onClick={() => close(true)} aria-label="Close service details" title="Close service details"><X size={17} /></button></header>
+      <header className={styles.header}><span className={styles.glyph}><Server size={19} /></span><div><h4>{service.name}</h4><span className={styles.status} data-up={isUp}>{status} <span>Cloud Run · {meta.monitoring === "probe" ? "HTTP health" : "JVM"}</span></span></div><button className={styles.close} type="button" onClick={() => close(true)} aria-label="Close service details" title="Close service details"><X size={17} /></button></header>
       <div className={styles.body}><DetailContent service={service} summaryAt={summaryAt} payload={current.payload} loading={current.loading} failed={current.failed} retry={() => { detailCache.delete(active.job); setAttempt(value => value + 1); }} /></div>
       <footer className={styles.links}>
         <a href={meta.repositoryUrl} target="_blank" rel="noopener noreferrer" aria-label="Source code on GitHub" title={`Open ${meta.repo} on GitHub`}><Github size={15} />GitHub<ArrowUpRight size={13} /></a>

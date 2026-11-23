@@ -2,11 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServiceMetricsHandler, serviceQueries } from '../src/lib/serviceMetrics.mjs';
 import { SERVICE_CATALOG, getServiceMetadata, metricNumber, memorySize } from '../src/lib/serviceCatalog.mjs';
+import { monitoringServices } from '../src/lib/monitoringSummary.mjs';
 
 const job = 'portfolio-admin-service';
 const clock = 1_791_954_000_000;
 const vector = (field, value) => ({ metric: { field, instance: 'private.internal', uri: '/internal' }, value: [clock / 1000, String(value)] });
-const fixture = [vector('up', 1), vector('heapUsedBytes', 200_000_000), vector('reqPerSec', 0.0123), vector('cpuPct', 'NaN'), vector('meanLatencyMs', '+Inf'), vector('gcMeanPauseMs', -1), vector('privateField', 123)];
+const fixture = [vector('sampleAtSeconds', clock / 1000), vector('up', 1), vector('heapUsedBytes', 200_000_000), vector('reqPerSec', 0.0123), vector('cpuPct', 'NaN'), vector('meanLatencyMs', '+Inf'), vector('gcMeanPauseMs', -1), vector('privateField', 123)];
 function mockFetch(calls) {
   return async (url, options) => {
     calls.push({ url, options });
@@ -19,11 +20,11 @@ async function invoke(handler, query = { job }, method = 'GET') {
   return output;
 }
 
-test('catalog and queries accept only the ten known jobs; no arbitrary query injection', () => {
-  assert.equal(Object.keys(SERVICE_CATALOG).length, 10);
+test('catalog and queries accept only thirteen known jobs; no arbitrary query injection', () => {
+  assert.equal(Object.keys(SERVICE_CATALOG).length, 13);
   for (const key of Object.keys(SERVICE_CATALOG)) {
     assert.ok(getServiceMetadata(key).repositoryUrl.startsWith('https://github.com/YuqiGuo105/'));
-    assert.match(serviceQueries(key).range, /\[5m\]/);
+    assert.match(serviceQueries(key).range, getServiceMetadata(key).monitoring === 'probe' ? /probe_duration_seconds/ : /\[5m\]/);
   }
   for (const key of ['__proto__', 'constructor', 'x"} or up', ['portfolio-admin-service'], '', null]) {
     assert.equal(getServiceMetadata(key), null);
@@ -130,4 +131,53 @@ test('small nonzero metrics are not rounded into misleading zeroes', () => {
   assert.equal(metricNumber(0, 3), '0.000');
   assert.equal(memorySize(-1), 'N/A');
   assert.equal(memorySize(1024 ** 3), '1.00 GiB');
+});
+
+test('Node health queries cannot mistake exporter availability for target health', async () => {
+  const probeJob = 'portfolio-voice-relay';
+  const queries = serviceQueries(probeJob);
+  assert.match(queries.instant, /min\(probe_success/);
+  assert.doesNotMatch(queries.instant, /jvm_|http_server_|min\(up\{/);
+  const handler = createServiceMetricsHandler({ getToken: () => 'SECRET', now: () => clock,
+    fetchImpl: async url => Response.json({status: 'success', data: {result: url.endsWith('/query')
+      ? [vector('up', 0), vector('sampleAtSeconds', clock / 1000), vector('responseMs', 82), vector('httpStatus', 503)]
+      : [{values: [[clock / 1000, '82']]}]}}) });
+  const result = await invoke(handler, { job: probeJob });
+  assert.equal(result.body.metrics.up, 0);
+  assert.equal(result.body.metrics.httpStatus, 503);
+  assert.deepEqual(result.body.requests, []);
+  assert.equal(result.body.probeHistory[0].v, 82);
+  assert.equal(result.body.metrics.heapUsedBytes, undefined);
+});
+
+test('expired or missing sample timestamps never yield a healthy detail', async () => {
+  for (const sampleAt of [clock / 1000 - 500, clock / 1000 + 500, null]) {
+    const handler = createServiceMetricsHandler({ getToken: () => 'SECRET', now: () => clock,
+      fetchImpl: async () => Response.json({status:'success', data:{result:[vector('up',1), ...(sampleAt ? [vector('sampleAtSeconds',sampleAt)] : [])]}}) });
+    const result = await invoke(handler);
+    assert.equal(result.body.metrics.up, null);
+  }
+});
+
+const sample = (job, n) => ({metric:{job},value:[clock / 1000,String(n)]});
+test('summary distinguishes failed probes, absent metrics, and JVM-only fields', () => {
+  const node = 'portfolio-mcp-server', media = 'portfolio-media-service';
+  const services = monitoringServices({up:[sample(node,1),sample(media,1)],
+    sampleAt:[sample(node,clock/1000),sample(media,clock/1000)],
+    probe:[sample(node,0)],probeAt:[sample(node,clock/1000)],
+    probeDuration:[sample(node,56)],probeStatus:[sample(node,500)], heapPct:[sample(media,12)]}, clock/1000);
+  assert.equal(services.length,13);
+  const m = services.find(s=>s.job===media), n = services.find(s=>s.job===node), absent = services.find(s=>s.job===job);
+  assert.equal(m.up,true); assert.equal(m.heapPct,12);
+  assert.equal(n.up,false); assert.equal(n.status,'check-failed'); assert.equal(n.responseMs,56);
+  assert.equal(n.heapPct,null); assert.equal(n.reqPerSec,null);
+  assert.equal(absent.status,'unknown'); assert.equal(absent.noMetrics,true);
+});
+
+test('summary does not invent zero traffic, idle, or healthy results for stale samples', () => {
+  const rows = monitoringServices({up:[sample(job,1)],sampleAt:[sample(job,clock/1000-500)],reqRate:[sample(job,0)]},clock/1000);
+  const service = rows.find(s=>s.job===job);
+  assert.equal(service.up,false); assert.equal(service.reqPerSec,null); assert.equal(service.status,'unknown');
+  const missingProbe = monitoringServices({up:[sample('portfolio-voice-relay',1)],sampleAt:[sample('portfolio-voice-relay',clock/1000)]},clock/1000).find(s=>s.job==='portfolio-voice-relay');
+  assert.equal(missingProbe.status,'unknown');
 });
