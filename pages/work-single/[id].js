@@ -9,6 +9,13 @@ import evolutionData from "../../docs/architecture/platform-evolution.json";
 import SeoHead, { absoluteUrl } from "../../src/components/SeoHead";
 import { sanitize } from "../../src/lib/sanitizeHtml";
 import { supabaseServer } from "../../src/supabase/supabaseServer";
+import { renderMedia } from "../../src/lib/media/render";
+import MediaEnhancer from "../../src/components/media/MediaEnhancer";
+import DemoVideo from "../../src/components/media/DemoVideo";
+import { demoForContent } from "../../src/lib/media/demoCatalog.mjs";
+import { loadMediaCatalog } from "../../src/lib/media/publishedCatalog.mjs";
+import demoStyles from "../../src/components/media/Demos.module.css";
+import { localArticleDraft } from "../../src/lib/media/localArticleDraft.mjs";
 
 // Loaded only when the article contains a time machine figure.
 const ArchitectureTimeMachine = dynamic(() => import("../../src/components/ArchitectureTimeMachine"));
@@ -75,9 +82,9 @@ export async function getServerSideProps({ params, res }) {
     throw navigationResult.error;
   }
 
-  const project = projectResult.data;
+  const project = await localArticleDraft(projectResult.data);
   const projects = navigationResult.data || [];
-  const content = sanitizeWithMermaid(project.content);
+  const content = await renderMedia(sanitizeWithMermaid(project.content), supabaseServer);
 
   const currentIndex = projects.findIndex((item) => item.id === id);
   const nextProject = currentIndex >= 0 ? projects[currentIndex + 1] || null : null;
@@ -86,6 +93,7 @@ export async function getServerSideProps({ params, res }) {
 
   return {
     props: {
+      demo: demoForContent((await loadMediaCatalog(supabaseServer)).demos, `project:${id}`),
       project: {
         id: project.id,
         title: project.title || "",
@@ -109,7 +117,7 @@ export async function getServerSideProps({ params, res }) {
   };
 }
 
-export default function WorkSingle({ project, evolution, nextProject }) {
+export default function WorkSingle({ project, evolution, nextProject, demo = null }) {
   const articleRef = useRef(null);
   const [timeMachines, setTimeMachines] = useState([]);
 
@@ -252,11 +260,16 @@ export default function WorkSingle({ project, evolution, nextProject }) {
             <div className="row">
               <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
                 <div className="p-title">Project</div>
+                {demo && <div className={demoStyles.embedded} id="project-video">
+                  <h2>{demo.title} demo</h2>
+                  <DemoVideo key={demo.id} demo={demo} />
+                </div>}
                 <div
                   className="text"
                   ref={articleRef}
                   dangerouslySetInnerHTML={{ __html: project.content }}
                 />
+                <MediaEnhancer html={project.content} />
                 {timeMachines.map((item) => createPortal(
                   <ArchitectureTimeMachine variant="embedded" data={evolution} initialId={item.step} heading={item.heading} />,
                   item.container,

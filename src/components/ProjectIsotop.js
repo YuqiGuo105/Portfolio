@@ -4,6 +4,8 @@ import ProjectSystemCover, { supportsSystemCover } from "./projects/ProjectSyste
 import { orderedProjects } from "../lib/discovery/core.mjs";
 import { supabase } from "../supabase/supabaseClient";
 import { PROJECT_CARD_COLUMNS, PROJECT_SYSTEM_COLUMNS, firstSystemByProject } from "../lib/publicContent.mjs";
+import ProjectHoverVideo from "./media/ProjectHoverVideo";
+import { demoForContent } from "../lib/media/demoCatalog.mjs";
 
 const BASE_FILTERS = [
   { key: "all", label: "All", icon: "fa-border-all" },
@@ -16,7 +18,7 @@ const categoryKey = (category) => category.trim().replace(/\s+/g, "-");
 
 // `initialProjects` / `initialSystems` come from the page's getStaticProps, so the cards are in the
 // server-rendered HTML; the browser then refreshes them.
-const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjects = null, initialSystems = null, variant = 'original' }) => {
+const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjects = null, initialSystems = null, variant = 'original', demos = [] }) => {
   const isotope = useRef();
   const [filterKey, setFilterKey] = useState("all");
   const [projects, setProjects] = useState(() => (Array.isArray(initialProjects) ? initialProjects : []));
@@ -158,6 +160,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjec
               <Link href={`/work-single/${project.id}`} passHref>
                 <a className="proj-card">
                   <div className="proj-card-image">
+                    <ProjectHoverVideo demo={demoForContent(demos, `project:${project.id}`)}>
                     {hasSystemCover ? (
                       <ProjectSystemCover system={projectSystem} />
                     ) : (
@@ -176,6 +179,7 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjec
                         ))}
                       </div>
                     )}
+                    </ProjectHoverVideo>
                   </div>
 
                   <div className="proj-card-body">

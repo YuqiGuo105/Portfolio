@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Terminal, History } from 'lucide-react';
 import SocialLinks from '../components/SocialLinks';
 import styles from './Footer.module.css';
 import { OPEN_TERMINAL_EVENT } from '../components/TerminalLauncher';
@@ -27,11 +28,11 @@ const Footer = () => {
                 onClick={() => window.dispatchEvent(new Event(OPEN_TERMINAL_EVENT))}
                 title="Open the site terminal (` or ⌘K)"
               >
-                <span aria-hidden="true">&gt;_</span> Open terminal <kbd>`</kbd>
+                <Terminal className={styles.terminalIcon} size={16} aria-hidden="true" /> Open terminal <kbd>`</kbd>
               </button>
               <Link href="/site-history" passHref>
                 <a className={styles.terminal} title="See this homepage at every point in its history">
-                  <span aria-hidden="true">⟲</span> Site history
+                  <History className={styles.historyIcon} size={16} aria-hidden="true" /> Site history
                 </a>
               </Link>
             </div>

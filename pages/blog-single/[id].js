@@ -10,6 +10,11 @@ import { supabaseServer } from '../../src/supabase/supabaseServer';
 // request time and served 500s for every blog-single view. sanitize-html
 // is pure JS and works identically in local Node and on Vercel.
 import { sanitize } from '../../src/lib/sanitizeHtml';
+import { renderMedia } from '../../src/lib/media/render';
+import MediaEnhancer from '../../src/components/media/MediaEnhancer';
+import DemoVideo from '../../src/components/media/DemoVideo';
+import { demoForContent } from '../../src/lib/media/demoCatalog.mjs';
+import { loadMediaCatalog } from '../../src/lib/media/publishedCatalog.mjs';
 
 /**
  * Server-rendered blog detail. Fetching + sanitizing on the server means
@@ -34,7 +39,7 @@ export async function getServerSideProps({ params, res }) {
 
   // Sanitize once on the server. The client component just prints the
   // already-clean HTML, keeping the sanitizer out of the hydration path.
-  const sanitizedContent = sanitize(data.content);
+  const sanitizedContent = await renderMedia(sanitize(data.content), supabaseServer);
 
   // Short cache on the CDN + stale-while-revalidate so a burst of hits
   // does not spam Supabase, but publishing a fresh post shows up within
@@ -48,6 +53,7 @@ export async function getServerSideProps({ params, res }) {
 
   return {
     props: {
+      demo: demoForContent((await loadMediaCatalog(supabaseServer)).demos, `blog:${id}`),
       blog: {
         id: data.id,
         title: data.title || '',
@@ -63,7 +69,7 @@ export async function getServerSideProps({ params, res }) {
   };
 }
 
-const BlogSingle = ({ blog }) => {
+const BlogSingle = ({ blog, demo = null }) => {
   const router = useRouter();
 
   // Trim the sanitized HTML to a plain-text excerpt for the meta
@@ -135,7 +141,9 @@ const BlogSingle = ({ blog }) => {
                   className="post-content"
                 >
 
+                  {demo && <div id="article-video"><DemoVideo demo={demo} /></div>}
                   <div className="post-content" dangerouslySetInnerHTML={{__html: blog.content}}></div>
+                  <MediaEnhancer html={blog.content} />
 
                   {/* Tags Section */}
                   <span className="tags-links">

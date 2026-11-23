@@ -13,9 +13,61 @@
 //      it falls back to prompting the user for an image URL so the
 //      editor never gets stuck behind a broken upload flow.
 
-import { forwardRef, useCallback, useMemo, useRef } from 'react';
+import { forwardRef, useCallback, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { supabase } from '../../supabase/supabaseClient';
+import { writerApi } from '../../lib/writerApi';
+import { assetUrl } from '../../lib/media/markup.mjs';
+import { processingProgress, uploadMedia, waitUntilProcessed } from '../../lib/media/upload.mjs';
+
+// The media pipeline (upload -> transcode -> publish) is offered only once its backend is switched on.
+const MEDIA_PIPELINE = process.env.NEXT_PUBLIC_MEDIA_PIPELINE === '1';
+const MEDIA_BASE_URL = process.env.NEXT_PUBLIC_MEDIA_BASE_URL || '';
+const MEDIA_ACCEPT = 'video/mp4,video/quicktime,video/webm,image/jpeg,image/png,image/webp,image/avif,image/heic';
+
+// An uploaded asset is stored in the article as a reference (see src/lib/media/markup.mjs).
+// Quill only keeps HTML it has a blot for, so the reference gets one.
+let QuillClass = null;
+function registerMediaAsset(Quill) {
+  QuillClass = Quill;
+  if (Quill.imports['formats/media-asset']) return;
+  const BlockEmbed = Quill.import('blots/block/embed');
+  class MediaAsset extends BlockEmbed {
+    static create(value) {
+      const node = super.create();
+      node.setAttribute('data-media-id', value.id);
+      node.setAttribute('data-media-kind', value.kind);
+      node.setAttribute('contenteditable', 'false');
+      if (value.previewUrl) {
+        const preview = document.createElement('img');
+        preview.setAttribute('src', value.previewUrl);
+        preview.setAttribute('alt', value.alt || '');
+        node.appendChild(preview);
+      }
+      return node;
+    }
+    static value(node) {
+      const preview = node.querySelector('img');
+      return {
+        id: node.getAttribute('data-media-id'),
+        kind: node.getAttribute('data-media-kind'),
+        previewUrl: preview ? preview.getAttribute('src') : '',
+        alt: preview ? preview.getAttribute('alt') : '',
+      };
+    }
+  }
+  MediaAsset.blotName = 'media-asset';
+  MediaAsset.tagName = 'FIGURE';
+  MediaAsset.className = 'media-asset';
+  Quill.register(MediaAsset, true);
+  Quill.import('ui/icons').media = '<svg viewBox="0 0 18 18"><rect class="ql-stroke" x="2" y="3" width="14" height="12" rx="2" fill="none"/><polygon class="ql-fill" points="7,6 12,9 7,12"/></svg>';
+}
+
+/** The image a reference shows wherever it is not resolved: the video poster or the JPEG fallback. */
+function previewOf(asset) {
+  const file = asset?.manifest?.poster || asset?.manifest?.fallback;
+  return file && MEDIA_BASE_URL ? assetUrl(MEDIA_BASE_URL, asset.manifest, file.path) : '';
+}
 
 const CONTENT_BUCKET =
   (typeof process !== 'undefined' &&
@@ -68,6 +120,7 @@ async function defaultUploadImage(file) {
 const QuillNoSSR = dynamic(
   async () => {
     const { default: RQ } = await import('react-quill');
+    registerMediaAsset(RQ.Quill);
     require('react-quill/dist/quill.snow.css');
     const Wrapped = forwardRef(function QuillForwardRef(props, ref) {
       return <RQ ref={ref} {...props} />;
@@ -82,6 +135,7 @@ const QuillNoSSR = dynamic(
 );
 
 const FORMATS = [
+  'media-asset',
   'header',
   'bold',
   'italic',
@@ -102,6 +156,7 @@ export default function RichTextEditor({
   uploadImage,
 }) {
   const quillRef = useRef(null);
+  const [mediaStatus, setMediaStatus] = useState('');
   const uploader = uploadImage || defaultUploadImage;
 
   const imageHandler = useCallback(() => {
@@ -138,6 +193,45 @@ export default function RichTextEditor({
     input.click();
   }, [uploader]);
 
+  // Upload through the media pipeline, insert the reference at once, fill in its preview when ready.
+  const mediaHandler = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = MEDIA_ACCEPT;
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      const editor = quillRef.current?.getEditor?.();
+      if (!file || !editor) return;
+      const range = editor.getSelection(true) || { index: editor.getLength(), length: 0 };
+      try {
+        setMediaStatus(`Uploading ${file.name}…`);
+        const uploaded = await uploadMedia(file, {
+          api: writerApi.media,
+          onProgress: fraction => setMediaStatus(`Uploading ${file.name}: ${Math.round(fraction * 100)}%`),
+        });
+        editor.insertEmbed(range.index, 'media-asset', { id: uploaded.id, kind: uploaded.kind, alt: file.name }, 'user');
+        editor.setSelection(range.index + 1, 0, 'user');
+        const asset = await waitUntilProcessed(writerApi.media, uploaded.id, {
+          onUpdate: current => {
+            const { done, total } = processingProgress(current);
+            setMediaStatus(total ? `Processing ${file.name}: step ${done} of ${total}` : `Processing ${file.name}…`);
+          },
+        });
+        if (asset.status !== 'READY') throw new Error(asset.failureMessage || 'Processing failed');
+        const node = editor.root.querySelector(`figure[data-media-id="${asset.id}"]`);
+        const blot = node && QuillClass ? QuillClass.find(node) : null;
+        const index = blot ? editor.getIndex(blot) : -1;
+        if (index >= 0) {
+          editor.deleteText(index, 1, 'user');
+          editor.insertEmbed(index, 'media-asset', { id: asset.id, kind: asset.kind, previewUrl: previewOf(asset), alt: file.name }, 'user');
+        }
+        setMediaStatus(`${file.name} is ready.`);
+      } catch (err) {
+        setMediaStatus(`${file.name}: ${err?.message || 'upload failed'}`);
+      }
+    };
+    input.click();
+  }, []);
   const modules = useMemo(
     () => ({
       toolbar: {
@@ -146,16 +240,17 @@ export default function RichTextEditor({
           ['bold', 'italic', 'underline', 'strike'],
           ['blockquote', 'code-block'],
           [{ list: 'ordered' }, { list: 'bullet' }],
-          ['link', 'image'],
+          MEDIA_PIPELINE ? ['link', 'image', 'media'] : ['link', 'image'],
           ['clean'],
         ],
         handlers: {
           image: imageHandler,
+          media: mediaHandler,
         },
       },
       clipboard: { matchVisual: false },
     }),
-    [imageHandler]
+    [imageHandler, mediaHandler]
   );
 
   return (
@@ -170,6 +265,7 @@ export default function RichTextEditor({
         placeholder={placeholder || 'Write your content here…'}
         className="rich-editor"
       />
+      {mediaStatus && <p className="rich-editor-media-status" role="status">{mediaStatus}</p>}
       <style jsx global>{`
         .rich-editor .ql-toolbar {
           background: #f1f3f4;
@@ -190,6 +286,30 @@ export default function RichTextEditor({
         }
         .rich-editor .ql-editor.ql-blank::before {
           color: #909aa2;
+        }
+        .rich-editor .ql-editor figure.media-asset {
+          margin: 12px 0;
+          padding: 8px;
+          border: 1px dashed #9aa5ae;
+          border-radius: 6px;
+          background: #f6f8f9;
+        }
+        .rich-editor .ql-editor figure.media-asset:empty::before {
+          content: 'Media: processing';
+          color: #66717d;
+          font-size: 0.85rem;
+        }
+        .rich-editor .ql-editor figure.media-asset[data-media-kind='VIDEO']::after {
+          content: 'Video';
+          display: block;
+          margin-top: 4px;
+          color: #66717d;
+          font-size: 0.8rem;
+        }
+        .rich-editor-media-status {
+          margin: 6px 2px 0;
+          color: #52606b;
+          font-size: 0.85rem;
         }
         .rich-editor .ql-editor img {
           max-width: 100%;

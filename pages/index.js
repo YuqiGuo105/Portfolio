@@ -20,6 +20,11 @@ import { GitPullRequest } from "lucide-react";
 
 import SocialLinks from "../src/components/SocialLinks";
 import ProjectIsotop from "../src/components/ProjectIsotop";
+import { demoForContent } from "../src/lib/media/demoCatalog.mjs";
+import { loadMediaCatalog } from "../src/lib/media/publishedCatalog.mjs";
+import ProjectHoverVideo from "../src/components/media/ProjectHoverVideo";
+import HeroIntro, { HeroIntroButton } from "../src/components/media/HeroIntro";
+import hoverVideoStyles from "../src/components/media/ProjectHoverVideo.module.css";
 import {
   BLOG_CARD_COLUMNS,
   LIST_REVALIDATE_SECONDS,
@@ -38,11 +43,12 @@ Modal.setAppElement('#__next');
 // complete without JavaScript; the browser refreshes them after load.
 export async function getStaticProps() {
   const client = publicServerClient();
-  const [featured, blogs, lifeBlogs, experiences] = await Promise.all([
+  const [featured, blogs, lifeBlogs, experiences, media] = await Promise.all([
     orEmpty(() => loadProjectCards(client, { featuredOnly: true }), { projects: [], systems: {} }, "projects"),
     orEmpty(() => loadTechBlogCards(client), [], "blogs"),
     orEmpty(() => loadLifeBlogCards(client, { ascending: true }), [], "life blogs"),
     orEmpty(() => loadExperiences(client), [], "experience"),
+    loadMediaCatalog(client),
   ]);
   // Where a referral can be asked for follows the work history too (see src/lib/referral/availability.mjs).
   const { referralRuntime } = await import("../src/lib/referral/runtime.mjs");
@@ -57,6 +63,8 @@ export async function getStaticProps() {
       // The employer named in the introduction and in structured data: the open-ended row of the work history.
       currentRole: previewRole || currentRole(experiences),
       referral,
+      demos: media.demos,
+      intro: media.intro,
     },
     revalidate: LIST_REVALIDATE_SECONDS,
   };
@@ -79,7 +87,14 @@ const BlogSliderArrow = ({ className = "", onClick, direction }) => {
   );
 };
 
-const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: builtRole = null, referral = null }) => {
+const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: builtRole = null, referral = null, demos = [], intro = null }) => {
+  const [introOpen, setIntroOpen] = useState(false);
+  const introButton = useRef(null);
+  const portraitSlot = useRef(null);
+  const openIntro = () => {
+    setIntroOpen(true);
+  };
+  const closeIntro = () => { setIntroOpen(false); introButton.current?.focus({ preventScroll: true }); };
   const [blogs, setBlogs] = useState(() => initialContent.blogs || []);
   const [error, setError] = useState(null);
   const [yearsOfExperience, setYearsOfExperience] = useState(1);
@@ -831,6 +846,7 @@ const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: bui
                 tabIndex={0}
                 aria-label={stories.length ? "Open profile stories" : "Open GitHub profile"}
                 onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
                     openStoryModal();
@@ -838,6 +854,7 @@ const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: bui
                 }}
               >
                 <div
+                  ref={portraitSlot}
                   style={{
                     display: "inline-block",
                     position: "relative",
@@ -868,6 +885,7 @@ const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: bui
                     alt="Yuqi Guo illustrated portrait on a beach at sunset"
                     border={stories.length ? "5px solid white" : "0"}
                   />
+                  {intro && introOpen && <HeroIntro intro={intro} onClose={closeIntro} />}
                 </div>
 
                 {/* 隐藏原有circle元素但保留在DOM中 */}
@@ -889,6 +907,7 @@ const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: bui
                     <strong>Microservices</strong> and <strong>Distributed Systems</strong>.
                   </p>
 
+                  {intro && <HeroIntroButton intro={intro} onPlay={openIntro} buttonRef={introButton} />}
                   <SocialLinks className="social-links" placement="home-intro" />
                 </div>
               </div>
@@ -1106,6 +1125,7 @@ const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: bui
               variant={homeVariant}
               initialProjects={initialContent.projects}
               initialSystems={initialContent.systems}
+              demos={demos}
             />
           </div>
         </section>
@@ -1148,11 +1168,13 @@ const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: bui
                   <div className="blog-slider-shell">
                     <Slider ref={blogSliderRef} {...settings}>
                       {blogs.map((blog) => (
-                        <div key={blog.id} className="archive-item">
+                        <div key={blog.id} className={`archive-item ${hoverVideoStyles.blogCard}`}>
                           <div className="image">
                             <Link href={`/blog-single/${blog.id}`} legacyBehavior>
                               <a onClick={() => recordClick("blog-item", `/blog-single/${blog.id}`)}>
-                                <img src={blog.image_url} alt={blog.title} />
+                                <ProjectHoverVideo hoverBoundary=".archive-item" demo={demoForContent(demos, `blog:${blog.id}`)}>
+                                  <img src={blog.image_url} alt={blog.title} />
+                                </ProjectHoverVideo>
                               </a>
                             </Link>
                           </div>

@@ -1,0 +1,35 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mediaSteps, savedUpload, mediaWarnings } from '../src/lib/media/library.mjs';
+import { publishedDemo, loadMediaCatalog } from '../src/lib/media/publishedCatalog.mjs';
+
+test('inspector reports real progress, failed tasks and completion', () => {
+  const asset = { kind: 'VIDEO', sourceVersion: 1, status: 'PROCESSING', jobs: [
+    { type: 'PLAN', status: 'SUCCEEDED' }, { type: 'VIDEO_RENDITION', rendition: '720p', status: 'RUNNING' },
+  ] };
+  assert.deepEqual(mediaSteps(asset).map(s => s.state), ['done', 'done', 'active', 'waiting']);
+  asset.jobs[1].status = 'DEAD'; asset.status = 'FAILED';
+  assert.equal(mediaSteps(asset)[2].state, 'failed');
+  asset.status = 'READY';
+  assert.ok(mediaSteps(asset).every(s => s.state === 'done'));
+});
+test('resume metadata never stores signed URLs', () => {
+  assert.equal(JSON.stringify(savedUpload({ assetId: 'a', uploadId: 'b', parts: [{ url: 'secret' }] })).includes('secret'), false);
+});
+test('size warnings compare actual source and placement', () => {
+  assert.equal(mediaWarnings({ probe: { width: 400 }, usages: [{ displayWidth: 1000, label: 'Home' }] }).length, 1);
+});
+test('published catalog only exposes safe media paths and PR links', () => {
+  const row = { manifest: {}, presentation: { id: 'yuqi-intro', seconds: 60, src: 'media/a/v1/intro.mp4', poster: 'media/a/v1/poster.webp',
+    chapters: [{ seconds: 0, title: 'Start', href: 'javascript:alert(1)' }] } };
+  const demo = publishedDemo(row, 'https://storage.googleapis.com/public');
+  assert.equal(demo.src, 'https://storage.googleapis.com/public/media/a/v1/intro.mp4');
+  assert.equal(demo.chapters[0].href, undefined);
+  row.presentation.src = 'media/a/../original.mp4';
+  assert.equal(publishedDemo(row, 'https://storage.googleapis.com/public'), null);
+});
+test('production never uses local catalog and lookup failure is harmless', async () => {
+  assert.deepEqual(await loadMediaCatalog(null, { NODE_ENV: 'production', MEDIA_LOCAL_REVIEW: '1' }), { demos: [], intro: null });
+  const client = { from() { throw new Error('offline'); } };
+  assert.deepEqual(await loadMediaCatalog(client, { NEXT_PUBLIC_MEDIA_BASE_URL: 'https://example.com' }), { demos: [], intro: null });
+});

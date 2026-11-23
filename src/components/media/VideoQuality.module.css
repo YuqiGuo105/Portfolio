@@ -1,0 +1,13 @@
+.control { position: relative; flex: 0 0 44px; }
+.trigger { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #fff; cursor: pointer; }
+.trigger:hover, .trigger[aria-expanded="true"] { background: #ffffff24; }
+.trigger:focus-visible, .menu button:focus-visible { outline: 2px solid #ff8059; outline-offset: -2px; }
+.menu { position: absolute; z-index: 20; right: 0; bottom: 52px; width: 218px; max-height: min(300px, 65vh); overflow-y: auto; padding: 8px; border: 1px solid #ffffff12; border-radius: 8px; background: #141a25f5; box-shadow: 0 8px 28px #0004; color: #fff; }
+.heading { padding: 8px 12px; font: 600 12px/1.4 system-ui, sans-serif; text-transform: uppercase; color: #bfc6d0; }
+.menu button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 9px 12px; border: 0; border-radius: 5px; background: transparent; color: #fff; font: 500 15px/1.4 system-ui, sans-serif; text-align: left; cursor: pointer; }
+.menu button[aria-checked="true"], .menu button:hover { background: #ffffff1c; }
+.menu button svg { color: #ff8059; flex-shrink: 0; }
+.menu small { margin-left: 7px; font-size: 12px; font-weight: 400; color: #c5cbd4; }
+.menu button { height: 44px; letter-spacing: 0; }
+:global(body.light-skin) .control button, :global(body.dark-skin) .control button { color: #fff; }
+@media (max-width: 480px) { .menu { width: 200px; max-height: 260px; right: -44px; bottom: 8px; } }

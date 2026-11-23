@@ -1,0 +1,40 @@
+.launch {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  max-width: 100%;
+  margin: 8px 0 20px;
+  padding: 8px 22px 8px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: #1c2528;
+  color: #f7f5f2;
+  font: 500 17px/1.35 Rubik, system-ui, sans-serif;
+  letter-spacing: 0;
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.launch:hover { background: #303c40; box-shadow: 0 4px 14px #1c252822; }
+.launch:focus-visible, .close:focus-visible { outline: 3px solid #ff8059; outline-offset: 4px; }
+.playIcon { display: grid; place-items: center; flex: 0 0 40px; height: 40px; border-radius: 50%; background: #ff8059; color: #1c2528; }
+.player { position: fixed; inset: 0; width: min(960px, calc(100% - 32px)); max-width: none; max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: auto; border: 1px solid #ffffff33; border-radius: 8px; background: #1c2528; color: #fff; box-shadow: 0 20px 80px #0007; }
+.player::backdrop { background: #0a1018b8; }
+.surface { min-width: 0; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; }
+.header h2 { margin: 0; color: white; font: 500 18px/1.4 Rubik, sans-serif; letter-spacing: 0; }
+:global(body.light-skin) .player .header h2, :global(body.dark-skin) .player .header h2 { color: #fff; }
+.header h2 span { color: #aebfc3; font-weight: 400; }
+.close { display: grid; place-items: center; padding: 0; border: 1px solid #ffffff55; background: #ffffff16; color: white; width: 44px; height: 44px; border-radius: 5px; cursor: pointer; flex-shrink: 0; }
+:global(body.light-skin) .player .close, :global(body.dark-skin) .player .close { color: #fff; }
+@media (min-width: 768px) { .player { width: min(960px, calc(100% - 32px), calc((100dvh - 104px) * 16 / 9)); } }
+:global(body.light-skin) .launch { color: #f7f5f2; }
+:global(body.dark-skin) .launch { background: #edf0ed; color: #1c2528; }
+@media (max-width: 767px) {
+  .launch { font-size: 16px; }
+  .player { width: calc(100% - 16px); max-height: calc(100dvh - 16px); }
+  .header { padding: 8px; gap: 8px; }
+  .header h2 { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .launch { transition: none; } }

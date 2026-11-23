@@ -1,0 +1,66 @@
+{
+  "id": "0470298d-c74d-4d4b-be33-d948b033002a",
+  "verifiedAt": "2026-11-23T07:59:54.619Z",
+  "sourceUpdatedAt": "2026-11-22T23:50:04.739745",
+  "summary": "Eight merged pull requests across five upstream projects, covering agent lifecycle, streaming turns, retry behavior, Kubernetes tooling and test isolation.",
+  "technology": "Open Source, Java, AI Agents, RxJava, Google ADK, Spring AI Alibaba, Google LangExtract, Kubernetes, Testing",
+  "content": "<article class=\"project-case-study\">\n\n<div class=\"project-hero\">\n\n<p class=\"project-eyebrow\">Open Source / 8 Merged Pull Requests / 5 Upstream Projects / 2026</p>\n\n<h2>Contributions to RxJava, Google ADK, Kubernetes and AI Libraries</h2>\n\n<p class=\"project-summary\">Eight merged pull requests across five upstream projects, covering agent lifecycle, streaming turns, retry behavior, Kubernetes tooling and test isolation.</p>\n\n</div>\n\n<h2 id=\"os-summary\">At a Glance</h2>\n\n<table><thead><tr><th>Project</th><th>Contribution</th><th>Merged pull requests</th></tr></thead><tbody><tr><td>RxJava</td><td>Isolated the Flowable observeOn race test for parallel test execution. Test-only change; production behavior is unchanged.</td><td><a href=\"https://github.com/ReactiveX/RxJava/pull/8399\">#8399</a></td></tr><tr><td>Google ADK Java</td><td>Exposed live-turn completion controls and cleaned up empty parent maps when deleting in-memory sessions.</td><td><a href=\"https://github.com/google/adk-java/pull/1381\">#1381</a>, <a href=\"https://github.com/google/adk-java/pull/923\">#923</a></td></tr><tr><td>Kubernetes Java Client</td><td>Added a tested custom-object PATCH example, local CRD generator builds, and opt-in managedFields deserialization.</td><td><a href=\"https://github.com/kubernetes-client/java/pull/4868\">#4868</a>, <a href=\"https://github.com/kubernetes-client/java/pull/4751\">#4751</a>, <a href=\"https://github.com/kubernetes-client/java/pull/4746\">#4746</a></td></tr><tr><td>Spring AI Alibaba</td><td>Preserved shell sessions across human-in-the-loop interrupt and resume.</td><td><a href=\"https://github.com/alibaba/spring-ai-alibaba/pull/4491\">#4491</a></td></tr><tr><td>Google LangExtract</td><td>Added bounded retries for transient Gemini errors during document extraction.</td><td><a href=\"https://github.com/google/langextract/pull/385\">#385</a></td></tr></tbody></table>\n\n<hr>\n\n<h2 id=\"os-recovery\">1. Spring AI Alibaba — Keep the Shell After a Pause</h2>\n\n<h3>The problem</h3>\n\n<p>An AI agent can run shell commands. It keeps one shell open, so a command like <code>cd build</code> still applies to the next command.</p>\n\n<p>Some steps need a person to approve them. The agent pauses, the person approves, and the agent continues. When it continued, it had lost track of its shell, so the next command failed with a <code>NullPointerException</code>.</p>\n\n<h3>What I changed</h3>\n\n<p>Each conversation has an id (<code>threadId</code>) that survives the pause. I added a small lookup table from that id to the open shell. When the agent resumes, it looks up its shell by id and keeps using it, still in the same folder.</p>\n\n<div class=\"mermaid\">\nsequenceDiagram\n    autonumber\n    actor Person\n    participant Agent\n    participant Table as Lookup table\n    participant Shell\n\n    Agent->>Shell: open a shell\n    Agent->>Table: save shell under this conversation's id\n    Agent->>Shell: cd build\n    Agent-->>Person: pause, approval needed\n    Person-->>Agent: approve, continue\n    Agent->>Table: find the shell by id\n    Table-->>Agent: same shell as before\n    Agent->>Shell: make, still in the build folder\n    Agent->>Table: remove the entry when finished\n    Agent->>Shell: close the shell\n</div>\n\n<ul>\n<li>The entry is removed when the conversation ends, so the table only holds shells that are still in use.</li>\n<li>If a caller has no conversation id, the code raises a clear error instead of opening a shell nobody would close.</li>\n<li>Eight unit tests cover saving, finding, removing, and keeping two conversations apart.</li>\n</ul>\n\n<hr>\n\n<h2 id=\"os-retry\">2. Google LangExtract — Retry Only the Piece That Failed</h2>\n\n<h3>The problem</h3>\n\n<p>LangExtract splits a long document into pieces and sends them to Gemini at the same time. If Gemini briefly answered \"busy\" (503) or \"too many requests\" (429) for one piece, the whole document failed, and all the pieces that had already succeeded were thrown away.</p>\n\n<h3>What I changed</h3>\n\n<p>Each piece now retries on its own when the error is temporary. It waits about 1 second, then 2, then 4, up to a limit, and gives up after a few tries. Errors that retrying cannot fix are reported straight away.</p>\n\n<div class=\"mermaid\">\nflowchart LR\n    Send[\"Send one piece<br/>to Gemini\"]\n    OK{\"Success?\"}\n    Done[\"Keep the result\"]\n    Temp{\"Temporary error<br/>and tries left?\"}\n    Wait[\"Wait, then<br/>double the wait\"]\n    Fail[\"Report the error\"]\n\n    Send --> OK\n    OK -- Yes --> Done\n    OK -- No --> Temp\n    Temp -- Yes --> Wait\n    Wait --> Send\n    Temp -- No --> Fail\n</div>\n\n<table>\n<thead>\n<tr>\n<th>Setting</th>\n<th>Default</th>\n<th>Meaning</th>\n</tr>\n</thead>\n<tbody>\n<tr><td><code>max_retries</code></td><td>3</td><td>Extra tries per piece</td></tr>\n<tr><td><code>retry_delay</code></td><td>1 s</td><td>First wait; doubles each time</td></tr>\n<tr><td><code>max_retry_delay</code></td><td>16 s</td><td>Longest wait</td></tr>\n</tbody>\n</table>\n\n<p>Before merging, the maintainer built on my change: random variation in the waits so pieces do not all retry at the same moment, and a check that stops these retries from stacking on top of the Gemini SDK's own retries.</p>\n\n<hr>\n\n<h2 id=\"os-patch\">3. Kubernetes Java Client — A Tested Example for Patching</h2>\n\n<h3>The problem</h3>\n\n<p>To change part of a Kubernetes object you send a PATCH request, and the request must say which patch format its body uses. With the generated Java client it is easy to send a patch for a custom resource without that format, and the server then rejects it. The library has a helper, <code>PatchUtils</code>, that sets it correctly, but there was no example for custom resources.</p>\n\n<h3>What I changed</h3>\n\n<ul>\n<li>A runnable example, <code>PatchCustomObjectExample</code>, that patches a custom resource from a JSON file.</li>\n<li>A short README section: use <code>PatchUtils</code> for patches.</li>\n<li>Tests against a mock server that check the exact request that goes out, for two patch formats, so the example cannot quietly stop working.</li>\n</ul>\n\n<pre><code class=\"language-java\">Object result =\n    PatchUtils.patch(\n        Object.class,\n        () -&gt;\n            api.patchNamespacedCustomObject(\n                    group, version, namespace, plural, name, new V1Patch(patchJson))\n                .buildCall(null),\n        V1Patch.PATCH_FORMAT_JSON_PATCH,\n        client);\n</code></pre>\n\n<hr>\n\n<section id=\"os-new-contributions\"><h2>Further Merged Contributions</h2><h3>RxJava</h3><p>Isolated the Flowable observeOn race test for parallel test execution. Test-only change; production behavior is unchanged.</p><h3>Google ADK Java</h3><p>Exposed live-turn completion controls and cleaned up empty parent maps when deleting in-memory sessions.</p><h3>Kubernetes Java Client</h3><p>Added a tested custom-object PATCH example, local CRD generator builds, and opt-in managedFields deserialization.</p></section><h2 id=\"os-takeaways\">What These Have in Common</h2>\n\n<ul><li><strong>Keep changes focused.</strong> Repair lifecycle and integration boundaries without unrelated refactoring.</li><li><strong>Make behavior verifiable.</strong> Add regression tests or isolate concurrency tests, with the scope documented in each PR.</li><li><strong>Upstream evidence.</strong> Every linked contribution is merged; the PR pages retain the review and implementation history.</li></ul>\n\n<p class=\"project-tags\"><a href=\"https://github.com/ReactiveX/RxJava/pull/8399\">ReactiveX/RxJava #8399</a> / <a href=\"https://github.com/google/adk-java/pull/1381\">google/adk-java #1381</a> / <a href=\"https://github.com/google/adk-java/pull/923\">google/adk-java #923</a> / <a href=\"https://github.com/kubernetes-client/java/pull/4868\">kubernetes-client/java #4868</a> / <a href=\"https://github.com/kubernetes-client/java/pull/4751\">kubernetes-client/java #4751</a> / <a href=\"https://github.com/kubernetes-client/java/pull/4746\">kubernetes-client/java #4746</a> / <a href=\"https://github.com/alibaba/spring-ai-alibaba/pull/4491\">alibaba/spring-ai-alibaba #4491</a> / <a href=\"https://github.com/google/langextract/pull/385\">google/langextract #385</a></p>\n\n<hr>\n\n<section id=\"repository-wiki\">\n<h2 id=\"repository-wiki-heading\">Repository Wiki</h2>\n<p>Explore the codebases behind the contributions. These Wikis describe Yuqi's forks; the upstream pull requests above remain the contribution evidence.</p>\n<ul>\n<li><a href=\"https://app.devin.ai/org/yuqiguo105/wiki/YuqiGuo105/spring-ai-alibaba\" target=\"_blank\" rel=\"noopener noreferrer\">Spring AI Alibaba (fork; English)</a></li>\n<li><a href=\"https://app.devin.ai/org/yuqiguo105/wiki/YuqiGuo105/langextract\" target=\"_blank\" rel=\"noopener noreferrer\">LangExtract (fork; English)</a></li>\n<li><a href=\"https://app.devin.ai/org/yuqiguo105/wiki/YuqiGuo105/java\" target=\"_blank\" rel=\"noopener noreferrer\">Kubernetes Java Client (fork)</a></li>\n</ul>\n<p><small>AI-generated repository documentation; it may lag behind the code. Devin sign-in and workspace access may be required.</small></p>\n</section>\n\n</article>\n",
+  "contributions": [
+    {
+      "repo": "ReactiveX/RxJava",
+      "number": 8399,
+      "title": "4.x: Isolate Flowable observeOn race test",
+      "url": "https://github.com/ReactiveX/RxJava/pull/8399",
+      "mergedAt": "2026-11-20T08:08:26Z"
+    },
+    {
+      "repo": "google/adk-java",
+      "number": 1381,
+      "title": "feat: expose turnComplete for live content",
+      "url": "https://github.com/google/adk-java/pull/1381",
+      "mergedAt": "2026-10-20T16:21:10Z"
+    },
+    {
+      "repo": "google/adk-java",
+      "number": 923,
+      "title": "fix: memory leak in InMemorySessionService.deleteSession() - clean up empty parent maps",
+      "url": "https://github.com/google/adk-java/pull/923",
+      "mergedAt": "2026-04-01T11:58:57Z"
+    },
+    {
+      "repo": "kubernetes-client/java",
+      "number": 4868,
+      "title": "docs: add custom object patch example",
+      "url": "https://github.com/kubernetes-client/java/pull/4868",
+      "mergedAt": "2026-08-04T17:30:32Z"
+    },
+    {
+      "repo": "kubernetes-client/java",
+      "number": 4751,
+      "title": "cert-manager: build crd-model-gen image locally in update.sh",
+      "url": "https://github.com/kubernetes-client/java/pull/4751",
+      "mergedAt": "2026-05-17T17:55:04Z"
+    },
+    {
+      "repo": "kubernetes-client/java",
+      "number": 4746,
+      "title": "feat: add opt-in toggle for managedFields inclusion in deserialization",
+      "url": "https://github.com/kubernetes-client/java/pull/4746",
+      "mergedAt": "2026-05-09T22:25:18Z"
+    },
+    {
+      "repo": "alibaba/spring-ai-alibaba",
+      "number": 4491,
+      "title": "fix(agent): preserve shell session across HITL interrupt/resume",
+      "url": "https://github.com/alibaba/spring-ai-alibaba/pull/4491",
+      "mergedAt": "2026-07-05T13:11:13Z"
+    },
+    {
+      "repo": "google/langextract",
+      "number": 385,
+      "title": "Add automatic retry logic for transient Gemini API errors (503, 429)",
+      "url": "https://github.com/google/langextract/pull/385",
+      "mergedAt": "2026-04-21T07:01:56Z"
+    }
+  ]
+}

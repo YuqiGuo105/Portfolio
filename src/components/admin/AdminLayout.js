@@ -28,6 +28,7 @@ import {
   UserCog,
   Users,
   X,
+  Film,
 } from "lucide-react";
 import AdminTokenGate from "./AdminTokenGate";
 import { useAdminSession } from "./AdminSessionContext";
@@ -56,6 +57,7 @@ const NAV_GROUPS = [
       { href: "/admin/life-blogs", label: "Life blogs", icon: BookOpen },
       { href: "/admin/projects", label: "Projects", icon: BriefcaseBusiness },
       { href: "/admin/stories", label: "Stories", icon: Images },
+      ...(process.env.NEXT_PUBLIC_MEDIA_PIPELINE === '1' ? [{ href: '/admin/media', label: 'Media library', icon: Film }] : []),
     ],
   },
   {

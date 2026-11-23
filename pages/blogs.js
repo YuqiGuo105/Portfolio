@@ -5,6 +5,9 @@ import { useRouter } from 'next/router';
 import { supabase } from '../src/supabase/supabaseClient';
 import SeoHead from "../src/components/SeoHead";
 import LogInDialog from "../src/components/LogInDialog";
+import ProjectHoverVideo from "../src/components/media/ProjectHoverVideo";
+import { demoForContent } from "../src/lib/media/demoCatalog.mjs";
+import { loadMediaCatalog } from "../src/lib/media/publishedCatalog.mjs";
 import {
   BLOG_CARD_COLUMNS,
   LIFE_BLOG_CARD_COLUMNS,
@@ -48,11 +51,12 @@ function collectTags(blogs) {
 // The post list is in the first HTML (see src/lib/publicContent.mjs); the browser refreshes it after load.
 export async function getStaticProps() {
   const client = publicServerClient();
-  const [techBlogs, lifeBlogs] = await Promise.all([
+  const [techBlogs, lifeBlogs, media] = await Promise.all([
     orEmpty(() => loadTechBlogCards(client), [], "blogs"),
     orEmpty(() => loadLifeBlogCards(client), [], "life blogs"),
+    loadMediaCatalog(client),
   ]);
-  return { props: { initialBlogs: combineBlogs(techBlogs, lifeBlogs) }, revalidate: LIST_REVALIDATE_SECONDS };
+  return { props: { initialBlogs: combineBlogs(techBlogs, lifeBlogs), demos: media.demos }, revalidate: LIST_REVALIDATE_SECONDS };
 }
 
 // Pagination Component
@@ -89,7 +93,7 @@ const Pagination = ({ totalItems, itemsPerPage, currentPage, onPageChange }) => 
   );
 };
 
-const Blogs = ({ initialBlogs = [] }) => {
+const Blogs = ({ initialBlogs = [], demos = [] }) => {
   const router = useRouter();
   const { tag: queryTag, type: queryType } = router.query;
 
@@ -372,7 +376,9 @@ const Blogs = ({ initialBlogs = [] }) => {
                     <div className="image">
                       <Link href={blog.linkPath} legacyBehavior>
                         <a onClick={(e) => handleProtectedClick(e, requireLogin, blog.linkPath)}>
-                          <img src={blog.image_url} alt={blog.title} />
+                          {blog.blogType === 'technical' ? <ProjectHoverVideo inline demo={demoForContent(demos, `blog:${blog.id}`)}>
+                            <img src={blog.image_url} alt={blog.title} />
+                          </ProjectHoverVideo> : <img src={blog.image_url} alt={blog.title} />}
                         </a>
                       </Link>
                       <span className={`blog-type-badge ${blog.blogType}`}>

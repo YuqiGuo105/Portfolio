@@ -1,6 +1,7 @@
 import Layout from "../src/layout/Layout";
 import SeoHead from "../src/components/SeoHead";
 import ProjectIsotop from "../src/components/ProjectIsotop";
+import { loadMediaCatalog } from "../src/lib/media/publishedCatalog.mjs";
 import {
   LIST_REVALIDATE_SECONDS,
   loadProjectCards,
@@ -15,10 +16,10 @@ export async function getStaticProps() {
     { projects: [], systems: {} },
     "projects"
   );
-  return { props: { projects, systems }, revalidate: LIST_REVALIDATE_SECONDS };
+  return { props: { projects, systems, demos: (await loadMediaCatalog(publicServerClient())).demos }, revalidate: LIST_REVALIDATE_SECONDS };
 }
 
-const WorksList = ({ projects = [], systems = {} }) => {
+const WorksList = ({ projects = [], systems = {}, demos = [] }) => {
   return (
     <Layout>
       <SeoHead
@@ -63,7 +64,7 @@ const WorksList = ({ projects = [], systems = {} }) => {
           <div className="row">
             <div className="col-xs-12 col-sm-12 col-md-12 col-lg-12">
               {/* Works */}
-              <ProjectIsotop showViewAll={false} initialProjects={projects} initialSystems={systems} />
+              <ProjectIsotop showViewAll={false} initialProjects={projects} initialSystems={systems} demos={demos} />
             </div>
           </div>
         </div>

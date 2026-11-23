@@ -199,6 +199,21 @@ export const writerApi = {
       return request('GET', `/api/admin/content?${params.toString()}`);
     },
   },
+  // Image and video uploads through the media pipeline (admin-service /api/admin/media).
+  media: {
+    start: (upload) => request('POST', '/api/admin/media/uploads', upload),
+    resume: (id, uploadId) => request('POST', `/api/admin/media/${id}/upload-parts`, { uploadId }),
+    complete: (id, uploadId) => request('POST', `/api/admin/media/${id}/upload-complete`, { uploadId }),
+    get: (id) => request('GET', `/api/admin/media/${id}`),
+    list: ({ status, kind, limit = 50 } = {}) => {
+      const query = new URLSearchParams({ limit: String(limit) });
+      if (status) query.set('status', status);
+      if (kind) query.set('kind', kind);
+      return request('GET', `/api/admin/media?${query}`);
+    },
+    retry: (id) => request('POST', `/api/admin/media/${id}/retry`),
+  },
+
   adminUsers: {
     list: ({ status, role, limit = 100, offset = 0 } = {}) => {
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });

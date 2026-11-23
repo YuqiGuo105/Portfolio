@@ -1,0 +1,15 @@
+.page { padding: 150px 0 80px; }
+.page h1 { margin: 24px 0 36px; font: 400 64px/1.1 "Sorts Mill Goudy", Georgia, serif; letter-spacing: 0; }
+.back, .projectLink { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: inherit; font-size: 15px; }
+.demo { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(200px, 1fr); gap: 32px; align-items: start; }
+.details { padding-top: 6px; }
+.eyebrow { font-size: 12px; opacity: .65; }
+.details h2 { font: 400 28px/1.2 "Sorts Mill Goudy", Georgia, serif; margin: 14px 0; }
+.details p { font-size: 15px; line-height: 1.65; opacity: .8; }
+.projectLink { border-bottom: 1px solid #ee6e46; }
+.entry { display: flex; justify-content: center; margin: 20px 0 0; }
+.entry a { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: inherit; font-size: 16px; text-decoration: none; }
+.entry a:hover { color: #e06b48; }
+.embedded { max-width: 945px; margin: 0 auto 48px; scroll-margin-top: 130px; }
+.embedded h2 { font-size: 22px; margin: 0 0 18px; }
+@media (max-width: 800px) { .demo { grid-template-columns: minmax(0, 1fr); gap: 24px; } .page { padding-top: 120px; } .page h1 { font-size: 42px; } }

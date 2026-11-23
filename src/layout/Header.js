@@ -13,42 +13,42 @@ import SocialLinks from '../components/SocialLinks';
 
 const Header = ({ onOpenSearch }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [menuReady, setMenuReady] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    setMenuReady(false);
+    if (menuOpen) {
+      setMenuVisible(true);
+      document.body.classList.add("no-scroll");
+    }
+    // Preserve the closing animation, but never let it outlive this Header.
+    const timer = setTimeout(() => {
+      setMenuVisible(menuOpen);
+      setMenuReady(menuOpen);
+    }, 1000);
+    return () => {
+      clearTimeout(timer);
+      if (menuOpen) document.body.classList.remove("no-scroll");
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    const events = router.events;
+    if (!events) return undefined;
+    const closeMenu = () => setMenuOpen(false);
+    events.on("routeChangeStart", closeMenu);
+    events.on("hashChangeStart", closeMenu);
+    return () => {
+      events.off("routeChangeStart", closeMenu);
+      events.off("hashChangeStart", closeMenu);
+    };
+  }, [router.events]);
+
   const openMenu = (event) => {
     event.preventDefault();
-    const menu = document.querySelector(".menu-btn");
-    setMenuOpen(!menu.classList.contains("active"));
-    if (menu.classList.contains("active")) {
-      menu.classList.remove("active");
-      menu.classList.add("no-touch");
-      document.body.classList.remove("no-scroll");
-      document.querySelector(".menu-full-overlay").classList.remove("is-open");
-      document
-        .querySelector(".menu-full-overlay")
-        .classList.remove("has-scroll");
-      document
-        .querySelector(".menu-full-overlay")
-        .classList.remove("animate-active");
-      setTimeout(function () {
-        document
-          .querySelector(".menu-full-overlay")
-          .classList.remove("visible");
-        menu.classList.remove("no-touch");
-      }, 1000);
-    } else {
-      menu.classList.add("active", "no-touch");
-      // var height = document.querySelector(window).height();
-      // document.querySelector(".menu-full-overlay").css({ height: height });
-      document.body.classList.add("no-scroll");
-      document
-        .querySelector(".menu-full-overlay")
-        .classList.add("is-open", "visible");
-      setTimeout(function () {
-        document
-          .querySelector(".menu-full-overlay")
-          .classList.add("has-scroll", "animate-active");
-        menu.classList.remove("no-touch");
-      }, 1000);
-    }
+    setMenuOpen(open => !open);
   };
 
   const [day, setDay] = useState(true);
@@ -73,8 +73,6 @@ const Header = ({ onOpenSearch }) => {
       return () => mq?.removeEventListener("change", handler);
     }
   }, []);
-
-  const router = useRouter();
 
   useEffect(() => {
     if (day) {
@@ -102,40 +100,7 @@ const Header = ({ onOpenSearch }) => {
   };
 
   const linkClick = () => {
-    const menu = document.querySelector(".menu-btn");
-    setMenuOpen(!menu.classList.contains("active"));
-    if (menu.classList.contains("active")) {
-      menu.classList.remove("active");
-      menu.classList.add("no-touch");
-      document.body.classList.remove("no-scroll");
-      document.querySelector(".menu-full-overlay").classList.remove("is-open");
-      document
-        .querySelector(".menu-full-overlay")
-        .classList.remove("has-scroll");
-      document
-        .querySelector(".menu-full-overlay")
-        .classList.remove("animate-active");
-      setTimeout(function () {
-        document
-          .querySelector(".menu-full-overlay")
-          .classList.remove("visible");
-        menu.classList.remove("no-touch");
-      }, 1000);
-    } else {
-      menu.classList.add("active", "no-touch");
-      // var height = document.querySelector(window).height();
-      // document.querySelector(".menu-full-overlay").css({ height: height });
-      document.body.classList.add("no-scroll");
-      document
-        .querySelector(".menu-full-overlay")
-        .classList.add("is-open", "visible");
-      setTimeout(function () {
-        document
-          .querySelector(".menu-full-overlay")
-          .classList.add("has-scroll", "animate-active");
-        menu.classList.remove("no-touch");
-      }, 1000);
-    }
+    setMenuOpen(false);
   };
 
   return (
@@ -210,7 +175,7 @@ const Header = ({ onOpenSearch }) => {
               </span>
             </button>
             {/* menu btn */}
-            <button type="button" className={`menu-btn ${styles.action} ${styles.menu}`} onClick={openMenu}
+            <button type="button" className={`menu-btn ${styles.action} ${styles.menu} ${menuOpen ? "active" : ""} ${(menuOpen && !menuReady) || (!menuOpen && menuVisible) ? "no-touch" : ""}`} onClick={openMenu}
               aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} aria-controls="site-navigation"
               data-nav-action="menu" data-tooltip={menuOpen ? "Close menu" : "Menu"}>
               <span />
@@ -219,7 +184,7 @@ const Header = ({ onOpenSearch }) => {
         </div>
       </div>
       {/* Menu Full Overlay */}
-      <div id="site-navigation" className="menu-full-overlay" style={{ minHeight: "100vh" }}>
+      <div id="site-navigation" className={`menu-full-overlay ${menuOpen || menuVisible ? "visible" : ""} ${menuOpen ? "is-open" : ""} ${menuOpen && menuReady ? "has-scroll animate-active" : ""}`} style={{ minHeight: "100vh" }}>
         <div className="menu-full-container">
           <div className="container">
             <div className="row">
