@@ -376,7 +376,7 @@ const Blogs = ({ initialBlogs = [], demos = [] }) => {
                     <div className="image">
                       <Link href={blog.linkPath} legacyBehavior>
                         <a onClick={(e) => handleProtectedClick(e, requireLogin, blog.linkPath)}>
-                          {blog.blogType === 'technical' ? <ProjectHoverVideo inline demo={demoForContent(demos, `blog:${blog.id}`)}>
+                          {blog.blogType === 'technical' ? <ProjectHoverVideo inline hoverBoundary=".archive-item" demo={demoForContent(demos, `blog:${blog.id}`)}>
                             <img src={blog.image_url} alt={blog.title} />
                           </ProjectHoverVideo> : <img src={blog.image_url} alt={blog.title} />}
                         </a>

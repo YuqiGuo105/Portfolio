@@ -1,7 +1,7 @@
 import Head from "next/head";
 import Script from "next/script";
 import { Fragment, useEffect, useRef } from "react";
-import { useRouter } from "next/router";
+import Router, { useRouter } from "next/router";
 import SeoHead from "../src/components/SeoHead";
 import MobilePullToRefresh from "../src/components/MobilePullToRefresh";
 import TerminalLauncher from "../src/components/TerminalLauncher";
@@ -12,6 +12,7 @@ import { startPageBehaviorTracking } from "../src/lib/behaviorAnalytics";
 import { isPrivateAnalyticsPage } from "../src/lib/analyticsPagePolicy.mjs";
 import { employerUrl } from "../src/lib/currentRole.mjs";
 import { hasChatWidget, isHomePageRoute } from "../src/lib/chatPagePolicy.mjs";
+import { startHomeScrollReturn } from "../src/lib/homeScrollReturn.mjs";
 import "../styles/globals.css";
 import "../styles/carousel.css";
 import "../styles/chatWidget.css";
@@ -114,6 +115,8 @@ function MyApp({ Component, pageProps }) {
   const isHomePage = isHomePageRoute(router.pathname);
   const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
   const loadRecaptcha = recaptchaSiteKey && !isPrivateAnalyticsPage(router.asPath);
+
+  useEffect(() => startHomeScrollReturn(Router), []);
 
   // One tracker owns page views and throttled scroll-depth checkpoints.
   useEffect(() => {

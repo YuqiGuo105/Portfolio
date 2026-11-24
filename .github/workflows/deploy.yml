@@ -63,6 +63,9 @@ jobs:
       - name: Media upload and Introduction handoff
         run: node --test tests/media*.test.mjs
 
+      - name: Homepage return and navigation
+        run: node --test tests/home-scroll-return.test.mjs tests/header-menu.test.mjs
+
       - name: Voice and private-history regression tests
         run: npm run test:voice
 
