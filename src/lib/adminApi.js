@@ -86,8 +86,13 @@ export const adminApi = {
       return request('/api/admin/visitor-governance/hold', { method: release ? 'DELETE' : 'POST', body: JSON.stringify({ batchId, reason }) });
     },
   },
-  // Notifications cleared from the bell in the top bar.
+  // The notification log, and the notifications cleared from the bell in the top bar.
+  // One object: a second `notifications` key further down would replace this one whole.
   notifications: {
+    list({ limit = 50, offset = 0 } = {}) {
+      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+      return request(`/api/admin/notifications?${params.toString()}`);
+    },
     cleared() { return request('/api/admin/notification-dismissals'); },
     clear(keys) { return request('/api/admin/notification-dismissals', { method: 'POST', body: JSON.stringify({ keys }) }); },
   },
@@ -137,12 +142,6 @@ export const adminApi = {
       });
     },
   },
-  notifications: {
-    list({ limit = 50, offset = 0 } = {}) {
-      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-      return request(`/api/admin/notifications?${params.toString()}`);
-    },
-  },
   conversations: {
     list({ query = "", hours = 168, limit = 50 } = {}) {
       const params = new URLSearchParams({
@@ -151,6 +150,20 @@ export const adminApi = {
         limit: String(limit),
       });
       return request(`/api/admin/chat-conversations?${params.toString()}`);
+    },
+  },
+  // Answers a visitor rated, each with the run frozen when it was rated.
+  chatFeedback: {
+    list({ verdict = "", limit = 100, full = false } = {}) {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (verdict) params.set("verdict", verdict);
+      if (full) params.set("full", "1");
+      return request(`/api/admin/chat-feedback?${params.toString()}`, { cache: "no-store" });
+    },
+    download({ verdict = "" } = {}) {
+      const params = new URLSearchParams({ format: "jsonl" });
+      if (verdict) params.set("verdict", verdict);
+      return download(`/api/admin/chat-feedback?${params.toString()}`);
     },
   },
   voiceConversations: {

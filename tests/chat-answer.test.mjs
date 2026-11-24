@@ -213,8 +213,39 @@ test('the smaller parts stay inside the widget and leave the launcher where the 
   assert.ok(reduced);
   const app = readFileSync(new URL('../pages/_app.js', import.meta.url), 'utf8');
   assert.ok(app.indexOf('styles/chatWidgetParts.css') > app.indexOf('styles/chatWidgetAnswer.css'));
-  // The launcher keeps the name its tests and screen readers know it by; the extra line is for the eye.
+  // The launcher is the box it has always been: Mr. Pot and his name, under the name its tests and
+  // screen readers know. This sheet gives it its size and nothing of its look.
   const widget = readFileSync(new URL('../src/components/ChatWidget.js', import.meta.url), 'utf8');
-  assert.ok(widget.includes('alt="Chat Bot"') && widget.includes('<span className="cw-launch-name">Mr.Pot</span>'));
-  assert.match(widget, /className="cw-launch-hint" aria-hidden="true"/);
+  const button = widget.slice(widget.indexOf('className="launch-button"'), widget.indexOf('/** Main ChatWidget export */'));
+  assert.ok(button.includes('<MrPotAvatar size="launch" launcher />'));
+  assert.ok(button.includes('<span className="cw-launch-name"><span className="cw-sr">Chat Bot </span>Mr.Pot</span>'));
+  assert.doesNotMatch(button, /cw-launch-(art|hint|text)|Ask about/);
+  sheet.walkRules(rule => {
+    if (!rule.selector.includes('.launch-button')) return;
+    rule.walkDecls(d => assert.ok(['height', 'padding'].includes(d.prop), `${rule.selector} sets ${d.prop}`));
+  });
+  assert.doesNotMatch(css, /cw-launch-/);
+  const base = readFileSync(new URL('../styles/chatWidget.css', import.meta.url), 'utf8');
+  assert.ok(base.includes('border: 1px solid #ff8059;') && base.includes('border-radius: 12px;'), 'the box and its outline');
+});
+
+test('an answer can be rated; the verdict is one widget action and Mr. Pot reacts to it', () => {
+  const footer = readFileSync(new URL('../src/components/chat/AnswerFooter.js', import.meta.url), 'utf8');
+  for (const label of ['aria-label="Good answer"', 'aria-label="Not helpful"']) assert.ok(footer.includes(label), label);
+  assert.ok(footer.includes('aria-pressed={feedback === "up"}') && footer.includes('aria-pressed={feedback === "down"}'));
+  // Pressing the chosen one again takes it back.
+  assert.ok(footer.includes('onFeedback(feedback === "up" ? null : "up")') && footer.includes('onFeedback(feedback === "down" ? null : "down")'));
+  const widget = readFileSync(new URL('../src/components/ChatWidget.js', import.meta.url), 'utf8');
+  assert.ok(widget.includes('trackWidget("chat", verdict === "up" ? "answer_liked" : verdict === "down" ? "answer_disliked" : "answer_rating_cleared")'));
+  // Praise is the one verdict he answers; any other only ends that look.
+  assert.ok(widget.includes('reactPot(verdict === "up" ? "shy" : "none")'));
+  assert.doesNotMatch(widget, /reactPot\("sorry"\)/);
+  // A failed answer has nothing to rate.
+  assert.ok(widget.includes('onFeedback={m.errorCode || !m.id || !m.runId ? null : (verdict) => rateAnswer(m.id, verdict)}'));
+  assert.ok(footer.includes('disabled={feedbackPending}'));
+  const telemetry = readFileSync(new URL('../src/lib/widgetTelemetry.js', import.meta.url), 'utf8');
+  for (const action of ['answer_liked', 'answer_disliked', 'answer_rating_cleared']) assert.ok(telemetry.includes(`'${action}'`), action);
+  // The analytics event is the verdict alone. The run ID goes to the site's own feedback route,
+  // which reads the answer from the assistant's record: no answer text leaves the browser.
+  assert.doesNotMatch(widget.slice(widget.indexOf('const rateAnswer'), widget.indexOf('const rateAnswer') + 640), /content|question/);
 });

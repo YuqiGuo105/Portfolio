@@ -22,6 +22,11 @@ const ACTION_LABELS = {
   unsubscribe_completed: 'Unsubscribed', tool_used: 'Used an assistant tool',
   recommendation_dismiss: 'Dismissed a recommendation', widget_opened: 'Opened', widget_action: 'Used',
 };
+// Widget actions that read better as a sentence than as "Used chat: answer liked".
+const WIDGET_ACTION_LABELS = {
+  'chat:answer_liked': 'Liked an answer', 'chat:answer_disliked': 'Marked an answer not helpful',
+  'chat:answer_rating_cleared': 'Took back an answer rating',
+};
 const CLICKS = { outbound_link_clicked: 'outbound', search_result_clicked: 'search', recommendation_click: 'recommendation',
   content_open: 'content', project_open: 'content' };
 // Seen-on-screen records say nothing about what the visitor did.
@@ -95,6 +100,8 @@ function addToPage(entry, item) {
   if (PASSIVE.has(name) || ['read_progress', 'engaged_time', 'page_view'].includes(name)) return;
   const component = item.properties?.component, action = item.properties?.action;
   const label = ACTION_LABELS[name] || name.replace(/_/g, ' ');
+  const named = name === 'widget_action' ? WIDGET_ACTION_LABELS[`${component}:${action}`] : '';
+  if (named) { entry.actions.push({ time: item.eventTime, label: named, detail: '' }); return; }
   entry.actions.push({ time: item.eventTime,
     label: name.startsWith('widget_') ? `${label} ${component || 'a widget'}` : label,
     detail: name.startsWith('widget_') ? (action && action !== 'open' ? String(action).replace(/_/g, ' ') : '') : (action || component || '') });

@@ -542,6 +542,26 @@ body.dark-skin #__chat_widget_root#__chat_widget_root .cw-codeblock {
   color: var(--cwm-muted);
 }
 
+/* the end of the line: a verdict on the answer, then copy */
+#__chat_widget_root#__chat_widget_root .cw-act-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+#__chat_widget_root#__chat_widget_root .cw-act-end .cw-act-icon {
+  margin-left: 0;
+}
+#__chat_widget_root#__chat_widget_root .cw-act-rate.is-chosen,
+#__chat_widget_root#__chat_widget_root .cw-act-rate.is-chosen:hover {
+  background: var(--cwm-accent-soft);
+  color: var(--cwm-accent);
+}
+#__chat_widget_root#__chat_widget_root .cw-act-rate.is-chosen svg {
+  fill: currentColor;
+  fill-opacity: 0.2;
+}
+
 #__chat_widget_root#__chat_widget_root .cw-panel {
   margin: 10px 0 0;
   padding: 0;

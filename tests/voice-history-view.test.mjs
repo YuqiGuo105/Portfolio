@@ -251,6 +251,7 @@ test("conversations UI merges fixtures, folds transcripts, and isolates partial 
   let mode = "success";
   const pending = [];
   const agentItem = { runId: "agent-fixture", startedAt: end, status: "completed", completedAt: end, question: "Agent question", answer: "Agent answer", latencyMs: 1500 };
+  const ratedItem = { run_id: agentItem.runId, verdict: "up", question: agentItem.question, answer: agentItem.answer, run: agentItem, status: agentItem.status };
   const voiceItem = mapVoiceConversation(call({ messages: [message("fixture-message", { content: "<script>unsafe()</script> **plain transcript**" })] }));
   const voiceData = { items: [voiceItem], scope: voiceHistoryResponse([], voiceHistoryOptions({ limit: 100 }, now)).scope };
   const { default: Page } = await compile("../pages/admin/conversations.js", {
@@ -267,6 +268,10 @@ test("conversations UI merges fixtures, folds transcripts, and isolates partial 
         if (mode === "voice-error" || mode === "both-error") throw new Error("Voice offline");
         if (mode === "deferred") return new Promise((resolve) => pending.push({ query, resolve }));
         return voiceData;
+      } },
+      chatFeedback: { list: async () => {
+        if (mode === "feedback-error") throw new Error("Feedback offline");
+        return { enabled: true, items: [ratedItem] };
       } },
     } },
   });
@@ -299,6 +304,28 @@ test("conversations UI merges fixtures, folds transcripts, and isolates partial 
   assert.match(document.body.textContent, /does not confirm audio playback/);
   assert.match(document.body.textContent, /<script>unsafe\(\)<\/script> \*\*plain transcript\*\*/);
   assert.equal(document.querySelectorAll("script").length, 0);
+  const selectView = (label) => act(async () => Simulate.click(
+    [...document.querySelectorAll('[aria-label="What to list"] button')].find((button) => button.textContent.startsWith(label)),
+  ));
+  const selectRating = (label) => act(async () => Simulate.click(
+    [...document.querySelectorAll('[aria-label="Rating"] button')].find((button) => button.textContent === label),
+  ));
+  assert.match(document.querySelectorAll("article")[0].textContent, /Liked/);
+  await selectView("Rated answers");
+  assert.equal(document.querySelectorAll("article").length, 1);
+  assert.match(document.querySelector("article").textContent, /Agent answer/);
+  assert.doesNotMatch(document.body.textContent, /Voice \/ Qwen/);
+  await selectRating("Not helpful");
+  assert.equal(document.querySelectorAll("article").length, 0);
+  await selectRating("Liked");
+  assert.equal(document.querySelectorAll("article").length, 1);
+  mode = "feedback-error";
+  await refresh();
+  assert.match(document.body.textContent, /Rated answers unavailable: Feedback offline/);
+  await selectView("All activity");
+  assert.equal(document.querySelectorAll("article").length, 2);
+  assert.match(document.body.textContent, /Agent answer/);
+  assert.match(document.body.textContent, /Voice \/ Qwen/);
   mode = "voice-error";
   await refresh();
   assert.match(document.body.textContent, /Voice records unavailable: Voice offline/);

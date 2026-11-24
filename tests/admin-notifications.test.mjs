@@ -138,3 +138,14 @@ test('before the table exists the server says so, and an outage is an error, not
   assert.equal((await call(down, { method: 'POST', body: { keys: ['referral:a1'] } })).statusCode, 503);
   assert.deepEqual(validKeys(['referral:a1', 'referral:a1', 'audience:i-9', 'bad key']), ['referral:a1', 'audience:i-9']);
 });
+
+test('the admin client names each group once, so the bell can reach its cleared list', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/lib/adminApi.js', import.meta.url), 'utf8');
+  // Two keys with the same name in one object literal: the later replaces the earlier whole, and
+  // nothing warns. That once left `notifications.cleared` and `notifications.clear` undefined.
+  const groups = [...source.matchAll(/^ {2}([A-Za-z]+): \{$/gm)].map(match => match[1]);
+  assert.deepEqual(groups.filter((name, index) => groups.indexOf(name) !== index), []);
+  const block = source.slice(source.indexOf('  notifications: {'), source.indexOf('  referrals: {'));
+  for (const method of ['list(', 'cleared()', 'clear(keys)']) assert.ok(block.includes(method), method);
+});

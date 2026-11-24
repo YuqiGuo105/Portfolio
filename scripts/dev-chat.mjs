@@ -161,6 +161,13 @@ const server = createServer(async (req, res) => {
   if (url.pathname === '/health') return json({ status: 'UP' });
   if (!url.pathname.startsWith('/api/')) return handle(req, res);
   if (url.pathname === '/api/rag/capabilities') return json({ deep: true, attachments: true });
+  if (url.pathname === '/api/rag/answer/feedback') {
+    // In production the site reads the run from the assistant's record and stores a frozen copy.
+    let body = ''; for await (const chunk of req) body += chunk;
+    const { runId, verdict = null } = JSON.parse(body || '{}');
+    console.log(verdict ? `Answer rated ${verdict}: run ${runId} would be stored with its question, answer, sources and prompt versions.` : `Rating taken back: run ${runId} would be removed.`);
+    return json({ saved: true, verdict });
+  }
   if (url.pathname === '/api/rag/admission') {
     const line = process.env.CHAT_PREVIEW_LINE;
     return json(line === 'queued' ? { status: 'queued', ahead: 3, eta: 240 } : line === 'full' ? { status: 'full', reason: 'daily' } : { status: 'active', messages: 15, seconds: 600 });

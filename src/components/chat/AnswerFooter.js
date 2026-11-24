@@ -1,5 +1,5 @@
 import { useId, useState } from "react"
-import { BookOpen, Check, ChevronDown, Copy, LockKeyhole, MapPin, Timer, X } from "lucide-react"
+import { BookOpen, Check, ChevronDown, Copy, LockKeyhole, MapPin, Timer, X, ThumbsDown, ThumbsUp } from "lucide-react"
 import { isSourceLinked } from "../../lib/chatEvidence.mjs"
 import { formatCost, formatCount, formatMs } from "../../lib/chatRunSummary.mjs"
 import ResearchSteps from "./ResearchSteps"
@@ -104,10 +104,10 @@ function RunRecord({ steps, totals, runId, research }) {
 }
 
 /**
- * The line under a finished answer: what it was based on, how it was produced, and copy.
+ * The line under a finished answer: what it was based on, how it was produced, a verdict and copy.
  * One panel is open at a time, so an answer never ends in a stack of disclosures.
  */
-export default function AnswerFooter({ content = "", sources = [], steps = [], totals = {}, runId = "", guide = null, research = null }) {
+export default function AnswerFooter({ content = "", sources = [], steps = [], totals = {}, runId = "", guide = null, research = null, feedback = null, feedbackPending = false, onFeedback = null }) {
   const [panel, setPanel] = useState(null)
   const id = useId()
   const toggle = name => setPanel(current => current === name ? null : name)
@@ -141,7 +141,26 @@ export default function AnswerFooter({ content = "", sources = [], steps = [], t
             <span>{guide.label}</span>
           </button>
         ) : null}
-        {content.trim() ? <CopyButton text={content} label="Copy the answer" /> : null}
+        {content.trim() ? (
+          <span className="cw-act-end">
+            {/* Pressing the one already chosen takes it back. */}
+            {onFeedback ? (
+              <>
+                <button type="button" className={`cw-act cw-act-icon cw-act-rate${feedback === "up" ? " is-chosen" : ""}`} aria-pressed={feedback === "up"}
+                  disabled={feedbackPending} aria-busy={feedbackPending} title={feedbackPending ? "Saving rating" : "Good answer"}
+                  onClick={() => onFeedback(feedback === "up" ? null : "up")} aria-label="Good answer">
+                  <ThumbsUp size={15} aria-hidden="true" />
+                </button>
+                <button type="button" className={`cw-act cw-act-icon cw-act-rate${feedback === "down" ? " is-chosen" : ""}`} aria-pressed={feedback === "down"}
+                  disabled={feedbackPending} aria-busy={feedbackPending} title={feedbackPending ? "Saving rating" : "Not helpful"}
+                  onClick={() => onFeedback(feedback === "down" ? null : "down")} aria-label="Not helpful">
+                  <ThumbsDown size={15} aria-hidden="true" />
+                </button>
+              </>
+            ) : null}
+            <CopyButton text={content} label="Copy the answer" />
+          </span>
+        ) : null}
       </div>
 
       {panel === "sources" ? (
