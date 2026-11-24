@@ -13,6 +13,7 @@
     "docs:architecture": "node scripts/render-architecture-diagram.mjs docs/architecture/platform-system-flow.json && node scripts/render-architecture-views.mjs",
     "docs:architecture:check": "node scripts/render-architecture-views.mjs --check",
     "test:voice": "node --test tests/voice*.test.mjs",
+    "posttest": "node --test tests/chat-modern.test.mjs",
     "test:monitoring": "node --test tests/monitoring-registry.test.mjs tests/service-metrics.test.mjs",
     "test:ai-budget": "node --test tests/ai-spend.test.mjs tests/ai-model-gateway.test.mjs tests/qwen-dictation.test.mjs tests/qwen-local-chat.test.mjs",
     "test:oauth": "node --test tests/oauth-consent.test.mjs tests/google-auth.test.mjs tests/admin-access-boundaries.test.mjs",
