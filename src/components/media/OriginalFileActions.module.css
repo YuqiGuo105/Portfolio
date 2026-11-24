@@ -1,0 +1,26 @@
+.root { border-top: 1px solid #d8e1e3; padding: 18px 0 0; margin-top: 18px; color: #293741; font: 14px/1.5 system-ui, sans-serif; letter-spacing: 0; }
+.root header { display: flex; align-items: center; gap: 8px; }
+.root h3 { color: inherit; font: 650 14px/1.5 system-ui, sans-serif; margin: 0; }
+.root p { color: #52636f; font-size: 13px; margin: 8px 0; }
+.root .filename { overflow-wrap: anywhere; color: inherit; }
+.root button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid #c6d2d8; border-radius: 5px; background: #fff; color: #344750; padding: 9px 12px; min-height: 44px; font: 600 13px/1.4 system-ui, sans-serif; letter-spacing: 0; cursor: pointer; }
+.root button svg { flex-shrink: 0; }
+.root button:focus-visible { outline: 2px solid #267b70; outline-offset: 3px; }
+.root button:disabled { opacity: .6; cursor: not-allowed; }
+.root .remove { color: #a83224; border-color: #dfb4ad; background: #fff8f6; }
+.root .remove:hover:not(:disabled) { background: #fce7e3; border-color: #b84c3a; }
+.root .success { color: #246653; display: flex; gap: 8px; align-items: flex-start; }
+.root .success svg { flex-shrink: 0; margin-top: 2px; }
+.root .error { color: #a83224; overflow-wrap: anywhere; }
+.dialog { width: min(460px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 24px; box-sizing: border-box; border: 1px solid #d8e1e3; border-radius: 8px; background: #fff; color: #293741; box-shadow: 0 20px 60px #0003; margin: auto; }
+.dialog::backdrop { background: #101d28a6; }
+.root .dialog h2 { color: inherit; font: 650 20px/1.4 system-ui, sans-serif; margin: 0 0 12px; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+:global([data-theme=dark]) .root { color: #e3ecef; border-color: #45555f; }
+:global([data-theme=dark]) .root p { color: #bac8d0; }
+:global([data-theme=dark]) .dialog { color: #e3ecef; background: #1d2831; border-color: #45555f; }
+:global([data-theme=dark]) .root button { background: #26343e; color: #e3ecef; border-color: #5c6d77; }
+:global([data-theme=dark]) .root .remove { background: #382825; color: #ffb4a6; border-color: #916256; }
+:global([data-theme=dark]) .root .error { color: #ffb4a6; }
+:global([data-theme=dark]) .root .success { color: #a8ddc8; }
+@media (max-width: 420px) { .dialog { padding: 20px; } .actions { flex-direction: column-reverse; } .actions button { width: 100%; } }

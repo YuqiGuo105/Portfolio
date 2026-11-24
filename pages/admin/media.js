@@ -4,7 +4,7 @@ import { Upload, RefreshCw, Film, Image as ImageIcon, Search, X, RotateCcw } fro
 import AdminLayout from '../../src/components/admin/AdminLayout';
 import { writerApi } from '../../src/lib/writerApi';
 import { uploadMedia } from '../../src/lib/media/upload.mjs';
-import { mediaPoster, mediaFacts, mediaRenditions, savedUpload } from '../../src/lib/media/library.mjs';
+import { mediaPoster, mediaFacts, mediaRenditions, newerMediaAsset, savedUpload } from '../../src/lib/media/library.mjs';
 import { formatVideoTime } from '../../src/lib/media/demoCatalog.mjs';
 import MediaInspector from '../../src/components/media/MediaInspector';
 import styles from '../../src/components/media/MediaLibrary.module.css';
@@ -41,7 +41,10 @@ export function MediaLibraryContent({ previewAssets = null, api = writerApi.medi
     try {
       const next = await api.list({ limit: 100 });
       if (!mounted.current) return;
-      setAssets(next); setError('');
+      setAssets(items => {
+        const currentById = new Map(items.map(item => [item.id, item]));
+        return next.map(item => newerMediaAsset(currentById.get(item.id), item));
+      }); setError('');
     } catch (err) {
       if (mounted.current) setError(err.status === 404 ? 'The media service is not enabled yet.' : err.message);
     } finally {
@@ -134,7 +137,8 @@ export function MediaLibraryContent({ previewAssets = null, api = writerApi.medi
           </button>;
         })}
       </section>
-      {selected && <MediaInspector asset={selected} baseUrl={BASE_URL} onClose={() => setSelectedId(null)} onRetry={retry} retrying={retrying === selected.id} />}
+      {selected && <MediaInspector asset={selected} baseUrl={BASE_URL} onClose={() => setSelectedId(null)} onRetry={retry} retrying={retrying === selected.id}
+        api={readOnly ? null : api} onChanged={next => setAssets(items => items.map(item => item.id === next.id ? newerMediaAsset(item, next) : item))} />}
     </div>
   </div>;
 }

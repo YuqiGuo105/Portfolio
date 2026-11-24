@@ -218,6 +218,8 @@ export const writerApi = {
       return request('GET', `/api/admin/media?${query}`);
     },
     retry: (id) => request('POST', `/api/admin/media/${id}/retry`),
+    checkOriginalDeletion: id => request('GET', `/api/admin/media/${encodeURIComponent(id)}/original-deletion-check`),
+    deleteOriginal: (id, expectedVersion) => request('DELETE', `/api/admin/media/${encodeURIComponent(id)}/original?expectedVersion=${encodeURIComponent(expectedVersion)}`),
   },
 
   adminUsers: {
