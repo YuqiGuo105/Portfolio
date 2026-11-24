@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Check, ChevronDown, Clock3, FileSearch, GitBranch, Layers3, Loader2, Play, RotateCcw, ShieldCheck, Square, Terminal } from 'lucide-react';
+import { MCP_SCENARIOS, callArguments } from '../lib/mcpScenarios.mjs';
 import styles from '../../styles/McpPlayground.module.css';
 
-const EXAMPLES = [
-  { id: 'projects', label: 'Project match', Icon: Layers3, question: "Which project demonstrates Yuqi's distributed-systems experience?" },
-  { id: 'kubernetes', label: 'Article search', Icon: FileSearch, question: 'Find articles about Kubernetes.' },
-  { id: 'publishing', label: 'Publish flow', Icon: GitBranch, question: 'How does content move from publishing to search and AI retrieval?' },
-];
+const ICONS = { projects: Layers3, kubernetes: FileSearch, publishing: GitBranch };
+const EXAMPLES = Object.entries(MCP_SCENARIOS).map(([id, example]) => ({ id, Icon: ICONS[id], ...example }));
+// What a visitor gets back, said before they run it.
+const RETURNS = {
+  projects: 'Up to three projects, each with its summary, stack and a link to the page it came from.',
+  kubernetes: 'Up to three articles, each with its summary and a link to the page it came from.',
+  publishing: 'The project that documents the pipeline, and its publication steps read from that page.',
+};
 const ERRORS = {
   rate_limited: 'Too many requests. Please wait a minute before trying again.',
   timeout: 'The MCP request timed out. Please try again.',
@@ -90,7 +94,15 @@ export default function McpPlayground() {
         </label>)}
       </fieldset>
       <div className={styles.prompt}>
-        <p>{example.question}</p>
+        <div className={styles.ask}>
+          <p>{example.question}</p>
+          {/* The request an AI client makes for this question. It is the same one the server sends. */}
+          <p className={styles.callLine}>
+            <span className={styles.callVerb}>{result ? 'Called' : running ? 'Calling' : 'Calls'}</span>
+            <code>{example.tool.name}</code>
+            {callArguments(example.tool.arguments).map(({ key, value }) => <span className={styles.callArg} key={key}><span>{key}</span>{value}</span>)}
+          </p>
+        </div>
         <div className={styles.actions}>
           <button type="submit" className={styles.run} disabled={running || cooldown > 0}>
             {running ? <Loader2 className={styles.spinner} size={16} /> : phase === 'error' ? <RotateCcw size={16} /> : <Play size={16} />}
@@ -103,10 +115,11 @@ export default function McpPlayground() {
 
     <div className={styles.statusbar}>
       <span role="status" aria-live="polite">{result && <Check size={15} />}{status}</span>
-      <span>{result ? <><Clock3 size={14} /> {duration(result.elapsedMs)} <span className={styles.separator}>/</span> {result.calls.length} tool call</> : <><ShieldCheck size={14} /> Public, read-only</>}</span>
+      <span>{result ? <><Clock3 size={14} /> {duration(result.elapsedMs)} <span className={styles.separator}>/</span> {result.calls.length} tool {result.calls.length === 1 ? 'call' : 'calls'}</> : <><ShieldCheck size={14} /> Public, read-only</>}</span>
     </div>
 
     {phase === 'error' && <p className={styles.error} role="alert">{error}</p>}
+    {!result && !running && phase !== 'error' && <p className={styles.idle}>{RETURNS[scenario]} The raw request and response are shown with it.</p>}
     {running && <div className={styles.loading} aria-hidden="true"><span /><span /><span /></div>}
     {result && <div className={styles.output}>
       {result.status === 'empty' && <p className={styles.notice}>No matching public records were returned for this query.</p>}
@@ -115,7 +128,7 @@ export default function McpPlayground() {
           <span className={styles.resultIndex}>{String(index + 1).padStart(2, '0')}</span>
           <div>
             <div className={styles.kind}>{item.type === 'PROJECT' ? 'Project' : 'Article'}{item.sourceRequiresLogin && ' / Sign-in required to read'}</div>
-            <h3>{item.title}</h3>
+            <h3><a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}<ArrowUpRight size={16} aria-hidden="true" /></a></h3>
             <p>{item.summary}</p>
             <div className={styles.tags}>{item.tags.map(tag => <span key={tag}>{tag}</span>)}</div>
           </div>

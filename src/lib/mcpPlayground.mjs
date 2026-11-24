@@ -2,15 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { Parser } from 'htmlparser2';
 import { parseSSEBlock } from './chatStream.mjs';
+import { MCP_SCENARIOS } from './mcpScenarios.mjs';
 
 const ENDPOINT = 'https://www.yuqi.site/mcp';
 const MAX_BYTES = 128 * 1024;
 const TIMEOUT_MS = 18_000;
-const SCENARIOS = Object.freeze({
-  projects: { name: 'search_portfolio', arguments: { query: 'distributed systems', types: ['PROJECT'], limit: 3 } },
-  kubernetes: { name: 'search_articles', arguments: { keyword: 'Kubernetes', sourceType: 'BLOG', limit: 3 } },
-  publishing: { name: 'get_project', arguments: { projectId: '8edf9020-39b6-4db4-83b3-43c459bef1cf', format: 'html' } },
-});
+// The tool call each example makes. The table is fixed and shared with the page that shows it.
+const SCENARIOS = Object.freeze(Object.fromEntries(Object.entries(MCP_SCENARIOS).map(([id, example]) => [id, example.tool])));
 
 export class PlaygroundError extends Error {
   constructor(code, status = 502) { super(code); this.code = code; this.status = status; }
