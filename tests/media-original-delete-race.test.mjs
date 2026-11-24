@@ -128,6 +128,67 @@ test('asset merge compares metadata versions only within one id and accepts clea
   assert.equal(library.newerMediaAsset(deleted, null), null);
 });
 
+test('media library filters locally and keeps details and result counts in sync', async () => {
+  let reads = 0;
+  const image = { ...replacement, kind: 'IMAGE', title: 'Cover image', filename: 'cover.webp', contentType: 'image/webp' };
+  const failed = { ...asset, id: 'video-failed', title: 'Failed video', status: 'FAILED' };
+  api.list = async () => { reads++; return [asset, image, failed]; };
+  await act(async () => root.render(React.createElement(MediaLibraryContent, { api })));
+  const rows = () => [...document.querySelectorAll('[aria-label="Media assets"] button')];
+  const search = document.querySelector('[aria-label="Search media"]');
+  const filter = document.querySelector('[aria-label="Filter media"]');
+  assert.equal(rows().length, 3);
+  await act(async () => Simulate.change(search, { target: { value: 'COVER' } }));
+  assert.equal(rows().length, 1);
+  assert.match(rows()[0].textContent, /Cover image/);
+  assert.match(document.querySelector('[aria-label="Media assets"]').textContent, /Files 1 \/ 3/);
+  await act(async () => Simulate.click(rows()[0]));
+  assert.equal(observedAsset, image);
+  await click('Close media details');
+  assert.equal(document.querySelector('[aria-label="Media details"]'), null);
+  await act(async () => {
+    Simulate.change(search, { target: { value: '' } });
+    Simulate.change(filter, { target: { value: 'FAILED' } });
+  });
+  assert.equal(rows().length, 1);
+  assert.match(rows()[0].textContent, /Failed video/);
+  await act(async () => Simulate.change(search, { target: { value: 'not-found' } }));
+  assert.equal(rows().length, 0);
+  assert.match(document.body.textContent, /No media found/);
+  assert.equal(reads, 1, 'search and filters must not add API requests');
+  assert.deepEqual(calls, []);
+});
+
+test('media visual preview stays read-only while exposing the full layout', async () => {
+  api.list = () => { throw new Error('Preview must not load production media'); };
+  await act(async () => root.render(React.createElement(MediaLibraryContent, { previewAssets: [asset], api })));
+  assert.equal(button('Upload files').disabled, true);
+  assert.match(document.body.textContent, /Local review/);
+  assert.ok(document.querySelector('[aria-label="Search media"]'));
+  await act(async () => Simulate.click(document.querySelector('[aria-label="Media assets"] button')));
+  assert.equal(observedAsset, asset);
+  assert.equal(button('Delete original'), undefined);
+  await click('Refresh media');
+  assert.deepEqual(calls, []);
+});
+
+test('media controls override the public theme fixed height and full-width select', () => {
+  const postcss = require('postcss');
+  const css = postcss.parse(readFileSync(new URL('../src/components/media/MediaLibrary.module.css', import.meta.url), 'utf8'));
+  const declarations = selector => {
+    const values = {};
+    css.walkRules(rule => {
+      if (rule.selector === selector && rule.parent === css) rule.walkDecls(declaration => { values[declaration.prop] = declaration.value; });
+    });
+    return values;
+  };
+  assert.equal(declarations('.library :where(.iconButton, .asset, .uploadButton, .retry, .resume button, .upload button, .player button), .library select').height, 'auto');
+  assert.equal(declarations('.library .asset').height, 'auto');
+  assert.equal(declarations('.toolbar')['grid-template-columns'], 'minmax(0, 1fr) 160px');
+  assert.equal(declarations('.library .search').padding, '0 12px');
+  assert.equal(declarations('.library .search input').margin, '0');
+});
+
 for (const parent of parents) {
   test(`${parent.name}: in-flight old read cannot undo a successful deletion`, async () => {
     if (parent.read === 'list') api.list = async () => [asset, replacement];

@@ -56,3 +56,14 @@
   .chapters button { flex: none; }
   .frame:fullscreen .picture { flex: 1; min-height: 0; }
 }
+/* The admin inspector is narrow even on a desktop viewport. */
+@container media-preview (max-width: 480px) {
+  .overlay { position: relative; padding: 0 8px 4px; background: #10151e; }
+  .controls { flex-wrap: wrap; gap: 0; }
+  .chapterName, .sound, .pip { display: none; }
+  .play { width: 56px; height: 56px; top: 50%; }
+  .time { font-size: 12px; }
+  .picture { border-radius: 8px 8px 0 0; }
+  .caption { position: absolute; bottom: calc(100% + 6px); left: 4px; right: 4px; }
+  .caption span { font-size: 13px; }
+}
