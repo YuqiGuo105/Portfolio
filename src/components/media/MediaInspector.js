@@ -42,8 +42,8 @@ export default function MediaInspector({ asset, baseUrl, onClose, onRetry, retry
     <header className={styles.detailHeader}><div><h2>{asset.title || asset.filename}</h2><p>{asset.filename}</p></div>
       <button type="button" className={styles.iconButton} onClick={onClose} aria-label="Close media details" title="Close details"><X size={18} /></button></header>
     <p className={styles.availability}>{asset.status === 'LOCAL' ? 'Local sample / not published' : asset.status === 'READY' ? 'Available for playback' : 'Not available to visitors until processing completes'}</p>
-    {asset.previewDemo ? <DemoVideo key={asset.id} demo={asset.previewDemo} /> : asset.kind === 'VIDEO' && (asset.manifest?.hls || asset.manifest?.mp4) && baseUrl
-      ? <PublishedVideo key={asset.id} asset={asset} baseUrl={baseUrl} /> : poster
+    {asset.previewDemo ? <DemoVideo key={`preview:${asset.id}`} demo={asset.previewDemo} /> : asset.kind === 'VIDEO' && (asset.manifest?.hls || asset.manifest?.mp4) && baseUrl
+      ? <PublishedVideo key={`preview:${asset.id}`} asset={asset} baseUrl={baseUrl} /> : poster
         ? <img className={styles.still} src={poster} alt={asset.title || asset.filename} />
         : <div className={styles.placeholder}><FileImage size={32} /><span>Preview pending</span></div>}
     <dl className={styles.facts}>
@@ -52,7 +52,7 @@ export default function MediaInspector({ asset, baseUrl, onClose, onRetry, retry
       <div><dt>File size</dt><dd>{asset.sizeBytes ? `${(asset.sizeBytes / 1048576).toFixed(2)} MB` : 'Unknown'}</dd></div>
       <div><dt>Version</dt><dd>{asset.sourceVersion ? `v${asset.sourceVersion}` : asset.status === 'LOCAL' ? 'Local sample' : 'Awaiting upload'}</dd></div>
     </dl>
-    <OriginalFileActions key={asset.id} asset={asset} api={api} onChanged={onChanged} />
+    <OriginalFileActions key={`original:${asset.id}`} asset={asset} api={api} onChanged={onChanged} />
     {asset.failureMessage && <p className={styles.error} role="alert">{asset.failureMessage}</p>}
     {warnings.map(warning => <p className={styles.warning} key={warning}><AlertCircle size={16} />{warning}</p>)}
     {asset.status === 'LOCAL' ? <section className={styles.section}><h3>Video files</h3><div className={styles.chips}>{renditions.map(r => <span key={r.name}>{r.name}</span>)}</div></section>

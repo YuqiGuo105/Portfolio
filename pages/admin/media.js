@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Upload, RefreshCw, Film, Image as ImageIcon, Search, X, RotateCcw } from 'lucide-react';
+import { Upload, RefreshCw, Film, Image as ImageIcon, Search, X, RotateCcw, Check, ArrowUpRight, ChevronDown } from 'lucide-react';
 import AdminLayout from '../../src/components/admin/AdminLayout';
 import { writerApi } from '../../src/lib/writerApi';
 import { uploadMedia } from '../../src/lib/media/upload.mjs';
@@ -22,7 +22,7 @@ export function MediaLibraryContent({ previewAssets = null, api = writerApi.medi
   const [upload, setUpload] = useState(null);
   const [resume, setResume] = useState(null);
   const [loading, setLoading] = useState(!readOnly);
-  const [selectedId, setSelectedId] = useState(previewAssets?.[0]?.id || null);
+  const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [dragging, setDragging] = useState(false);
@@ -109,31 +109,35 @@ export function MediaLibraryContent({ previewAssets = null, api = writerApi.medi
     && `${asset.title} ${asset.filename}`.toLowerCase().includes(query.toLowerCase()));
 
   return <div className={styles.library}>
-    <header className={styles.header}><div><h1>Media</h1><p>{assets.length} assets{readOnly ? ' / Local review' : ''}</p></div>
-      <button type="button" className={styles.iconButton} disabled={loading} onClick={load} aria-label="Refresh media" title="Refresh media"><RefreshCw size={18} /></button></header>
-    {!readOnly && <p className={styles.introLink}><Link href="/admin/media-intro"><a><Film size={17} />Manage homepage Introduction</a></Link></p>}
-    {!readOnly && <div className={styles.dropzone} data-dragging={dragging}
+    <header className={styles.header}><div><h1>Media library</h1><p>{assets.length} assets{readOnly ? ' / Local review' : ''}</p></div>
+      <div className={styles.headerActions}>
+        {!readOnly && <Link href="/admin/media-intro"><a className={styles.introLink}><Film size={16} />Homepage intro<ArrowUpRight size={15} /></a></Link>}
+        <button type="button" className={styles.iconButton} disabled={loading} onClick={load} aria-label="Refresh media" title="Refresh media"><RefreshCw size={18} /></button>
+      </div></header>
+    <div className={styles.dropzone} data-dragging={dragging}
       onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
       onDrop={event => { event.preventDefault(); setDragging(false); startUpload(event.dataTransfer.files?.[0]); }}>
-      <Upload size={24} /><div><button type="button" disabled={!!upload} onClick={() => { resumeNext.current = false; picker.current?.click(); }}>Upload image or video</button><p>Originals stay private. Only processed files are public.</p></div>
-    </div>}
+      <span className={styles.uploadIcon}><Upload size={22} /></span><div className={styles.uploadCopy}><strong>Upload images or videos</strong><p>Private originals. Public playback files.</p></div>
+      <button type="button" className={styles.uploadButton} disabled={!!upload || readOnly} onClick={() => { resumeNext.current = false; picker.current?.click(); }}><Upload size={16} />Upload files</button>
+    </div>
     <input ref={picker} type="file" accept={ACCEPT} onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; startUpload(file); }} hidden />
     {upload && <div className={styles.upload} role="status"><span>{upload.name} <b>{Math.round(upload.progress * 100)}%</b></span><progress value={upload.progress} max="1" /><button type="button" onClick={() => uploadController.current?.abort()} aria-label="Pause upload" title="Pause upload"><X size={17} /></button></div>}
     {resume && !upload && <div className={styles.resume}><span>Unfinished upload</span><button type="button" onClick={() => { resumeNext.current = true; picker.current?.click(); }}><RotateCcw size={16} />Resume with original file</button></div>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     <div className={styles.toolbar}><label className={styles.search}><Search size={17} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search media" aria-label="Search media" /></label>
-      <select aria-label="Filter media" value={filter} onChange={event => setFilter(event.target.value)}><option value="ALL">All media</option><option value="VIDEO">Videos</option><option value="IMAGE">Images</option><option value="PROCESSING">Processing</option><option value="FAILED">Failed</option></select></div>
+      <div className={styles.filter}><select aria-label="Filter media" value={filter} onChange={event => setFilter(event.target.value)}><option value="ALL">All media</option><option value="VIDEO">Videos</option><option value="IMAGE">Images</option><option value="PROCESSING">Processing</option><option value="FAILED">Failed</option></select><ChevronDown size={16} aria-hidden="true" /></div></div>
     <div className={styles.workspace} data-selected={!!selected}>
       <section className={styles.list} aria-label="Media assets">
+        <div className={styles.listHeading}><span>Files <b>{filtered.length}{filtered.length !== assets.length ? ` / ${assets.length}` : ''}</b></span><span>Status / Renditions</span></div>
         {loading ? <p className={styles.empty}>Loading media...</p> : !filtered.length ? <p className={styles.empty}>No media found.</p> : filtered.map(asset => {
           const poster = mediaPoster(asset, BASE_URL);
           const facts = mediaFacts(asset);
           const Icon = asset.kind === 'VIDEO' ? Film : ImageIcon;
           return <button type="button" key={asset.id} className={styles.asset} aria-pressed={selectedId === asset.id} onClick={() => setSelectedId(asset.id)}>
             {poster ? <img src={poster} alt="" loading="lazy" /> : <span className={styles.assetIcon}><Icon size={25} /></span>}
-            <span className={styles.assetName}><strong>{asset.title || asset.filename}</strong><small>{asset.kind === 'VIDEO' ? 'Video' : 'Image'}{facts.seconds ? ` / ${formatVideoTime(facts.seconds)}` : ''}{facts.width ? ` / ${facts.width} x ${facts.height}` : ''}</small><small className={styles.filename}>{asset.filename}</small></span>
-            <span className={styles.assetStatus}><b data-status={asset.status}>{STATUS[asset.status] || asset.status}</b><span className={styles.chips}>{mediaRenditions(asset).map(r => <span key={r.name} data-status={r.status}>{r.name}{r.status === 'SUCCEEDED' ? ' done' : ''}</span>)}</span></span>
+            <span className={styles.assetName}><strong>{asset.title || asset.filename}</strong><small className={styles.assetFacts}><Icon size={13} />{asset.kind === 'VIDEO' ? 'Video' : 'Image'}{facts.seconds ? ` / ${formatVideoTime(facts.seconds)}` : ''}{facts.width ? ` / ${facts.width} x ${facts.height}` : ''}</small><small className={styles.filename}>{asset.filename}</small></span>
+            <span className={styles.assetStatus}><b data-status={asset.status}><span className={styles.statusDot} />{STATUS[asset.status] || asset.status}</b><span className={styles.chips}>{mediaRenditions(asset).map(r => <span key={r.name} data-status={r.status} title={`${r.name}: ${r.status === 'SUCCEEDED' ? 'Ready' : r.status === 'LOCAL' ? 'Local file' : r.status}`}><span>{r.name}</span>{r.status === 'SUCCEEDED' && <Check size={11} aria-label="Ready" />}</span>)}</span></span>
           </button>;
         })}
       </section>
