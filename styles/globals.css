@@ -1807,6 +1807,7 @@ body.dark-skin .cv-content .resume-education-row > div:last-child {
 
 /* ── Individual card — equal fixed height ── */
 .proj-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   text-decoration: none !important;
@@ -1818,6 +1819,10 @@ body.dark-skin .cv-content .resume-education-row > div:last-child {
   height: 100%;
   min-height: 390px;
 }
+
+.proj-card-link { text-decoration: none !important; color: inherit; }
+.proj-card-link::after { content: ""; position: absolute; inset: 0; z-index: 4; }
+.proj-card:has(.proj-card-link:focus-visible) { outline: 3px solid #ff8059; outline-offset: 3px; }
 
 .proj-card:hover {
   transform: translateY(-7px);

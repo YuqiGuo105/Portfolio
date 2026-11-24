@@ -157,10 +157,9 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjec
               key={project.id}
               className={`proj-col col-xs-12 col-sm-6 col-md-6 ${columnClass} ${categoryClasses}`}
             >
-              <Link href={`/work-single/${project.id}`} passHref>
-                <a className="proj-card">
+                <div className="proj-card">
                   <div className="proj-card-image">
-                    <ProjectHoverVideo demo={demoForContent(demos, `project:${project.id}`)}>
+                    <ProjectHoverVideo hoverBoundary=".proj-card" demo={demoForContent(demos, `project:${project.id}`)}>
                     {hasSystemCover ? (
                       <ProjectSystemCover system={projectSystem} />
                     ) : (
@@ -182,7 +181,8 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjec
                     </ProjectHoverVideo>
                   </div>
 
-                  <div className="proj-card-body">
+                  <Link href={`/work-single/${project.id}`} passHref>
+                  <a className="proj-card-body proj-card-link">
                     <h3 className="proj-card-title">{project.title}</h3>
                     {techList.length > 0 && (
                       <div className="proj-tech-list">
@@ -200,9 +200,9 @@ const ProjectIsotop = ({ featuredOnly = false, showViewAll = true, initialProjec
                         <i className="fas fa-external-link-alt" aria-hidden="true" />
                       </span>
                     </div>
-                  </div>
-                </a>
-              </Link>
+                  </a>
+                  </Link>
+                </div>
             </div>
           );
         })}

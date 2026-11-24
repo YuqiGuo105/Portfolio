@@ -49,6 +49,7 @@ beforeEach(() => {
     disconnect() { this.disconnected = true; }
   };
   window.HTMLMediaElement.prototype.pause = () => { paused++; };
+  window.HTMLMediaElement.prototype.play = () => Promise.resolve();
   root = createRoot(document.getElementById('root'));
   render();
 });
@@ -140,6 +141,75 @@ test('unmount cancels pending dwell and removes card listeners', () => {
   assert.equal(pending.size, 0);
   act(() => card.dispatchEvent(new window.Event('pointerenter')));
   assert.equal(pending.size, 0);
+});
+
+test('one tap plays on touch, survives finger-up, and a second tap restores the cover', () => {
+  fineHover = false; reducedMotion = true;
+  pointer('pointerenter', 'touch'); advance(1000);
+  assert.equal(video(), null);
+  const button = document.querySelector('button');
+  assert.equal(button.getAttribute('aria-label'), 'Play video preview');
+  act(() => button.click());
+  assert.ok(video());
+  assert.equal(button.getAttribute('aria-pressed'), 'true');
+  pointer('pointerleave', 'touch'); pointer('pointercancel', 'touch');
+  assert.ok(video());
+  act(() => button.click());
+  assert.equal(video(), null);
+  assert.equal(button.getAttribute('aria-pressed'), 'false');
+  advance(1000); assert.equal(video(), null);
+});
+
+test('manual previews still stop when offscreen or the page is hidden', () => {
+  for (const reason of ['hidden', 'offscreen']) {
+    hidden = false;
+    act(() => observer.callback([{ isIntersecting: true }]));
+    act(() => document.querySelector('button').click());
+    assert.ok(video());
+    act(() => {
+      if (reason === 'hidden') { hidden = true; document.dispatchEvent(new window.Event('visibilitychange')); }
+      else observer.callback([{ isIntersecting: false }]);
+    });
+    assert.equal(video(), null);
+  }
+});
+
+test('preview control is separate from the article link and does not trigger navigation', () => {
+  let cardClicks = 0, articleClicks = 0;
+  act(() => root.render(React.createElement('article', { onClick: () => cardClicks++ },
+    React.createElement(Preview, { demo }, React.createElement('a', { href: '/article', onClick: event => {
+      event.preventDefault(); articleClicks++;
+    } }, 'Read article')))));
+  const button = document.querySelector('button');
+  assert.equal(button.closest('a'), null);
+  act(() => button.click());
+  assert.equal(cardClicks, 0); assert.equal(articleClicks, 0);
+  assert.ok(video());
+  act(() => document.querySelector('a').click());
+  assert.equal(articleClicks, 1);
+});
+
+test('starting another preview stops the previous one, including an automatic preview', () => {
+  act(() => root.render(React.createElement('section', null,
+    React.createElement(Preview, { demo }),
+    React.createElement(Preview, { demo: { preview: '/second.mp4' } }))));
+  const buttons = document.querySelectorAll('button');
+  act(() => buttons[0].click());
+  assert.equal(video().getAttribute('src'), '/preview.mp4');
+  act(() => buttons[1].click());
+  assert.equal(document.querySelectorAll('video').length, 1);
+  assert.equal(video().getAttribute('src'), '/second.mp4');
+  act(() => Simulate.pointerEnter(document.querySelector('.cover'), { pointerType: 'mouse' }));
+  advance(800);
+  assert.equal(document.querySelectorAll('video').length, 1);
+  assert.equal(video().getAttribute('src'), '/preview.mp4');
+});
+
+test('rejected play restores an operable play button without an unhandled promise', async () => {
+  window.HTMLMediaElement.prototype.play = () => Promise.reject(new Error('Playback blocked'));
+  await act(async () => document.querySelector('button').click());
+  assert.equal(video(), null);
+  assert.equal(document.querySelector('button').getAttribute('aria-pressed'), 'false');
 });
 
 test('both blog surfaces use the whole card, without changing Life blogs', () => {

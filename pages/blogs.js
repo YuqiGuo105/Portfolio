@@ -374,13 +374,17 @@ const Blogs = ({ initialBlogs = [], demos = [] }) => {
                 return (
                   <div className="archive-item" key={`${blog.blogType}-${blog.id}`}>
                     <div className="image">
-                      <Link href={blog.linkPath} legacyBehavior>
-                        <a onClick={(e) => handleProtectedClick(e, requireLogin, blog.linkPath)}>
-                          {blog.blogType === 'technical' ? <ProjectHoverVideo inline hoverBoundary=".archive-item" demo={demoForContent(demos, `blog:${blog.id}`)}>
+                      {blog.blogType === 'technical' ? <ProjectHoverVideo inline hoverBoundary=".archive-item" demo={demoForContent(demos, `blog:${blog.id}`)}>
+                        <Link href={blog.linkPath} legacyBehavior>
+                          <a onClick={(e) => handleProtectedClick(e, requireLogin, blog.linkPath)}>
                             <img src={blog.image_url} alt={blog.title} />
-                          </ProjectHoverVideo> : <img src={blog.image_url} alt={blog.title} />}
+                          </a>
+                        </Link>
+                      </ProjectHoverVideo> : <Link href={blog.linkPath} legacyBehavior>
+                        <a onClick={(e) => handleProtectedClick(e, requireLogin, blog.linkPath)}>
+                          <img src={blog.image_url} alt={blog.title} />
                         </a>
-                      </Link>
+                      </Link>}
                       <span className={`blog-type-badge ${blog.blogType}`}>
                         {blog.blogType === 'technical' ? 'Tech' : 'Life'}
                       </span>

@@ -1170,13 +1170,13 @@ const Index = ({ initialContent = {}, homeVariant = 'original', currentRole: bui
                       {blogs.map((blog) => (
                         <div key={blog.id} className={`archive-item ${hoverVideoStyles.blogCard}`}>
                           <div className="image">
-                            <Link href={`/blog-single/${blog.id}`} legacyBehavior>
-                              <a onClick={() => recordClick("blog-item", `/blog-single/${blog.id}`)}>
-                                <ProjectHoverVideo hoverBoundary=".archive-item" demo={demoForContent(demos, `blog:${blog.id}`)}>
+                            <ProjectHoverVideo hoverBoundary=".archive-item" demo={demoForContent(demos, `blog:${blog.id}`)}>
+                              <Link href={`/blog-single/${blog.id}`} legacyBehavior>
+                                <a onClick={() => recordClick("blog-item", `/blog-single/${blog.id}`)}>
                                   <img src={blog.image_url} alt={blog.title} />
-                                </ProjectHoverVideo>
-                              </a>
-                            </Link>
+                                </a>
+                              </Link>
+                            </ProjectHoverVideo>
                           </div>
 
                           <div className="desc">
