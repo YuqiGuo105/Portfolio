@@ -44,7 +44,8 @@ try {
       if (scenario === 'final') {
         assert.match(await page.locator('#__chat_widget_root').innerText(), /Fixture completed\./)
         assert.doesNotMatch(await page.locator('#__chat_widget_root').innerText(), /Cannot read properties/)
-        const toggle = page.locator('#__chat_widget_root .cw-th-toggle').last()
+        // The actions under an answer are real buttons; the site theme's hover fill must not be drawn on them.
+        const toggle = page.locator('#__chat_widget_root .cw-foot .cw-act').last()
         assert.equal(await toggle.evaluate((element) => getComputedStyle(element, '::before').content), 'none')
         assert.equal(await toggle.evaluate((element) => getComputedStyle(element, '::after').content), 'none')
       }

@@ -17,6 +17,8 @@ try {
     // No paid calls, telemetry writes, mail, location lookup or real conversation creation.
     await context.route('**/api/**', route => route.request().url().includes('/api/architecture/evolution')
       ? route.continue() : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ results: [], projects: [], count: 0, flags: [], pulses: [], peers: [] }) }));
+    // The waiting line has to answer that this visitor holds a place, or nothing is sent.
+    await context.route('**/api/rag/admission', route => route.fulfill({ json: { status: 'active' } }));
     let calls = 0;
     await context.route('**/answer/stream', route => {
       calls++;
@@ -55,7 +57,7 @@ try {
     assert.equal(await page.locator('.bot-container').getByText('Project page requested', { exact: true }).count(), 1);
     assert.equal(await page.locator('.bot-container').getByText('Publish Article: step 4', { exact: true }).count(), 1);
     assert.equal(await page.locator('.bot-container').getByText('Publish Article: step 5', { exact: true }).count(), 1);
-    await page.locator('.bot-container').getByText('Execution record', { exact: false }).click();
+    await page.locator('.bot-container').getByRole('button', { name: /^How this answer was produced/ }).last().click();
     assert.equal(await page.locator('.bot-container').getByText('MUST_NOT_APPEAR', { exact: false }).count(), 0);
     assert.equal(calls, 1);
     await page.screenshot({ path: `${artifacts}/chat-${width}.png`, fullPage: false });

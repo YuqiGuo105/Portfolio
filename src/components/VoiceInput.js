@@ -1,7 +1,9 @@
+
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AudioLines, Check, Loader2, Mic, X } from 'lucide-react';
+import { Check, CircleAlert, Loader2, X } from 'lucide-react';
 import { MAX_RECORDING_MS, recordingToBase64 } from '../lib/dictationAudio.mjs';
 import { DICTATION_MESSAGES } from '../lib/localAssistant.mjs';
+import styles from './VoiceInput.module.css';
 
 const errors = {
   NotAllowedError: 'Allow microphone access in your browser to dictate.',
@@ -9,10 +11,45 @@ const errors = {
   NotReadableError: 'Your microphone is being used by another application.',
 };
 
+const SAMPLE_MS = 55;      // one bar of the waveform
+const BAR = 3, GAP = 3;    // CSS pixels
+const clock = seconds => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+
+// Loudness of the microphone right now, 0 to 1, or null when the browser cannot measure it.
+function createMeter(stream) {
+  try {
+    const Context = window.AudioContext || window.webkitAudioContext;
+    const context = new Context();
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 1024;
+    const source = context.createMediaStreamSource(stream);
+    source.connect(analyser);
+    const samples = new Float32Array(analyser.fftSize);
+    context.resume?.().catch(() => {});
+    return {
+      read() {
+        if (context.state !== 'running') return null;
+        analyser.getFloatTimeDomainData(samples);
+        let sum = 0;
+        for (const sample of samples) sum += sample * sample;
+        const rms = Math.sqrt(sum / samples.length);
+        // Speech sits around 0.02 to 0.2; the curve keeps quiet talkers visible.
+        return Math.min(1, Math.max(0, (rms - 0.006) / 0.16) ** 0.6);
+      },
+      close() { try { source.disconnect(); } catch {} context.close().catch(() => {}); },
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function VoiceInput({ onInsert, onClose }) {
   const activeRef = useRef(null);
   const callbacksRef = useRef({ onInsert, onClose });
   callbacksRef.current = { onInsert, onClose };
+  const canvasRef = useRef(null);
+  const doneRef = useRef(null);
+  const levelsRef = useRef([]);
   const [status, setStatus] = useState('starting');
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
@@ -23,6 +60,8 @@ export default function VoiceInput({ onInsert, onClose }) {
     if (!run) return;
     clearTimeout(run.timeout);
     clearInterval(run.ticker);
+    cancelAnimationFrame(run.frame);
+    run.meter?.close();
     run.controller.abort();
     if (run.recorder) {
       run.recorder.ondataavailable = run.recorder.onstop = run.recorder.onerror = null;
@@ -32,16 +71,58 @@ export default function VoiceInput({ onInsert, onClose }) {
     run.chunks.length = 0;
   }, []);
 
+  // The waveform scrolls right to left: each bar is the loudness of one short slice of speech.
+  const draw = useCallback((run, now) => {
+    const canvas = canvasRef.current;
+    if (!canvas || activeRef.current !== run) return;
+    const width = canvas.clientWidth, height = canvas.clientHeight;
+    const ratio = Math.min(window.devicePixelRatio || 1, 3);
+    if (canvas.width !== Math.round(width * ratio) || canvas.height !== Math.round(height * ratio)) {
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
+    }
+    const levels = levelsRef.current;
+    if (run.recorder?.state === 'recording' && now - run.sampledAt >= SAMPLE_MS) {
+      const level = run.meter?.read();
+      run.measured ||= level != null;
+      run.peak = Math.max(level ?? 0, (run.peak || 0) * 0.6);
+      levels.push(level == null ? 0 : run.peak);
+      if (levels.length > 400) levels.splice(0, levels.length - 400);
+      run.sampledAt = now;
+    }
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = getComputedStyle(canvas).color;
+    const step = BAR + GAP;
+    const slide = run.recorder?.state === 'recording' && !run.still ? Math.min(1, (now - run.sampledAt) / SAMPLE_MS) * step : 0;
+    for (let i = 0, x = width - BAR - slide; x > -BAR; i++, x -= step) {
+      const level = levels[levels.length - 1 - i] || 0;
+      const bar = Math.max(BAR, level * (height - 6));
+      // Older speech fades toward the left edge.
+      context.globalAlpha = (level ? 0.35 + 0.65 * Math.min(1, x / (width * 0.5)) : 0.22) * Math.min(1, (x + BAR) / 18);
+      context.beginPath();
+      if (context.roundRect) context.roundRect(x, (height - bar) / 2, BAR, bar, BAR / 2);
+      else context.rect(x, (height - bar) / 2, BAR, bar);
+      context.fill();
+    }
+    // Once recording stops the last frame stays on screen; nothing is left to animate.
+    if (run.recorder?.state === 'recording') run.frame = requestAnimationFrame(time => draw(run, time));
+  }, []);
+
   const start = useCallback(async () => {
     dispose();
     setError('');
     setSeconds(0);
+    levelsRef.current = [];
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder || !(window.AudioContext || window.webkitAudioContext)) {
       setError('Voice input is unavailable here. Use a supported browser or type your message.');
       setStatus('error');
       return;
     }
-    const run = { controller: new AbortController(), chunks: [], bytes: 0 };
+    const run = { controller: new AbortController(), chunks: [], bytes: 0, sampledAt: 0,
+      still: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches };
     activeRef.current = run;
     setStatus('starting');
     const fail = error => {
@@ -65,6 +146,7 @@ export default function VoiceInput({ onInsert, onClose }) {
       run.recorder.onstop = async () => {
         if (activeRef.current !== run) return;
         run.stream.getTracks().forEach(track => track.stop());
+        run.meter?.close();
         clearTimeout(run.timeout);
         clearInterval(run.ticker);
         setStatus('transcribing');
@@ -88,56 +170,73 @@ export default function VoiceInput({ onInsert, onClose }) {
         } catch (error) { fail(error); }
       };
       run.recorder.start(250);
+      run.meter = createMeter(run.stream);
       setStatus('recording');
       const started = Date.now();
       run.ticker = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 250);
       run.timeout = setTimeout(() => { if (run.recorder.state === 'recording') run.recorder.stop(); }, MAX_RECORDING_MS);
+      run.frame = requestAnimationFrame(time => draw(run, time));
     } catch (error) { fail(error); }
-  }, [dispose]);
+  }, [dispose, draw]);
 
-  const stop = () => {
+  const stop = useCallback(() => {
     const run = activeRef.current;
     if (run?.recorder?.state !== 'recording') return;
     setStatus('transcribing');
     run.recorder.stop();
-  };
+  }, []);
+
+  const cancel = useCallback(() => { dispose(); callbacksRef.current.onClose(); }, [dispose]);
 
   useEffect(() => {
     start();
     return dispose;
   }, [start, dispose]);
 
-  const waiting = status === 'starting' || status === 'transcribing';
+  // Enter finishes and Escape cancels from anywhere, without the visitor finding a button first.
+  useEffect(() => {
+    const onKey = event => {
+      if (event.defaultPrevented || event.isComposing) return;
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancel(); }
+      else if (event.key === 'Enter' && !event.target.closest?.('button, a, input, textarea, select, [contenteditable="true"]')) {
+        event.preventDefault();
+        stop();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [cancel, stop]);
+
+  useEffect(() => {
+    if (status === 'recording' || status === 'error') doneRef.current?.focus({ preventScroll: true });
+  }, [status]);
+
   const failed = status === 'error';
-  return <section className="dictation" aria-label="Voice input">
-    <div className="recording-row">
-      <button type="button" title="Cancel recording" aria-label="Cancel recording" onClick={() => { dispose(); onClose(); }}><X size={18} /></button>
-      <div className="recording-status" role="status" title="Auto-detected languages. Audio is sent to the configured transcription provider and is not saved by this site.">
-        {waiting ? <Loader2 size={19} className="spinner" /> : <AudioLines size={22} className={failed ? '' : 'listening'} />}
-        <span>{status === 'starting' ? 'Connecting...' : status === 'transcribing' ? 'Transcribing...' : failed ? 'Voice input paused' : 'Recording'}</span>
-      </div>
-      {!failed && <time aria-label="Recording duration">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</time>}
-      <button className="complete" type="button" disabled={waiting} title={failed ? 'Try recording again' : 'Finish recording'} aria-label={failed ? 'Try recording again' : 'Finish recording'} onClick={failed ? start : stop}>
-        {failed ? <Mic size={18} /> : <Check size={19} />}
+  const left = Math.max(0, Math.ceil(MAX_RECORDING_MS / 1000) - seconds);
+  const closing = status === 'recording' && left <= 10;
+  return <section className={`cw-voice ${styles.voice}`} data-state={status} aria-label="Voice input">
+    <div className={styles.field}>
+      <button type="button" className={styles.cancel} title="Cancel (Esc)" aria-label="Cancel voice input" onClick={cancel}><X size={18} aria-hidden="true" /></button>
+      {failed
+        ? <p className={styles.error} role="alert"><CircleAlert size={16} aria-hidden="true" /><span>{error}</span></p>
+        : <div className={styles.stage}>
+          <canvas ref={canvasRef} className={styles.wave} aria-hidden="true" />
+          {status !== 'recording' && <span className={styles.note} role="status">{status === 'starting' ? 'Waiting for the microphone…' : 'Turning speech into text…'}</span>}
+          {status === 'recording' && <span className={styles.srOnly} role="status">Listening</span>}
+        </div>}
+      {status === 'recording' && <time className={styles.time} data-closing={closing || undefined}
+        aria-label={closing ? `${left} seconds left` : 'Recording time'}>{closing ? `${left}s left` : clock(seconds)}</time>}
+      <button ref={doneRef} type="button" className={styles.done} disabled={status === 'starting' || status === 'transcribing'}
+        title={failed ? undefined : 'Finish and turn the recording into text (Enter)'} onClick={failed ? start : stop}>
+        {failed ? 'Try again' : status === 'transcribing' || status === 'starting'
+          ? <><Loader2 size={16} className={styles.spin} aria-hidden="true" /><span className={styles.srOnly}>Please wait</span></>
+          : <><Check size={16} strokeWidth={2.4} aria-hidden="true" />Done</>}
       </button>
     </div>
-    {error && <p role="alert">{error}</p>}
-    <style jsx>{`
-      .dictation { padding:6px 0; color:var(--cw-input-text,#202b32); }
-      .recording-row { display:flex; align-items:center; gap:10px; min-height:44px; }
-      .recording-status { display:flex; align-items:center; gap:8px; flex:1; min-width:0; font-size:13px; }
-      .recording-status span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-      time { flex:none; font:12px ui-monospace,monospace; font-variant-numeric:tabular-nums; opacity:.7; }
-      button { display:grid; place-items:center; flex:0 0 36px; width:36px; height:36px; padding:0; border:1px solid var(--cw-input-border,#cbd5e1); border-radius:50%; background:transparent; color:inherit; cursor:pointer; }
-      button.complete { background:var(--cw-input-text,#202b32); color:var(--cw-input-bg,#fff); border-color:transparent; }
-      button:disabled { opacity:.45; cursor:default; }
-      button::before, button::after { display:none!important; }
-      p { margin:6px 0 2px; font-size:12px; line-height:1.45; }
-      .dictation :global(.spinner) { animation:rotate 1s linear infinite; }
-      .dictation :global(.listening) { animation:pulse 1.1s ease-in-out infinite alternate; }
-      @keyframes rotate { to { transform:rotate(360deg); } }
-      @keyframes pulse { to { opacity:.35; } }
-      @media(prefers-reduced-motion:reduce) { .dictation :global(.spinner), .dictation :global(.listening) { animation:none; } }
-    `}</style>
+    {!failed && <p className={styles.hint}>
+      {status === 'transcribing' ? 'The text will appear in the message box for you to check before sending.'
+        : <><span className={styles.keys}>Speak in any language. Press Enter when you are done, Esc to cancel.</span>
+          <span className={styles.touch}>Speak in any language, then tap Done.</span></>}
+    </p>}
   </section>;
 }

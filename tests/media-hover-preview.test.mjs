@@ -25,6 +25,7 @@ new Function('require', 'exports', code)(name => {
   if (name.endsWith('.css')) return { __esModule: true, default: { cover: 'cover', playing: 'playing' } };
   if (name.endsWith('demoCatalog.mjs')) return catalog;
   if (name.endsWith('viewportPreview.mjs')) return viewport;
+  if (name.endsWith('useMediaTelemetry')) return { __esModule: true, default: () => React.useRef(null) };
   return require(name);
 }, exports);
 const Preview = exports.default;

@@ -44,12 +44,19 @@ const ALLOWED_EVENTS = new Set([
   'subscribe_started', 'subscribe_verified', 'unsubscribe_completed',
   'recommendation_impression', 'recommendation_click', 'recommendation_dismiss',
   'chat_started', 'chat_completed', 'tool_used',
+  'widget_opened', 'widget_action',
+  'media_impression', 'media_play_request', 'media_preview_start', 'media_start',
+  'media_progress', 'media_summary', 'media_complete', 'media_action', 'media_error',
 ]);
 
 const PROPERTY_ALLOWLIST = new Set([
   'contentId', 'contentType', 'category', 'progressPercent', 'engagedSeconds',
   'component', 'action', 'campaign', 'experimentId', 'variant',
   'recommendationRequestId', 'rank', 'modelVersion', 'resultCount',
+  'mediaId', 'mediaVersion', 'placement', 'playbackId', 'playMode',
+  'durationSeconds', 'positionSeconds', 'watchedSeconds', 'coveragePercent', 'startupMs',
+  'stallCount', 'stallMs', 'quality', 'chapterIndex', 'errorCode', 'sequence', 'playTrigger',
+  'bitrateKbps', 'bandwidthKbps', 'downlinkMbps', 'effectiveType',
 ]);
 
 export const config = {
@@ -82,7 +89,8 @@ function sanitizeProperties(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value)
     .filter(([key, item]) => PROPERTY_ALLOWLIST.has(key)
-      && ['string', 'number', 'boolean'].includes(typeof item))
+      && ['string', 'number', 'boolean'].includes(typeof item)
+      && (typeof item !== 'number' || (Number.isFinite(item) && Math.abs(item) <= 86400000)))
     .map(([key, item]) => [key, typeof item === 'string' ? item.slice(0, 255) : item]));
 }
 
@@ -175,7 +183,12 @@ export default async function handler(req, res) {
   if (!await allowAnalyticsRequest(req, res)) return;
   const forwarded = req.headers['x-forwarded-for'] || '';
   const ip = (forwarded.split(',')[0] || req.socket?.remoteAddress || '').trim();
-  if (await isRateLimited(ip)) {
+  // A bounded, separate telemetry bucket prevents playback from consuming the
+  // existing page-event allowance. Neither bucket is an authentication signal.
+  const telemetryEvent = ALLOWED_EVENTS.has(body.event) && /^(media_|widget_)/.test(body.event);
+  if (await isRateLimited(ip, telemetryEvent ? 'ui-telemetry' : 'track',
+    telemetryEvent ? { limit: 30, windowMs: 60000 } : undefined)) {
+    res.setHeader('Retry-After', '60');
     return res.status(429).json({ error: 'Too many requests' });
   }
 
@@ -213,13 +226,15 @@ export default async function handler(req, res) {
 
   // The browser provides only a single-use token. The score is fetched and
   // validated here so clients can never submit their own bot classification.
-  const assessment = await createRecaptchaAssessment({
+  const assessment = telemetryEvent ? { status: 'NOT_REQUESTED_COST_POLICY' } : await createRecaptchaAssessment({
     token: body.recaptchaToken,
     expectedAction: event,
     userAgent: ua,
     userIpAddress: ip,
   });
-  const trustedBotProperties = assessmentProperties(assessment);
+  const trustedBotProperties = telemetryEvent
+    ? { botAssessmentStatus: 'NOT_REQUESTED_COST_POLICY' }
+    : { botAssessmentStatus: assessment.status, ...assessmentProperties(assessment) };
 
   const nowIso = new Date().toISOString();
 

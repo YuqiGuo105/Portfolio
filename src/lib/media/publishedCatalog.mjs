@@ -34,7 +34,7 @@ export function publishedDemo(row, baseUrl) {
     .map(q => ({ height: q.height, src: publicPath(q.src, base), bytes: Number(q.bytes) || 0 })).filter(q => q.src);
   const href = /^\/(?:work-single|blog-single)\/[a-f0-9-]+$/.test(p.href || '') ? p.href : null;
   if (p.id !== 'yuqi-intro' && (!href || !/^(?:project|blog):[a-f0-9-]+$/.test(p.contentId || ''))) return null;
-  return { id: String(p.id), title: String(p.title || ''), summary: String(p.summary || ''),
+  return { id: String(p.id), assetId: row.asset_id || null, title: String(p.title || ''), summary: String(p.summary || ''),
     contentId: p.contentId || null, href, src, poster, seconds: Number(p.seconds), ...(hls ? { hls } : {}),
     width: Number(p.width) || 0, height: Number(p.height) || 0, bytes: Number(p.bytes) || 0,
     preview: publicPath(p.preview, base), captions: publicPath(p.captions, base), qualities,

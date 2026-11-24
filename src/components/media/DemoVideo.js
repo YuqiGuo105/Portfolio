@@ -4,8 +4,9 @@ import { formatVideoTime } from '../../lib/media/demoCatalog.mjs';
 import styles from './DemoVideo.module.css';
 import useVideoQuality from './useVideoQuality';
 import VideoQuality from './VideoQuality';
+import useMediaTelemetry from './useMediaTelemetry';
 
-export default function DemoVideo({ demo, autoStart = false }) {
+export default function DemoVideo({ demo, autoStart = false, placement = demo.id === 'yuqi-intro' ? 'home_intro' : 'article', onTelemetry }) {
   const [started, setStarted] = useState(autoStart);
   const [error, setError] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -20,7 +21,9 @@ export default function DemoVideo({ demo, autoStart = false }) {
   const video = useRef(null);
   const captionTrack = useRef(null);
   const frame = useRef(null);
-  const quality = useVideoQuality(video, demo, started, () => { setError(true); setPlaying(false); });
+  const telemetry = useMediaTelemetry({ asset: demo, frame, video, active: started, placement, emit: onTelemetry });
+  const quality = useVideoQuality(video, demo, started, () => { setError(true); setPlaying(false); telemetry.current?.error('stream_failed'); });
+  useEffect(() => { if (autoStart) telemetry.current?.request(); }, [autoStart, telemetry]);
   const chapters = demo.chapters || [];
   const activeChapter = Math.max(0, chapters.findLastIndex(chapter => chapter.seconds <= time));
   const segments = chapters.length ? chapters : [{ seconds: 0, title: demo.title }];
@@ -52,6 +55,7 @@ export default function DemoVideo({ demo, autoStart = false }) {
     return () => { track.removeEventListener('cuechange', update); element.removeEventListener('load', update); };
   }, [started, demo.captions]);
   function playFrom(seconds = null) {
+    telemetry.current?.request();
     if (seconds !== null) { quality.seek(seconds); setTime(seconds); }
     setError(false);
     setStarted(true);
@@ -67,6 +71,7 @@ export default function DemoVideo({ demo, autoStart = false }) {
     else playFrom(time >= duration ? 0 : null);
   }
   function scrub(seconds) {
+    telemetry.current?.action('seek');
     const next = Math.max(0, Math.min(duration, seconds));
     setTime(next);
     if (!started) { playFrom(next); return; }
@@ -80,6 +85,7 @@ export default function DemoVideo({ demo, autoStart = false }) {
     } catch { setNotice('Picture-in-picture is unavailable in this browser.'); }
   }
   async function expand() {
+    telemetry.current?.action(fullscreen ? 'fullscreen_exit' : 'fullscreen_enter');
     try {
       if (document.fullscreenElement === frame.current) await document.exitFullscreen();
       else if (frame.current?.requestFullscreen) await frame.current.requestFullscreen();
@@ -142,7 +148,7 @@ export default function DemoVideo({ demo, autoStart = false }) {
             </button>
             <button type="button" className={styles.icon} disabled={!demo.captions} aria-pressed={Boolean(demo.captions && captions)}
               onClick={() => setCaptions(!captions)} aria-label="Captions" title={demo.captions ? 'Captions' : 'No captions available'}><Captions size={21} aria-hidden="true" /></button>
-            <VideoQuality quality={quality} title={demo.title} />
+            <VideoQuality quality={{ ...quality, change: value => { telemetry.current?.action('quality', { quality: String(value) }); quality.change(value); } }} title={demo.title} />
             <button type="button" className={`${styles.icon} ${styles.pip}`} disabled={!started || !pipSupported} onClick={pictureInPicture} aria-label="Picture in picture" title="Picture in picture"><PictureInPicture2 size={21} aria-hidden="true" /></button>
             <button type="button" className={styles.icon} onClick={expand} aria-label={fullscreen ? 'Exit fullscreen' : 'Fullscreen'} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
               {fullscreen ? <Minimize size={21} aria-hidden="true" /> : <Maximize size={21} aria-hidden="true" />}
@@ -155,7 +161,7 @@ export default function DemoVideo({ demo, autoStart = false }) {
     {chapters.length > 0 && <figcaption className={styles.toolbar}>
       <div className={styles.chapters} aria-label="Video chapters">
       {chapters.map((chapter, index) => <button key={chapter.seconds} type="button"
-        aria-pressed={started && activeChapter === index} onClick={() => playFrom(chapter.seconds)}>
+        aria-pressed={started && activeChapter === index} onClick={() => { telemetry.current?.action('chapter', { chapterIndex: index }); playFrom(chapter.seconds); }}>
         <span>{formatVideoTime(chapter.seconds)}{duration <= 6 && chapter.seconds % 1 ? `.${String(Math.round(chapter.seconds % 1 * 100)).padStart(2, '0')}` : ''}</span>{chapter.title}
       </button>)}
       </div>

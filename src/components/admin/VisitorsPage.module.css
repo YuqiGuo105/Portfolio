@@ -388,3 +388,15 @@
   .journeyFact, .journeyFact:nth-child(2) { border-right: 0; border-bottom: 1px solid #e8ecef; }
   .journeyFact:last-child { border-bottom: 0; }
 }
+
+/*
+ * The public theme sizes every <button> on the site (60px tall, 58px line height) and sets its
+ * own font on labels and selects. Inside the visitor workspace a control is as tall as its own
+ * rule says. Rules that set a height with two classes or more are not affected.
+ */
+.workspace button { height: auto; line-height: 1.25; }
+.workspace :is(label, select) { font-family: inherit; }
+.workspace .fieldInput { height: 36px; min-height: 36px; }
+.workspace .filterGrid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.workspace .trafficToggle { margin: 0; min-height: 34px; }
+.viewOptions { padding: 0 16px; }

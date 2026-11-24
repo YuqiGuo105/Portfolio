@@ -36,39 +36,37 @@ try {
     await page.getByRole('button', { name: 'Send message', exact: true }).click()
     await panel.getByText('Fibonacci numbers form a well-known sequence.', { exact: true }).waitFor()
 
-    const reasoning = panel.locator('.cw-reasoning').last()
-    const toggle = reasoning.locator('.cw-reasoning-toggle')
-    const subtitle = reasoning.locator('.cw-reasoning-subtitle')
-    await reasoning.getByText('3 phases completed', { exact: true }).waitFor()
+    // Nothing is parked between the question and the finished answer: the steps a Deep answer
+    // reported are in the record under it.
+    assert.equal(await panel.locator('.cw-working, .cw-reasoning, .todo-container').count(), 0)
+    const answer = panel.locator('.cw-msg-row.cw-bot').last()
+    assert.equal(await answer.locator('.cw-bubble-bot > :first-child').innerText(), 'Fibonacci numbers form a well-known sequence.')
+    const toggle = answer.getByRole('button', { name: /^How this answer was produced/ })
     assert.equal(await toggle.getAttribute('aria-expanded'), 'false')
+    await toggle.click()
+    const record = answer.locator('.cw-panel')
+    await record.getByText('Research', { exact: true }).waitFor()
+    assert.deepEqual(await record.locator('.cw-step.is-done .cw-step-label').allInnerTexts(),
+      ['Understand the question', 'Search portfolio knowledge', 'Verify the response'])
+    assert.deepEqual(await record.locator('.cw-step-detail').allInnerTexts(), ['Intent identified', 'Relevant evidence found', 'Claims checked'])
 
     const geometry = await page.evaluate(() => {
-      const reasoning = document.querySelector('#__chat_widget_root .cw-reasoning')
-      const toggle = reasoning.querySelector('.cw-reasoning-toggle')
-      const subtitle = reasoning.querySelector('.cw-reasoning-subtitle')
-      const answer = reasoning.nextElementSibling
-      const panelRect = reasoning.getBoundingClientRect()
-      const toggleRect = toggle.getBoundingClientRect()
-      const subtitleRect = subtitle.getBoundingClientRect()
-      const answerRect = answer.getBoundingClientRect()
-      const toggleStyle = getComputedStyle(toggle)
+      const root = document.querySelector('#__chat_widget_root')
+      const record = [...root.querySelectorAll('.cw-panel')].at(-1)
+      const scroller = root.querySelector('.bot-messages')
+      const steps = [...record.querySelectorAll('.cw-step')].map(step => step.getBoundingClientRect())
+      const toggle = [...root.querySelectorAll('.cw-act[aria-expanded="true"]')].at(-1)
       return {
-        panelBottom: panelRect.bottom,
-        toggleBottom: toggleRect.bottom,
-        subtitleBottom: subtitleRect.bottom,
-        answerTop: answerRect.top,
-        toggleHeight: toggleRect.height,
-        lineHeight: toggleStyle.lineHeight,
-        overflow: toggleStyle.overflow,
+        recordFits: record.scrollWidth <= record.clientWidth + 1 && scroller.scrollWidth <= scroller.clientWidth + 1,
+        stepsStack: steps.every((rect, index) => index === 0 || rect.top >= steps[index - 1].bottom - 0.5),
+        toggleHeight: toggle.getBoundingClientRect().height,
+        lineHeight: getComputedStyle(toggle).lineHeight,
       }
     })
-
-    assert.ok(geometry.subtitleBottom <= geometry.panelBottom + 0.5, 'subtitle stays inside reasoning panel')
-    assert.ok(geometry.toggleBottom <= geometry.panelBottom + 0.5, 'toggle stays inside reasoning panel')
-    assert.ok(geometry.answerTop >= geometry.panelBottom, 'answer starts after reasoning panel')
-    assert.ok(geometry.toggleHeight >= 50, 'two-line toggle keeps enough vertical space')
+    assert.ok(geometry.recordFits, 'the record stays inside the conversation')
+    assert.ok(geometry.stepsStack, 'steps do not overlap')
+    assert.ok(geometry.toggleHeight >= 30 && geometry.toggleHeight <= 36, 'the action keeps its own height')
     assert.notEqual(geometry.lineHeight, '58px', 'global theme line-height is overridden')
-    assert.equal(geometry.overflow, 'visible')
     assert.deepEqual(pageErrors, [])
     await page.screenshot({ path: `/private/tmp/chat-reasoning-layout-${width}.png` })
     console.log(JSON.stringify({ width, geometry, passed: true }))

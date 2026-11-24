@@ -17,13 +17,14 @@ const { transform } = require('next/dist/build/swc');
 const { code } = await transform(readFileSync(new URL('../src/components/share/ShareSheet.js', import.meta.url), 'utf8'), {
   filename: 'ShareSheet.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'automatic' } }, target: 'es2020' }, module: { type: 'commonjs' },
 });
-let root, generated, copied, touched, downloads, blobs, exported, closed, makePoster, makeBlob;
+let root, generated, copied, touched, downloads, blobs, exported, closed, makePoster, makeBlob, widgetEvents;
 const exports = {};
 new Function('require', 'exports', code)(name => {
   if (name.endsWith('.css')) return { __esModule: true, default: {} };
   if (name.endsWith('link.mjs')) return links;
   if (name.endsWith('qr.mjs')) return codes;
   if (name.endsWith('open.mjs')) return { touch: event => touched.push(event) };
+  if (name.includes('widgetTelemetry')) return { trackWidget: (...args) => widgetEvents.push(args) };
   if (name.endsWith('poster.mjs')) return { ...posters, posterCanvas: async value => { generated.push(value); return makePoster(value); }, canvasBlob: async canvas => { exported.push(canvas); return makeBlob(canvas); } };
   return require(name);
 }, exports);
@@ -37,6 +38,7 @@ beforeEach(() => {
   document.documentElement.style.overflow = 'auto'; document.getElementById('opener').focus();
   root = createRoot(document.getElementById('root'));
   generated = []; copied = []; touched = []; downloads = []; blobs = []; exported = []; closed = 0;
+  widgetEvents = [];
   makePoster = async () => ({ width: 1080, height: 1350 }); makeBlob = async () => new Blob(['png'], { type: 'image/png' });
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async value => copied.push(value) } });
   Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
@@ -66,6 +68,7 @@ test('copy success is recorded only after clipboard or fallback confirms success
   assert.deepEqual(copied, ['http://localhost:3150/card?via=link']);
   assert.deepEqual(touched, []);
   assert.equal(document.querySelector('[role="status"]').textContent, 'Link copied');
+  assert.deepEqual(widgetEvents, [['share'], ['share', 'link_copied']]);
 });
 
 test('the sheet mounts at the body overlay layer and removes only its own portal on close', async () => {
@@ -86,6 +89,7 @@ test('a rejected clipboard and failed fallback do not claim success or record a 
   await render(); await click('Copy link');
   assert.match(document.querySelector('[role="status"]').textContent, /Could not copy/);
   assert.equal(touched.length, 0); assert.ok(button('Copy link'));
+  assert.deepEqual(widgetEvents, [['share']]);
   assert.equal(document.activeElement, document.querySelector('input'));
   document.execCommand = () => true;
   await click('Copy link'); assert.equal(touched.length, 0); assert.ok(button('Link copied'));

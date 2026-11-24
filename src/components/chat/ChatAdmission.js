@@ -55,18 +55,13 @@ export function useChatAdmission(deviceId) {
 }
 
 const wait = (seconds) => (seconds < 90 ? "about a minute" : `about ${Math.round(seconds / 60)} minutes`);
-const box = {
-  flexShrink: 0, padding: "9px 12px", borderTop: "1px solid var(--cw-input-border, #e5e7eb)", background: "var(--cw-input-bg, #ffffff)",
-  color: "var(--cw-input-text, #1f2937)", fontSize: 12.5, lineHeight: 1.5,
-};
-const link = { color: "inherit", fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 2 };
 
 // Shown above the message box. Nothing is shown to someone who simply holds a place.
 export function ChatAdmissionNotice({ admission }) {
   if (admission.status === "queued") {
     const ahead = Number(admission.ahead) || 0;
     return (
-      <div role="status" style={box} data-chat-line="queued">
+      <div role="status" className="cw-notice" data-chat-line="queued">
         <strong>You are in line.</strong>{" "}
         {ahead === 0 ? "You are next" : `${ahead} ${ahead === 1 ? "person is" : "people are"} ahead of you`}, {wait(Number(admission.eta) || 60)}.
         {" "}Keep this open and it starts by itself; you can write your question while you wait.
@@ -75,16 +70,16 @@ export function ChatAdmissionNotice({ admission }) {
   }
   if (admission.status === "full") {
     return (
-      <div role="status" style={box} data-chat-line="full">
+      <div role="status" className="cw-notice" data-chat-line="full">
         {admission.reason === "daily" && <><strong>Today’s chat places are all taken.</strong> They open again tomorrow. </>}
         {admission.reason === "line" && <><strong>The line for the chat is full right now.</strong> Try again in a few minutes. </>}
         {admission.reason === "network" && <><strong>This network already holds several places in the chat.</strong> Close another tab, or try again shortly. </>}
-        {admission.reason !== "network" && <Link href="/talk"><a style={link}>Leave me a message instead</a></Link>}
+        {admission.reason !== "network" && <Link href="/talk"><a>Leave me a message instead</a></Link>}
       </div>
     );
   }
   if (admission.status === "active" && admission.turn) {
-    return <div role="status" style={box} data-chat-line="turn"><strong>It is your turn.</strong> Go ahead and send your question.</div>;
+    return <div role="status" className="cw-notice is-go" data-chat-line="turn"><strong>It is your turn.</strong> Go ahead and send your question.</div>;
   }
   return null;
 }

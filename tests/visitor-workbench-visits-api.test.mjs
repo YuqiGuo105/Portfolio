@@ -3,8 +3,16 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createVisitorActorHeaders } from '../src/lib/visitorActorHeaders.mjs';
+import * as visitorSessions from '../src/lib/visitorSessions.mjs';
 const require = createRequire(import.meta.url);
 const { transform } = require('next/dist/build/swc');
+test('workspace keeps hydration time stable and active-view clicks do not clear records', () => {
+  const source = readFileSync(new URL('../pages/admin/visitors.js', import.meta.url), 'utf8');
+  assert.match(source, /\[rangeEnd, setRangeEnd\] = useState\(null\)/);
+  assert.match(source, /useEffect\(\(\) => \{ setRangeEnd\(new Date\(\).toISOString\(\)\); \}, \[\]\)/);
+  assert.match(source, /if \(!range.to\) return/);
+  assert.match(source, /if \(value === recordView\) return;\s*requests.current.logs\+\+;\s*setItems\(\[\]\)/);
+});
 const { code } = await transform(readFileSync(new URL('../pages/api/admin/visitors.js', import.meta.url), 'utf8'), {
   filename: 'visitors.js', jsc: { parser: { syntax: 'ecmascript' }, target: 'es2020' }, module: { type: 'commonjs' },
 });
@@ -18,6 +26,7 @@ function handler(allowed) {
     if (name.includes('supabaseServer')) return { supabaseServer: { from: () => { throw new Error('Unexpected content lookup'); } } };
     if (name.includes('analyticsHostFilter')) return { isLoopbackUrl: () => false };
     if (name.includes('visitorActorHeaders')) return { createVisitorActorHeaders };
+    if (name.includes('visitorSessions')) return visitorSessions;
     throw new Error(`Unexpected import ${name}`);
   }, exports);
   return exports.default;

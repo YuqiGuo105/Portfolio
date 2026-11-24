@@ -32,6 +32,9 @@ const ALLOWED_EVENTS = new Set([
   "chat_started",
   "chat_completed",
   "tool_used",
+  "widget_opened", "widget_action",
+  "media_impression", "media_play_request", "media_preview_start", "media_start",
+  "media_progress", "media_summary", "media_complete", "media_action", "media_error",
 ]);
 
 function uuid() {
@@ -238,7 +241,9 @@ function deliveryQueue() {
     // Navigation must not wait for the optional risk SDK. It is not an ingest gate.
     const generation = (entry.generation || 0) + 1;
     entry.generation = generation;
-    const token = urgent || entry.attempts ? null : recaptchaToken(entry.payload.event);
+    // High-frequency UI telemetry uses local diagnostics, never paid assessments.
+    const token = urgent || entry.attempts || /^(media_|widget_)/.test(entry.payload.event)
+      ? null : recaptchaToken(entry.payload.event);
     if (!token) { void send(entry); return; }
     entry.waiting = true;
     void token.then(value => {

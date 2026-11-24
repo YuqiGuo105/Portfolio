@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { trackWidget } from '../lib/widgetTelemetry';
 import { createPortal } from "react-dom";
 import { ArrowRight, ArrowUpRight, BookOpen, BriefcaseBusiness, Compass, FileText, FolderGit2, LockKeyhole, RotateCw, Search, SearchX, TriangleAlert, X } from "lucide-react";
 import { trackBehavior } from "../lib/behaviorAnalytics";
@@ -41,6 +42,7 @@ function ResultRow({ item, onNavigate }) {
 }
 
 export default function SearchOverlay({ isOpen, onClose }) {
+  useEffect(() => { if (isOpen) trackWidget('search'); }, [isOpen]);
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("");
   const [composing, setComposing] = useState(false);

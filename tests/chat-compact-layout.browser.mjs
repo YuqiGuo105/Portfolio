@@ -20,6 +20,8 @@ try {
           { stage: 'answer_final', payload: { answer } }, { stage: 'done' },
         ].map(event => `data: ${JSON.stringify(event)}\n\n`).join('') })
       }
+      // The waiting line has to answer that this visitor holds a place, or nothing is sent.
+      if (url.pathname === '/api/rag/admission') return route.fulfill({ json: { status: 'active' } })
       // Preserve third-party protocols such as reCAPTCHA; only stub app writes.
       if (request.method() !== 'GET' && (url.origin === new URL(origin).origin || url.hostname.endsWith('.supabase.co'))) return route.fulfill({ json: { ok: true } })
       return route.continue()

@@ -107,6 +107,21 @@ test('leaving flushes without waiting for optional CAPTCHA, and late token canno
   resolve('late-token'); await settle(); assert.equal(h.requests.length, 1); assert.equal(h.saved(), null);
 }));
 
+test('media and widget delivery never executes CAPTCHA and retries keep the same event ID', () => harness(async h => {
+  process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY = 'test-only';
+  let assessments = 0;
+  window.grecaptcha = { enterprise: { ready: fn => fn(), execute: () => { assessments++; return Promise.resolve('token'); } } };
+  h.respond(() => ({ ok: false, status: 503 }));
+  h.track('media_summary', { properties: { mediaId: 'movie', playbackId: 'play-1', watchedSeconds: 15 } });
+  h.track('widget_opened', { properties: { component: 'chat', action: 'open' } });
+  await settle();
+  assert.equal(assessments, 0);
+  const ids = h.requests.map(r => r.payload.eventId);
+  h.respond(ack); await h.advance(3000);
+  assert.deepEqual(h.requests.slice(2).map(r => r.payload.eventId), ids);
+  assert.equal(assessments, 0); assert.equal(h.saved(), null);
+}));
+
 test('Retry-After is respected across reloads; permanent rejection is not retried', async () => {
   let saved;
   await harness(async h => {

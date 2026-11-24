@@ -5,6 +5,7 @@ import { shareUrl } from "../../lib/share/link.mjs";
 import { canvasBlob, displayUrl, fileName, posterCanvas } from "../../lib/share/poster.mjs";
 import { qrPath, qrSvg } from "../../lib/share/qr.mjs";
 import styles from "./Share.module.css";
+import { trackWidget } from '../../lib/widgetTelemetry';
 
 const save = (blob, name) => {
   const href = URL.createObjectURL(blob);
@@ -34,6 +35,7 @@ export default function ShareSheet({ content, onClose }) {
 
   useEffect(() => {
     mounted.current = true;
+    trackWidget('share');
     setCanSystemShare(typeof navigator.share === "function");
     return () => { mounted.current = false; clearTimeout(copyTimer.current); };
   }, []);
@@ -92,6 +94,7 @@ export default function ShareSheet({ content, onClose }) {
     if (!mounted.current) return;
     if (!success) { clearTimeout(copyTimer.current); setCopied(false); setStatus("Could not copy. Select and copy the link."); return; }
     setCopied(true); setStatus("Link copied");
+    trackWidget('share', 'link_copied');
     clearTimeout(copyTimer.current);
     copyTimer.current = setTimeout(() => setCopied(false), 2200);
   };
@@ -103,6 +106,7 @@ export default function ShareSheet({ content, onClose }) {
       if (!mounted.current) return;
       save(blob, fileName(content.title, content.kind === "quote" ? "quote" : content.kind === "card" ? "card" : "share"));
       setStatus("Picture saved");
+      trackWidget('share', 'image_download_requested');
     } catch { if (mounted.current) setStatus("Could not save the picture. Please try again."); }
     finally { if (mounted.current) setSaving(false); }
   };
@@ -110,6 +114,7 @@ export default function ShareSheet({ content, onClose }) {
     try {
       save(new Blob([qrSvg(urls.qr, { quiet: 4, title: `QR code for ${displayUrl(urls.link)}` })], { type: "image/svg+xml" }), fileName(content.title, "qr").replace(/\.png$/, ".svg"));
       setStatus("QR code saved");
+      trackWidget('share', 'qr_download_requested');
     } catch { setStatus("Could not save the QR code. Please try again."); }
   };
   const systemShare = async () => {

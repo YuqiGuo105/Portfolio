@@ -37,8 +37,12 @@ import { eventTimestamp, outboundLinkDetails } from "../../src/lib/visitorWorkbe
 import VisitorOverview from "../../src/components/admin/VisitorOverview";
 import VisitorGovernance from "../../src/components/admin/VisitorGovernance";
 import VisitorBotDiagnostics from "../../src/components/admin/VisitorBotDiagnostics";
+import VisitorActivity from "../../src/components/admin/VisitorActivity";
+import { VisitorSessionCard, visitorSessionList } from "../../src/components/admin/VisitorSessions";
 
 const PAGE_SIZE = 50;
+// A visitor card is much taller than one event, so a page holds fewer of them.
+const SESSION_PAGE_SIZE = 20;
 const WINDOWS = [
   { label: "24h", value: 24 },
   { label: "7d", value: 168 },
@@ -94,14 +98,19 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
   const [alertDraft, setAlertDraft] = useState(null);
   const requests = useRef({ logs: 0, alerts: 0, intelligence: 0 });
   const [items, setItems] = useState([]);
-  const [recordView, setRecordView] = useState('visits');
+  const [recordView, setRecordView] = useState('sessions');
+  const [sample, setSample] = useState(null);
+  const pageSize = recordView === 'sessions' ? SESSION_PAGE_SIZE : PAGE_SIZE;
   const [draft, setDraft] = useState(EMPTY_FILTERS);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [hours, setHours] = useState(24);
   const [page, setPage] = useState(0);
   const [pageInfo, setPageInfo] = useState({ number: 0, size: PAGE_SIZE, totalElements: 0, totalPages: 0 });
-  const [rangeEnd, setRangeEnd] = useState(() => new Date().toISOString());
-  const range = useMemo(() => ({ hours, to: rangeEnd, from: new Date(Date.parse(rangeEnd) - hours * 3600000).toISOString() }), [hours, rangeEnd]);
+  const [rangeEnd, setRangeEnd] = useState(null);
+  const range = useMemo(() => rangeEnd
+    ? { hours, to: rangeEnd, from: new Date(Date.parse(rangeEnd) - hours * 3600000).toISOString() }
+    : { hours }, [hours, rangeEnd]);
+  useEffect(() => { setRangeEnd(new Date().toISOString()); }, []);
   const [alerts, setAlerts] = useState(EMPTY_ALERTS);
   const [intelligence, setIntelligence] = useState(EMPTY_INTELLIGENCE);
   const [alertsLoading, setAlertsLoading] = useState(true);
@@ -115,21 +124,25 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
   const [queryExpanded, setQueryExpanded] = useState(true);
 
   const load = useCallback(async () => {
+    if (!range.to) return;
     const sequence = ++requests.current.logs;
     setLoading(true);
     setError("");
     try {
-      const data = await api.visitors.list({ ...filters, ...range, page, size: PAGE_SIZE, view: recordView });
+      const data = await api.visitors.list({ ...filters, ...range, page, size: pageSize, view: recordView });
       if (sequence !== requests.current.logs) return;
-      setItems(Array.isArray(data.items) ? data.items : []);
-      setPageInfo(data.page || { number: page, size: PAGE_SIZE, totalElements: 0, totalPages: 0 });
+      // A response for another view must not be drawn with this view's cards.
+      const usable = Array.isArray(data.items) && (data.view || 'events') === recordView;
+      setItems(usable ? data.items : []);
+      setSample(recordView === 'sessions' ? data.sample || null : null);
+      setPageInfo(data.page || { number: page, size: pageSize, totalElements: 0, totalPages: 0 });
     } catch (requestError) {
       if (sequence !== requests.current.logs) return;
       setError(requestError.message || "Visitor logs could not be loaded.");
     } finally {
       if (sequence === requests.current.logs) setLoading(false);
     }
-  }, [api, filters, range, page, recordView]);
+  }, [api, filters, range, page, recordView, pageSize]);
 
   const loadAlerts = useCallback(async () => {
     const sequence = ++requests.current.alerts;
@@ -261,8 +274,8 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
   }, [filters.bot, filters.includeAdmin]);
 
   const total = Number(pageInfo.totalElements || 0);
-  const start = total === 0 ? 0 : page * PAGE_SIZE + 1;
-  const end = Math.min((page + 1) * PAGE_SIZE, total);
+  const start = total === 0 ? 0 : page * pageSize + 1;
+  const end = Math.min((page + 1) * pageSize, total);
   const paginationProps = {
     page,
     pageInfo,
@@ -279,7 +292,7 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
 
   return (
     <>
-      <div className={ui.page}>
+      <div className={`${ui.page} ${visitorStyles.workspace}`}>
         <PageHeader
           title="Visitors"
           subtitle="Traffic trends and protected visitor records."
@@ -296,6 +309,7 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
         />
 
         <VisitorBotDiagnostics api={api} filters={filters} range={range} synthetic={storageScope === 'local-preview'} />
+        <VisitorActivity api={api} filters={filters} range={range} synthetic={storageScope === 'local-preview'} />
 
         <VisitorGovernance api={api} />
 
@@ -432,11 +446,22 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
             </div>
             </form>
 
+            <div className={visitorStyles.viewOptions}>
             <VisitorToolbar filters={filters} hours={hours} zone={zone} onZone={setZone}
               storageScope={storageScope || session?.profile?.email || session?.email}
               onRestore={view => { const next = { ...EMPTY_FILTERS, ...view.filters }; setDraft(next); setFilters(next); setHours(view.hours); setPage(0); }} />
 
-            <VisitorRecordView value={recordView} onChange={value => { setRecordView(value); setPage(0); }} />
+            <VisitorRecordView value={recordView} onChange={value => {
+              if (value === recordView) return;
+              requests.current.logs++;
+              setItems([]); setSample(null); setRecordView(value); setPage(0);
+            }} />
+            </div>
+            {recordView === 'sessions' && sample && !sample.complete && (
+              <div className={visitorStyles.exportNotice} role="status">
+                Visitors are grouped from the newest {sample.activities} of {sample.totalActivities} page visits in this window. Shorten the window, or use Page visits, to reach older ones.
+              </div>
+            )}
             <VisitorPagination
               {...paginationProps}
               top
@@ -450,8 +475,10 @@ export function VisitorsWorkspace({ api = adminApi, storageScope }) {
             )}
 
             <DataState loading={loading} error={error && !items.length ? error : ""} empty={!loading && !error && items.length === 0} onRetry={load}>
-              <div className={visitorStyles.eventList}>
-                {items.map((item) => (
+              <div className={recordView === 'sessions' ? visitorSessionList : visitorStyles.eventList}>
+                {recordView === 'sessions' ? items.filter((item) => Array.isArray(item.pages)).map((session) => (
+                  <VisitorSessionCard session={session} zone={zone} onFilter={quickFilter} onInspect={(item, tab) => setSelection({ item, tab })} onAlert={createAlert} key={session.key} />
+                )) : items.map((item) => (
                   <VisitorEventCard item={item} zone={zone} onFilter={quickFilter} onInspect={(item, tab) => setSelection({ item, tab })} onAlert={createAlert} key={item.eventId || `${item.eventTime}-${item.pageUrl}`} />
                 ))}
               </div>
@@ -485,7 +512,7 @@ function VisitorPagination({
       <span>
         {total === 0
           ? "0 records"
-          : `${start}–${end} of ${total} ${recordView === 'visits' ? 'activities' : 'events'} · Page ${page + 1} of ${Math.max(totalPages, 1)}`}
+          : `${start}–${end} of ${total} ${recordView === 'sessions' ? 'visitors' : recordView === 'visits' ? 'activities' : 'events'} · Page ${page + 1} of ${Math.max(totalPages, 1)}`}
       </span>
       <div className={ui.paginationActions}>
         {onExport && (
