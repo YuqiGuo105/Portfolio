@@ -42,6 +42,22 @@ authentication credential.
 - Only an open, visible pending-job admin page polls status. The public homepage
   gains no polling or new media downloads from this capability.
 
+## Delete a processed video's original
+
+In `/admin/media` select a video, or open its current Introduction in
+`/admin/media-intro`, then choose **Delete original**. The server checks that it
+is READY, has a complete playback manifest and has no active processing jobs.
+Confirming removes only the private uploaded source from active storage. Playback
+renditions, captions, article references, placement history and `yuqi-intro` stay
+unchanged. Re-transcoding requires another upload; this action cannot be undone in
+the application. Storage-provider retention can delay final erasure.
+
+Authorization and eligibility are checked again on confirmation. A conflicting
+edit requires a fresh check; a failed deletion can be retried against the same
+source. The operation is audited. The action performs no requests until clicked
+and adds no visitor-side polling. It requires the admin API's original-deletion
+capability; local/read-only media previews do not expose it.
+
 ## Verification
 
 The Java `MediaPresentationJobsTest` covers permissions, idempotency, conflict,

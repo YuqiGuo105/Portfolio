@@ -1,5 +1,11 @@
 import { assetUrl } from './markup.mjs';
 
+export function newerMediaAsset(current, incoming) {
+  // Reads and mutations can finish out of order for the same asset.
+  return current && incoming && current.id === incoming.id
+    && (current.metadataVersion ?? -1) > (incoming.metadataVersion ?? -1) ? current : incoming;
+}
+
 export function mediaPoster(asset, baseUrl) {
   if (asset?.previewUrl) return asset.previewUrl;
   const file = asset?.manifest?.poster || asset?.manifest?.fallback;
@@ -25,7 +31,9 @@ export function mediaSteps(asset) {
   const publish = jobs.find(job => job.type === 'PUBLISH');
   const ready = asset.status === 'READY';
   return [
-    { title: 'Uploaded', state: asset.sourceVersion > 0 || ready ? 'done' : asset.status === 'FAILED' ? 'failed' : 'active', detail: 'Original stored privately' },
+    { title: 'Uploaded', state: asset.sourceVersion > 0 || ready ? 'done' : asset.status === 'FAILED' ? 'failed' : 'active',
+      detail: asset.originalStatus === 'DELETED' ? 'Original deleted; processed files retained'
+        : asset.originalStatus === 'DELETING' || asset.originalStatus === 'DELETE_FAILED' ? 'Original deletion not yet confirmed' : 'Original stored privately' },
     { title: 'Probed', state: ready || asset.probe ? 'done' : state(plan), detail: 'Source dimensions and encoding checked', jobs: plan ? [plan] : [] },
     { title: asset.kind === 'VIDEO' ? 'Transcoding' : 'Image variants', state: ready || outputs.length && outputs.every(job => job.status === 'SUCCEEDED') ? 'done'
       : outputs.some(job => job.status === 'DEAD') ? 'failed' : outputs.some(job => job.status === 'RUNNING') ? 'active' : 'waiting', jobs: outputs },

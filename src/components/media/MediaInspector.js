@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Circle, Loader2, AlertCircle, X, ExternalLink, RotateCcw, Play, FileImage } from 'lucide-react';
 import DemoVideo from './DemoVideo';
+import OriginalFileActions from './OriginalFileActions';
 import { createMediaPlayer } from '../../lib/media/player.mjs';
 import { assetUrl } from '../../lib/media/markup.mjs';
 import { mediaFacts, mediaPoster, mediaSteps, mediaRenditions, mediaWarnings } from '../../lib/media/library.mjs';
@@ -32,7 +33,7 @@ function PublishedVideo({ asset, baseUrl }) {
   </div>;
 }
 
-export default function MediaInspector({ asset, baseUrl, onClose, onRetry, retrying }) {
+export default function MediaInspector({ asset, baseUrl, onClose, onRetry, retrying, api, onChanged }) {
   const facts = mediaFacts(asset);
   const poster = mediaPoster(asset, baseUrl);
   const renditions = mediaRenditions(asset);
@@ -51,6 +52,7 @@ export default function MediaInspector({ asset, baseUrl, onClose, onRetry, retry
       <div><dt>File size</dt><dd>{asset.sizeBytes ? `${(asset.sizeBytes / 1048576).toFixed(2)} MB` : 'Unknown'}</dd></div>
       <div><dt>Version</dt><dd>{asset.sourceVersion ? `v${asset.sourceVersion}` : asset.status === 'LOCAL' ? 'Local sample' : 'Awaiting upload'}</dd></div>
     </dl>
+    <OriginalFileActions key={asset.id} asset={asset} api={api} onChanged={onChanged} />
     {asset.failureMessage && <p className={styles.error} role="alert">{asset.failureMessage}</p>}
     {warnings.map(warning => <p className={styles.warning} key={warning}><AlertCircle size={16} />{warning}</p>)}
     {asset.status === 'LOCAL' ? <section className={styles.section}><h3>Video files</h3><div className={styles.chips}>{renditions.map(r => <span key={r.name}>{r.name}</span>)}</div></section>

@@ -13,6 +13,12 @@ test('inspector reports real progress, failed tasks and completion', () => {
   asset.status = 'READY';
   assert.ok(mediaSteps(asset).every(s => s.state === 'done'));
 });
+test('inspector keeps processing history but does not claim a deleted original is stored', () => {
+  const asset = { kind: 'VIDEO', sourceVersion: 1, status: 'READY', originalStatus: 'DELETED' };
+  assert.match(mediaSteps(asset)[0].detail, /Original deleted/);
+  assert.ok(mediaSteps(asset).every(s => s.state === 'done'));
+  assert.match(mediaSteps({ ...asset, originalStatus: 'DELETE_FAILED' })[0].detail, /not yet confirmed/);
+});
 test('resume metadata never stores signed URLs', () => {
   assert.equal(JSON.stringify(savedUpload({ assetId: 'a', uploadId: 'b', parts: [{ url: 'secret' }] })).includes('secret'), false);
 });

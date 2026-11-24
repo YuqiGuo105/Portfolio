@@ -3,10 +3,11 @@ import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, Film, Plus, RefreshCw, Upload, X } from 'lucide-react';
 import { writerApi } from '../../lib/writerApi';
 import { uploadMedia } from '../../lib/media/upload.mjs';
-import { mediaPoster } from '../../lib/media/library.mjs';
+import { mediaPoster, newerMediaAsset } from '../../lib/media/library.mjs';
 import { validJobId, pendingPresentationJob, canUploadPresentation, presentationJobLabel,
   presentationJobMessage, presentationUploadApi } from '../../lib/media/presentationJobs.mjs';
 import styles from './IntroductionManager.module.css';
+import OriginalFileActions from './OriginalFileActions';
 
 const BASE_URL = process.env.NEXT_PUBLIC_MEDIA_BASE_URL || '';
 
@@ -37,7 +38,7 @@ export default function IntroductionManager({ jobId = null, onSelect, api = writ
       const selected = validJobId(jobId) ? await api.presentationJob(jobId) : null;
       const nextAsset = nextCurrent.assetId ? await api.get(nextCurrent.assetId) : null;
       if (mounted.current && version === generation.current) {
-        setCurrent(nextCurrent); setJobs(nextJobs); setJob(selected); setAsset(nextAsset); setError('');
+        setCurrent(nextCurrent); setJobs(nextJobs); setJob(selected); setAsset(value => newerMediaAsset(value, nextAsset)); setError('');
       }
     } catch (err) { if (mounted.current && version === generation.current) setError(err.message); }
     finally { refreshing.current = false; if (mounted.current && version === generation.current) setLoading(false); }
@@ -118,6 +119,7 @@ export default function IntroductionManager({ jobId = null, onSelect, api = writ
         <div><span className={styles.label}>{current?.enabled ? 'CURRENT VIDEO' : 'NO ACTIVE VIDEO'}</span><h2>{current?.presentation?.title || 'Introduction'}</h2>
           {asset && <p>{asset.filename}</p>}<a href="/" target="_blank" rel="noreferrer">View homepage</a></div>
       </section>
+      {asset && <OriginalFileActions key={asset.id} asset={asset} api={api} onChanged={next => setAsset(value => newerMediaAsset(value, next))} />}
       <div className={styles.workspace}><section className={styles.task} aria-label="Introduction upload">
         <h2>{job ? presentationJobLabel(job) : 'Replace Introduction'}</h2>
         {!job ? <div className={styles.create}><label>Video title<input maxLength={300} value={title} onChange={event => { setTitle(event.target.value); requestId.current = null; }} disabled={busy} /></label>
