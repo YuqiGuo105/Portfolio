@@ -195,3 +195,36 @@ test('disconnecting during the rate-limit check cannot start a tool call later',
   await handler(request(), res);
   assert.equal(called, false); assert.equal(res.body, undefined); assert.equal(res.listenerCount('close'), 0);
 });
+
+test('the page shows the same call the server sends, and cannot change it', async () => {
+  const { MCP_SCENARIOS, callArguments } = await import('../src/lib/mcpScenarios.mjs');
+  assert.deepEqual(Object.keys(MCP_SCENARIOS), ['projects', 'kubernetes', 'publishing']);
+  for (const [id, example] of Object.entries(MCP_SCENARIOS)) {
+    assert.ok(example.label && example.question && example.tool.name, id);
+    assert.ok(Object.isFrozen(example) && Object.isFrozen(example.tool) && Object.isFrozen(example.tool.arguments), `${id} is fixed`);
+    // What the server posts for this example is the call written in the shared table.
+    let sent;
+    await runPlayground(id, { fetchImpl: async (_url, options) => { sent = JSON.parse(options.body); throw new Error('stop here'); } }).catch(() => {});
+    assert.equal(sent.method, 'tools/call');
+    assert.deepEqual(sent.params, example.tool);
+  }
+  assert.ok(Object.isFrozen(MCP_SCENARIOS.projects.tool.arguments.types));
+  assert.throws(() => { 'use strict'; MCP_SCENARIOS.projects.tool.arguments.limit = 50; }, TypeError);
+
+  // One line a visitor can read: quoted strings, bracketed lists, a record ID cut short.
+  assert.deepEqual(callArguments(MCP_SCENARIOS.projects.tool.arguments),
+    [{ key: 'query', value: '"distributed systems"' }, { key: 'types', value: '["PROJECT"]' }, { key: 'limit', value: '3' }]);
+  assert.deepEqual(callArguments(MCP_SCENARIOS.publishing.tool.arguments),
+    [{ key: 'projectId', value: '"8edf9020…"' }, { key: 'format', value: '"html"' }]);
+  assert.deepEqual(callArguments({ flag: true, nested: { a: 1 }, none: null }), [{ key: 'flag', value: 'true' }, { key: 'nested', value: '…' }, { key: 'none', value: '…' }]);
+  assert.deepEqual(callArguments(null), []);
+  assert.deepEqual(callArguments(['a']), []);
+
+  const { readFileSync } = await import('node:fs');
+  const component = readFileSync(new URL('../src/components/McpPlayground.js', import.meta.url), 'utf8');
+  // The browser only ever names a scenario; the call it displays is never posted.
+  assert.ok(component.includes('body: JSON.stringify({ scenario })'));
+  assert.ok(component.includes("result.calls.length === 1 ? 'call' : 'calls'"));
+  // A result opens the page it came from, in a new tab, without handing over the opener.
+  assert.match(component, /<h3><a href=\{item\.url\} target="_blank" rel="noopener noreferrer">/);
+});

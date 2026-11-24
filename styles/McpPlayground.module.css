@@ -10,7 +10,15 @@
 .option input:checked + span { color: #17695b; background: #fff; border-color: #ccdcd6; box-shadow: 0 1px 3px #162e2510; }
 .option input:focus-visible + span { outline: 3px solid #238c79; outline-offset: 1px; }
 .prompt { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 24px 0; min-height: 114px; }
-.prompt > p { color: #20292e; font-size: 19px; line-height: 1.5; font-weight: 550; max-width: 580px; }
+.ask { display: grid; gap: 12px; min-width: 0; }
+.ask > p:first-child { color: #20292e; font-size: 19px; line-height: 1.5; font-weight: 550; max-width: 580px; }
+/* the request this example makes, on one line that wraps between arguments, never inside one */
+.playground .callLine { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; color: #5d6970; font-size: 12px; line-height: 1.5; }
+.callVerb { color: #6b7771; }
+.callLine code { padding: 3px 8px; border: 1px solid #cfe0d9; border-radius: 4px; background: #f1f7f4; color: #17695b; font: 600 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-style: normal; white-space: nowrap; }
+.callArg { display: inline-flex; align-items: baseline; gap: 5px; padding: 3px 8px; border-radius: 4px; background: #f3f5f4; color: #33423c; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: nowrap; }
+.callArg > span { color: #7a8781; }
+.playground .idle { padding: 20px 0 4px; color: #5d6970; font-size: 14px; line-height: 1.7; max-width: 640px; }
 .actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .playground .run, .playground .stop { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; min-height: 42px; width: auto; min-width: 132px; padding: 0 16px; margin: 0; border: 1px solid #17695b; border-radius: 5px; background: #17695b; color: #fff; box-shadow: none; font-family: inherit; font-size: 13px; font-weight: 600; line-height: 1.4; text-transform: none; transform: none; overflow: visible; cursor: pointer; }
 .playground .run::before, .playground .run::after, .playground .stop::before, .playground .stop::after, .playground summary::before, .playground summary::after { display: none !important; content: none !important; }
@@ -31,6 +39,11 @@
 .resultIndex { font: 12px/1.6 ui-monospace, monospace; color: #8b9992; padding-top: 2px; }
 .kind { color: #64716c; font-size: 11px; line-height: 1.6; margin-bottom: 6px; }
 .results h3 { font-size: 19px; line-height: 1.35; font-weight: 650; margin: 0 0 9px; }
+.playground .results h3 a { display: inline; color: inherit; text-decoration: none; }
+.results h3 a svg { margin-left: 5px; vertical-align: -1px; color: #8b9992; }
+.playground .results h3 a:hover { color: #17695b; text-decoration: underline; text-underline-offset: 4px; }
+.results h3 a:hover svg { color: #17695b; }
+.results h3 a:focus-visible { outline: 3px solid #238c79; outline-offset: 3px; border-radius: 2px; }
 .results p { color: #5d6970; font-size: 14px; line-height: 1.7; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 12px; color: #17695b; font-size: 11px; font-weight: 600; }
 .workflow { padding: 24px 0 8px; }
@@ -66,7 +79,8 @@
 @media (max-width: 1000px) { .prompt { align-items: flex-start; flex-direction: column; gap: 18px; } }
 @media (max-width: 480px) {
   .option > span { flex-direction: column; gap: 6px; font-size: 11px; padding: 10px 4px; min-height: 65px; }
-  .prompt > p { font-size: 17px; }
+  .ask > p:first-child { font-size: 17px; }
+  .callArg { white-space: normal; overflow-wrap: anywhere; }
   .statusbar { font-size: 11px; }
   .results > li { grid-template-columns: 20px minmax(0,1fr); gap: 10px; }
   .results h3 { font-size: 17px; }
