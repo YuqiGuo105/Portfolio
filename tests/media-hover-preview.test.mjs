@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { test, beforeEach, afterEach, after } from 'node:test';
 import { JSDOM } from 'jsdom';
 import * as catalog from '../src/lib/media/demoCatalog.mjs';
+import * as viewport from '../src/lib/media/viewportPreview.mjs';
 
 const require = createRequire(import.meta.url);
 const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost/', pretendToBeVisual: true });
@@ -23,6 +24,7 @@ const exports = {};
 new Function('require', 'exports', code)(name => {
   if (name.endsWith('.css')) return { __esModule: true, default: { cover: 'cover', playing: 'playing' } };
   if (name.endsWith('demoCatalog.mjs')) return catalog;
+  if (name.endsWith('viewportPreview.mjs')) return viewport;
   return require(name);
 }, exports);
 const Preview = exports.default;
@@ -38,14 +40,17 @@ beforeEach(() => {
   pending = new Map(); timerId = 0; now = 0; paused = 0;
   reducedMotion = false; fineHover = true; hidden = false;
   Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
-  window.matchMedia = query => ({ matches: query.includes('reduced-motion') ? reducedMotion : fineHover });
+  window.matchMedia = query => ({ get matches() { return query.includes('reduced-motion') ? reducedMotion : query.includes('hover: none') ? !fineHover : fineHover; } });
   globalThis.setTimeout = (callback, ms) => {
     const id = ++timerId; pending.set(id, { callback, at: now + ms }); return id;
   };
   globalThis.clearTimeout = id => pending.delete(id);
+  window.setTimeout = globalThis.setTimeout;
+  window.clearTimeout = globalThis.clearTimeout;
   globalThis.IntersectionObserver = class {
     constructor(callback) { observer = this; this.callback = callback; this.disconnected = false; }
     observe() {}
+    unobserve() {}
     disconnect() { this.disconnected = true; }
   };
   window.HTMLMediaElement.prototype.pause = () => { paused++; };
@@ -73,6 +78,44 @@ function advance(ms) {
   });
 }
 const video = () => document.querySelector('video');
+function intersection(visible, ratio = 1, element = document.querySelector('.cover')) {
+  act(() => observer.callback([{ target: element, isIntersecting: visible, intersectionRatio: visible ? ratio : 0 }]));
+}
+
+test('touch viewport dwell plays without a tap and stops when the cover leaves view', () => {
+  fineHover = false;
+  intersection(true);
+  advance(999); assert.equal(video(), null);
+  advance(1); assert.ok(video());
+  assert.equal(video().muted, true);
+  pointer('pointerleave', 'touch'); assert.ok(video());
+  intersection(true, 0.5); assert.equal(video(), null);
+  advance(1000); assert.equal(video(), null);
+});
+
+test('scrolling resets mobile dwell and manually pausing suppresses automatic replay', () => {
+  fineHover = false;
+  intersection(true); advance(800);
+  act(() => document.dispatchEvent(new window.Event('scroll')));
+  advance(999); assert.equal(video(), null);
+  advance(1); assert.ok(video());
+  act(() => document.querySelector('button').click());
+  act(() => document.dispatchEvent(new window.Event('scroll')));
+  advance(1000); assert.equal(video(), null);
+  intersection(false); intersection(true);
+  advance(1000); assert.ok(video());
+});
+
+test('blocked automatic playback is not retried until the cover leaves view', async () => {
+  fineHover = false;
+  let attempts = 0;
+  window.HTMLMediaElement.prototype.play = () => { attempts++; return Promise.reject(new Error('Low power mode')); };
+  intersection(true);
+  await act(async () => advance(1000));
+  assert.equal(video(), null);
+  act(() => document.dispatchEvent(new window.Event('scroll')));
+  advance(1000); assert.equal(attempts, 1);
+});
 
 test('loads no video until a full 800ms hover; then plays muted inline', () => {
   assert.equal(video(), null);
@@ -100,18 +143,18 @@ for (const reason of ['pointerleave', 'pointercancel', 'hidden', 'offscreen']) {
   test(`${reason} cancels both waiting and playing previews`, () => {
     const stop = () => act(() => {
       if (reason === 'hidden') { hidden = true; document.dispatchEvent(new window.Event('visibilitychange')); }
-      else if (reason === 'offscreen') observer.callback([{ isIntersecting: false }]);
+      else if (reason === 'offscreen') intersection(false);
       else pointer(reason);
     });
     pointer('pointerenter'); stop(); advance(800); assert.equal(video(), null);
     hidden = false;
-    act(() => observer.callback([{ isIntersecting: true }]));
+    intersection(true);
     pointer('pointerenter'); advance(800); assert.ok(video());
     stop(); assert.equal(video(), null); assert.ok(paused > 0);
   });
 }
 
-test('touch and reduced-motion devices keep their still cover', () => {
+test('pointer hover alone never starts touch or reduced-motion previews', () => {
   pointer('pointerenter', 'touch'); advance(1000); assert.equal(video(), null);
   reducedMotion = true;
   pointer('pointerenter'); advance(1000); assert.equal(video(), null);
@@ -163,12 +206,12 @@ test('one tap plays on touch, survives finger-up, and a second tap restores the 
 test('manual previews still stop when offscreen or the page is hidden', () => {
   for (const reason of ['hidden', 'offscreen']) {
     hidden = false;
-    act(() => observer.callback([{ isIntersecting: true }]));
+    intersection(true);
     act(() => document.querySelector('button').click());
     assert.ok(video());
     act(() => {
       if (reason === 'hidden') { hidden = true; document.dispatchEvent(new window.Event('visibilitychange')); }
-      else observer.callback([{ isIntersecting: false }]);
+      else intersection(false);
     });
     assert.equal(video(), null);
   }

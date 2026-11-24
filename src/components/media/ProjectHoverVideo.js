@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pause, Play } from 'lucide-react';
 import { canPreviewOnHover } from '../../lib/media/demoCatalog.mjs';
+import { registerViewportPreview } from '../../lib/media/viewportPreview.mjs';
 import styles from './ProjectHoverVideo.module.css';
 
 const PREVIEW_STARTED = 'yuqi:media-preview-start';
@@ -13,6 +14,7 @@ export default function ProjectHoverVideo({ demo, children, inline = false, hove
   const root = useRef(null);
   const visible = useRef(true);
   const manual = useRef(false);
+  const viewportPreview = useRef(null);
   const stop = useCallback(() => {
     clearTimeout(timer.current);
     timer.current = null;
@@ -29,9 +31,9 @@ export default function ProjectHoverVideo({ demo, children, inline = false, hove
     window.dispatchEvent(new window.CustomEvent(PREVIEW_STARTED, { detail: root.current }));
     setActive(true);
   }, [demo?.preview]);
-  const leave = useCallback(() => {
+  const leave = useCallback(event => {
     // A touch pointer leaves on finger-up; an explicit preview must keep playing.
-    if (!manual.current) stop();
+    if (event?.pointerType !== 'touch' && !manual.current) stop();
   }, [stop]);
   const enter = useCallback(event => {
     const pointerType = event.pointerType;
@@ -51,45 +53,43 @@ export default function ProjectHoverVideo({ demo, children, inline = false, hove
   const toggle = event => {
     event.preventDefault();
     event.stopPropagation();
-    if (active) stop();
+    if (active) { viewportPreview.current?.suppress(); stop(); }
     else start(true);
   };
+  const failed = useCallback(() => {
+    viewportPreview.current?.suppress();
+    stop();
+  }, [stop]);
   const mountVideo = useCallback(node => {
     video.current = node;
-    if (node) node.play()?.catch(() => { if (video.current === node) stop(); });
-  }, [stop]);
+    if (node) node.play()?.catch(() => { if (video.current === node) failed(); });
+  }, [failed]);
   useEffect(() => {
     stop();
     if (!demo?.preview) return undefined;
-    const hidden = () => { if (document.hidden) stop(); };
-    const otherPreview = event => { if (event.detail !== root.current) stop(); };
-    const observer = new IntersectionObserver(entries => {
-      visible.current = Boolean(entries[0]?.isIntersecting);
-      if (!visible.current) stop();
+    viewportPreview.current = registerViewportPreview(root.current, {
+      start, stop,
+      visibility: isVisible => { visible.current = isVisible; if (!isVisible) stop(); },
     });
-    if (root.current) observer.observe(root.current);
     const boundary = hoverBoundary ? root.current?.closest(hoverBoundary) : null;
     boundary?.addEventListener('pointerenter', enter);
     boundary?.addEventListener('pointerleave', leave);
     boundary?.addEventListener('pointercancel', leave);
-    window.addEventListener(PREVIEW_STARTED, otherPreview);
-    document.addEventListener('visibilitychange', hidden);
     return () => {
       clearTimeout(timer.current);
-      observer.disconnect();
-      document.removeEventListener('visibilitychange', hidden);
-      window.removeEventListener(PREVIEW_STARTED, otherPreview);
+      viewportPreview.current?.unregister();
+      viewportPreview.current = null;
       boundary?.removeEventListener('pointerenter', enter);
       boundary?.removeEventListener('pointerleave', leave);
       boundary?.removeEventListener('pointercancel', leave);
     };
-  }, [demo?.preview, hoverBoundary, enter, leave, stop]);
+  }, [demo?.preview, hoverBoundary, enter, leave, start, stop]);
   const label = `${active ? 'Pause' : 'Play'} video preview${demo?.title ? `: ${demo.title}` : ''}`;
   return <div ref={root} className={`${styles.cover} ${inline ? styles.inline : ''}`} onPointerEnter={hoverBoundary ? undefined : enter} onPointerLeave={hoverBoundary ? undefined : leave} onPointerCancel={leave}>
     {children}
     {active && <video ref={mountVideo} src={demo.preview} muted autoPlay loop playsInline preload="none"
       aria-hidden="true" tabIndex={-1} className={`${styles.video} ${playing ? styles.playing : ''}`}
-      onPlaying={() => setPlaying(true)} onError={stop} />}
+      onPlaying={() => setPlaying(true)} onError={failed} />}
     {demo?.preview && <button type="button" className={styles.previewButton} aria-label={label} title={label}
       aria-pressed={active} onClick={toggle} onPointerDown={event => event.stopPropagation()}
       onTouchStart={event => event.stopPropagation()}>
