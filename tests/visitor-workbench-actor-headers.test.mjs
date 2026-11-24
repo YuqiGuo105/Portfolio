@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createVisitorActorHeaders } from '../src/lib/visitorActorHeaders.mjs';
+import * as visitorSessions from '../src/lib/visitorSessions.mjs';
 
 const require = createRequire(import.meta.url);
 const { transform } = require('next/dist/build/swc');
@@ -26,6 +27,7 @@ function handler(route, { auth = { userId: actor, email: 'private-admin@example.
       res.status(status).json({ error: 'denied' }); return null;
     } };
     if (name.includes('visitorActorHeaders')) return { createVisitorActorHeaders };
+    if (name.includes('visitorSessions')) return visitorSessions;
     if (name.includes('supabaseServer')) return { supabaseServer: { from() { throw new Error('Unexpected database call'); } } };
     if (name.includes('analyticsHostFilter')) return { isLoopbackUrl: () => false };
     throw new Error(`Unexpected import ${name}`);

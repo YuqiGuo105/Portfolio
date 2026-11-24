@@ -55,8 +55,6 @@ test('composer avoids iOS zoom and distinguishes disabled actions', () => {
   const menu = declarations(`${root} .cw-mode-menu`);
   assert.equal(menu.left, '50%');
   assert.equal(menu.transform, 'translateX(-50%)');
-  const quotes = declarations(`${root} .answer-sources blockquote::before,\n${root} .answer-sources blockquote::after`);
-  assert.equal(quotes.display, 'none');
 });
 
 test('skin is lightweight and loaded after the base styles', () => {

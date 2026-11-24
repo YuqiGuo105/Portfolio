@@ -2,16 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pause, Play } from 'lucide-react';
 import { canPreviewOnHover } from '../../lib/media/demoCatalog.mjs';
 import { registerViewportPreview } from '../../lib/media/viewportPreview.mjs';
+import useMediaTelemetry from './useMediaTelemetry';
 import styles from './ProjectHoverVideo.module.css';
 
 const PREVIEW_STARTED = 'yuqi:media-preview-start';
 
-export default function ProjectHoverVideo({ demo, children, inline = false, hoverBoundary = null, hoverDelay = 800 }) {
+export default function ProjectHoverVideo({ demo, children, inline = false, hoverBoundary = null, hoverDelay = 800, onTelemetry }) {
   const [active, setActive] = useState(false);
   const [playing, setPlaying] = useState(false);
   const timer = useRef(null);
   const video = useRef(null);
   const root = useRef(null);
+  const telemetry = useMediaTelemetry({ asset: demo, frame: root, video, active, placement: inline ? 'blog_cover' : 'project_cover', preview: true, emit: onTelemetry });
   const visible = useRef(true);
   const manual = useRef(false);
   const viewportPreview = useRef(null);
@@ -23,14 +25,15 @@ export default function ProjectHoverVideo({ demo, children, inline = false, hove
     setActive(false);
     setPlaying(false);
   }, []);
-  const start = useCallback((explicit = false) => {
+  const start = useCallback((explicit = false, trigger = 'viewport') => {
     if (!demo?.preview || document.hidden || !visible.current) return;
     clearTimeout(timer.current);
     timer.current = null;
     manual.current = explicit;
+    telemetry.current?.request(explicit ? 'button' : trigger);
     window.dispatchEvent(new window.CustomEvent(PREVIEW_STARTED, { detail: root.current }));
     setActive(true);
-  }, [demo?.preview]);
+  }, [demo?.preview, telemetry]);
   const leave = useCallback(event => {
     // A touch pointer leaves on finger-up; an explicit preview must keep playing.
     if (event?.pointerType !== 'touch' && !manual.current) stop();
@@ -47,7 +50,7 @@ export default function ProjectHoverVideo({ demo, children, inline = false, hove
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       timer.current = null;
-      if (allowed()) start();
+      if (allowed()) start(false, 'hover');
     }, hoverDelay);
   }, [demo?.preview, hoverDelay, start]);
   const toggle = event => {

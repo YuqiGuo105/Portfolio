@@ -1,0 +1,600 @@
+/*
+ * Chat conversation, the smaller parts.
+ *
+ * The launcher, attached files, the drop target, notices, the steps of a Deep answer, page
+ * controls and key terms. Imported last in pages/_app.js; the colours are the ones set in
+ * chatWidgetModern.css. Every selector starts with the doubled root id, and the buttons spell
+ * out what the site theme would otherwise give every <button> (60px tall, wide padding, a
+ * hover fill drawn with ::before).
+ */
+
+/* ---------- launcher ---------- */
+/* no `display` here: the site terminal hides the launcher with its own rule while it is open */
+#__chat_widget_root#__chat_widget_root .launch-button {
+  align-items: center;
+  gap: 11px;
+  width: auto;
+  min-width: 0;
+  height: 58px;
+  padding: 6px 22px 6px 7px;
+  overflow: visible;
+  border: 1px solid var(--cwm-line);
+  border-radius: 29px;
+  background: var(--cwm-raised);
+  box-shadow: 0 18px 40px -16px rgba(20, 24, 28, 0.45), 0 4px 10px -4px rgba(20, 24, 28, 0.18) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: var(--cwm-ink);
+  font-family: "Rubik", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-align: left;
+  white-space: nowrap;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+#__chat_widget_root#__chat_widget_root .launch-button::before,
+#__chat_widget_root#__chat_widget_root .launch-button::after,
+#__chat_widget_root#__chat_widget_root :is(.cw-chip-x, .cw-plan-stop, .cw-guide-btn)::before,
+#__chat_widget_root#__chat_widget_root :is(.cw-chip-x, .cw-plan-stop, .cw-guide-btn)::after {
+  display: none;
+}
+#__chat_widget_root#__chat_widget_root .launch-button:hover {
+  border-color: var(--cwm-fill-strong);
+  background: var(--cwm-raised);
+  box-shadow: 0 24px 46px -16px rgba(20, 24, 28, 0.5), 0 6px 14px -4px rgba(20, 24, 28, 0.2) !important;
+  color: var(--cwm-ink);
+  transform: translateY(-2px);
+}
+#__chat_widget_root#__chat_widget_root .launch-button:active {
+  transform: none;
+}
+#__chat_widget_root#__chat_widget_root .cw-launch-art {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 50%;
+  background: var(--cwm-accent-soft);
+}
+#__chat_widget_root#__chat_widget_root .cw-launch-art img {
+  width: 36px;
+  height: 36px;
+}
+#__chat_widget_root#__chat_widget_root .cw-launch-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+#__chat_widget_root#__chat_widget_root .cw-launch-name {
+  color: var(--cwm-ink);
+}
+#__chat_widget_root#__chat_widget_root .cw-launch-hint {
+  color: var(--cwm-muted);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+.dark #__chat_widget_root#__chat_widget_root .launch-button,
+body.dark-skin #__chat_widget_root#__chat_widget_root .launch-button {
+  box-shadow: 0 18px 40px -14px rgba(0, 0, 0, 0.75), 0 4px 10px -4px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* ---------- attached files ---------- */
+#__chat_widget_root#__chat_widget_root .cw-tray {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0 2px 8px;
+}
+/* a message takes two files: side by side, each half the row, so the tray never changes height */
+#__chat_widget_root#__chat_widget_root .cw-tray > .cw-file {
+  flex: 0 1 calc(50% - 4px);
+  max-width: calc(50% - 4px);
+}
+#__chat_widget_root#__chat_widget_root .cw-msg-files {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 2px -5px 8px;
+}
+#__chat_widget_root#__chat_widget_root .cw-file {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: min(100%, 250px);
+  height: 50px;
+  padding: 0 6px 0 0;
+  overflow: hidden;
+  border: 1px solid var(--cwm-line);
+  border-radius: 14px;
+  background: var(--cwm-raised);
+  color: var(--cwm-ink);
+}
+#__chat_widget_root#__chat_widget_root .cw-file-main {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 6px 0 6px;
+  color: inherit;
+  text-decoration: none;
+}
+#__chat_widget_root#__chat_widget_root .cw-file-kind {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--cwm-fill);
+  color: var(--cwm-soft);
+}
+#__chat_widget_root#__chat_widget_root .cw-file-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+#__chat_widget_root#__chat_widget_root .cw-chip-name {
+  overflow: hidden;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#__chat_widget_root#__chat_widget_root :is(.cw-file-facts, .cw-chip-meta) {
+  overflow: hidden;
+  color: var(--cwm-muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+#__chat_widget_root#__chat_widget_root .cw-chip-err {
+  color: var(--cwm-accent);
+  font-weight: 600;
+}
+#__chat_widget_root#__chat_widget_root .cw-file.is-failed {
+  border-color: var(--cwm-accent);
+}
+#__chat_widget_root#__chat_widget_root .cw-file.is-failed .cw-file-kind {
+  background: var(--cwm-accent-soft);
+  color: var(--cwm-accent);
+}
+#__chat_widget_root#__chat_widget_root a.cw-file-main:hover .cw-chip-name {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+#__chat_widget_root#__chat_widget_root .cw-chip-x {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--cwm-muted);
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+#__chat_widget_root#__chat_widget_root .cw-chip-x:hover {
+  background: var(--cwm-fill-strong);
+  color: var(--cwm-ink);
+}
+/* an upload fills a hairline along the bottom of its card, so the card keeps its size when it finishes */
+#__chat_widget_root#__chat_widget_root .cw-file-bar {
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: var(--cwm-fill);
+}
+#__chat_widget_root#__chat_widget_root .cw-file-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--cwm-accent);
+  transition: width 160ms linear;
+}
+/* inside the visitor's bubble the card takes the bubble's own colours */
+#__chat_widget_root#__chat_widget_root .cw-bubble-user .cw-file {
+  height: 46px;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--cwm-surface) 13%, transparent);
+  color: var(--cwm-surface);
+}
+#__chat_widget_root#__chat_widget_root .cw-bubble-user .cw-file-kind {
+  width: 32px;
+  height: 32px;
+  background: color-mix(in srgb, var(--cwm-surface) 14%, transparent);
+  color: var(--cwm-surface);
+}
+#__chat_widget_root#__chat_widget_root .cw-bubble-user .cw-file-facts {
+  color: color-mix(in srgb, var(--cwm-surface) 68%, transparent);
+}
+#__chat_widget_root#__chat_widget_root .cw-spin {
+  animation: cw-turn 0.9s linear infinite;
+}
+@keyframes cw-turn {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- dropping files onto the window ---------- */
+#__chat_widget_root#__chat_widget_root .cw-file-drop {
+  position: absolute;
+  inset: 8px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 24px;
+  border: 1.5px dashed var(--cwm-accent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--cwm-surface) 94%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: var(--cwm-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  pointer-events: none;
+}
+#__chat_widget_root#__chat_widget_root .cw-file-drop > svg {
+  margin-bottom: 8px;
+  color: var(--cwm-accent);
+}
+#__chat_widget_root#__chat_widget_root .cw-file-drop > strong {
+  color: var(--cwm-ink);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ---------- notices: something went wrong, or the waiting line ---------- */
+#__chat_widget_root#__chat_widget_root .cw-toast {
+  position: absolute;
+  top: 78px;
+  right: 12px;
+  left: 12px;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 14px;
+  border: 1px solid var(--cwm-accent);
+  border-radius: 14px;
+  background: var(--cwm-raised);
+  box-shadow: 0 16px 36px -16px rgba(20, 24, 28, 0.45);
+  color: var(--cwm-ink);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  animation: cw-drop-in 180ms ease-out;
+}
+#__chat_widget_root#__chat_widget_root .cw-toast > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--cwm-accent);
+}
+@keyframes cw-drop-in {
+  from { opacity: 0; transform: translateY(-6px); }
+}
+#__chat_widget_root#__chat_widget_root .cw-notice {
+  flex-shrink: 0;
+  margin: 0 12px 4px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--cwm-fill);
+  color: var(--cwm-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+#__chat_widget_root#__chat_widget_root .cw-notice strong {
+  color: var(--cwm-ink);
+  font-weight: 600;
+}
+#__chat_widget_root#__chat_widget_root .cw-notice.is-go {
+  background: var(--cwm-accent-soft);
+}
+#__chat_widget_root#__chat_widget_root .cw-notice a {
+  color: var(--cwm-accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ---------- the steps of a Deep answer ---------- */
+#__chat_widget_root#__chat_widget_root .cw-working {
+  display: grid;
+  gap: 10px;
+}
+#__chat_widget_root#__chat_widget_root .cw-steps {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+#__chat_widget_root#__chat_widget_root .cw-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0 0 12px;
+  list-style: none;
+}
+#__chat_widget_root#__chat_widget_root .cw-step:last-child {
+  padding-bottom: 0;
+}
+/* the line that joins one step to the next */
+#__chat_widget_root#__chat_widget_root .cw-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 21px;
+  bottom: 1px;
+  left: 8.5px;
+  width: 1px;
+  background: var(--cwm-line);
+}
+#__chat_widget_root#__chat_widget_root .cw-step-mark {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 1.5px solid var(--cwm-fill-strong);
+  border-radius: 50%;
+  color: var(--cwm-surface);
+}
+#__chat_widget_root#__chat_widget_root .cw-step.is-done .cw-step-mark {
+  border-color: var(--cwm-soft);
+  background: var(--cwm-soft);
+}
+#__chat_widget_root#__chat_widget_root .cw-step.is-active .cw-step-mark {
+  border-color: var(--cwm-accent);
+}
+#__chat_widget_root#__chat_widget_root .cw-step.is-active .cw-step-mark::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cwm-accent);
+  animation: cw-pulse 1.4s ease-in-out infinite;
+}
+@keyframes cw-pulse {
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+#__chat_widget_root#__chat_widget_root .cw-step-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+#__chat_widget_root#__chat_widget_root .cw-step-label {
+  color: var(--cwm-muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+#__chat_widget_root#__chat_widget_root .cw-step:is(.is-done, .is-active) .cw-step-label {
+  color: var(--cwm-ink);
+}
+#__chat_widget_root#__chat_widget_root .cw-step.is-active .cw-step-label {
+  font-weight: 500;
+}
+#__chat_widget_root#__chat_widget_root .cw-step-detail {
+  color: var(--cwm-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+/* the same list inside the record under a finished answer */
+#__chat_widget_root#__chat_widget_root .cw-run-part {
+  padding: 12px 14px 13px;
+  border-bottom: 1px solid var(--cwm-line);
+}
+#__chat_widget_root#__chat_widget_root .cw-run-head {
+  margin: 0 0 9px;
+  padding: 0;
+  color: var(--cwm-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+#__chat_widget_root#__chat_widget_root .cw-run-head-timing {
+  margin: 0;
+  padding: 12px 14px 0;
+}
+
+/* ---------- key terms ---------- */
+#__chat_widget_root#__chat_widget_root .cw-concepts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+}
+#__chat_widget_root#__chat_widget_root .cw-concepts-label {
+  color: var(--cwm-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+#__chat_widget_root#__chat_widget_root .cw-concepts-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+#__chat_widget_root#__chat_widget_root .cw-concept-badge {
+  margin: 0;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--cwm-fill);
+  color: var(--cwm-soft);
+  font-size: 12.5px;
+  line-height: 1.5;
+  list-style: none;
+}
+
+/* ---------- page controls offered with an answer ---------- */
+#__chat_widget_root#__chat_widget_root .cw-plan {
+  margin: 14px 0 0;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--cwm-line);
+  border-radius: 16px;
+  background: var(--cwm-raised);
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-title {
+  margin: 0 0 10px;
+  color: var(--cwm-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-steps {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-steps:last-child {
+  margin-bottom: 0;
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-step {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-n {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--cwm-fill);
+  color: var(--cwm-soft);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-step.is-done .cw-plan-n {
+  background: var(--cwm-soft);
+  color: var(--cwm-raised);
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-step.is-active .cw-plan-n {
+  background: var(--cwm-accent-soft);
+  color: var(--cwm-accent);
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  color: var(--cwm-soft);
+  font-size: 13.5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-text strong {
+  color: var(--cwm-ink);
+  font-weight: 600;
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-text code {
+  display: inline;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--cwm-fill);
+  color: var(--cwm-ink);
+  font-family: var(--cwm-mono);
+  font-size: 12.5px;
+  font-style: normal;
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-result {
+  color: var(--cwm-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--cwm-line);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--cwm-ink);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-stop:hover {
+  background: var(--cwm-fill);
+  color: var(--cwm-ink);
+}
+#__chat_widget_root#__chat_widget_root .cw-plan-note {
+  margin: 0;
+  color: var(--cwm-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+@media (max-width: 480px) {
+  #__chat_widget_root#__chat_widget_root .cw-launch-hint {
+    display: none;
+  }
+  #__chat_widget_root#__chat_widget_root .launch-button {
+    height: 54px;
+    padding-right: 18px;
+  }
+  #__chat_widget_root#__chat_widget_root .cw-launch-art {
+    width: 40px !important;
+    height: 40px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #__chat_widget_root#__chat_widget_root :is(.launch-button, .cw-file-bar > i, .cw-chip-x) {
+    transition: none;
+  }
+  #__chat_widget_root#__chat_widget_root .launch-button:hover {
+    transform: none;
+  }
+  #__chat_widget_root#__chat_widget_root .cw-toast,
+  #__chat_widget_root#__chat_widget_root .cw-step.is-active .cw-step-mark::after {
+    animation: none;
+  }
+  #__chat_widget_root#__chat_widget_root .cw-spin {
+    animation-duration: 2.4s;
+  }
+}

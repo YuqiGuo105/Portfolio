@@ -18,10 +18,11 @@ const { code } = await transform(readFileSync(new URL('../src/components/SearchO
   filename: 'SearchOverlay.js', jsc: { parser: { syntax: 'ecmascript', jsx: true },
     transform: { react: { runtime: 'automatic' } }, target: 'es2020' }, module: { type: 'commonjs' },
 });
-const exports = {};
+const exports = {}, widgetEvents = [];
 new Function('require', 'exports', code)(name => {
   if (name.endsWith('.css')) return { __esModule: true, default: new Proxy({}, { get: (_, key) => key }) };
   if (name.includes('behaviorAnalytics')) return { trackBehavior() {} };
+  if (name.includes('widgetTelemetry')) return { trackWidget: (...args) => widgetEvents.push(args) };
   return require(name);
 }, exports);
 const SearchOverlay = exports.default;
@@ -45,6 +46,7 @@ beforeEach(t => {
   opener = document.getElementById('opener'); opener.focus();
   root = createRoot(document.getElementById('root'));
   requests = [];
+  widgetEvents.length = 0;
   globalThis.fetch = (url, options) => new Promise(resolve => requests.push({ url, ...options, resolve }));
   t.mock.timers.enable({ apis: ['setTimeout'] });
   render(true);
@@ -55,6 +57,11 @@ afterEach(t => {
   globalThis.fetch = nativeFetch;
 });
 after(() => dom.window.close());
+
+test('records a search open once, not each input change', () => {
+  type('kafka'); type('kafka pipeline');
+  assert.deepEqual(widgetEvents, [['search']]);
+});
 
 test('debounces, aborts obsolete requests and ignores late responses', async t => {
   type('old'); await advance(t);

@@ -170,7 +170,7 @@ test('browser-to-ingestion contract preserves session identity and destination f
   assert.notEqual(clickEvent.sessionId, requests[0].body.sessionId, 'server-side pseudonymization is retained');
   assert.equal(clickEvent.anonId, view.anonId);
   assert.equal(clickEvent.targetUrl, 'https://www.linkedin.com/in/example/');
-  assert.deepEqual(clickEvent.properties, { component: 'footer', action: 'linkedin' });
+  assert.deepEqual(clickEvent.properties, { component: 'footer', action: 'linkedin', botAssessmentStatus: 'SKIPPED' });
 });
 
 test('ingestion independently strips query tokens and rejects malformed outbound events', async () => {

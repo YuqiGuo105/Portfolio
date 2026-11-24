@@ -1,0 +1,153 @@
+/* Voice input sits where the message box was and keeps its outline, so the panel does not jump. */
+.voice {
+  --ink: var(--cwm-ink, #1d2327);
+  --soft: var(--cwm-soft, #454b52);
+  --muted: var(--cwm-muted, #656b73);
+  --line: var(--cwm-line, rgba(29, 35, 39, 0.1));
+  --fill: var(--cwm-fill, rgba(29, 35, 39, 0.045));
+  --raised: var(--cwm-raised, #fff);
+  --surface: var(--cwm-surface, #fffdfa);
+  --accent: var(--cwm-accent, #b84220);
+  color: var(--ink);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 5px;
+  border: 1px solid var(--muted);
+  border-radius: 26px;
+  background: var(--raised);
+  box-shadow: 0 12px 30px -18px rgba(20, 24, 28, 0.45);
+}
+
+.voice.voice button {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  height: 40px;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+
+.voice.voice .cancel {
+  width: 40px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--soft);
+}
+.voice.voice .cancel:hover { background: var(--fill); color: var(--ink); }
+
+.voice.voice .done {
+  gap: 6px;
+  min-width: 40px;
+  padding: 0 16px 0 13px;
+  border-radius: 20px;
+  background: var(--ink);
+  color: var(--surface);
+}
+.voice.voice .done:hover:not(:disabled) { color: var(--surface); opacity: 0.86; }
+.voice.voice .done:disabled { padding: 0; width: 40px; background: var(--fill); color: var(--muted); cursor: default; }
+.voice.voice[data-state="error"] .done { padding: 0 16px; }
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+}
+.wave {
+  display: block;
+  width: 100%;
+  height: 100%;
+  color: var(--ink);
+  transition: opacity 200ms ease;
+}
+.voice[data-state="starting"] .wave,
+.voice[data-state="transcribing"] .wave { opacity: 0; }
+
+.note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: transparent;
+  background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 38%, var(--ink) 50%, var(--muted) 62%, var(--muted) 100%) 0 0 / 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: sweep 1.8s linear infinite;
+}
+
+.time {
+  flex: none;
+  min-width: 34px;
+  padding-right: 2px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--muted);
+}
+.time[data-closing] { color: var(--accent); font-weight: 600; }
+
+.error {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 4px 0;
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.error :global(svg) { flex: none; color: var(--accent); }
+
+.hint {
+  margin: 7px 14px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.touch { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .keys { display: none; }
+  .touch { display: inline; }
+}
+
+.spin { animation: turn 0.9s linear infinite; }
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes sweep { from { background-position: 100% 0; } to { background-position: -40% 0; } }
+@keyframes turn { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .note { animation: none; color: var(--muted); background: none; }
+  .spin { animation-duration: 2.4s; }
+  .voice button, .wave { transition: none; }
+}

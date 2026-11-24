@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ArrowUpRight, Clock3, Github, Activity, Server, X, RotateCw } from "lucide-react";
 import { getServiceMetadata, GRAFANA_PUBLIC_URL, memorySize, metricNumber, processAge } from "../lib/serviceCatalog.mjs";
 import styles from "./ServiceHoverDetails.module.css";
+import { trackWidget } from '../lib/widgetTelemetry';
 
 const detailCache = new Map();
 const FRESH_MS = 60_000;
@@ -90,6 +91,7 @@ export function useServiceHoverDetails(services, summaryAt) {
   const open = (svc, element, pinned = false) => {
     clearTimers();
     if (!metadataFor(svc)) return;
+    if (activeRef.current?.job !== svc.job) trackWidget('monitoring');
     trigger.current = element;
     const next = { job: svc.job, pinned };
     activeRef.current = next; setActive(next);

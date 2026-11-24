@@ -1,4 +1,5 @@
 import { playbackSnapshot, restorePlayback } from './rendition.mjs';
+import { clearPlaybackStats, notePlaybackStats } from './playbackStats.mjs';
 
 const NATIVE_HLS = 'application/vnd.apple.mpegurl';
 
@@ -69,10 +70,14 @@ export function createMediaPlayer(video, { loadHls = () => import('hls.js'), onS
         });
         hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
           const level = hls?.levels[data.level];
-          if (!disposed && level) video.dispatchEvent(new CustomEvent('media-level', {
+          if (disposed || !level) return;
+          notePlaybackStats(video, { height: Math.min(level.width, level.height), bitrate: level.bitrate, bandwidth: hls.bandwidthEstimate });
+          video.dispatchEvent(new CustomEvent('media-level', {
             bubbles: true, detail: { height: Math.min(level.width, level.height), bitrate: level.bitrate, levels: hls.levels.length },
           }));
         });
+        // The estimate settles as segments arrive; viewing telemetry reads the latest one.
+        hls.on(Hls.Events.FRAG_LOADED, () => { if (!disposed && hls) notePlaybackStats(video, { bandwidth: hls.bandwidthEstimate }); });
         hls.on(Hls.Events.ERROR, (event, data) => {
           if (disposed || !hls || !data.fatal) return;
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !networkRetry) {
@@ -117,6 +122,7 @@ export function createMediaPlayer(video, { loadHls = () => import('hls.js'), onS
       video.removeEventListener('error', fail);
       if (restoreNative) video.removeEventListener('loadedmetadata', restoreNative);
       nativeSnapshot = undefined;
+      clearPlaybackStats(video);
       hls?.destroy();
       hls = undefined;
       video.pause();

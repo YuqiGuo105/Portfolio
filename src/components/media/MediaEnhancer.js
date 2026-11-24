@@ -2,12 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, Play, RotateCw } from 'lucide-react';
 import { createMediaPlayer } from '../../lib/media/player.mjs';
+import useMediaTelemetry from './useMediaTelemetry';
 
 function PlayerControls({ video }) {
   const [state, setState] = useState('idle');
   const [levels, setLevels] = useState([]);
   const [quality, setQuality] = useState(-1);
   const player = useRef();
+  const videoRef = useRef(video), frameRef = useRef(video.parentElement);
+  videoRef.current = video; frameRef.current = video.parentElement;
+  const telemetry = useMediaTelemetry({ asset: { id: video.parentElement.dataset.mediaId },
+    frame: frameRef, video: videoRef, active: true, placement: 'article_inline' });
   useEffect(() => {
     setState('idle');
     setLevels([]);
@@ -21,10 +26,10 @@ function PlayerControls({ video }) {
   const label = state === 'loading' ? 'Loading video' : state === 'error' ? 'Retry video' : 'Play video';
   return <>
     {pending && <button className="media-play" type="button" aria-label={label} title={label}
-      disabled={state === 'loading'} onClick={() => { setQuality(-1); player.current?.start(); }}><Icon size={28} aria-hidden="true" /></button>}
+      disabled={state === 'loading'} onClick={() => { telemetry.current?.request(); setQuality(-1); player.current?.start(); }}><Icon size={28} aria-hidden="true" /></button>}
     {state === 'error' && <span className="media-error" role="status">Video unavailable. Try again.</span>}
     {levels.length > 1 && <label className="media-quality">Quality <select aria-label="Video quality" value={quality}
-      onChange={event => { const index = Number(event.target.value); setQuality(index); player.current?.setQuality(index); }}>
+      onChange={event => { const index = Number(event.target.value); telemetry.current?.action('quality', { quality: index === -1 ? 'auto' : String(levels.find(level => level.index === index)?.height || index) }); setQuality(index); player.current?.setQuality(index); }}>
       <option value={-1}>Auto</option>{levels.map(level => <option key={level.index} value={level.index}>{level.height}p</option>)}
     </select></label>}
   </>;

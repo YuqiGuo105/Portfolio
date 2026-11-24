@@ -63,7 +63,14 @@ try {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByLabel('Saved filter views').selectOption('Jaipur mobile');
     const view = page.getByRole('group', { name: 'Visitor record view' });
-    assert.equal(await view.getByRole('button', { name: 'Page visits', exact: true }).getAttribute('aria-pressed'), 'true');
+    // The list opens on one card per visitor; the checks below are about the page-visit rows.
+    assert.equal(await view.getByRole('button', { name: 'Visitors', exact: true }).getAttribute('aria-pressed'), 'true');
+    await page.locator('article[data-session]').first().waitFor();
+    const sessionCount = await page.locator('article[data-session]').count();
+    await view.getByRole('button', { name: 'Visitors', exact: true }).click();
+    assert.equal(await page.locator('article[data-session]').count(), sessionCount, 'Re-selecting the active view preserves its rows');
+    await view.getByRole('button', { name: 'Page visits', exact: true }).click();
+    await page.getByText(/of \d+ activities · Page/).first().waitFor();
     await view.getByRole('button', { name: 'Raw events', exact: true }).click();
     await page.getByText(/of \d+ events · Page/).first().waitFor();
     const rawCount = await page.locator('article').count();

@@ -1,8 +1,52 @@
 import { validateSessionRequest } from './visitorSessionRequest.mjs';
 import { sampleHistory, previewOverview } from './visitorOverviewPreview.mjs';
 import { groupVisitorEvents } from './visitorWorkbench.mjs';
+import { groupVisitorSessions } from './visitorSessions.mjs';
 import { createVisitorGovernancePreview } from './visitorGovernancePreview.mjs';
 import { diagnosticPreviewEvents } from './visitorBotDiagnosticsPreview.mjs';
+
+// Two made-up visits that show what the Visitors view says about reading and video: one on a fast
+// connection that watched most of the introduction, one on a slow connection that gave up early.
+function journeySamples(now) {
+  const events = [];
+  const add = (session, seconds, eventName, pageUrl, properties = {}, extra = {}) => events.push({
+    eventId: `sample-journey-${events.length}`, siteId: 'preview.local', sessionId: session.id, anonymousId: `${session.id}-anon`,
+    eventName, eventTime: new Date(now - 20 * 60000 + seconds * 1000).toISOString(), serverTime: new Date(now - 20 * 60000 + seconds * 1000 + 900).toISOString(),
+    pageUrl, bot: false, properties, ...session.client, ...extra });
+  const fast = { id: 'sample-reader-session', client: { deviceType: 'desktop', browser: 'Chrome', os: 'macOS', city: 'Seattle', region: 'WA', country: 'US',
+    referrer: 'https://www.google.com/', ipAddress: '198.51.100.71', userAgent: 'Sample Chrome macOS' } };
+  const slow = { id: 'sample-slow-video-session', client: { deviceType: 'mobile', browser: 'Chrome', os: 'Android', city: 'Pune', region: 'MH', country: 'IN',
+    referrer: '', ipAddress: '203.0.113.52', userAgent: 'Sample Chrome Android' } };
+  const project = '/work-single/7c3715bf-7722-4df5-9e83-5d7e9493ea2c';
+  const projectContent = { title: 'Portfolio Platform', type: 'project', coverUrl: '/assets/images/mcp-guide/claude-public-tools.png' };
+  const intro = { component: 'video', mediaId: 'yuqi-intro', mediaVersion: 'v5', placement: 'home_intro', playMode: 'explicit', playTrigger: 'button', durationSeconds: 60 };
+  const fastLine = { quality: '720p', bitrateKbps: 2800, bandwidthKbps: 5200, downlinkMbps: 10, effectiveType: '4g' };
+
+  add(fast, 0, 'page_view', '/');
+  add(fast, 3, 'media_impression', '/', intro);
+  add(fast, 6, 'media_play_request', '/', { ...intro, playbackId: 'sample-play-fast' });
+  add(fast, 6.4, 'media_start', '/', { ...intro, playbackId: 'sample-play-fast', startupMs: 420, ...fastLine });
+  add(fast, 22, 'media_progress', '/', { ...intro, playbackId: 'sample-play-fast', progressPercent: 25, watchedSeconds: 15, coveragePercent: 25, ...fastLine });
+  add(fast, 37, 'media_progress', '/', { ...intro, playbackId: 'sample-play-fast', progressPercent: 50, watchedSeconds: 30, coveragePercent: 50, ...fastLine, quality: '1080p', bitrateKbps: 5000, bandwidthKbps: 8400 });
+  add(fast, 49, 'media_summary', '/', { ...intro, playbackId: 'sample-play-fast', watchedSeconds: 42, coveragePercent: 70, stallCount: 0, stallMs: 0, ...fastLine, quality: '1080p', bitrateKbps: 5000, bandwidthKbps: 8400 });
+  add(fast, 52, 'read_progress', '/', { progressPercent: 25 });
+  add(fast, 58, 'read_progress', '/', { progressPercent: 50 });
+  add(fast, 70, 'project_open', '/', { component: 'projects' }, { targetUrl: project, targetContent: projectContent });
+  add(fast, 71, 'page_view', project, {}, { pageContent: projectContent });
+  for (const [at, percent] of [[84, 25], [101, 50], [130, 75], [162, 100]]) add(fast, at, 'read_progress', project, { progressPercent: percent }, { pageContent: projectContent });
+  add(fast, 170, 'outbound_link_clicked', project, { component: 'article', action: 'github' }, { targetUrl: 'https://github.com/example/portfolio', pageContent: projectContent });
+  add(fast, 176, 'widget_opened', project, { component: 'chat', action: 'open' }, { pageContent: projectContent });
+  add(fast, 190, 'chat_started', project, { component: 'chat' }, { pageContent: projectContent });
+  add(fast, 240, 'page_view', '/mcp-guide');
+  add(fast, 262, 'read_progress', '/mcp-guide', { progressPercent: 25 });
+
+  const slowLine = { quality: '360p', bitrateKbps: 600, bandwidthKbps: 650, downlinkMbps: 1.2, effectiveType: '3g' };
+  add(slow, 400, 'page_view', '/');
+  add(slow, 404, 'media_play_request', '/', { ...intro, playbackId: 'sample-play-slow' });
+  add(slow, 407.9, 'media_start', '/', { ...intro, playbackId: 'sample-play-slow', startupMs: 3900, ...slowLine });
+  add(slow, 431, 'media_summary', '/', { ...intro, playbackId: 'sample-play-slow', watchedSeconds: 12, coveragePercent: 20, stallCount: 3, stallMs: 7400, ...slowLine });
+  return events;
+}
 
 // Synthetic fixtures only. Never contains production visitor data or credentials.
 export function createVisitorPreviewApi() {
@@ -30,7 +74,7 @@ export function createVisitorPreviewApi() {
     userAgent: index < 29 ? 'Sample Safari iPhone' : 'Sample Googlebot/2.1',
     properties: { ...(index % 3 === 2 ? { action: socialLinks[Math.floor(index / 3) % socialLinks.length][0], component: 'footer' } : {}), ...(index % 3 === 1 ? { progressPercent: [25, 50, 75, 100][Math.floor(index / 3) % 4] } : {}), ...(index < 29 ? {} : { botAssessmentProvider: 'GOOGLE_RECAPTCHA_ENTERPRISE', botAssessmentStatus: 'VALID', botAssessmentHumanScore: 0.1, botAssessmentReasons: ['AUTOMATION'], botAssessmentVerifiedBot: true }) },
   }))].sort((a, b) => a.eventTime.localeCompare(b.eventTime));
-  const events = [...baseEvents, ...diagnosticPreviewEvents(now)].sort((a, b) => a.eventTime.localeCompare(b.eventTime));
+  const events = [...baseEvents, ...diagnosticPreviewEvents(now), ...journeySamples(now)].sort((a, b) => a.eventTime.localeCompare(b.eventTime));
   const rules = [{ ruleId: 1, siteId: 'preview.local', name: 'Sample visitor alert', eventType: 'page_view', geoLevel: 'GLOBAL', geoAreaId: '', threshold: 1, comparator: '>=', granularity: '5m', cooldownSeconds: 1800, filters: { bot: 'EXCLUDE' }, enabled: false }];
   const pending = new Map();
   const governance = createVisitorGovernancePreview(baseEvents, now);
@@ -47,7 +91,7 @@ export function createVisitorPreviewApi() {
     visitorGovernance: governance,
     visitors: {
       async overview(filters) { return previewOverview(events.filter(item => matches(item, filters)), filters, now); },
-      async list(filters) { const items = events.filter(item => matches(item, filters)).reverse(); return { ...paginate(filters.view === 'visits' ? groupVisitorEvents(items) : items, filters.page || 0, filters.size || 50), view: filters.view || 'events', summary: { totalEvents: items.length, uniqueVisitors: new Set(items.map(e => e.sessionId)).size, countries: new Set(items.map(e => e.country)).size, cities: new Set(items.map(e => e.city).filter(Boolean)).size } }; },
+      async list(filters) { const items = events.filter(item => matches(item, filters)).reverse(); const visits = groupVisitorEvents(items); return { ...paginate(filters.view === 'sessions' ? groupVisitorSessions(visits) : filters.view === 'visits' ? visits : items, filters.page || 0, filters.size || 50), view: filters.view || 'events', ...(filters.view === 'sessions' ? { sample: { activities: visits.length, totalActivities: visits.length, complete: true } } : {}), summary: { totalEvents: items.length, uniqueVisitors: new Set(items.map(e => e.sessionId)).size, countries: new Set(items.map(e => e.country)).size, cities: new Set(items.map(e => e.city).filter(Boolean)).size } }; },
       async sessionEvidence(body) {
         const { sessionId, window, page } = validateSessionRequest(body);
         const all = events.filter(e => e.sessionId === sessionId && e.eventTime >= window.from && e.eventTime < window.to).reverse();

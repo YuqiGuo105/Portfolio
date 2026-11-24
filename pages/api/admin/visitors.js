@@ -2,12 +2,17 @@ import { requireAdminUser } from "../../../src/lib/agentServiceProxy";
 import { supabaseServer } from "../../../src/supabase/supabaseServer";
 import { isLoopbackUrl } from "../../../src/lib/analyticsHostFilter";
 import { createVisitorActorHeaders } from "../../../src/lib/visitorActorHeaders.mjs";
+import { groupVisitorSessions } from "../../../src/lib/visitorSessions.mjs";
 
 const PROD_DEFAULT = "https://portfolio-analytics-aggregator-702193211434.us-central1.run.app";
 const EXPORT_FORMATS = new Set(["csv", "json"]);
 const EXPORT_PAGE_SIZE = 100;
 const EXPORT_MAX_ROWS = boundedInteger(process.env.ADMIN_VISITOR_EXPORT_MAX_ROWS, 5_000, 100, 10_000);
 const EXPORT_CONCURRENCY = 5;
+// The visitors view groups page visits into sessions here, over the newest records of the window.
+const SESSION_SOURCE_PAGE = 100;
+const SESSION_SOURCE_PAGES = boundedInteger(process.env.ADMIN_VISITOR_SESSION_PAGES, 6, 1, 20);
+const SESSION_PAGE_SIZE = 20;
 const ALLOWED_QUERY = new Set([
   "from", "to", "hours", "q", "event", "path", "country", "city",
   "device", "browser", "referrer", "sessionId", "bot", "includeAdmin", "page", "size",
@@ -50,7 +55,7 @@ export default async function handler(req, res) {
   const base = (process.env.ANALYTICS_API_URL || PROD_DEFAULT).replace(/\/+$/, "");
   const format = firstQueryValue(req.query.format)?.toLowerCase();
   const view = firstQueryValue(req.query.view) || "events";
-  if (!["events", "visits"].includes(view)) return res.status(400).json({ error: "invalid_view" });
+  if (!["events", "visits", "sessions"].includes(view)) return res.status(400).json({ error: "invalid_view" });
   if (format && !EXPORT_FORMATS.has(format)) {
     return res.status(400).json({
       error: "invalid_export_format",
@@ -64,6 +69,10 @@ export default async function handler(req, res) {
     if (format) {
       const exported = await loadExportRows(base, token, params, actorHeaders);
       return sendExport(res, format, exported);
+    }
+
+    if (view === "sessions") {
+      return res.status(200).json(await loadSessions(base, token, params, actorHeaders));
     }
 
     const payload = await fetchVisitorPage(base, token, params, actorHeaders, view);
@@ -125,6 +134,59 @@ async function fetchVisitorPage(base, token, params, actorHeaders, view = "event
   } finally {
     clearTimeout(timeout);
   }
+}
+
+// One record per visitor session. The page-visit records are read newest first, up to
+// SESSION_SOURCE_PAGES pages, then grouped; when the window holds more than that, the response
+// says so and the oldest sessions are marked as possibly starting earlier.
+async function loadSessions(base, token, queryParams, actorHeaders) {
+  const number = Math.max(0, Number.parseInt(queryParams.get("page"), 10) || 0);
+  const size = boundedInteger(queryParams.get("size"), SESSION_PAGE_SIZE, 1, 50);
+  const source = new URLSearchParams(queryParams);
+  source.set("page", "0");
+  source.set("size", String(SESSION_SOURCE_PAGE));
+
+  const firstPage = await fetchVisitorPage(base, token, source, actorHeaders, "visits");
+  const reported = Math.max(0, Number(firstPage.page?.totalElements || 0));
+  const pages = Math.min(Math.ceil(reported / SESSION_SOURCE_PAGE), SESSION_SOURCE_PAGES);
+  // Later pages must read the same window as the first one, not a window that keeps moving.
+  source.delete("hours");
+  if (firstPage.from) source.set("from", firstPage.from);
+  if (firstPage.to) source.set("to", firstPage.to);
+  const rest = await mapWithConcurrency(
+    Array.from({ length: Math.max(pages - 1, 0) }, (_, index) => index + 1), 2,
+    async (pageNumber) => {
+      const pageParams = new URLSearchParams(source);
+      pageParams.set("page", String(pageNumber));
+      return fetchVisitorPage(base, token, pageParams, actorHeaders, "visits");
+    },
+  );
+  const read = [firstPage, ...rest].flatMap((page) => (Array.isArray(page.items) ? page.items : []));
+  const complete = read.length >= reported;
+  const records = filterLocalhostRecords(read);
+  const contentByPath = await loadContentReferences(records);
+  const withContent = records.map((item) => ({
+    ...item,
+    pageContent: contentByPath.get(normalizePath(item.pageUrl)) || null,
+    targetContent: contentByPath.get(normalizePath(item.targetUrl)) || null,
+  }));
+  const oldest = read.reduce((earliest, item) => {
+    const at = Date.parse(item.visit?.firstEventTime || item.eventTime);
+    return Number.isFinite(at) && (earliest === null || at < earliest) ? at : earliest;
+  }, null);
+  const sessions = groupVisitorSessions(withContent, {
+    boundary: complete || oldest === null ? null : new Date(oldest).toISOString(),
+  });
+
+  return {
+    view: "sessions",
+    items: sessions.slice(number * size, (number + 1) * size),
+    page: { number, size, totalElements: sessions.length, totalPages: Math.ceil(sessions.length / size) },
+    summary: firstPage.summary || null,
+    from: firstPage.from || null,
+    to: firstPage.to || null,
+    sample: { activities: read.length, totalActivities: reported, complete },
+  };
 }
 
 async function loadExportRows(base, token, queryParams, actorHeaders) {

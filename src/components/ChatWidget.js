@@ -2,13 +2,18 @@
 
 import { createPortal } from "react-dom"
 import { useState, useEffect, useRef, Fragment } from "react"
-import { Minus, ArrowUpRight, Loader2, FileText, X, ChevronDown, Check, Copy, Zap, Brain, Circle, Square, Sparkles, Compass, Search, BookOpen, Wrench, MessageSquare, CheckCircle2, Clock } from "lucide-react"
+import { trackWidget } from '../lib/widgetTelemetry'
+import { Minus, ArrowUp, ArrowUpRight, Loader2, ChevronDown, Check, Zap, Brain, Square } from "lucide-react"
 import Image from "next/image"
 import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
 import LogInDialog from "../components/LogInDialog"
-import AnswerSources from "./AnswerSources"
-import RunReplay from "./RunReplay"
+import MarkdownMessage from "./chat/AnswerMarkdown"
+import AnswerFooter from "./chat/AnswerFooter"
+import AnswerProgress from "./chat/AnswerProgress"
+import AttachmentChip from "./chat/AttachmentChip"
+import ResearchSteps from "./chat/ResearchSteps"
+import { researchRecord, runSteps, runTotals } from "../lib/chatRunSummary.mjs"
 import BrowserActionPlan from "./BrowserActionPlan"
 import { recordPublicRunEvent } from "../lib/publicRunReplay.mjs"
 import { normalizeBrowserPlan } from "../lib/browserActions.mjs"
@@ -16,17 +21,16 @@ import VoiceInput from "./VoiceInput"
 import MrPotAvatar from "./MrPotAvatar"
 import { hasLiveVoiceRoute, isHomePageRoute } from "../lib/chatPagePolicy.mjs"
 import { createChatPosition } from "../lib/chatPosition.mjs"
-import { Mic, Plus, Upload, Phone } from "lucide-react"
+import { AlertCircle, Mic, Plus, Upload, Phone } from "lucide-react"
 import { mergeEvidence } from "../lib/chatEvidence.mjs"
 import { postSSE } from "../lib/chatStream.mjs"
 import { ChatAdmissionNotice, useChatAdmission } from "./chat/ChatAdmission"
-import { ChatRequestError, chatRequestError, failAssistantMessage, chatStepsLabel } from "../lib/chatErrors.mjs"
+import { ChatRequestError, chatRequestError, failAssistantMessage } from "../lib/chatErrors.mjs"
 import { applyWebGuidePlan, normalizeWebGuidePlan } from "../lib/webGuide"
 import { primeVoiceAudio, releaseVoiceAudio } from "../lib/voice/audioActivation.mjs"
 import { UNAVAILABLE_CHAT_CAPABILITIES, normalizeChatCapabilities, DEEP_UNAVAILABLE, ATTACHMENTS_UNAVAILABLE } from "../lib/chatCapabilities.mjs"
 
 import dynamic from "next/dynamic"
-const ChatMarkdown = dynamic(() => import("./ChatMarkdown.mjs"))
 const LiveVoiceCall = dynamic(() => import("./LiveVoiceCall"), { ssr: false })
 /* ============================================================
    ChatWidget — POST SSE for /api/rag/answer/stream
@@ -660,82 +664,6 @@ function safeShort(s, max) {
 
 
 
-// Formula output is rendered as React nodes, never through imperative DOM typesetting.
-function MarkdownMessage({ content, streaming = false }) {
-
-  const Pre = ({ children }) => {
-    const preRef = useRef(null)
-    const [copied, setCopied] = useState(false)
-
-    const codeEl = Array.isArray(children) ? children[0] : children
-    const className = codeEl?.props?.className || ""
-    const lang = (className.match(/language-([a-z0-9_-]+)/i) || [])[1] || "text"
-
-    // ✅ rehype-highlight 可能把代码拆成很多 <span> 节点，直接读 props.children 会变成 [object Object]
-    // 所以复制时从 DOM 的 textContent 取“用户看到的纯文本”。
-    const getCodeText = () => String(preRef.current?.textContent || "").replace(/\n$/, "")
-
-    const handleCopy = async () => {
-      try {
-        await navigator.clipboard.writeText(getCodeText())
-        setCopied(true)
-        setTimeout(() => setCopied(false), 900)
-      } catch {}
-    }
-
-    return (
-      <div className="cw-codeblock">
-        <div className="cw-codeblock-head">
-          <span className="cw-code-lang">{lang}</span>
-          <button type="button" className="cw-code-copy" onClick={handleCopy}>
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-        <pre ref={preRef} className="cw-pre">
-        {children}
-      </pre>
-      </div>
-    )
-  }
-
-  const Link = ({ href = "", children, ...props }) => {
-    const childText = (Array.isArray(children) ? children : [children])
-      .filter((child) => typeof child === "string" || typeof child === "number")
-      .join("")
-      .trim()
-    const external = /^https?:\/\//i.test(href)
-    let label = childText || href
-
-    if (external && (!childText || /^https?:\/\//i.test(childText))) {
-      try {
-        const url = new URL(href)
-        const path = url.pathname.replace(/\/$/, "")
-        label = `${url.hostname.replace(/^www\./, "")}${path}`
-      } catch {}
-    }
-
-    return (
-      <a
-        {...props}
-        href={href}
-        className="cw-smart-link"
-        target={external ? "_blank" : undefined}
-        rel={external ? "noreferrer noopener" : undefined}
-      >
-        <span className="cw-smart-link-label">{label}</span>
-        {external ? <ArrowUpRight className="cw-smart-link-icon" aria-hidden="true" /> : null}
-      </a>
-    )
-  }
-
-  return (
-    <div className="cw-md">
-      <ChatMarkdown content={content} streaming={streaming} components={{ pre: Pre, a: Link }} />
-    </div>
-  )
-}
-
 /**
  * Wraps MarkdownMessage and highlights phrases that matched page content.
  * Only rendered when pageMatches is non-empty (i.e. backend confirmed page relevance).
@@ -1057,166 +985,14 @@ function formatStageTitle(stage, message) {
 
 /* ---------- UI bits ---------- */
 
-function ReasoningChain({ steps, streaming }) {
-  const [expanded, setExpanded] = useState(Boolean(streaming))
-  useEffect(() => {
-    if (!streaming) setExpanded(false)
-  }, [streaming])
-  if (!steps?.length) return null
-  const doneCount = steps.filter((s) => s.completed).length
-  return (
-    <div className="cw-reasoning" aria-live={streaming ? "polite" : "off"}>
-      <button type="button" className="cw-reasoning-toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
-        {streaming ? <Loader2 className="cw-r-ico cw-r-spin" size={15} /> : <Brain className="cw-r-ico" size={15} />}
-        <span className="cw-reasoning-heading">
-          <span>{streaming ? "Researching" : "Research activity"}</span>
-          <span className="cw-reasoning-subtitle">
-            {streaming ? "Searching and verifying sources" : `${doneCount} phases completed`}
-          </span>
-        </span>
-        <ChevronDown className={"cw-chev " + (expanded ? "open" : "")} size={13} />
-      </button>
-      {expanded && (
-        <div className="cw-reasoning-steps">
-          {steps.map((step, i) => (
-            <div key={`${step.label}-${i}`} className={"cw-rs " + (step.completed ? "done" : streaming && i === steps.length - 1 ? "active" : "")}>
-              <div className="cw-rs-dot">
-                {step.completed ? <CheckCircle2 className="cw-rs-check" size={14} /> : <Circle className="cw-rs-circle" size={14} />}
-              </div>
-              <div className="cw-rs-body">
-                <div className="cw-rs-label">{step.label}</div>
-                {step.detail && <div className="cw-rs-detail">{step.detail}</div>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
+// The terms an answer turns on, as reported by the agent. One quiet row; no colour code to learn.
 function KeyConceptsBar({ concepts }) {
-  if (!concepts?.length) return null
-  const colorMap = {
-    primary: "#ef4444",
-    secondary: "#f59e0b",
-    contextual: "#10b981",
-    TECH: "#3b82f6",
-    PERSON: "#8b5cf6",
-    ORG: "#f97316",
-    CONCEPT: "#6b7280",
-  }
+  const terms = [...new Set((concepts || []).map(concept => String(concept?.term || "").trim()).filter(Boolean))]
+  if (!terms.length) return null
   return (
     <div className="cw-concepts">
-      <span className="cw-concepts-label">Key concepts:</span>
-      {concepts.map((c, i) => (
-        <span
-          key={i}
-          className="cw-concept-badge"
-          style={{ borderColor: colorMap[c.importance] || colorMap[c.type] || "#6b7280" }}
-        >
-          {c.term}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-function SourceCardsRow({ cards }) {
-  const [collapsed, setCollapsed] = useState(false)
-  if (!cards?.length) return null
-  const badgeLabel = (type) => {
-    if (type === "web") return "Web"
-    if (type === "life_blog") return "Life Blog"
-    if (type === "tech_blog") return "Tech Blog"
-    if (type === "Projects") return "Project"
-    return "Article"
-  }
-  const emoji = (type) => {
-    if (type === "web") return "🌐"
-    if (type === "life_blog") return "✈️"
-    if (type === "tech_blog") return "💡"
-    return "🗂️"
-  }
-  return (
-    <div className="cw-source-cards-wrapper">
-      <button className="cw-source-cards-toggle" onClick={() => setCollapsed(!collapsed)}>
-        <span>Sources ({cards.length})</span>
-        <ChevronDown className={`cw-source-cards-chevron${collapsed ? "" : " open"}`} />
-      </button>
-      {!collapsed && (
-        <div className="cw-source-cards">
-          {cards.map((c) => (
-            <a
-              key={c.id}
-              href={c.url}
-              className="cw-source-card"
-              target="_blank"
-              rel="noopener noreferrer"
-              title={c.title}
-            >
-              {c.imageUrl
-                ? <img src={c.imageUrl} alt={c.title} className="cw-source-card-img" loading="lazy" />
-                : c.favicon
-                  ? <div className="cw-source-card-img-placeholder"><img src={c.favicon} alt="" className="cw-source-card-favicon" loading="lazy" /></div>
-                  : <div className="cw-source-card-img-placeholder">{emoji(c.type)}</div>
-              }
-              <div className="cw-source-card-body">
-                <div className="cw-source-card-badge">{badgeLabel(c.type)}</div>
-                <div className="cw-source-card-title">{c.title}</div>
-              </div>
-            </a>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function TypingIndicator() {
-  return (
-    <div className="typing">
-      <span className="dot" />
-      <span className="dot" />
-      <span className="dot" />
-      <style jsx>{`
-        .typing {
-          display: flex;
-          gap: 6px;
-          align-items: center;
-          padding: 2px 0;
-        }
-        .dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 999px;
-          background: rgba(107, 114, 128, 0.85);
-          animation: bounce 1s infinite;
-        }
-        .dot:nth-child(2) {
-          animation-delay: 0.15s;
-        }
-        .dot:nth-child(3) {
-          animation-delay: 0.3s;
-        }
-        @keyframes bounce {
-          0%,
-          80%,
-          100% {
-            transform: translateY(0);
-            opacity: 0.55;
-          }
-          40% {
-            transform: translateY(-4px);
-            opacity: 1;
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .dot {
-            animation: none;
-          }
-        }
-      `}</style>
+      <span className="cw-concepts-label">Key terms</span>
+      <ul className="cw-concepts-list">{terms.map(term => <li key={term} className="cw-concept-badge">{term}</li>)}</ul>
     </div>
   )
 }
@@ -1261,144 +1037,27 @@ function Overlay({ onClick }) {
   )
 }
 
-/* ---------- TodoList for deep_plan_done ---------- */
-function TodoList({ subtasks, expanded = false }) {
-  const [isExpanded, setIsExpanded] = useState(expanded)
-  const completed = subtasks.filter(t => typeof t === 'object' ? t.status === 'complete' : false).length
-    
-  return (
-    <div className="todo-container">
-      <div className="todo-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <ChevronDown className={`todo-chevron ${isExpanded ? "expanded" : ""}`} />
-        <span>Todos ({completed}/{subtasks.length})</span>
-      </div>
-      {isExpanded && (
-        <div className="todo-list">
-          {subtasks.map((task, idx) => {
-            const isComplete = typeof task === 'object' ? task.status === 'complete' : false
-            const taskText = typeof task === 'object' ? (task.text || task.name || JSON.stringify(task)) : String(task)
-            return (
-              <div key={idx} className={`todo-item ${isComplete ? 'completed' : ''}`}>
-                {isComplete ? <Check className="todo-icon done" /> : <Circle className="todo-icon pending" />}
-                <span className="todo-text">{taskText}</span>
-              </div>
-            )
-          })}
-        </div>
-      )}
-      <style jsx>{`
-        .todo-container {
-          margin-bottom: 12px;
-          border-radius: 10px;
-          border: 1px solid rgba(229, 231, 235, 0.9);
-          background: rgba(248, 250, 252, 0.95);
-          overflow: hidden;
-        }
-        :global(.dark) .todo-container,
-        :global(body.dark-skin) .todo-container {
-          border-color: rgba(55, 65, 81, 0.7);
-          background: rgba(15, 23, 42, 0.6);
-        }
-        .todo-header {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 12px;
-          cursor: pointer;
-          font-size: 13px;
-          font-weight: 500;
-          color: rgba(17, 24, 39, 0.9);
-          transition: background 0.15s ease;
-        }
-        .todo-header:hover {
-          background: rgba(0, 0, 0, 0.04);
-        }
-        :global(.dark) .todo-header,
-        :global(body.dark-skin) .todo-header {
-          color: rgba(248, 250, 252, 0.9);
-        }
-        :global(.dark) .todo-header:hover,
-        :global(body.dark-skin) .todo-header:hover {
-          background: rgba(255, 255, 255, 0.05);
-        }
-        .todo-chevron {
-          width: 16px;
-          height: 16px;
-          transition: transform 0.2s ease;
-          flex-shrink: 0;
-        }
-        .todo-chevron.expanded {
-          transform: rotate(180deg);
-        }
-        .todo-list {
-          border-top: 1px solid rgba(229, 231, 235, 0.6);
-          padding: 8px 0;
-        }
-        :global(.dark) .todo-list,
-        :global(body.dark-skin) .todo-list {
-          border-top-color: rgba(55, 65, 81, 0.5);
-        }
-        .todo-item {
-          display: flex;
-          align-items: flex-start;
-          gap: 8px;
-          padding: 6px 12px;
-          font-size: 12px;
-          line-height: 1.4;
-          color: rgba(55, 65, 81, 0.95);
-        }
-        :global(.dark) .todo-item,
-        :global(body.dark-skin) .todo-item {
-          color: rgba(226, 232, 240, 0.9);
-        }
-        .todo-item.completed .todo-text {
-          text-decoration: line-through;
-          opacity: 0.6;
-        }
-        .todo-icon {
-          width: 14px;
-          height: 14px;
-          flex-shrink: 0;
-          margin-top: 1px;
-        }
-        .todo-icon.done {
-          color: #10b981;
-        }
-        .todo-icon.pending {
-          color: rgba(156, 163, 175, 0.8);
-        }
-        .todo-text {
-          flex: 1;
-          min-width: 0;
-          word-break: break-word;
-        }
-      `}</style>
-    </div>
-  )
-}
-
-/* ---------- Tool call helpers ---------- */
+/* ---------- Stage names ---------- */
 
 /**
- * Stage registry — add an entry here to support a new stage type.
+ * Stage registry: add an entry here to support a new stage type.
  * `match` runs against the lowercased `stage || title`. First match wins.
- * tone keys map to CSS classes (.tone-*) below; add new tones in both
- * ToolCard and StageToast style blocks if introducing one.
+ * `label` names the step in the record under a finished answer; `doing` is the line shown while it runs.
  */
 const STAGE_REGISTRY = [
-  { match: (s) => /(connect|network|transport)/.test(s),           label: "Connecting",    tone: "cyan",    Icon: Zap },
-  { match: (s) => /(safety|policy|guard|verify|check)/.test(s),   label: "Checking",      tone: "amber",   Icon: CheckCircle2 },
-  { match: (s) => /plan/.test(s),                              label: "Planning",     tone: "violet",  Icon: Sparkles },
-  { match: (s) => /(route|intent|classif)/.test(s),            label: "Routing",      tone: "blue",    Icon: Compass },
-  { match: (s) => /(retriev|search|kb|rag|query)/.test(s),     label: "Searching",    tone: "indigo",  Icon: Search },
-  { match: (s) => /(doc|chunk|embed|index)/.test(s),           label: "Reading docs", tone: "cyan",    Icon: FileText },
-  { match: (s) => /(history|memory|context)/.test(s),          label: "Context",      tone: "amber",   Icon: BookOpen },
-  { match: (s) => /(tool|call|invoke|api|fetch)/.test(s),      label: "Tool call",    tone: "emerald", Icon: Wrench },
-  { match: (s) => /(generate|compose|answer|reply|stream)/.test(s), label: "Generating", tone: "rose",  Icon: MessageSquare },
-  { match: (s) => /(think|reason|reflect|brain)/.test(s),      label: "Thinking",     tone: "violet",  Icon: Brain },
+  { match: (s) => /(connect|network|transport)/.test(s),            label: "Connection",   doing: "Connecting" },
+  { match: (s) => /(safety|policy|guard|verify|check)/.test(s),     label: "Safety check", doing: "Checking the request" },
+  { match: (s) => /plan/.test(s),                                   label: "Planning",     doing: "Planning the answer" },
+  { match: (s) => /(route|intent|classif)/.test(s),                 label: "Intent",       doing: "Understanding the question" },
+  { match: (s) => /(retriev|search|kb|rag|query)/.test(s),          label: "Retrieval",    doing: "Searching the portfolio" },
+  { match: (s) => /(doc|chunk|embed|index)/.test(s),                label: "Sources",      doing: "Reading the sources" },
+  { match: (s) => /(history|memory|context)/.test(s),               label: "Context",      doing: "Recalling the conversation" },
+  { match: (s) => /(tool|call|invoke|api|fetch)/.test(s),           label: "Tool call",    doing: "Using a tool" },
+  { match: (s) => /(generate|compose|answer|reply|stream)/.test(s), label: "Generation",   doing: "Writing the answer" },
+  { match: (s) => /(think|reason|reflect|brain)/.test(s),           label: "Reasoning",    doing: "Thinking it through" },
 ]
 
-const DEFAULT_STAGE_META = { label: "Processing", tone: "slate", Icon: Circle }
+const DEFAULT_STAGE_META = { label: "Step", doing: "Working on it" }
 
 function getStageMeta(stage, title) {
   const s = String(stage || title || "").toLowerCase()
@@ -1407,6 +1066,29 @@ function getStageMeta(stage, title) {
     if (entry.match(s)) return entry
   }
   return DEFAULT_STAGE_META
+}
+
+// An answer that also came with a guide plan keeps its own text; the guide is offered on the
+// answer's action line instead of as a card under every reply.
+function answerOffersGuide(message) {
+  if (!message.showGuideCta || !message.guidePlan) return false
+  const content = String(message.content || "").trim()
+  return Boolean(content) && content !== String(message.guideCopy || "").trim()
+}
+
+// True for a turn that went to the assistant, false for the welcome and other local notes.
+function wasRequested(message) {
+  return Boolean(message.executionStages?.length || message.publicRunEvents?.length || message.runId || message.sourceCards?.length
+    || message.reasoningSteps?.length || message.planPayload?.subtasks?.length)
+}
+
+// What the progress line says while an answer is being prepared.
+function progressLabel(message, research) {
+  // A Deep answer names its own step; that says more than the pipeline stage behind it.
+  if (research?.current) return research.current
+  const active = message.thinkingNow || [...(message.executionStages || [])].reverse().find((step) => !step?.tsEnd)
+  if (active?.toolName) return `Using ${active.toolName}`
+  return getStageMeta(active?.stage, active?.title).doing
 }
 
 function getMrPotState(message) {
@@ -1425,757 +1107,6 @@ function getMrPotState(message) {
   if (message.streaming) return "thinking"
   if (message.content) return "success"
   return "idle"
-}
-
-// Pull a short one-line summary from a card payload (without huge JSON)
-function getCardSummary(step) {
-  const p = step?.rawPayload
-  if (step?.keyInfo && typeof step.keyInfo === "string") return step.keyInfo
-  if (!p) return null
-  if (typeof p === "string") return p.length > 80 ? p.slice(0, 77) + "…" : p
-  if (typeof p !== "object") return null
-
-  if (Array.isArray(p)) return `${p.length} item${p.length === 1 ? "" : "s"}`
-
-  if (typeof p.docsFound === "number") return `${p.docsFound} doc${p.docsFound === 1 ? "" : "s"}`
-  if (typeof p.docCount === "number") return `${p.docCount} doc${p.docCount === 1 ? "" : "s"}`
-  if (typeof p.chunksFound === "number")
-    return `${p.chunksFound} chunk${p.chunksFound === 1 ? "" : "s"}`
-  if (typeof p.historyHits === "number")
-    return `${p.historyHits} message${p.historyHits === 1 ? "" : "s"}`
-  if (typeof p.count === "number") return `${p.count} result${p.count === 1 ? "" : "s"}`
-  if (typeof p.sourcesFound === "number")
-    return `${p.sourcesFound} source${p.sourcesFound === 1 ? "" : "s"}`
-
-  const taskArr = p.tasks ?? p.subtasks ?? p.steps ?? p.plan
-  if (Array.isArray(taskArr) && taskArr.length > 0)
-    return `${taskArr.length} task${taskArr.length === 1 ? "" : "s"}`
-
-  if (typeof p.query === "string") return `"${p.query.slice(0, 60)}${p.query.length > 60 ? "…" : ""}"`
-  if (typeof p.message === "string" && p.message.length < 80) return p.message
-  return null
-}
-
-// Format a millisecond duration as a short readable string (e.g. "1.2s", "340ms", "2m 5s")
-function formatDuration(ms) {
-  if (typeof ms !== "number" || !isFinite(ms) || ms < 0) return null
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`
-  const m = Math.floor(ms / 60000)
-  const s = Math.round((ms % 60000) / 1000)
-  return `${m}m ${s}s`
-}
-
-// Turn a step's payload into plain-language bullet points a non-technical reader can understand.
-// Returns an array of { label, value } pairs; never includes raw JSON.
-function humanizeStep(step) {
-  const out = []
-  const meta = getStageMeta(step?.stage, step?.title)
-  const p = step?.rawPayload
-
-  if (p && typeof p === "object" && !Array.isArray(p)) {
-    if (typeof p.query === "string" && p.query.trim()) {
-      out.push({ label: "What I searched for", value: `“${p.query.trim().slice(0, 200)}”` })
-    }
-    if (typeof p.intent === "string") out.push({ label: "Topic", value: p.intent })
-    if (typeof p.route === "string") out.push({ label: "Route", value: p.route })
-    if (typeof p.toolName === "string") out.push({ label: "Tool", value: p.toolName })
-    if (typeof p.functionName === "string") out.push({ label: "Tool", value: p.functionName })
-
-    if (typeof p.docsFound === "number")
-      out.push({ label: "Found", value: `${p.docsFound} matching document${p.docsFound === 1 ? "" : "s"}` })
-    else if (typeof p.docCount === "number")
-      out.push({ label: "Found", value: `${p.docCount} matching document${p.docCount === 1 ? "" : "s"}` })
-    if (typeof p.chunksFound === "number")
-      out.push({ label: "Read", value: `${p.chunksFound} passage${p.chunksFound === 1 ? "" : "s"}` })
-    if (typeof p.historyHits === "number")
-      out.push({ label: "Recalled", value: `${p.historyHits} earlier message${p.historyHits === 1 ? "" : "s"}` })
-    if (typeof p.count === "number" && !out.some((x) => x.label === "Found"))
-      out.push({ label: "Result", value: `${p.count} item${p.count === 1 ? "" : "s"}` })
-    if (typeof p.sourcesFound === "number")
-      out.push({ label: "Sources", value: `${p.sourcesFound} public source${p.sourcesFound === 1 ? "" : "s"}` })
-
-    const taskArr = p.tasks ?? p.subtasks ?? p.steps ?? p.plan
-    if (Array.isArray(taskArr) && taskArr.length > 0) {
-      const items = taskArr
-        .slice(0, 5)
-        .map((t) => (typeof t === "string" ? t : t?.title || t?.name || t?.text))
-        .filter(Boolean)
-      if (items.length) out.push({ label: "My plan", value: items, kind: "list" })
-    }
-
-    if (typeof p.message === "string" && p.message.length < 200 && !out.some((x) => x.value === p.message)) {
-      out.push({ label: "Note", value: p.message })
-    }
-    if (typeof p.result === "string" && p.result.length < 300) {
-      out.push({ label: "Result", value: p.result })
-    }
-  } else if (typeof p === "string" && p.trim()) {
-    out.push({ label: "Note", value: p.length > 240 ? p.slice(0, 237) + "…" : p })
-  } else if (Array.isArray(p)) {
-    out.push({ label: "Result", value: `${p.length} item${p.length === 1 ? "" : "s"}` })
-  }
-
-  return out
-}
-
-/* ---------- Collapsible tool history (timeline) ---------- */
-const STEP_REVEAL_INTERVAL_MS = 320
-
-function ToolHistory({ cards, kind = "tools", streaming = false, failed = false }) {
-  const [open, setOpen] = useState(Boolean(streaming))
-  const [clock, setClock] = useState(Date.now())
-  const [visibleCount, setVisibleCount] = useState(() => streaming ? Math.min(1, cards?.length || 0) : (cards?.length || 0))
-
-  useEffect(() => {
-    setOpen(Boolean(streaming))
-    if (!streaming) return undefined
-    const timer = window.setInterval(() => setClock(Date.now()), 500)
-    return () => window.clearInterval(timer)
-  }, [streaming])
-
-  useEffect(() => {
-    const total = Array.isArray(cards) ? cards.length : 0
-    if (!streaming) {
-      setVisibleCount(total)
-      return undefined
-    }
-    if (total === 0 || visibleCount >= total) return undefined
-    const timer = window.setTimeout(
-      () => setVisibleCount((current) => Math.min(total, Math.max(1, current + 1))),
-      STEP_REVEAL_INTERVAL_MS,
-    )
-    return () => window.clearTimeout(timer)
-  }, [cards, streaming, visibleCount])
-
-  if (!Array.isArray(cards) || cards.length === 0) return null
-  const count = cards.length
-  const displayCount = streaming ? Math.max(1, Math.min(visibleCount, count)) : count
-  const visibleCards = streaming ? [cards[displayCount - 1]] : cards
-  const doneCount = streaming
-    ? displayCount - 1
-    : cards.filter((card) => card?.tsEnd || card?.status === "completed" || card?.status === "failed").length
-  const label = kind === "steps"
-    ? (streaming ? `Working · ${doneCount}/${displayCount}` : chatStepsLabel(count, failed || cards.some(card => card.status === "failed")))
-    : `Used ${count} tool${count === 1 ? "" : "s"}`
-  return (
-    <div className={`cw-th mb-2 ${streaming ? "is-live" : ""}`} aria-live={streaming ? "polite" : "off"}>
-      <button
-        type="button"
-        className={"cw-th-toggle " + (open ? "is-open" : "")}
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open ? "true" : "false"}
-      >
-        <span className="cw-th-check" aria-hidden="true">
-          {streaming ? <Loader2 className="cw-th-spinner" /> : failed || cards.some(card => card.status === "failed") ? <X /> : <Check />}
-        </span>
-        <span className="cw-th-label">
-          {label}
-        </span>
-        <span className="cw-th-chev" aria-hidden="true">
-          <ChevronDown />
-        </span>
-      </button>
-      {open ? (
-        <div className="cw-th-body">
-          {visibleCards.map((card, idx) => (
-            <ToolCard
-              key={card.id}
-              step={card}
-              streaming={streaming}
-              presentationActive={streaming}
-              now={clock}
-              index={idx}
-              isLast={idx === visibleCards.length - 1}
-            />
-          ))}
-        </div>
-      ) : null}
-      <style jsx>{`
-        .cw-th {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          overflow: hidden;
-          border: 1px solid rgba(100, 116, 139, 0.2);
-          border-radius: 8px;
-          background: rgba(248, 250, 252, 0.72);
-          transition: border-color 160ms ease, background-color 160ms ease;
-        }
-        .cw-th.is-live {
-          border-color: rgba(59, 130, 246, 0.3);
-          background: rgba(239, 246, 255, 0.62);
-        }
-        .cw-th-toggle {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          width: 100%;
-          padding: 8px 10px;
-          border: 0;
-          background: transparent;
-          color: #334155;
-          font-size: 12px;
-          font-weight: 650;
-          text-align: left;
-          cursor: pointer;
-          transition: background-color 150ms ease;
-        }
-        .cw-th-toggle:hover {
-          background: rgba(148, 163, 184, 0.08);
-        }
-        .cw-th-check {
-          width: 18px;
-          height: 18px;
-          border-radius: 999px;
-          background: rgba(16, 185, 129, 0.12);
-          color: #059669;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          flex: 0 0 auto;
-        }
-        .cw-th.is-live .cw-th-check { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
-        .cw-th-check :global(svg) {
-          width: 12px;
-          height: 12px;
-          stroke-width: 3;
-        }
-        .cw-th-check :global(.cw-th-spinner) { animation: thSpin 900ms linear infinite; }
-        .cw-th-label { flex: 1 1 auto; min-width: 0; }
-        .cw-th-chev {
-          display: inline-flex;
-          opacity: 0.6;
-          transition: transform 180ms ease;
-        }
-        .cw-th-chev :global(svg) {
-          width: 14px;
-          height: 14px;
-        }
-        .cw-th-toggle.is-open .cw-th-chev {
-          transform: rotate(180deg);
-        }
-        :global(body.dark-skin) .cw-th-toggle,
-        :global(.dark) .cw-th-toggle {
-          color: rgba(226, 232, 240, 0.92);
-        }
-        :global(body.dark-skin) .cw-th,
-        :global(.dark) .cw-th {
-          border-color: rgba(148, 163, 184, 0.24);
-          background: rgba(15, 23, 42, 0.5);
-        }
-        :global(body.dark-skin) .cw-th.is-live,
-        :global(.dark) .cw-th.is-live {
-          border-color: rgba(96, 165, 250, 0.35);
-          background: rgba(30, 58, 138, 0.16);
-        }
-        :global(body.dark-skin) .cw-th-check,
-        :global(.dark) .cw-th-check {
-          background: rgba(16, 185, 129, 0.18);
-          color: #6ee7b7;
-        }
-        .cw-th-body {
-          position: relative;
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          padding: 0 10px 8px;
-          animation: thIn 180ms ease-out;
-        }
-        @keyframes thSpin { to { transform: rotate(360deg); } }
-        @keyframes thIn {
-          from { opacity: 0; transform: translateY(-4px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
-    </div>
-  )
-}
-
-/* ---------- Completed tool card (in history) ---------- */
-function ToolCard({ step, streaming = false, presentationActive = false, now = Date.now() }) {
-  const [open, setOpen] = useState(false)
-  if (!step) return null
-  const meta = getStageMeta(step.stage, step.title)
-  const StageIcon = meta.Icon || Circle
-  const details = humanizeStep(step)
-  const hasDetails = details.length > 0
-  const isFailed = step.status === "failed"
-  const isActive = streaming && (presentationActive || (!step.tsEnd && !["completed", "failed"].includes(step.status)))
-  const stageTitle = typeof step.title === "string" && step.title.trim() && step.title !== meta.label
-    ? step.title.trim()
-    : null
-  const duration = formatDuration(
-    presentationActive && step.ts
-      ? now - step.ts
-      : typeof step.durationMs === "number"
-      ? step.durationMs
-      : (step.ts ? (step.tsEnd || (isActive ? now : null)) - step.ts : NaN),
-  )
-
-  return (
-    <div className={`cw-tc tone-${meta.tone} ${isActive ? "is-active" : ""} ${isFailed ? "is-failed" : ""}`}>
-      <button
-        type="button"
-        className={"cw-tc-row " + (open ? "is-open" : "") + (hasDetails ? "" : " no-details") + (isActive ? " is-active" : "")}
-        onClick={() => hasDetails && setOpen((v) => !v)}
-        aria-expanded={open ? "true" : "false"}
-        disabled={!hasDetails}
-      >
-        <span className="cw-tc-icon" aria-hidden="true"><StageIcon /></span>
-        <span className="cw-tc-copy">
-          <span className="cw-tc-name">{meta.label}</span>
-          {stageTitle ? <span className="cw-tc-title">{stageTitle}</span> : null}
-        </span>
-        {duration ? (
-          <span className="cw-tc-dur"><Clock /> {duration}</span>
-        ) : null}
-        <span className={`cw-tc-status ${isActive ? "active" : ""} ${isFailed ? "failed" : ""}`} aria-hidden="true">
-          {isActive ? <Loader2 /> : isFailed ? <X /> : <CheckCircle2 />}
-        </span>
-        {hasDetails ? (
-          <span className="cw-tc-chev" aria-hidden="true"><ChevronDown /></span>
-        ) : null}
-      </button>
-      {open && hasDetails ? (
-        <div className="cw-tc-detail">
-          {details.map((d, i) => (
-            d.kind === "list" && Array.isArray(d.value) ? (
-              <ol className="cw-tc-list" key={i}>
-                {d.value.map((it, j) => <li key={j}>{it}</li>)}
-              </ol>
-            ) : (
-              <div className="cw-tc-line" key={i}>
-                <span className="cw-tc-k">{d.label}</span>
-                <span className="cw-tc-v">{d.value}</span>
-              </div>
-            )
-          ))}
-        </div>
-      ) : null}
-      <style jsx>{`
-        .cw-tc { --tone: 100, 116, 139; }
-        .cw-tc.tone-violet  { --tone: 139, 92, 246; }
-        .cw-tc.tone-blue    { --tone: 59, 130, 246; }
-        .cw-tc.tone-indigo  { --tone: 99, 102, 241; }
-        .cw-tc.tone-cyan    { --tone: 6, 182, 212; }
-        .cw-tc.tone-amber   { --tone: 245, 158, 11; }
-        .cw-tc.tone-emerald { --tone: 16, 185, 129; }
-        .cw-tc.tone-rose    { --tone: 244, 63, 94; }
-        .cw-tc.tone-slate   { --tone: 100, 116, 139; }
-
-        .cw-tc-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          width: 100%;
-          padding: 5px 8px;
-          margin: 0 -8px;
-          border: none;
-          background: transparent;
-          border-radius: 6px;
-          text-align: left;
-          cursor: pointer;
-          font-size: 13px;
-          line-height: 1.4;
-          transition: background 120ms ease;
-        }
-        .cw-tc-row:hover:not(:disabled) { background: rgba(var(--tone), 0.07); }
-        .cw-tc-row.no-details { cursor: default; }
-        .cw-tc-row.is-active { background: rgba(var(--tone), 0.055); }
-        :global(body.dark-skin) .cw-tc-row:hover:not(:disabled),
-        :global(.dark) .cw-tc-row:hover:not(:disabled) { background: rgba(var(--tone), 0.12); }
-
-        .cw-tc-icon {
-          flex-shrink: 0;
-          display: inline-flex;
-          color: rgb(var(--tone));
-        }
-        .cw-tc-icon :global(svg) { width: 15px; height: 15px; stroke-width: 2; }
-
-        .cw-tc-copy {
-          flex: 1 1 auto;
-          min-width: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 1px;
-        }
-        .cw-tc-name {
-          font-weight: 600;
-          color: rgba(15, 23, 42, 0.9);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .cw-tc-title {
-          color: rgba(71, 85, 105, 0.76);
-          font-size: 11px;
-          line-height: 1.3;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        :global(body.dark-skin) .cw-tc-name,
-        :global(.dark) .cw-tc-name { color: rgba(226, 232, 240, 0.92); }
-        :global(body.dark-skin) .cw-tc-title,
-        :global(.dark) .cw-tc-title { color: rgba(148, 163, 184, 0.88); }
-
-        .cw-tc-dur {
-          flex-shrink: 0;
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
-          font-size: 11.5px;
-          color: rgba(100, 116, 139, 0.85);
-          font-variant-numeric: tabular-nums;
-        }
-        .cw-tc-dur :global(svg) { width: 11px; height: 11px; }
-        :global(body.dark-skin) .cw-tc-dur,
-        :global(.dark) .cw-tc-dur { color: rgba(148, 163, 184, 0.85); }
-
-        .cw-tc-status {
-          flex-shrink: 0;
-          display: inline-flex;
-          color: rgb(16, 185, 129);
-        }
-        .cw-tc-status.active { color: rgb(var(--tone)); }
-        .cw-tc-status.failed { color: rgb(239, 68, 68); }
-        .cw-tc-status :global(svg) { width: 14px; height: 14px; }
-        .cw-tc-status.active :global(svg) { animation: tcSpin 900ms linear infinite; }
-
-        .cw-tc-chev {
-          flex-shrink: 0;
-          display: inline-flex;
-          color: rgba(100, 116, 139, 0.5);
-          transition: transform 180ms ease;
-        }
-        .cw-tc-chev :global(svg) { width: 13px; height: 13px; }
-        .cw-tc-row.is-open .cw-tc-chev { transform: rotate(180deg); }
-
-        .cw-tc-detail {
-          margin: 3px 0 3px 23px;
-          padding: 6px 10px;
-          border-left: 2px solid rgba(var(--tone), 0.3);
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          animation: tcOpen 150ms ease-out;
-        }
-        .cw-tc-line {
-          display: flex;
-          align-items: baseline;
-          gap: 6px;
-          font-size: 12.5px;
-          line-height: 1.5;
-        }
-        .cw-tc-k {
-          flex-shrink: 0;
-          font-size: 11px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0;
-          color: rgb(var(--tone));
-          opacity: 0.8;
-        }
-        .cw-tc-v {
-          color: rgba(30, 41, 59, 0.85);
-          word-break: break-word;
-          min-width: 0;
-        }
-        :global(body.dark-skin) .cw-tc-v,
-        :global(.dark) .cw-tc-v { color: rgba(203, 213, 225, 0.9); }
-        .cw-tc-list {
-          margin: 1px 0 0 0;
-          padding-left: 16px;
-          font-size: 12.5px;
-          line-height: 1.5;
-          color: rgba(30, 41, 59, 0.85);
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        :global(body.dark-skin) .cw-tc-list,
-        :global(.dark) .cw-tc-list { color: rgba(203, 213, 225, 0.9); }
-        .cw-tc-list li { list-style: disc; }
-
-        @keyframes tcOpen {
-          from { opacity: 0; transform: translateY(-2px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes tcSpin { to { transform: rotate(360deg); } }
-      `}</style>
-    </div>
-  )
-}
-
-/* ---------- Live stage toast (while streaming) ---------- */
-function StageToast({ step }) {
-  const [, setClockTick] = useState(0)
-  useEffect(() => {
-    const timer = window.setInterval(() => setClockTick((tick) => tick + 1), 250)
-    return () => window.clearInterval(timer)
-  }, [step?.id])
-  if (!step) return null
-  const meta = getStageMeta(step.stage, step.title)
-  const StageIcon = meta.Icon || Circle
-  const summary = getCardSummary(step)
-  const title = step.title || meta.label
-  const elapsed = formatDuration(Math.max(0, Date.now() - (step.ts || Date.now())))
-
-  // Extract tasks for the live mini-list (if any)
-  const tasks = (() => {
-    const p = step.rawPayload
-    if (!p) return null
-    if (Array.isArray(p)) {
-      const t = p.filter((it) => it && typeof it === "object" && (it.title || it.name || it.text))
-      return t.length ? t : null
-    }
-    if (typeof p !== "object") return null
-    const arr = p.tasks ?? p.subtasks ?? p.steps ?? p.plan
-    if (Array.isArray(arr) && arr.length) {
-      const t = arr.filter((it) => it && typeof it === "object" && (it.title || it.name || it.text))
-      return t.length ? t : null
-    }
-    return null
-  })()
-
-  return (
-    <div key={step.id} className={`cw-st tone-${meta.tone} mb-2`}>
-      <div className="cw-st-card">
-        <div className="cw-st-head">
-          <span className="cw-st-spinner" aria-hidden="true">
-            <StageIcon className="cw-st-glyph" />
-            <Loader2 className="cw-st-ring" />
-          </span>
-          <div className="cw-st-info">
-            <div className="cw-st-row1">
-              <span className="cw-st-tag">{meta.label}</span>
-              <span className="cw-st-title">{title}</span>
-              {elapsed ? <span className="cw-st-elapsed">{elapsed}</span> : null}
-            </div>
-            {summary ? <div className="cw-st-sub">{summary}</div> : null}
-          </div>
-        </div>
-
-        {tasks ? (
-          <ul className="cw-st-tasks">
-            {tasks.slice(0, 4).map((t, i) => (
-              <li key={t.id || i} className={t.completed || t.done ? "done" : ""}>
-                <span className="num">{t.order ?? i + 1}</span>
-                <span className="txt">{t.title || t.name || t.text}</span>
-                {(t.completed || t.done) ? <Check className="chk" /> : null}
-              </li>
-            ))}
-            {tasks.length > 4 ? <li className="more">+{tasks.length - 4} more</li> : null}
-          </ul>
-        ) : null}
-
-        <div className="cw-st-bar" aria-hidden="true" />
-      </div>
-
-      <style jsx>{`
-        .cw-st { --tone: 99, 102, 241; animation: stIn 200ms ease-out; }
-        .cw-st.tone-violet  { --tone: 139, 92, 246; }
-        .cw-st.tone-blue    { --tone: 59, 130, 246; }
-        .cw-st.tone-indigo  { --tone: 99, 102, 241; }
-        .cw-st.tone-cyan    { --tone: 6, 182, 212; }
-        .cw-st.tone-amber   { --tone: 245, 158, 11; }
-        .cw-st.tone-emerald { --tone: 16, 185, 129; }
-        .cw-st.tone-rose    { --tone: 244, 63, 94; }
-        .cw-st.tone-slate   { --tone: 100, 116, 139; }
-
-        .cw-st-card {
-          position: relative;
-          border-radius: 10px;
-          padding: 11px 14px 15px;
-          border: 1px solid rgba(var(--tone), 0.25);
-          background: rgba(255, 255, 255, 0.92);
-          box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
-          overflow: hidden;
-        }
-        :global(body.dark-skin) .cw-st-card,
-        :global(.dark) .cw-st-card {
-          background: rgba(15, 23, 42, 0.55);
-          border-color: rgba(var(--tone), 0.38);
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-        }
-
-        .cw-st-head {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .cw-st-spinner {
-          position: relative;
-          width: 28px;
-          height: 28px;
-          flex-shrink: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .cw-st-glyph {
-          position: absolute;
-          width: 14px;
-          height: 14px;
-          color: rgb(var(--tone));
-          stroke-width: 2;
-          z-index: 1;
-        }
-        .cw-st-ring {
-          position: absolute;
-          inset: 0;
-          width: 28px;
-          height: 28px;
-          color: rgba(var(--tone), 0.55);
-          stroke-dasharray: 50 22;
-          animation: spin 1.1s linear infinite;
-        }
-
-        .cw-st-info {
-          flex: 1;
-          min-width: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-        }
-        .cw-st-row1 {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-          min-width: 0;
-        }
-        .cw-st-tag {
-          flex-shrink: 0;
-          font-size: 9.5px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.07em;
-          color: rgb(var(--tone));
-          padding: 2px 5px;
-          border-radius: 4px;
-          background: rgba(var(--tone), 0.13);
-        }
-        :global(body.dark-skin) .cw-st-tag,
-        :global(.dark) .cw-st-tag { background: rgba(var(--tone), 0.22); }
-        .cw-st-title {
-          font-size: 13.5px;
-          font-weight: 600;
-          line-height: 1.25;
-          color: transparent;
-          background-image: linear-gradient(
-            90deg,
-            rgba(30, 41, 59, 0.55) 0%,
-            rgb(var(--tone)) 30%,
-            rgba(236, 72, 153, 0.85) 55%,
-            rgb(var(--tone)) 75%,
-            rgba(30, 41, 59, 0.55) 100%
-          );
-          background-size: 220% 100%;
-          -webkit-background-clip: text;
-          background-clip: text;
-          animation: waveText 1.8s ease-in-out infinite;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          flex: 1;
-          min-width: 0;
-        }
-        .cw-st-elapsed {
-          min-width: 38px;
-          flex-shrink: 0;
-          text-align: right;
-          font-size: 11px;
-          font-variant-numeric: tabular-nums;
-          color: rgba(71, 85, 105, 0.72);
-        }
-        :global(body.dark-skin) .cw-st-elapsed,
-        :global(.dark) .cw-st-elapsed { color: rgba(203, 213, 225, 0.7); }
-        :global(body.dark-skin) .cw-st-title,
-        :global(.dark) .cw-st-title {
-          background-image: linear-gradient(
-            90deg,
-            rgba(226, 232, 240, 0.45) 0%,
-            rgb(var(--tone)) 30%,
-            rgba(244, 114, 182, 0.9) 55%,
-            rgb(var(--tone)) 75%,
-            rgba(226, 232, 240, 0.45) 100%
-          );
-          background-size: 220% 100%;
-        }
-        .cw-st-sub {
-          font-size: 12px;
-          line-height: 1.4;
-          color: rgba(71, 85, 105, 0.85);
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        :global(body.dark-skin) .cw-st-sub,
-        :global(.dark) .cw-st-sub { color: rgba(148, 163, 184, 0.9); }
-
-        .cw-st-tasks {
-          margin: 9px 0 0 40px;
-          padding: 0;
-          list-style: none;
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-        }
-        .cw-st-tasks li {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 12px;
-          color: rgba(30, 41, 59, 0.85);
-        }
-        :global(body.dark-skin) .cw-st-tasks li,
-        :global(.dark) .cw-st-tasks li { color: rgba(226, 232, 240, 0.85); }
-        .cw-st-tasks li.done { opacity: 0.5; }
-        .cw-st-tasks li.done .txt { text-decoration: line-through; }
-        .cw-st-tasks .num { font-weight: 700; color: rgb(var(--tone)); min-width: 14px; font-size: 11px; }
-        .cw-st-tasks .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-        .cw-st-tasks .chk { width: 11px; height: 11px; color: #10b981; stroke-width: 3; flex-shrink: 0; }
-        .cw-st-tasks .more { font-size: 11px; color: rgba(100, 116, 139, 0.6); font-style: italic; }
-
-        .cw-st-bar {
-          position: absolute;
-          left: 0; right: 0; bottom: 0;
-          height: 2px;
-          overflow: hidden;
-          background: rgba(var(--tone), 0.07);
-        }
-        .cw-st-bar::before {
-          content: "";
-          position: absolute;
-          left: -40%; top: 0;
-          height: 100%; width: 40%;
-          background: linear-gradient(90deg, transparent, rgb(var(--tone)), transparent);
-          animation: indeterminate 1.3s ease-in-out infinite;
-        }
-        @keyframes stIn {
-          from { opacity: 0; transform: translateY(4px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-        @keyframes waveText {
-          0%   { background-position: 0% 50%; }
-          50%  { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-        @keyframes indeterminate {
-          0%   { left: -40%; }
-          100% { left: 100%; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .cw-st-ring, .cw-st-title, .cw-st-bar::before { animation: none; }
-        }
-      `}</style>
-    </div>
-  )
 }
 
 /* ----------------- private attachment upload helpers ----------------- */
@@ -2260,55 +1191,6 @@ async function deleteChatAttachment({ ragBase, sessionId, deviceId, attachmentId
 }
 
 /* ---------- Attachment UI (CSS only) ---------- */
-
-function AttachmentChip({ name, href, status, progress, onRemove }) {
-  const content = (
-    <span className="cw-chip-inner">
-      <FileText className="cw-chip-ico" />
-      <span className="cw-chip-name" title={name}>
-        {name}
-      </span>
-      {status === "uploading" ? <span className="cw-chip-meta">{progress}%</span> : null}
-      {status === "error" ? <span className="cw-chip-meta cw-chip-err">failed</span> : null}
-    </span>
-  )
-
-  return (
-    <div className="cw-chip">
-      {href ? (
-        <a className="cw-chip-link" href={href} target="_blank" rel="noreferrer noopener">
-          {content}
-        </a>
-      ) : (
-        content
-      )}
-
-      {onRemove ? (
-        <button type="button" className="cw-chip-x" onClick={onRemove} aria-label="Remove file">
-          <X className="cw-chip-x-ico" />
-        </button>
-      ) : null}
-    </div>
-  )
-}
-
-function AttachmentProgressRow({ name, progress }) {
-  return (
-    <div className="cw-prog">
-      <div className="cw-prog-top">
-        <span className="cw-prog-name" title={name}>
-          {name}
-        </span>
-        <span className="cw-prog-pct">{progress}%</span>
-      </div>
-      <div className="cw-prog-bar">
-        <div className="cw-prog-fill" style={{ width: `${progress}%` }} />
-      </div>
-    </div>
-  )
-}
-
-/* ---------- Chat window ---------- */
 
 function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef, guideQuestion }) {
   const freshBrowserPlansRef = useRef(new Set())
@@ -3334,7 +2216,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           return
         }
 
-        // Task 3: Handle deep_plan_done stage with subtasks for TodoList
+        // The plan a Deep answer made; shown while it works and kept in the record under the answer.
         if (stage === "deep_plan_done") {
           if (obj.payload?.subtasks) {
             setMessages((prev) =>
@@ -3463,7 +2345,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       payload: {
         intent: decision.routeKind,
         tool: decision.targetTool,
-        // toolName is the key humanizeStep looks for → makes the card expandable
+        // toolName names the step in the record under the answer
         toolName: decision.targetTool || undefined,
         route: decision.routeKind,
         toolArguments: decision.toolArguments,
@@ -3975,8 +2857,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       }}
     >
       {fileDragActive && <div className="cw-file-drop" role="status" aria-live="polite">
-        <Upload size={32} aria-hidden="true" />
+        <Upload size={26} aria-hidden="true" />
         <strong>{loading ? "Response in progress" : uploading ? "Upload in progress" : composerFiles.length >= MAX_FILES_PER_MESSAGE ? "Attachment limit reached" : "Drop files"}</strong>
+        <span>{loading ? "Add files once this answer has finished." : uploading ? "Add more once the current upload has finished."
+          : composerFiles.length >= MAX_FILES_PER_MESSAGE ? `A message takes up to ${MAX_FILES_PER_MESSAGE} files.` : "PDF, image or text, up to 5 MB each"}</span>
       </div>}
       {desktopResizable ? (
         <>
@@ -4100,31 +2984,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
               {m.role === "user" && Array.isArray(m.attachments) && m.attachments.length > 0 ? (
                 <div className="cw-msg-files">
                   {m.attachments.map((f) => (
-                    <AttachmentChip key={f.url || f.name} name={f.name} href={f.url} status="ready" />
+                    <AttachmentChip key={f.url || f.id || f.name} name={f.name} href={f.url} sizeBytes={f.sizeBytes} mimeType={f.mimeType} />
                   ))}
                 </div>
-              ) : null}
-
-              {m.role === "assistant" && m.streaming && m.thinkingNow && (!Array.isArray(m.executionStages) || m.executionStages.length === 0) ? (
-                <StageToast step={m.thinkingNow} />
-              ) : null}
-
-              {/* Execution trace and real MCP calls are intentionally separate. */}
-              {m.role === "assistant" && (m.streaming || !m.publicRunEvents?.length) && Array.isArray(m.executionStages) && m.executionStages.length > 0 ? (
-                <ToolHistory cards={m.executionStages} kind="steps" streaming={Boolean(m.streaming)} failed={Boolean(m.errorCode)} />
-              ) : null}
-              {m.role === "assistant" && !m.streaming && Array.isArray(m.toolCards) && m.toolCards.length > 0 ? (
-                <ToolHistory cards={m.toolCards} kind="tools" />
-              ) : null}
-
-              {/* Task 3: Render TodoList when planPayload with subtasks is present */}
-              {m.role === "assistant" && m.planPayload?.subtasks?.length > 0 ? (
-                <TodoList subtasks={m.planPayload.subtasks} expanded={true} />
-              ) : null}
-
-              {/* Reasoning chain for Deep Thinking mode */}
-              {m.role === "assistant" && m.reasoningSteps?.length > 0 ? (
-                <ReasoningChain steps={m.reasoningSteps} streaming={m.streaming} />
               ) : null}
 
               {m.showLoginCta ? (
@@ -4138,7 +3000,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
                     </button>
                   </div>
                 </div>
-              ) : m.showGuideCta ? (
+              ) : m.showGuideCta && !answerOffersGuide(m) ? (
+                // The guide is this message: the welcome, or a reply that is only the offer.
                 <>
                 {m.content?.trim() && m.guideCopy?.trim() && m.content.trim() !== m.guideCopy.trim()
                   ? <MarkdownMessage key={`${m.id}-guide-answer`} content={m.content} /> : null}
@@ -4157,9 +3020,17 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
                 </>
               ) : m.role === "assistant" ? (
                 m.streaming ? (
-                  m.content === "" ? (
-                    <TypingIndicator />
-                  ) : (
+                  m.content === "" ? (() => {
+                    // A Deep answer lists its steps under the progress line while it works; once the answer
+                    // is written the same list is in the record under it, so nothing stays above the answer.
+                    const research = researchRecord(m)
+                    return (
+                      <div className="cw-working">
+                        <AnswerProgress label={progressLabel(m, research)} since={m.executionStages?.[0]?.ts} />
+                        {research ? <ResearchSteps items={research.steps.length ? research.steps : research.plan} label={research.steps.length ? "Research steps" : "Plan"} /> : null}
+                      </div>
+                    )
+                  })() : (
                     <>
                       <MarkdownMessage key={`${m.id}-streaming`} content={m.content} streaming />
                       <StreamingCursor />
@@ -4174,21 +3045,28 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
                 renderTextWithLinks(m.content)
               )}
 
-              {/* Key concepts bar for Enhance mode */}
+              {/* The terms the answer turns on, when the agent reports them */}
               {m.role === "assistant" && !m.streaming && m.keyConcepts?.length > 0 ? (
                 <KeyConceptsBar concepts={m.keyConcepts} />
               ) : null}
 
-              {/* Source cards — shown below answer when KB hits have linkable content */}
-              {m.role === "assistant" && (m.sourceCards?.length > 0 || m.relatedLinks?.length > 0) ? (
-                <AnswerSources cards={m.sourceCards} related={m.relatedLinks} answer={m.content} />
-              ) : null}
               {m.role === "assistant" && m.browserPlan && <BrowserActionPlan plan={m.browserPlan} active={freshBrowserPlansRef.current.has(m.id) && !m.streaming && !m.errorCode} />}
-              {m.role === "assistant" && <RunReplay events={m.publicRunEvents} sources={m.sourceCards} streaming={m.streaming} />}
-              {m.role === "assistant" && m.runId ? <details style={{ marginTop: 10, fontSize: 12, overflowWrap: "anywhere" }}>
-                <summary style={{ cursor: "pointer" }}>Run details</summary>
-                <code style={{ userSelect: "text" }}>{m.runId}</code>
-              </details> : null}
+
+              {/* Sources, the execution record and the run ID share one line under the finished answer. */}
+              {m.role === "assistant" && !m.streaming && !m.showLoginCta && wasRequested(m) ? (() => {
+                const steps = runSteps(m, (stage, title) => getStageMeta(stage, title).label)
+                return (
+                  <AnswerFooter
+                    content={m.errorCode ? "" : m.content}
+                    sources={mergeEvidence(m.sourceCards, m.relatedLinks)}
+                    steps={steps}
+                    totals={runTotals(m, steps)}
+                    runId={m.runId}
+                    guide={answerOffersGuide(m) ? { label: m.guideButtonLabel || "Start web guide", hint: m.guideCopy, onStart: () => triggerSiteTour(m.guidePlan) } : null}
+                    research={researchRecord(m)}
+                  />
+                )
+              })() : null}
 
               {/* Related links — dynamic content suggestions from semantic search */}
             </div>
@@ -4197,24 +3075,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
       </div>
 
       {errorToast && (
-        <div
-          style={{
-            position: "absolute",
-            top: "70px",
-            left: "16px",
-            right: "16px",
-            zIndex: 100,
-            backgroundColor: "#ef4444",
-            color: "white",
-            padding: "10px 14px",
-            borderRadius: "8px",
-            fontSize: "14px",
-            fontWeight: 500,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-            animation: "toastIn 200ms ease-out",
-          }}
-        >
-          {errorToast}
+        <div className="cw-toast" role="alert">
+          <AlertCircle size={16} aria-hidden="true" />
+          <span>{errorToast}</span>
         </div>
       )}
 
@@ -4235,19 +3098,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         }} />}
         {composerFiles.length > 0 ? (
           <div className="cw-tray">
-            {composerFiles.map((f) =>
-              f.status === "uploading" ? (
-                <AttachmentProgressRow key={f.id} name={f.name} progress={f.progress || 0} />
-              ) : (
-                <AttachmentChip
-                  key={f.id}
-                  name={f.name}
-                  status={f.status}
-                  progress={f.progress}
-                  onRemove={() => removeComposerFile(f.id)}
-                />
-              ),
-            )}
+            {composerFiles.map((f) => (
+              <AttachmentChip key={f.id} name={f.name} status={f.status} progress={f.progress} sizeBytes={f.sizeBytes} mimeType={f.mimeType}
+                onRemove={() => removeComposerFile(f.id)} />
+            ))}
           </div>
         ) : null}
 
@@ -4296,7 +3150,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
             title={!capabilities.attachments ? ATTACHMENTS_UNAVAILABLE : composerFiles.length >= MAX_FILES_PER_MESSAGE ? `Max ${MAX_FILES_PER_MESSAGE} files` : "Upload"}
           >
             {uploading ? (
-              <Loader2 style={{ width: "18px", height: "18px", color: "white" }} className="animate-spin" />
+              <Loader2 size={18} className="cw-spin" aria-hidden="true" />
             ) : (
               <Plus size={22} />
             )}
@@ -4440,7 +3294,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
                 boxSizing: "border-box",
               }}
             >
-              <ArrowUpRight style={{ width: "18px", height: "18px", color: "white" }} />
+              <ArrowUp style={{ width: "18px", height: "18px", color: "white" }} strokeWidth={2.4} />
             </button>
           )}
 
@@ -4464,23 +3318,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         #__chat_widget_root button::after {
           content: none !important;
           display: none !important;
-        }
-
-        #__chat_widget_root .cw-file-drop {
-          position: absolute;
-          inset: 8px;
-          z-index: 50;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-          border: 2px dashed var(--cw-input-text, #475569);
-          border-radius: 8px;
-          background: var(--cw-input-bg, #fff);
-          color: var(--cw-input-text, #202b32);
-          pointer-events: none;
-          font-size: 18px;
         }
         /* ===== AG-UI Chat Agent Styles ===== */
         #__chat_widget_root .bot-container {
@@ -4603,84 +3440,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           color: #9ca3af;
         }
 
-        #__chat_widget_root .cw-md .cw-smart-link {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          min-width: 0;
-          max-width: 100%;
-          color: #2563eb;
-          font-weight: 600;
-          line-height: 1.4;
-          text-decoration: none;
-          text-underline-offset: 3px;
-        }
-
-        #__chat_widget_root .cw-md .cw-smart-link:hover {
-          text-decoration: underline;
-        }
-
-        #__chat_widget_root .cw-md .cw-smart-link-label {
-          min-width: 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        #__chat_widget_root .cw-md .cw-smart-link-icon {
-          width: 14px;
-          height: 14px;
-          flex: 0 0 14px;
-        }
-
-        #__chat_widget_root .cw-md ul:has(.cw-smart-link),
-        #__chat_widget_root .cw-md ol:has(.cw-smart-link) {
-          display: grid;
-          gap: 7px;
-          padding-left: 0;
-          list-style: none;
-        }
-
-        #__chat_widget_root .cw-md li:has(.cw-smart-link) {
-          display: flex;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 6px 10px;
-          margin: 0;
-          padding: 9px 10px;
-          border: 1px solid rgba(100, 116, 139, 0.16);
-          border-radius: 8px;
-          background: rgba(248, 250, 252, 0.7);
-        }
-
-        #__chat_widget_root .cw-md li:has(.cw-smart-link)::marker {
-          content: "";
-        }
-
-        #__chat_widget_root .cw-md li:has(.cw-smart-link) .cw-smart-link {
-          flex: 1 1 180px;
-          justify-content: space-between;
-          padding: 5px 8px;
-          border-radius: 6px;
-          background: rgba(37, 99, 235, 0.08);
-        }
-
-        :global(body.dark-skin) #__chat_widget_root .cw-md .cw-smart-link,
-        :global(.dark) #__chat_widget_root .cw-md .cw-smart-link {
-          color: #7dd3fc;
-        }
-
-        :global(body.dark-skin) #__chat_widget_root .cw-md li:has(.cw-smart-link),
-        :global(.dark) #__chat_widget_root .cw-md li:has(.cw-smart-link) {
-          border-color: rgba(148, 163, 184, 0.16);
-          background: rgba(15, 23, 42, 0.34);
-        }
-
-        :global(body.dark-skin) #__chat_widget_root .cw-md li:has(.cw-smart-link) .cw-smart-link,
-        :global(.dark) #__chat_widget_root .cw-md li:has(.cw-smart-link) .cw-smart-link {
-          background: rgba(56, 189, 248, 0.1);
-        }
-        
         /* Inline styles */
         #__chat_widget_root .cw-md strong {
           font-weight: 600;
@@ -5423,117 +4182,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           color: #c4b5fd;
         }
 
-        /* Reasoning chain */
-        #__chat_widget_root .cw-reasoning {
-          margin: 6px 0 10px;
-          border: 1px solid rgba(99, 102, 241, 0.18);
-          border-radius: 12px;
-          overflow: hidden;
-          background: rgba(99, 102, 241, 0.035);
-        }
-        #__chat_widget_root .cw-reasoning-toggle {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          width: 100%;
-          height: auto !important;
-          min-height: 56px;
-          padding: 9px 11px;
-          font-size: 12px;
-          font-weight: 650;
-          line-height: 1.3 !important;
-          cursor: pointer;
-          background: none;
-          border: none;
-          color: inherit;
-          text-align: left;
-          opacity: 0.9;
-          overflow: visible;
-          white-space: normal;
-        }
-        #__chat_widget_root .cw-reasoning-toggle:hover { opacity: 1; }
-        #__chat_widget_root .cw-r-ico { flex: 0 0 auto; color: #6366f1; }
-        #__chat_widget_root .cw-r-spin { animation: cw-reasoning-spin 1s linear infinite; }
-        #__chat_widget_root .cw-reasoning-heading {
-          display: flex;
-          min-width: 0;
-          flex: 1;
-          flex-direction: column;
-          gap: 1px;
-        }
-        #__chat_widget_root .cw-reasoning-subtitle {
-          font-size: 10px;
-          font-weight: 450;
-          line-height: 1.3;
-          opacity: 0.55;
-        }
-        #__chat_widget_root .cw-reasoning-toggle > .cw-chev { flex: 0 0 auto; }
-        #__chat_widget_root .cw-reasoning-steps {
-          padding: 4px 12px 12px 12px;
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-        #__chat_widget_root .cw-rs {
-          position: relative;
-          display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          font-size: 12px;
-          line-height: 1.45;
-          opacity: 0.62;
-        }
-        #__chat_widget_root .cw-rs:not(:last-child)::after {
-          content: "";
-          position: absolute;
-          left: 6px;
-          top: 17px;
-          bottom: -7px;
-          width: 1px;
-          background: rgba(99, 102, 241, 0.2);
-        }
-        #__chat_widget_root .cw-rs.done { opacity: 1; }
-        #__chat_widget_root .cw-rs.active { opacity: 0.9; }
-        #__chat_widget_root .cw-rs-dot { flex: 0 0 auto; padding-top: 1px; }
-        #__chat_widget_root .cw-rs-check { color: #10b981; }
-        #__chat_widget_root .cw-rs-circle { color: #9ca3af; }
-        #__chat_widget_root .cw-rs-label { font-weight: 650; }
-        #__chat_widget_root .cw-rs-detail { font-size: 11px; line-height: 1.5; opacity: 0.72; margin-top: 3px; }
-        @keyframes cw-reasoning-spin { to { transform: rotate(360deg); } }
-
-        /* Key concepts bar */
-        #__chat_widget_root .cw-concepts {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 6px;
-          margin-top: 10px;
-          padding-top: 8px;
-          border-top: 1px solid rgba(0,0,0,0.08);
-        }
-        #__chat_widget_root .cw-concepts-label {
-          font-size: 11px;
-          font-weight: 600;
-          opacity: 0.5;
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
-          flex-shrink: 0;
-        }
-        #__chat_widget_root .cw-concept-badge {
-          font-size: 11px;
-          padding: 2px 8px;
-          border-radius: 999px;
-          border: 1.5px solid;
-          background: rgba(255,255,255,0.5);
-          cursor: default;
-        }
-        :global(body.dark-skin) #__chat_widget_root .cw-concepts {
-          border-top-color: rgba(255,255,255,0.1);
-        }
-        :global(body.dark-skin) #__chat_widget_root .cw-concept-badge {
-          background: rgba(0,0,0,0.2);
-        }
-
         #__chat_widget_root .cw-mode-item-head {
           display: inline-flex;
           align-items: flex-start;
@@ -5701,78 +4349,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
           color: #818cf8;
         }
 
-        /* ===== Attachment UI ===== */
-        .cw-tray {
-          padding: 6px 0 10px;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .cw-msg-files {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-bottom: 8px;
-        }
-
-        .cw-prog {
-          border: 1px solid var(--cw-attachment-border-strong);
-          background: var(--cw-progress-surface);
-          border-radius: 12px;
-          padding: 8px 10px;
-          color: var(--cw-input-text);
-        }
-
-        .cw-prog-top {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          font-size: 12px;
-          opacity: 0.9;
-        }
-
-        .cw-prog-name {
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          max-width: 320px;
-        }
-
-        .cw-prog-pct {
-          min-width: 32px;
-          text-align: right;
-          color: var(--cw-input-placeholder);
-        }
-
-        .cw-prog-bar {
-          height: 6px;
-          border-radius: 999px;
-          background: var(--cw-progress-track);
-          overflow: hidden;
-          margin-top: 6px;
-        }
-
-        .cw-prog-fill {
-          height: 100%;
-          border-radius: 999px;
-          background: #f97316;
-          width: 0%;
-          transition: width 120ms linear;
-        }
-
-        .cw-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          border: 1px solid var(--cw-attachment-border-strong);
-          background: var(--cw-attachment-bg);
-          border-radius: 999px;
-          padding: 8px 10px;
-          max-width: 100%;
-          color: var(--cw-input-text);
-        }
-
         #__chat_widget_root .cw-textbox {
           transition: border-color 120ms ease, box-shadow 120ms ease;
         }
@@ -5852,79 +4428,6 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         :global(body.dark-skin) #__chat_widget_root .cw-tour-btn:focus-visible {
           outline: none;
           box-shadow: 0 0 0 2px var(--ag-accent-glow), 0 8px 28px rgba(99, 102, 241, 0.4) !important;
-        }
-
-
-        .cw-chip-link {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          text-decoration: none;
-          color: inherit;
-          max-width: 100%;
-        }
-
-        .cw-chip-inner {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          max-width: 100%;
-          min-width: 0;
-        }
-
-        .cw-chip-ico {
-          width: 16px;
-          height: 16px;
-          flex: 0 0 auto;
-          opacity: 0.9;
-        }
-
-        .cw-chip-name {
-          font-size: 13px;
-          line-height: 1.1;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          max-width: 260px;
-        }
-
-        .cw-chip-meta {
-          font-size: 12px;
-          opacity: 0.75;
-          flex: 0 0 auto;
-          color: var(--cw-input-placeholder);
-        }
-
-        .cw-chip-err {
-          color: #ef4444;
-          opacity: 1;
-        }
-
-        .cw-chip-x {
-          border: none;
-          background: transparent;
-          cursor: pointer;
-          padding: 2px;
-          border-radius: 8px;
-          opacity: 0.8;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .cw-chip-x:hover {
-          opacity: 1;
-          background: rgba(243, 244, 246, 1);
-        }
-
-        :global(.dark) .cw-chip-x:hover,
-        :global(body.dark-skin) .cw-chip-x:hover {
-          background: rgba(31, 41, 55, 1);
-        }
-
-        .cw-chip-x-ico {
-          width: 16px;
-          height: 16px;
         }
 
         /* ============================================================
@@ -6116,13 +4619,16 @@ function LauncherButton({ onOpen, onDragStart }) {
       type="button"
       onClick={onOpen}
       onMouseDown={onDragStart}
-      className="launch-button relative flex items-center rounded-full mb-2 px-5 py-4 shadow-xl ring-1 ring-gray-200 backdrop-blur hover:shadow-2xl"
+      className="launch-button"
     >
-      <span className="relative flex items-center justify-center rounded-full bg-blue-600" style={{ width: 60, height: 60 }}>
-        <Image src="/assets/images/chatPot.png" alt="Chat Bot" width={48} height={48} priority />
-        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white" />
+      <span className="cw-launch-art">
+        <Image src="/assets/images/chatPot.png" alt="Chat Bot" width={36} height={36} priority />
       </span>
-      <span className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">Mr.Pot</span>
+      <span className="cw-launch-text">
+        <span className="cw-launch-name">Mr.Pot</span>
+        {/* The button is already named by the picture and the name; this line is for the eye only. */}
+        <span className="cw-launch-hint" aria-hidden="true">Ask about Yuqi’s work</span>
+      </span>
     </button>
   )
 }
@@ -6131,6 +4637,7 @@ function LauncherButton({ onOpen, onDragStart }) {
 export default function ChatWidget() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  useEffect(() => { if (open) trackWidget('chat') }, [open])
   const [guideQuestion, setGuideQuestion] = useState(null)
   const [tourActive, setTourActive] = useState(false)
   const [mounted, setMounted] = useState(false)

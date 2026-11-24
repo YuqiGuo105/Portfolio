@@ -17,6 +17,8 @@ import "../styles/globals.css";
 import "../styles/carousel.css";
 import "../styles/chatWidget.css";
 import "../styles/chatWidgetModern.css";
+import "../styles/chatWidgetAnswer.css";
+import "../styles/chatWidgetParts.css";
 
 const SITE_URL = "https://www.yuqi.site";
 const ChatWidget = dynamic(() => import("../src/components/ChatWidget"), { ssr: false });

@@ -28,7 +28,7 @@ export function ScrollDepth({ event, compact = false }) {
 export function VisitorRecordView({ value, onChange }) {
   return <div className={`${styles.root} ${styles.recordView}`}>
     <div className={styles.zoneSwitch} role="group" aria-label="Visitor record view">
-      {[['visits', 'Page visits'], ['events', 'Raw events']].map(([id, label]) => <button key={id} type="button" aria-pressed={value === id} onClick={() => onChange(id)}>{label}</button>)}
+      {[['sessions', 'Visitors'], ['visits', 'Page visits'], ['events', 'Raw events']].map(([id, label]) => <button key={id} type="button" aria-pressed={value === id} onClick={() => onChange(id)}>{label}</button>)}
     </div>
   </div>;
 }

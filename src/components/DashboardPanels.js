@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { trackWidget } from '../lib/widgetTelemetry';
 import { useServiceHoverDetails } from "./ServiceHoverDetails";
 // The visitor globe with its live layer (presence, arrivals, guestbook flags).
 const LiveGlobe = dynamic(() => import("./LiveGlobe"), { ssr: false });
@@ -1150,7 +1151,7 @@ const DashboardPanels = () => {
               className="monitor-disclosure"
               type="button"
               aria-expanded={showAllMonitoredServices}
-              onClick={() => setShowAllMonitoredServices((current) => !current)}
+              onClick={() => { trackWidget('monitoring', showAllMonitoredServices ? 'collapse_services' : 'expand_services'); setShowAllMonitoredServices((current) => !current); }}
             >
               <span>
                 {showAllMonitoredServices
