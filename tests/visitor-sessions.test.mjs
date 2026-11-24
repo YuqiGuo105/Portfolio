@@ -250,6 +250,16 @@ test('an opened page lists what happened on it in order, and says how long it wa
   assert.deepEqual(pageTimeline({}), []);
   assert.deepEqual(pageTimeline(null), []);
 
+  // A rated answer reads as what the visitor did, not as a widget and an action name.
+  const [rated] = groupVisitorSessions(groupVisitorEvents([
+    event('r', 0, 'page_view', '/'),
+    event('r', 10, 'widget_action', '/', { component: 'chat', action: 'answer_liked' }),
+    event('r', 20, 'widget_action', '/', { component: 'chat', action: 'answer_disliked' }),
+    event('r', 30, 'widget_action', '/', { component: 'share', action: 'link_copied' }),
+  ]));
+  assert.deepEqual(pageTimeline(rated.pages[0]).filter(row => row.kind === 'action').map(row => [row.text, row.detail]),
+    [['Liked an answer', ''], ['Marked an answer not helpful', ''], ['Used share', 'link copied']]);
+
   // Until the next page opened is exact; the last page only has a lower bound.
   assert.deepEqual(timeOnPage(home, project), { ms: Date.parse(project.first) - Date.parse(home.first), atLeast: false });
   assert.deepEqual(timeOnPage(guide, undefined), { ms: Date.parse(guide.last) - Date.parse(guide.first), atLeast: true });

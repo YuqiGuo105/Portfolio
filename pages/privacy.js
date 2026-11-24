@@ -32,6 +32,7 @@ export default function PrivacyPage() {
 
       <h2>Retention and security</h2>
       <p><strong>Voice conversations:</strong> when you start a call, microphone audio, public page context, and approved profile facts are processed by Alibaba Cloud Qwen (or Google when configured). This site does not save audio recordings. Text transcripts and call metadata are saved in the existing private conversation database for conversation review and troubleshooting, accessible only through protected administrative services. Generated text may include responses you interrupted or did not finish hearing. You can request deletion using the contact below.</p>
+      <p><strong>Rated chat answers:</strong> if you rate an answer from the chat assistant, the question you asked and the answer you rated are kept privately with your rating, so that answer quality can be reviewed and improved. Taking the rating back removes that copy. You can request deletion using the contact below.</p>
       <p>Records are retained only as long as reasonably needed for their stated purpose, security, audit, and legal obligations. The platform uses access controls, encrypted transport, protected administrative routes, and least-privilege service authorization. No internet service can guarantee absolute security.</p>
 
       <h2>Your choices</h2>

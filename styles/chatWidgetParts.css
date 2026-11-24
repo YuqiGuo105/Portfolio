@@ -1,7 +1,7 @@
 /*
  * Chat conversation, the smaller parts.
  *
- * The launcher, attached files, the drop target, notices, the steps of a Deep answer, page
+ * Attached files, the drop target, notices, the steps of a Deep answer, page
  * controls and key terms. Imported last in pages/_app.js; the colours are the ones set in
  * chatWidgetModern.css. Every selector starts with the doubled root id, and the buttons spell
  * out what the site theme would otherwise give every <button> (60px tall, wide padding, a
@@ -9,76 +9,22 @@
  */
 
 /* ---------- launcher ---------- */
-/* no `display` here: the site terminal hides the launcher with its own rule while it is open */
+/* The launcher is the box it has always been: styles/chatWidget.css and the site theme draw it
+   (white, a 12px corner, the orange outline, the theme's hover fill). Only its size is spelled
+   out here, because the rule that used to set it left with the old window's inline styles. */
 #__chat_widget_root#__chat_widget_root .launch-button {
-  align-items: center;
-  gap: 11px;
-  width: auto;
-  min-width: 0;
-  height: 58px;
-  padding: 6px 22px 6px 7px;
-  overflow: visible;
-  border: 1px solid var(--cwm-line);
-  border-radius: 29px;
-  background: var(--cwm-raised);
-  box-shadow: 0 18px 40px -16px rgba(20, 24, 28, 0.45), 0 4px 10px -4px rgba(20, 24, 28, 0.18) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  color: var(--cwm-ink);
-  font-family: "Rubik", system-ui, sans-serif;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: 0;
-  text-align: left;
-  white-space: nowrap;
-  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  height: 62px;
+  padding: 0 60px;
 }
-#__chat_widget_root#__chat_widget_root .launch-button::before,
-#__chat_widget_root#__chat_widget_root .launch-button::after,
+@media screen and (max-width: 767px) {
+  #__chat_widget_root#__chat_widget_root .launch-button {
+    height: 52px;
+    padding: 0 48px;
+  }
+}
 #__chat_widget_root#__chat_widget_root :is(.cw-chip-x, .cw-plan-stop, .cw-guide-btn)::before,
 #__chat_widget_root#__chat_widget_root :is(.cw-chip-x, .cw-plan-stop, .cw-guide-btn)::after {
   display: none;
-}
-#__chat_widget_root#__chat_widget_root .launch-button:hover {
-  border-color: var(--cwm-fill-strong);
-  background: var(--cwm-raised);
-  box-shadow: 0 24px 46px -16px rgba(20, 24, 28, 0.5), 0 6px 14px -4px rgba(20, 24, 28, 0.2) !important;
-  color: var(--cwm-ink);
-  transform: translateY(-2px);
-}
-#__chat_widget_root#__chat_widget_root .launch-button:active {
-  transform: none;
-}
-#__chat_widget_root#__chat_widget_root .cw-launch-art {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 44px !important;
-  height: 44px !important;
-  border-radius: 50%;
-  background: var(--cwm-accent-soft);
-}
-#__chat_widget_root#__chat_widget_root .cw-launch-art img {
-  width: 36px;
-  height: 36px;
-}
-#__chat_widget_root#__chat_widget_root .cw-launch-text {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-}
-#__chat_widget_root#__chat_widget_root .cw-launch-name {
-  color: var(--cwm-ink);
-}
-#__chat_widget_root#__chat_widget_root .cw-launch-hint {
-  color: var(--cwm-muted);
-  font-size: 12.5px;
-  font-weight: 400;
-}
-.dark #__chat_widget_root#__chat_widget_root .launch-button,
-body.dark-skin #__chat_widget_root#__chat_widget_root .launch-button {
-  box-shadow: 0 18px 40px -14px rgba(0, 0, 0, 0.75), 0 4px 10px -4px rgba(0, 0, 0, 0.5) !important;
 }
 
 /* ---------- attached files ---------- */
@@ -569,26 +515,9 @@ body.dark-skin #__chat_widget_root#__chat_widget_root .launch-button {
   line-height: 1.5;
 }
 
-@media (max-width: 480px) {
-  #__chat_widget_root#__chat_widget_root .cw-launch-hint {
-    display: none;
-  }
-  #__chat_widget_root#__chat_widget_root .launch-button {
-    height: 54px;
-    padding-right: 18px;
-  }
-  #__chat_widget_root#__chat_widget_root .cw-launch-art {
-    width: 40px !important;
-    height: 40px !important;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  #__chat_widget_root#__chat_widget_root :is(.launch-button, .cw-file-bar > i, .cw-chip-x) {
+  #__chat_widget_root#__chat_widget_root :is(.cw-file-bar > i, .cw-chip-x) {
     transition: none;
-  }
-  #__chat_widget_root#__chat_widget_root .launch-button:hover {
-    transform: none;
   }
   #__chat_widget_root#__chat_widget_root .cw-toast,
   #__chat_widget_root#__chat_widget_root .cw-step.is-active .cw-step-mark::after {

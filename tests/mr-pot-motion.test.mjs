@@ -1,170 +1,229 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { POT_REST } from '../src/lib/mrPotAnimation.mjs'
-import { samplePotPerformance } from '../src/lib/mrPotMotion.mjs'
+import { readFileSync } from 'node:fs'
+import { createPotRig, POT_FACES, POT_REACTIONS, POT_REST, POT_SPRINGS, POT_STATES, SPEAKING_MOUTH } from '../src/lib/mrPotRig.mjs'
+import { drawPot, mouthPath, potMarkup, MOUTH_PARTS, POT_BOUNDS, POT_VIEW_BOX } from '../src/lib/mrPotDrawing.mjs'
 
-const states = ['idle', 'thinking', 'searching', 'listening', 'working', 'speaking', 'success', 'error']
+// A repeatable stream of "random" numbers, so a run can be replayed exactly.
+const seeded = seed => () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296 }
+const run = (rig, seconds, each = () => {}) => { for (let i = 0; i < Math.round(seconds * 120); i++) { rig.step(1 / 120); each(rig.state, rig.clock) } }
 
-test('each state performs several distinct gestures, not just a static pose', () => {
-  for (const state of states) {
-    const gestures = new Set()
-    for (let time = 0; time < 16; time += 0.1) gestures.add(samplePotPerformance(state, time).gesture)
-    assert.ok(gestures.size >= (state === 'speaking' ? 2 : 3), `${state}: ${[...gestures]}`)
+test('every state and reaction has a face, and every moving part has a spring and a resting value', () => {
+  assert.deepEqual(Object.keys(POT_SPRINGS).sort(), Object.keys(POT_REST).sort())
+  for (const name of [...POT_STATES, ...Object.keys(POT_REACTIONS), 'sleepy']) {
+    assert.ok(POT_FACES[name], name)
+    for (const key of Object.keys(POT_FACES[name])) assert.ok(key in POT_REST, `${name}.${key}`)
+  }
+  assert.deepEqual([...POT_STATES], ['idle', 'listening', 'thinking', 'searching', 'working', 'speaking', 'success', 'error'])
+  const widget = readFileSync(new URL('../src/components/MrPotAvatar.js', import.meta.url), 'utf8')
+  for (const state of POT_STATES) assert.ok(widget.includes(`${state}: "Mr Pot`), `${state} is announced`)
+})
+
+test('every part stays finite and inside the drawing in every look', () => {
+  for (const name of Object.keys(POT_FACES)) {
+    const rig = createPotRig({ random: seeded(7) })
+    if (POT_STATES.includes(name)) rig.setMood(name); else rig.react(name)
+    run(rig, name === 'sleepy' ? 0 : 12, (s) => {
+      for (const key of Object.keys(POT_REST)) assert.ok(Number.isFinite(s[key]), `${name}.${key}`)
+      assert.ok(Math.abs(s.tilt) < 12, `${name} tilt ${s.tilt}`)
+      assert.ok(s.lift > -40 && s.lift < 14, `${name} lift ${s.lift}`)
+      assert.ok(s.lidY > -8 && s.lidY < 30, `${name} lid ${s.lidY}`)
+      assert.ok(Math.abs(s.squash) < 0.16, `${name} squash ${s.squash}`)
+    })
   }
 })
 
-test('motion preserves scale and keeps the original head and face inside safe bounds', () => {
-  for (const state of states) for (let time = 0; time < 35; time += 0.03) {
-    const { pose } = samplePotPerformance(state, time)
-    assert.deepEqual(Object.keys(pose), Object.keys(POT_REST), 'only supported articulation parameters')
-    assert.ok(Object.values(pose).every(Number.isFinite))
-    assert.ok(Math.abs(pose.tilt) <= 4.1 && Math.abs(pose.lift) <= 1.4 && Math.abs(pose.shiftX) <= 0.6)
-    for (const key of ['gazeX', 'gazeY', 'eyeOpen', 'eyeLeft', 'eyeRight']) {
-      assert.ok(!(key in pose), `${key} cannot animate eyes independently of the head`)
-    }
-    assert.ok(pose.mouthWidth >= 0.75 && pose.mouthWidth <= 1.21 && pose.mouthHeight <= 1.81)
-    assert.ok(pose.mouthOpen >= 0 && pose.mouthOpen <= 1)
-    assert.ok(pose.lidOpen >= 0 && pose.lidOpen <= 1)
-    assert.ok(pose.lidBounce >= 0 && pose.lidBounce <= 1)
-    assert.ok(pose.blush >= 0 && pose.blush <= 0.65)
-    assert.ok(pose.bow >= 0 && pose.bow <= 24, 'a gentle forward bow, not a deep bend')
-    assert.ok(Math.abs(pose.handleLeft) <= 8 && Math.abs(pose.handleRight) <= 8, 'handles stay attached with a small swing')
-    assert.ok(Math.abs(pose.pupilX) <= 0.55 && Math.abs(pose.pupilY) <= 0.4, 'pupils stay inside the fixed sockets')
-    assert.ok(pose.blink >= 0 && pose.blink <= 1, 'one shared eyelid aperture')
+test('the mouth stays small: no gape when he says hello, speaks or finishes', () => {
+  const rig = createPotRig({ random: seeded(3) })
+  rig.setMood('speaking')
+  let widest = 0, moved = 0, previous = 0
+  run(rig, 12, (s) => { widest = Math.max(widest, s.open); if (Math.abs(s.open - previous) > 0.002) moved++; previous = s.open })
+  assert.ok(widest > 0.12, 'the mouth does move')
+  assert.ok(widest <= SPEAKING_MOUTH[1] + 0.02, `widest ${widest}`)
+  assert.ok(SPEAKING_MOUTH[1] <= 0.4)
+  assert.ok(moved > 200, 'and keeps moving while he speaks')
+
+  // Speech is phrases with a breath between them, in more than one mouth shape, and his head
+  // does not bob on every syllable.
+  const talk = createPotRig({ random: seeded(8) })
+  talk.setMood('speaking')
+  let together = 0, parted = 0, narrowest = 1, highest = 0, pauses = 0, shut = 0
+  run(talk, 12, (s) => {
+    if (s.open < 0.02) { together++; shut += 1 / 60 } else { parted++; if (shut > 0.22) pauses++; shut = 0 }
+    narrowest = Math.min(narrowest, s.wide); highest = Math.min(highest, s.lift)
+  })
+  assert.ok(parted > together, `mostly open while speaking: ${parted} to ${together}`)
+  assert.ok(pauses >= 4 && pauses <= 16, `breaths in twelve seconds: ${pauses}`)
+  assert.ok(narrowest < 0.85, `some sounds are rounder: ${narrowest}`)
+  assert.ok(highest > -4, `no hop per syllable: ${highest}`)
+  assert.equal(POT_FACES.speaking.open, undefined, 'he starts a sentence with his lips together')
+  for (const look of ['hello', 'success', 'shy', 'wink', 'curious']) {
+    assert.ok(!POT_FACES[look].open, `${look} keeps his mouth closed`)
+    assert.ok((POT_FACES[look].smile ?? 1) <= 1.3, `${look} smiles without grinning`)
   }
-})
+  // On the 512 grid the open mouth is never deeper than a tenth of his face.
+  const widestMouth = mouthPath({ smile: 1, open: SPEAKING_MOUTH[1] })
+  assert.ok(widestMouth.depth < 24 && widestMouth.height > 12, `depth ${widestMouth.depth}`)
+  assert.equal(mouthPath({ smile: 1, open: 0 }).filled, false)
+  assert.equal(mouthPath({ smile: 0, round: 1 }).filled, true)
 
-test('brows lead the head without stretching or moving the eyes independently', () => {
-  const early = samplePotPerformance('thinking', 0.5).pose
-  const later = samplePotPerformance('thinking', 1.3).pose
-  assert.equal(early.browRight, -12)
-  assert.equal(early.tilt, 0)
-  assert.equal(later.browLeft, 5)
-  assert.equal(later.tilt, -4)
-})
-
-test('loop boundaries are continuous and success or error settles instead of repeating', () => {
-  for (const [state, duration] of [['idle', 14], ['thinking', 10.5], ['searching', 7.6], ['listening', 8.8], ['working', 6.8]]) {
-    const before = samplePotPerformance(state, duration - 0.0001).pose
-    const after = samplePotPerformance(state, duration + 0.0001).pose
-    for (const key of Object.keys(POT_REST)) assert.ok(Math.abs(before[key] - after[key]) < 0.001, `${state}.${key}`)
+  // Opening is one movement: the lips part from the closed smile itself, the lower lip is a round
+  // curve (a cubic, not a point), and the opening only ever grows with `open`.
+  assert.equal(mouthPath({ open: MOUTH_PARTS - 0.001 }).d, mouthPath({ open: 0 }).d)
+  const justParted = mouthPath({ open: MOUTH_PARTS + 0.001 })
+  assert.ok(justParted.filled && justParted.height < 0.2 && Math.abs(justParted.depth - 8) < 0.2, 'no jump where the lips part')
+  let opening = 0
+  for (let open = MOUTH_PARTS; open <= 0.4; open += 0.01) {
+    const shape = mouthPath({ open })
+    assert.match(shape.d, /^M[\d.]+ 320 C[\d. ]+ Q256 [\d.]+ [\d.]+ 320 Z$/)
+    assert.ok(shape.height >= opening - 1e-9, `the opening grows: ${open}`)
+    opening = shape.height
   }
-  for (const state of ['success', 'error']) assert.deepEqual(samplePotPerformance(state, 100).pose, POT_REST)
+  const corner = d => Number(d.match(/^M([\d.]+)/)[1])
+  assert.ok(corner(mouthPath({ open: 0.3, wide: 0.7 }).d) > corner(mouthPath({ open: 0.3, wide: 1 }).d) + 3, 'a rounder sound is a narrower mouth')
 })
 
-test('hover lowers the head thoughtfully, holds, then rises without lateral motion', () => {
-  assert.equal(samplePotPerformance('speaking', 4).gesture, 'speaking-pause')
-  assert.equal(samplePotPerformance('speaking', 4).pose.mouthHeight, 1)
-  const down = samplePotPerformance('idle', 4, 1.2)
-  const hold = samplePotPerformance('idle', 4, 2.6)
-  const greeting = samplePotPerformance('idle', 4, 3.6)
-  assert.equal(down.gesture, 'hover-look-down')
-  assert.equal(down.pose.bow, 24)
-  assert.equal(hold.gesture, 'hover-ponder')
-  assert.deepEqual(hold.pose, down.pose)
-  assert.equal(greeting.pose.bow, 0)
-  assert.equal(greeting.gesture, 'hover-look-up')
-  for (const state of ['thinking', 'searching', 'working', 'speaking', 'success', 'error']) {
-    assert.deepEqual(samplePotPerformance(state, 4, 1.9), samplePotPerformance(state, 4), 'hover never interrupts an active task')
+test('thinking never settles into a fixed loop', () => {
+  const beats = seed => {
+    const rig = createPotRig({ random: seeded(seed) }), jumps = []
+    rig.setMood('thinking')
+    let last = 0
+    run(rig, 30, (s, clock) => { if (s.lidY > 3 && last <= 3) jumps.push(clock); last = s.lidY })
+    return jumps
   }
-  assert.deepEqual(samplePotPerformance('idle', 4, 4.8), samplePotPerformance('idle', 4))
-  for (let time = 0; time < 4.8; time += 0.025) {
-    const { pose, steady } = samplePotPerformance('idle', 0, time)
-    assert.equal(pose.tilt, 0, 'no sideways head rotation')
-    assert.equal(pose.shiftX, 0, 'no left/right scanning')
-    assert.equal(steady, true, 'the original GIF sway also pauses during the bow')
-    assert.ok(pose.bow <= 24)
-    assert.deepEqual(Object.keys(pose), Object.keys(POT_REST), 'hover has no per-eye position or size controls')
+  const first = beats(11), gaps = first.slice(1).map((time, index) => +(time - first[index]).toFixed(2))
+  assert.ok(first.length >= 8, `the lid jumps again and again: ${first.length}`)
+  assert.ok(new Set(gaps).size >= gaps.length * 0.7, `the gaps differ: ${gaps}`)
+  assert.ok(Math.max(...gaps) - Math.min(...gaps) > 0.4)
+  assert.notDeepEqual(first, beats(12), 'another visit plays differently')
+  assert.deepEqual(first, beats(11), 'the same seed replays exactly: all the variation comes from the random source')
+})
+
+test('at rest he blinks, fidgets and follows the pointer; left alone he gets sleepy and wakes when touched', () => {
+  const rig = createPotRig({ random: seeded(5) })
+  let blinks = 0, open = true
+  const moved = new Set()
+  run(rig, 60, (s) => {
+    if (s.eye < 0.3 && open) { blinks++; open = false } else if (s.eye > 0.8) open = true
+    for (const key of ['px', 'tilt', 'lidY', 'hL', 'lids', 'joy', 'wink', 'lidRot']) if (Math.abs(s[key] - POT_REST[key]) > 0.12) moved.add(key)
+  })
+  assert.ok(blinks >= 8 && blinks <= 40, `blinks in a minute: ${blinks}`)
+  assert.ok(moved.size >= 5, `habits seen: ${[...moved]}`)
+
+  rig.look(1, -1)
+  run(rig, 0.6)
+  assert.ok(rig.state.px > 3 && rig.state.py < -2, 'eyes go to the pointer')
+  run(rig, 3)
+  assert.ok(Math.abs(rig.state.px) < 6.5, 'and let go of it after a couple of seconds')
+
+  const alone = createPotRig({ random: seeded(9) })
+  run(alone, 95)
+  assert.equal(alone.shown, 'sleepy')
+  alone.key()
+  assert.equal(alone.shown, 'idle', 'a keystroke wakes him')
+  // Waking is a stretch, not a jump: it follows any pointer movement after a pause, so a start
+  // would look like a reaction to whatever is clicked next.
+  const dozing = createPotRig({ random: seeded(9) })
+  run(dozing, 95)
+  dozing.look(0.4, 0.6)
+  let jump = 0
+  run(dozing, 1.2, (s) => { jump = Math.min(jump, s.lift) })
+  assert.equal(dozing.shown, 'idle')
+  assert.ok(jump > -5, `waking lift ${jump}`)
+
+  // On the launcher he never nods off.
+  const launcher = createPotRig({ random: seeded(9), sleeps: false })
+  run(launcher, 200)
+  assert.equal(launcher.shown, 'idle')
+})
+
+test('a reaction is brief, gives way to an answer, and never interrupts one', () => {
+  const rig = createPotRig({ random: seeded(2) })
+  assert.equal(rig.react('shy'), true)
+  assert.equal(rig.shown, 'shy')
+  run(rig, 1)
+  assert.ok(rig.state.py > 1 && rig.state.blush > 0.9, 'he looks down, and blushes')
+  run(rig, POT_REACTIONS.shy)
+  assert.equal(rig.shown, 'idle', 'then he is himself again')
+
+  rig.react('curious')
+  rig.setMood('thinking')
+  assert.equal(rig.shown, 'thinking', 'the answer matters more than the reaction')
+  assert.equal(rig.react('shy'), false, 'no reactions while he is busy')
+  rig.setMood('speaking'); rig.setMood('success')
+  assert.equal(rig.shown, 'success')
+  assert.equal(rig.react('shy'), true, 'a like right after the answer is welcome')
+  run(rig, POT_REACTIONS.shy + 0.1)
+  assert.equal(rig.shown, 'idle', 'the celebration is not replayed after the reaction')
+  assert.equal(rig.react('nonsense'), false)
+  // A like taken back, or turned into a dislike, ends the blush without another reaction.
+  rig.setMood('idle'); run(rig, 0.1)
+  rig.react('shy'); run(rig, 0.5)
+  assert.equal(rig.shown, 'shy')
+  rig.settle()
+  assert.equal(rig.shown, 'idle')
+  rig.settle()
+  assert.equal(rig.shown, 'idle', 'settling with nothing playing does nothing')
+  rig.setMood('nonsense')
+  assert.equal(rig.base, 'idle')
+
+  const done = createPotRig({ random: seeded(4) })
+  done.setMood('success')
+  let highest = 0
+  run(done, 3, s => { highest = Math.min(highest, s.lift) })
+  assert.ok(highest < -6 && highest > -30, `a small hop: ${highest}`)
+  run(done, 1)
+  assert.equal(done.shown, 'idle', 'he settles after a finished answer')
+
+  const typing = createPotRig({ random: seeded(6) })
+  // The widget does both on the first character: the state first, then the reaction.
+  typing.setMood('listening')
+  assert.equal(typing.react('curious'), true, 'the first key is the moment for a curious look')
+  assert.equal(typing.shown, 'curious')
+  run(typing, POT_REACTIONS.curious + 0.1)
+  assert.equal(typing.shown, 'listening', 'then he goes back to listening, not to rest')
+  run(typing, 1)
+  const before = typing.state.lift
+  typing.key(); run(typing, 0.08)
+  assert.ok(typing.state.lift > before + 1, 'each keystroke is a nod')
+})
+
+test('with reduced motion he holds the right face and does not move', () => {
+  const rig = createPotRig({ random: seeded(1), still: () => true })
+  rig.setMood('thinking')
+  run(rig, 5, (s) => { assert.equal(s.lift, 0); assert.equal(s.lidY, 0); assert.equal(s.breath, 0) })
+  assert.equal(rig.state.py, POT_FACES.thinking.py)
+  rig.setMood('error')
+  rig.step(1 / 60)
+  assert.equal(rig.state.smile, POT_FACES.error.smile)
+  assert.equal(rig.puffs.length, 0)
+})
+
+test('the drawing is whole without the script, and draws every part every frame', () => {
+  const markup = potMarkup('potA')
+  // The window onto the grid is centred on the pot, not on the pot and its steam.
+  assert.equal(POT_VIEW_BOX, '0 12.5 512 512')
+  assert.ok(markup.startsWith(`<svg viewBox="${POT_VIEW_BOX}"`))
+  const [, top, , height] = POT_VIEW_BOX.split(' ').map(Number)
+  assert.equal(top + height / 2, (POT_BOUNDS.top + POT_BOUNDS.bottom) / 2)
+  assert.equal(256, (POT_BOUNDS.left + POT_BOUNDS.right) / 2)
+  assert.ok(markup.includes('id="potA-l"') && markup.includes('url(#potA-l)') && !potMarkup('potB').includes('potA'))
+  assert.doesNotMatch(markup, /<script|on\w+=|href=|url\(http/i)
+  const names = [...markup.matchAll(/data-p="(\w+)"/g)].map(match => match[1])
+  assert.equal(new Set(names).size, names.length, 'part names are unique')
+  // A stand-in for the DOM: record what each part was told.
+  const written = {}
+  const part = Object.fromEntries(names.map(name => [name, { setAttribute: (key, value) => { (written[name] ||= {})[key] = String(value) } }]))
+  part.puffList = Array.from({ length: 5 }, (_, index) => ({ setAttribute: (key, value) => { (written[`puff${index}`] ||= {})[key] = String(value) } }))
+  const rig = createPotRig({ random: seeded(8) })
+  rig.setMood('thinking')
+  run(rig, 2)
+  drawPot(part, rig.state, rig.clock, rig.puffs)
+  for (const name of ['hop', 'body', 'lid', 'hl', 'hr', 'bl', 'br', 'el', 'er', 'pl', 'pr', 'll', 'lr', 'mouth', 'blush', 'w1', 'w2', 'steam', 'sweat', 'jl', 'jr', 'cl', 'cr']) {
+    assert.ok(written[name], `${name} is drawn`)
+    for (const value of Object.values(written[name])) assert.doesNotMatch(value, /NaN|undefined|Infinity/, `${name}: ${value}`)
   }
-})
-
-test('thinking bows as a single head, holds, then raises the head', () => {
-  const before = samplePotPerformance('thinking', 4.8).pose
-  const down = samplePotPerformance('thinking', 5.7).pose
-  const hold = samplePotPerformance('thinking', 6.6).pose
-  const up = samplePotPerformance('thinking', 7.3).pose
-  assert.equal(before.bow, 0)
-  assert.equal(down.bow, 24)
-  assert.deepEqual(down, hold)
-  assert.equal(down.tilt, 0, 'forward bow must not become a sideways head tilt')
-  assert.equal(up.bow, 0)
-  assert.ok(up.lidOpen > 0 && up.mouthOpen > 0)
-  assert.equal(samplePotPerformance('thinking', 8.1).pose.lidOpen, 0)
-})
-
-test('speaking opens the mouth and rests between phrases', () => {
-  const openings = Array.from({ length: 35 }, (_, i) => samplePotPerformance('speaking', i / 10).pose.mouthOpen)
-  assert.ok(Math.max(...openings) > 0.5)
-  assert.equal(samplePotPerformance('speaking', 4).pose.mouthOpen, 0)
-  assert.equal(samplePotPerformance('speaking', 4).pose.lidOpen, 0)
-  assert.equal(Math.abs(samplePotPerformance('speaking', 4).pose.handleLeft), 0)
-  assert.equal(Math.abs(samplePotPerformance('speaking', 4).pose.handleRight), 0)
-  assert.ok(Math.max(...openings) <= 0.65, 'speaking is a small opening, not an exaggerated stretch')
-})
-
-test('handles react briefly to listening and completion, then settle', () => {
-  const listening = samplePotPerformance('listening', 1).pose
-  assert.ok(listening.handleRight > listening.handleLeft)
-  const success = samplePotPerformance('success', 0.45).pose
-  assert.ok(success.handleLeft > 0 && success.handleRight > 0)
-  assert.ok(samplePotPerformance('success', 0.85).pose.handleLeft < 0)
-  assert.equal(samplePotPerformance('success', 4).pose.handleLeft, 0)
-})
-
-test('invalid inputs fall back to a valid resting start', () => {
-  for (const time of [-1, NaN, Infinity]) assert.deepEqual(samplePotPerformance('unknown', time).pose, POT_REST)
-})
-
-test('paired blinks close quickly, hold briefly, and reopen with quiet intervals', () => {
-  assert.equal(samplePotPerformance('idle', 1.1).pose.blink, 0)
-  assert.equal(samplePotPerformance('idle', 1.19).pose.blink, 1)
-  assert.ok(samplePotPerformance('idle', 1.3).pose.blink > 0)
-  assert.equal(samplePotPerformance('idle', 1.4).pose.blink, 0)
-  for (const state of states) {
-    let active = 0, closed = 0
-    for (let t = 0; t < 14; t += 0.01) {
-      const { blink } = samplePotPerformance(state, t).pose
-      if (blink > 0) active++
-      if (blink > 0.99) closed++
-    }
-    assert.ok(closed > 0, `${state} has a visible paired blink`)
-    assert.ok(active < 14 * 100 * 0.16, `${state} spends most of its time with eyes open`)
-  }
-})
-
-test('gaze follows attention without moving the sockets or scanning on hover', () => {
-  assert.ok(samplePotPerformance('thinking', 0.5).pose.pupilY < 0)
-  assert.equal(samplePotPerformance('thinking', 5.7).pose.pupilY, 0.4)
-  assert.equal(samplePotPerformance('searching', 0.35).pose.pupilX, -0.55)
-  assert.equal(samplePotPerformance('searching', 2.5).pose.pupilX, 0.55)
-  for (let t = 0; t < 4.8; t += 0.05) {
-    const { pose } = samplePotPerformance('idle', 0, t)
-    assert.equal(pose.pupilX, 0, 'hover looks down then forward, never left/right')
-  }
-  assert.ok(samplePotPerformance('idle', 0, 3.6).pose.mouthOpen > 0)
-  assert.ok(samplePotPerformance('idle', 0, 3.6).pose.handleLeft > 0)
-})
-
-test('lid rises, makes one small rebound, then rests without changing head proportions', () => {
-  for (const [start, sample] of [
-    [5.7, age => samplePotPerformance('idle', age).pose],
-    [3.15, age => samplePotPerformance('idle', 0, age).pose],
-  ]) {
-    assert.equal(sample(start).lidBounce, 0)
-    assert.ok(sample(start + 0.48).lidBounce > 0.999)
-    assert.ok(sample(start + 1.05).lidBounce < 0.001)
-    assert.ok(Math.abs(sample(start + 1.27).lidBounce - 0.16) < 0.001)
-    assert.equal(sample(start + 1.66).lidBounce, 0)
-    for (const knot of [0, 0.48, 1.05, 1.27]) {
-      const t = start + knot, h = 0.0001
-      const center = sample(t).lidBounce
-      const before = sample(t - h).lidBounce, after = sample(t + h).lidBounce
-      assert.ok(Math.abs((after - before) / (2 * h)) < 0.001, 'no velocity snap at a turning point')
-      assert.ok(Math.abs((after - 2 * center + before) / h ** 2) < 0.2, 'landing acceleration stays smooth')
-    }
-  }
-  for (let time = 5.7; time < 7.4; time += 0.02) {
-    const pose = samplePotPerformance('idle', time).pose
-    for (const key of ['tilt', 'lift', 'shiftX', 'bow', 'handleLeft', 'handleRight']) assert.equal(pose[key], 0, `${key} is unaffected by the idle lid bounce`)
-  }
+  const component = readFileSync(new URL('../src/components/MrPotAvatar.js', import.meta.url), 'utf8')
+  assert.ok(component.includes('prefers-reduced-motion') && component.includes('IntersectionObserver') && component.includes('visibilitychange'))
+  assert.doesNotMatch(component, /canvas|\.gif/)
 })

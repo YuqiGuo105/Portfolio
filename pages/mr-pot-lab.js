@@ -3,6 +3,8 @@ import Link from "next/link";
 import { useState } from "react";
 import BrowserActionPlan from "../src/components/BrowserActionPlan";
 import RunReplay from "../src/components/RunReplay";
+import MrPotAvatar from "../src/components/MrPotAvatar";
+import { POT_REACTIONS, POT_STATES } from "../src/lib/mrPotRig.mjs";
 
 const CASES = [
   ["Publishing, step 3", { type: "diagram_step", flow: "publish-content", step: 3 }],
@@ -13,6 +15,8 @@ const CASES = [
 
 export default function MrPotLab() {
   const [selected, setSelected] = useState(null);
+  const [mood, setMood] = useState("idle");
+  const [reaction, setReaction] = useState(null);
   return <main style={{ maxWidth: 920, margin: "40px auto", padding: 24 }}>
     <Head><title>Mr. Pot | Local interaction lab</title><meta name="robots" content="noindex,nofollow" /></Head>
     <Link href="/"><a>Home</a></Link>
@@ -21,6 +25,17 @@ export default function MrPotLab() {
     <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>{CASES.map(([label, action]) =>
       <button type="button" key={label} onClick={() => setSelected({ label, action })}>{label}</button>)}</div>
     {selected && <BrowserActionPlan key={selected.label} plan={{ schemaVersion: 1, autoStart: false, actions: [selected.action] }} />}
+    <h2 style={{ fontSize: 20, marginTop: 40 }}>Mr. Pot / every look</h2>
+    <p>States come from the conversation. Reactions are short and only play while he is at rest or has just finished.</p>
+    <div style={{ display: "flex", alignItems: "center", gap: 32, flexWrap: "wrap" }}>
+      <div style={{ padding: 28, borderRadius: 16, background: "#fbf5ee" }}><MrPotAvatar state={mood} size="large" reaction={reaction} announce /></div>
+      <div style={{ display: "grid", gap: 12 }}>
+        <div role="group" aria-label="State" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{POT_STATES.map(name =>
+          <button type="button" key={name} aria-pressed={mood === name} onClick={() => setMood(name)} style={{ height: 36, padding: "0 14px" }}>{name}</button>)}</div>
+        <div role="group" aria-label="Reaction" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{Object.keys(POT_REACTIONS).map(name =>
+          <button type="button" key={name} onClick={() => setReaction(current => ({ name, id: (current?.id || 0) + 1 }))} style={{ height: 36, padding: "0 14px" }}>{name}</button>)}</div>
+      </div>
+    </div>
     <h2 style={{ fontSize: 20, marginTop: 40 }}>Execution record / fixture</h2>
     <RunReplay events={[
       { stage: "safety_check", label: "Input safety", status: "completed", durationMs: 90, inputTokens: null, outputTokens: null, costUsd: null },

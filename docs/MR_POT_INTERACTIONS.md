@@ -7,6 +7,7 @@ recorded separately from local test results.
 
 Open `/mr-pot-lab` in development mode. The page exercises real page controls
 without calling a model; its example execution record is explicitly a fixture.
+It also shows every look Mr. Pot has, one button each (see `docs/CHAT_WINDOW.md`).
 The lab returns 404 in production mode.
 
 Available actions:

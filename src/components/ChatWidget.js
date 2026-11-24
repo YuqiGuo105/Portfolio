@@ -1,10 +1,9 @@
 "use client"
 
 import { createPortal } from "react-dom"
-import { useState, useEffect, useRef, Fragment } from "react"
+import { useState, useEffect, useRef, useCallback, Fragment } from "react"
 import { trackWidget } from '../lib/widgetTelemetry'
 import { Minus, ArrowUp, ArrowUpRight, Loader2, ChevronDown, Check, Zap, Brain, Square } from "lucide-react"
-import Image from "next/image"
 import { supabase } from "../supabase/supabaseClient" // <-- adjust if your path differs
 import { useRouter } from "next/router"
 import LogInDialog from "../components/LogInDialog"
@@ -1168,6 +1167,20 @@ function uploadToAgentWithProgress({ uploadUrl, file, onProgress }) {
   })
 }
 
+// A verdict on one answer. Only the run's ID travels: the site reads the answer itself from the
+// assistant's own record, and keeps a copy with the verdict.
+async function sendAnswerFeedback({ runId, verdict, sessionId }) {
+  if (!runId || !sessionId) throw new Error("This answer cannot be rated yet.")
+  const response = await fetch("/api/rag/answer/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ runId, verdict, sessionId, page: window.location.pathname }),
+    keepalive: true,
+  })
+  const result = await response.json().catch(() => null)
+  if (!response.ok || result?.saved !== true) throw new Error("Your rating could not be saved. Please try again.")
+}
+
 async function endAttachmentConversation({ ragBase, sessionId, deviceId }) {
   if (!ragBase || !sessionId) return
   const response = await fetch(ragAttachmentUrl(ragBase, "conversation/end"), {
@@ -1225,6 +1238,10 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   const [uploading, setUploading] = useState(false)
   const uploadBusyRef = useRef(false)
   const [fileDragActive, setFileDragActive] = useState(false)
+  // Mr. Pot: a short look in answer to something the visitor just did, and a tick per keystroke.
+  const [potReaction, setPotReaction] = useState(null)
+  const [typingPulse, setTypingPulse] = useState(0)
+  const reactPot = useCallback((name) => setPotReaction((current) => ({ name, id: (current?.id || 0) + 1 })), [])
   const fileDragDepthRef = useRef(0)
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [liveVoiceOpen, setLiveVoiceOpen] = useState(false)
@@ -1281,6 +1298,8 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   }, [])
   const [endpoint, setEndpoint] = useState("")
   const [errorToast, setErrorToast] = useState("")
+  const pendingRatingsRef = useRef(new Set())
+  const [pendingRatings, setPendingRatings] = useState({})
   const MODE_KEY = "cw:mode"
 
   const BLOG_OWNER_EMAIL = "yuqi.guo17@gmail.com"
@@ -2816,7 +2835,34 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
   }
 
   const latestAssistantMessage = [...messages].reverse().find((message) => message.role === "assistant")
-  const headerPetState = voiceOpen ? "listening" : getMrPotState(latestAssistantMessage)
+  // While the visitor is writing and no answer is in progress, he leans toward the message box.
+  const answering = Boolean(latestAssistantMessage?.streaming)
+  const headerPetState = voiceOpen || (!answering && input.trim()) ? "listening" : getMrPotState(latestAssistantMessage)
+  const offeredGuide = Boolean(latestAssistantMessage && !answering && answerOffersGuide(latestAssistantMessage))
+  const latestAnswerId = latestAssistantMessage?.id
+  useEffect(() => {
+    // An answer that ends by offering the guide gets a wink, once the little celebration is over.
+    if (!offeredGuide) return undefined
+    const timer = setTimeout(() => reactPot("wink"), 1500)
+    return () => clearTimeout(timer)
+  }, [offeredGuide, latestAnswerId, reactPot])
+  const rateAnswer = async (id, verdict) => {
+    // Keep writes ordered: cancelling cannot race a still-running save.
+    if (pendingRatingsRef.current.has(id)) return
+    pendingRatingsRef.current.add(id)
+    setPendingRatings((prev) => ({ ...prev, [id]: true }))
+    try {
+      await sendAnswerFeedback({ runId: messages.find((message) => message.id === id)?.runId, verdict, sessionId })
+      setMessages((prev) => prev.map((message) => (message.id === id ? { ...message, feedback: verdict } : message)))
+      trackWidget("chat", verdict === "up" ? "answer_liked" : verdict === "down" ? "answer_disliked" : "answer_rating_cleared")
+      reactPot(verdict === "up" ? "shy" : "none")
+    } catch {
+      setErrorToast(verdict === null ? "Your rating could not be removed. Please try again." : "Your rating could not be saved. Please try again.")
+    } finally {
+      pendingRatingsRef.current.delete(id)
+      setPendingRatings((prev) => { const next = { ...prev }; delete next[id]; return next })
+    }
+  }
 
   return (
     <div
@@ -2829,6 +2875,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
         event.preventDefault()
         event.stopPropagation()
         fileDragDepthRef.current += 1
+        if (!fileDragActive) reactPot("surprised")
         setFileDragActive(true)
       }}
       onDragOver={(event) => {
@@ -2880,7 +2927,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >
-            <MrPotAvatar state={headerPetState} size="header" announce />
+            <MrPotAvatar state={headerPetState} size="header" announce reaction={potReaction} pulse={typingPulse} />
             <span className="cw-brand-copy">
               <span className="cw-title">Mr Pot</span>
             </span>
@@ -3064,6 +3111,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
                     runId={m.runId}
                     guide={answerOffersGuide(m) ? { label: m.guideButtonLabel || "Start web guide", hint: m.guideCopy, onStart: () => triggerSiteTour(m.guidePlan) } : null}
                     research={researchRecord(m)}
+                    feedback={m.feedback || null}
+                    feedbackPending={Boolean(pendingRatings[m.id])}
+                    onFeedback={m.errorCode || !m.id || !m.runId ? null : (verdict) => rateAnswer(m.id, verdict)}
                   />
                 )
               })() : null}
@@ -3160,6 +3210,9 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
             ref={textareaRef}
             value={input}
             onChange={(e) => {
+              // The first character makes him curious; every one after that is a nod.
+              if (!input && e.target.value) reactPot("curious")
+              setTypingPulse((count) => count + 1)
               setInput(e.target.value)
               touchSession()
             }}
@@ -4621,14 +4674,9 @@ function LauncherButton({ onOpen, onDragStart }) {
       onMouseDown={onDragStart}
       className="launch-button"
     >
-      <span className="cw-launch-art">
-        <Image src="/assets/images/chatPot.png" alt="Chat Bot" width={36} height={36} priority />
-      </span>
-      <span className="cw-launch-text">
-        <span className="cw-launch-name">Mr.Pot</span>
-        {/* The button is already named by the picture and the name; this line is for the eye only. */}
-        <span className="cw-launch-hint" aria-hidden="true">Ask about Yuqi’s work</span>
-      </span>
+      {/* The box and its label are the launcher as it has always been; only Mr. Pot is alive now. */}
+      <MrPotAvatar size="launch" launcher />
+      <span className="cw-launch-name"><span className="cw-sr">Chat Bot </span>Mr.Pot</span>
     </button>
   )
 }
