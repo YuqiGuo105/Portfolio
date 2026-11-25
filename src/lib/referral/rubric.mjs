@@ -8,7 +8,7 @@ export const CHECKS = Object.freeze(['verified', 'contradicted', 'unavailable', 
 export const CONTRADICTED_CAP = 39;
 export const PASS_SCORE = 60;
 export const EVIDENCE_PATHS = Object.freeze({
-  employer: 'Major-company experience + LinkedIn profile',
+  employer: 'Major-company engineering experience',
   openSource: 'Substantial open-source engineering',
   contests: 'Strong LeetCode contest performance',
 });
@@ -33,7 +33,8 @@ export function gradeEvidence(assessment, { profileUrl = '', badge = null, block
     const evidence = item.evidence.map(value => text(value, 280)).filter(Boolean).slice(0, 3);
     const links = [...new Set(item.links.map(value => httpsUrl(value, 500)).filter(Boolean))].slice(0, 3);
     const found = id !== 'employer' && CHECKS.includes(verification?.[id]) ? verification[id] : 'unchecked';
-    const hasReference = id === 'employer' ? Boolean(linkedInProfile(profileUrl))
+    // Employment is read from the résumé itself: a LinkedIn profile is noted for the owner when there is one, but its absence takes nothing away.
+    const hasReference = id === 'employer' ? true
       : found === 'verified' || (id === 'contests' ? links.some(link => /(^|\.)leetcode\.(com|cn)$/.test(new URL(link).hostname)) : links.length > 0);
     const supported = item.meetsBar && item.score >= PASS_SCORE && evidence.length > 0 && hasReference && found !== 'contradicted';
     // This argument is supplied by the authenticated owner action, never by the model or applicant.
@@ -76,8 +77,10 @@ export function autoDeclineBelow(env = {}) {
 export function screeningOutcome(note, env = {}) {
   if (note?.source !== 'ai' || !currentScreening(note) || !Number.isInteger(note.score)) return 'review';
   if (note.passed === true) return 'passed';
+  // A path the model found strong but that only lacks a link to check is a person's call, never an automatic decline.
   const waiting = note.criteria?.employer?.pendingBadge || note.consistency === 'conflicts'
-    || Object.values(note.criteria || {}).some(item => item.check === 'unavailable' && item.meetsBar);
+    || (!note.flags?.some(flag => flag !== 'incomplete')
+      && Object.values(note.criteria || {}).some(item => item.meetsBar && item.score >= PASS_SCORE && item.check !== 'contradicted'));
   return !waiting && note.score < autoDeclineBelow(env) ? 'auto_declined' : 'review';
 }
 

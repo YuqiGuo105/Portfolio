@@ -19,11 +19,11 @@ test('59 does not pass and 60 does, without adding other paths', () => {
   assert.equal(grade.score, 59); assert.equal(grade.passed, false);
 });
 
-test('each alternative can pass alone; the employer path needs a LinkedIn profile, and the owner can take it away', () => {
+test('each alternative can pass alone; the employer path stands on the résumé, and the owner can take it away', () => {
   const employer = assessment({ employer: strong(88), openSource: none() });
   const open = gradeEvidence(employer, { profileUrl });
   assert.equal(open.score, 88); assert.deepEqual(open.qualifiedPaths, ['employer']); assert.equal(open.criteria.employer.check, 'unchecked');
-  assert.equal(gradeEvidence(employer).passed, false, 'no LinkedIn profile to hold it against');
+  assert.equal(gradeEvidence(employer).passed, true, 'the résumé is the evidence; a LinkedIn link is optional');
   const badge = { confirmed: true, profileUrl, checkedBy: 'owner', checkedAt: '2026-11-16T12:00:00Z' };
   assert.equal(gradeEvidence(employer, { profileUrl, badge }).criteria.employer.check, 'verified');
   // A confirmation for another profile, or without an owner, verifies nothing but takes nothing away.

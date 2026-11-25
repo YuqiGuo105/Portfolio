@@ -105,7 +105,6 @@ export default function ContactVerification({ active, resetKey, onToken, action 
           aria-label="Retry verification" title="Retry verification">
           <RotateCw size={18} aria-hidden="true" />
         </button>
-        <a className={styles.emailLink} href="mailto:yuqi.guo17@gmail.com">Email instead</a>
       </div>
     </div>}
   </div>;

@@ -132,7 +132,10 @@ test('outcome: a pass, an automatic decline under the bar, and everything a pers
   // Major-company experience on the résumé with a LinkedIn profile goes straight to the owner, also when the profile is only on the résumé.
   const bigCo = { ...AI_NOTE, assessment: { employer: strong(88, []), openSource: none(), contests: none() } };
   assert.equal(screeningOutcome(grade(bigCo)), 'passed');
-  assert.equal(screeningOutcome(grade(bigCo, { profileUrl: '' })), 'auto_declined', 'no LinkedIn profile anywhere');
+  assert.equal(screeningOutcome(grade(bigCo, { profileUrl: '' })), 'passed', 'the résumé is enough; a LinkedIn link is optional');
+  // A path the model found strong but that has no link to check goes to the owner, never to an automatic decline.
+  const noLink = grade({ ...AI_NOTE, assessment: { employer: none(), contests: none(), openSource: strong(85, []) } });
+  assert.equal(noLink.passed, false); assert.equal(noLink.score, 59); assert.equal(screeningOutcome(noLink), 'review');
   const fromResume = grade(bigCo, { profileUrl: 'https://alex.example/portfolio', checks: { linkedin: 'https://www.linkedin.com/in/alex-chen' } });
   assert.equal(screeningOutcome(fromResume), 'passed'); assert.equal(fromResume.linkedinProfile, 'https://www.linkedin.com/in/alex-chen');
   // Waiting on the owner: a résumé that disagrees, a lookup that failed, no model at all.

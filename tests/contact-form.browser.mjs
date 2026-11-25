@@ -147,7 +147,6 @@ try {
       await retry.focus();
       assert.equal(await retry.evaluate(element => getComputedStyle(element).outlineWidth), '2px');
       await retry.press('Tab');
-      assert.equal(await verification.getByRole('link', { name: 'Email instead' }).evaluate(element => element === document.activeElement), true);
       await form.screenshot({ path: `/tmp/contact-retry-${theme}-${width}.png` });
     }
     await retry.click();

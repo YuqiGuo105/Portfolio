@@ -79,8 +79,9 @@ test('Share card is a normal page link outside the form, not a modal or submit a
     assert.equal(events.length, 0);
     assert.equal(window.location.pathname, '/'); assert.equal(submits, 0);
     assert.equal(document.querySelector('input').value, 'Unsent draft');
-    assert.ok(document.querySelector('a[href^="tel:"]'));
-    assert.ok(document.querySelector('a[href^="mailto:"]'));
+    // The contact section no longer prints a personal phone number or email address.
+    assert.equal(document.querySelector('#contact-section a[href^="tel:"]'), null);
+    assert.equal(document.querySelector('#contact-section a[href^="mailto:"]'), null);
   } finally { window.removeEventListener(SHARE_EVENT, capture); }
 });
 

@@ -18,14 +18,6 @@ const ContactForm = ({ referral = null, shareCardHref }) => (
         <div className="col-md-3 align-right contact-details">
           <div className="numbers-items contacts-items">
             <div className="numbers-item">
-              <div className="icon"><i className="fas fa-phone"/></div>
-              <a className="num contact-value" href="tel:+13159567675">+1 (315) 956 7675</a>
-            </div>
-            <div className="numbers-item">
-              <div className="icon"><i className="fas fa-mail-bulk"/></div>
-              <a className="num contact-value" href="mailto:yuqi.guo17@gmail.com">yuqi.guo17@gmail.com</a>
-            </div>
-            <div className="numbers-item">
               <a
                 className="contact-map-link"
                 href="https://www.google.com/maps/search/?api=1&query=Syracuse%2C%20NY%2013210%2C%20USA"

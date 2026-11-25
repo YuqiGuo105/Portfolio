@@ -74,7 +74,7 @@ function EvidenceScore({ request, busy, onBadge }) {
             <button type="button" className={styles.action} disabled={busy || reviewNote.trim().length < 10} onClick={() => save(true)}>Confirm official badge</button>
             <button type="button" className={styles.action} disabled={busy || reviewNote.trim().length < 10} onClick={() => save(false)}>Badge not verified</button>
           </div>
-        </> : <p className={styles.caveat}>No LinkedIn member profile was supplied in the form or the résumé, so this path cannot pass.</p>}
+        </> : <p className={styles.caveat}>No LinkedIn member profile was supplied in the form or the résumé. The path is judged on the résumé alone.</p>}
       </details>
     </div>
   );
