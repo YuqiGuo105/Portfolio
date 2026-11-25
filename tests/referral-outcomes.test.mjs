@@ -259,7 +259,7 @@ test('a pass sends two emails at once from the no-reply mailbox: the owner is as
   assert.equal(applicant.to, 'alex@example.com'); assert.match(applicant.subject, /passed screening/);
   assert.match(applicant.text, new RegExp(`https://www\\.yuqi\\.site/talk/status#${statusToken(id, env).replace('.', '\\.')}`));
   // The status link is random text, so it is left out of the check.
-  const said = (applicant.text + applicant.html).replace(/talk\/status#\S+/g, '').replace(/R-[0-9A-F]{12}/g, '');
+  const said = (applicant.text + applicant.html).replace(/talk\/status#\S+/g, '').replace(/R-[0-9A-F-]{12}/g, '');
   assert.equal(/82|score|\/100|open-source|Strengths/i.test(said), false, 'the applicant never sees the score or the note');
   const row = await f.store.get(id);
   assert.equal(row.outcome, 'passed'); assert.equal(row.status, 'new'); assert.ok(row.outcome_mail_at);
@@ -277,7 +277,7 @@ test('under the bar is declined automatically and the applicant gets one email f
   assert.equal(f.digests.length, 0); assert.equal(f.sent.length, 1); assert.equal(summary.turnedDown, 1);
   const [mail] = f.sent;
   assert.equal(mail.to, 'alex@example.com'); assert.match(mail.text, /was not selected/); assert.match(mail.text, /talk\/status#/);
-  assert.equal(/34|score|\/100|open-source|under the bar/i.test((mail.text + mail.html).replace(/talk\/status#\S+/g, '').replace(/R-[0-9A-F]{12}/g, '')), false, 'no score and no reason');
+  assert.equal(/34|score|\/100|open-source|under the bar/i.test((mail.text + mail.html).replace(/talk\/status#\S+/g, '').replace(/R-[0-9A-F-]{12}/g, '')), false, 'no score and no reason');
   await f.worker.run();
   assert.equal(f.sent.length, 1, 'sent once');
   assert.equal(applicantStage(row), 'not_selected');
