@@ -32,9 +32,6 @@ export default function TalkPage({ referral }) {
               Choose what you came for. Messages and referral requests land in my inbox; live chat and calls happen on TalkNest.
             </p>
             <TalkHub mode="page" referral={referral} />
-            <p className={styles.direct}>
-              Rather use email or phone? <a href="mailto:yuqi.guo17@gmail.com">yuqi.guo17@gmail.com</a> · <a href="tel:+13159567675">+1 (315) 956 7675</a>
-            </p>
           </div>
         </div>
       </section>
