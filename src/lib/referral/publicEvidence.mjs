@@ -123,7 +123,8 @@ const LC_QUERY = {
 const LC_ENDPOINT = { com: 'https://leetcode.com/graphql', cn: 'https://leetcode.cn/graphql/noj-go/' };
 
 export function createPublicEvidence({ env = process.env, fetchImpl = fetch, now = Date.now } = {}) {
-  const token = () => env.REFERRAL_GITHUB_TOKEN || env.GITHUB_TOKEN || '';
+  // Any GitHub token the site already has will do: it is only used to read public data at a higher rate limit.
+  const token = () => env.REFERRAL_GITHUB_TOKEN || env.GITHUB_TOKEN || env.GITHUB_PAT || '';
   // { data } | { missing: true } | { unavailable: true }
   async function github(path) {
     try {
