@@ -45,7 +45,7 @@ process.env.CRON_SECRET = require('node:crypto').randomBytes(24).toString('hex')
 // The preview never reaches the email account, whatever the environment file contains.
 for (const key of ['EMAIL_USER', 'EMAIL_PASS', 'EMAIL_TO']) delete process.env[key];
 
-const WRITABLE = new Set(['/api/contact', '/api/referral', '/api/referral/complete', '/api/referral/preview', '/api/referral/preview-upload', '/api/referral/preview-history', '/api/rag/admission', '/api/cron/referral-worker']);
+const WRITABLE = new Set(['/api/contact', '/api/referral', '/api/referral/complete', '/api/referral/status', '/api/referral/preview', '/api/referral/preview-upload', '/api/referral/preview-history', '/api/rag/admission', '/api/cron/referral-worker']);
 // hostname and port let the middleware on "/" build absolute URLs under a custom server.
 const app = require('next')({ dev: true, dir: root, hostname: '127.0.0.1', port, conf: { ...require('../next.config.js'), distDir: '.next-talk' } });
 await app.prepare();

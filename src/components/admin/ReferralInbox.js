@@ -8,6 +8,9 @@ import styles from "./ReferralInbox.module.css";
 
 const STATUS_LABELS = { new: "New", reviewing: "Reviewing", referred: "Referred", declined: "Declined", archived: "Archived" };
 const FLAG_LABELS = { spam: "Looks like spam", injection: "Tried to steer the AI", off_topic: "Off topic", incomplete: "Missing details" };
+const CHECK_LABELS = { verified: "Checked against public data: the cited work is there.", contradicted: "Checked against public data: the cited references do not hold, so this path is capped at 39.",
+  unavailable: "The public lookup could not be made; judged on what was submitted." };
+const OUTCOME = { passed: "Passed screening", auto_declined: "Declined automatically", review: "Waiting for you" };
 const CONSISTENCY = { consistent: "Introduction matches the résumé.", minor_gaps: "Small gaps between the introduction and the résumé.", conflicts: "The introduction and the résumé disagree.", not_checked: "The résumé was not compared with the introduction." };
 
 const when = (value) => {
@@ -40,26 +43,28 @@ function Signal({ request, offer }) {
 function EvidenceScore({ request, busy, onBadge }) {
   const note = request.screening;
   const [reviewNote, setReviewNote] = useState("");
-  const profile = linkedInProfile(request.profile_url);
+  const profile = linkedInProfile(request.profile_url) || linkedInProfile(note.linkedinProfile);
   const save = async (confirmed) => { if (await onBadge(confirmed, reviewNote)) setReviewNote(""); };
   return (
     <div className={styles.evidenceScore}>
       <p className={styles.noteLabel}>Evidence score · {note.score}/100 · Pass mark 60</p>
-      <p className={styles.caveat}>One strong path is required. Scores are not added together. AI assesses submitted evidence, not job fit; external claims still need review.</p>
+      <p className={styles.caveat}>One strong path is required. Scores are not added together. AI assesses submitted evidence, not job fit. GitHub and LeetCode links are looked up; they describe an account, not proof of whose it is.</p>
       {Object.entries(EVIDENCE_PATHS).map(([id, label]) => {
         const item = note.criteria[id];
         return <details key={id} className={styles.evidencePath}>
           <summary><span>{label}</span><strong>{item.score}/100</strong><span className={styles.pill} data-tone={item.eligible ? "strong" : "unclear"}>
-            {item.eligible ? "Meets gate" : item.pendingBadge ? "Badge check needed" : "Not established"}
+            {item.eligible ? "Meets gate" : item.pendingBadge ? "You did not confirm the profile" : "Not established"}
           </span><ChevronRight className={styles.evidenceChevron} size={15} aria-hidden="true" /></summary>
           <p>{item.reason}</p>
+          {id !== "employer" && item.check && item.check !== "unchecked" && <p className={styles.caveat}><strong>{CHECK_LABELS[item.check]}</strong></p>}
+          {!!note.checkFacts?.[id]?.length && <ul>{note.checkFacts[id].map((text) => <li key={text}>{text}</li>)}</ul>}
           {!!item.evidence.length && <ul>{item.evidence.map((text) => <li key={text}>{text}</li>)}</ul>}
           {!!item.links.length && <ul>{item.links.map((url) => <li key={url}><a href={url} target="_blank" rel="noopener noreferrer">{url}</a></li>)}</ul>}
         </details>;
       })}
       <details className={styles.evidencePath}>
         <summary><span>Official LinkedIn badge · {note.linkedinBadge?.confirmed ? "Confirmed by owner" : "Not confirmed"}</span><ChevronRight className={styles.evidenceChevron} size={15} aria-hidden="true" /></summary>
-        <p className={styles.caveat}>Check the official badge on the applicant&apos;s own profile. Premium, a LinkedIn login, a profile link or the applicant&apos;s claim does not count. A badge alone does not prove their employment history.</p>
+        <p className={styles.caveat}>A request with major-company experience on the résumé and a LinkedIn profile reaches you without waiting for this check. Open the profile before you refer; recording “not verified” takes the pass away. Premium, a LinkedIn login, a profile link or the applicant&apos;s claim does not count. A badge alone does not prove their employment history.</p>
         {note.linkedinBadge && <p className={styles.caveat}>{note.linkedinBadge.note} · {when(note.linkedinBadge.checkedAt)}</p>}
         {profile ? <>
           <a className={styles.action} href={profile} target="_blank" rel="noopener noreferrer">Open LinkedIn profile</a>
@@ -69,7 +74,7 @@ function EvidenceScore({ request, busy, onBadge }) {
             <button type="button" className={styles.action} disabled={busy || reviewNote.trim().length < 10} onClick={() => save(true)}>Confirm official badge</button>
             <button type="button" className={styles.action} disabled={busy || reviewNote.trim().length < 10} onClick={() => save(false)}>Badge not verified</button>
           </div>
-        </> : <p className={styles.caveat}>No LinkedIn member profile was supplied. This path cannot pass until a profile and its official badge can be checked.</p>}
+        </> : <p className={styles.caveat}>No LinkedIn member profile was supplied in the form or the résumé, so this path cannot pass.</p>}
       </details>
     </div>
   );
@@ -156,6 +161,13 @@ function Detail({ request, busy, onStatus, onNote, onDelete, onResume, onRescree
                 onClick={() => request.status !== status && onStatus(status)}>{STATUS_LABELS[status]}</button>
             ))}
           </div>
+          <p className={styles.caveat}>
+            {OUTCOME[request.outcome] ? `${OUTCOME[request.outcome]}. ` : ""}
+            {note.auto?.declined && request.status === "declined" ? `Scored under ${note.auto.below}, so it was declined without waiting for you; choose another status to overrule that. ` : ""}
+            {request.outcome === "passed" ? (request.outcome_mail_at ? `Confirmation to the applicant and the note to you were sent ${when(request.outcome_mail_at)}. ` : "The two emails have not been sent (no no-reply mailbox, or still queued). ") : ""}
+            The applicant sees the status on their page, never the score or these notes.
+          </p>
+          {request.status_token && <div className={styles.buttons}><a className={styles.action} href={`/talk/status#${request.status_token}`} target="_blank" rel="noopener noreferrer">See what the applicant sees</a></div>}
           <p className={styles.caveat}>Declining or archiving deletes the résumé file straight away. Otherwise it is deleted 30 days after the request arrived.</p>
         </div>
         <div className={styles.block}>

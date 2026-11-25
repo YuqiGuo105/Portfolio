@@ -68,7 +68,7 @@ test('upload then confirm queues the request once and wakes the worker', async (
   res = await send(f.complete, { idempotencyKey: body.idempotencyKey });
   assert.equal(res.statusCode, 200); assert.equal(res.body.reference, accepted.body.reference);
   // The applicant is told it arrived and nothing about screening.
-  assert.deepEqual(Object.keys(res.body).sort(), ['message', 'ok', 'reference', 'requestId']);
+  assert.deepEqual(Object.keys(res.body).sort(), ['message', 'ok', 'reference', 'requestId', 'statusToken']);
   const [row] = await f.store.list();
   assert.equal(row.state, 'queued'); assert.equal(row.resume_bytes, pdf().length); assert.equal(f.kicks.length, 1);
   // Confirming again changes nothing and does not wake the worker again.
@@ -271,7 +271,8 @@ test('only the owner can attest an official LinkedIn badge; stale checks and app
     return res;
   };
   assert.equal((await call()).statusCode, 401);
-  assert.equal((await f.store.get(row.id)).screening.passed, false);
+  // Major-company experience on the résumé plus a LinkedIn profile passes without waiting for the owner's check.
+  assert.equal((await f.store.get(row.id)).screening.passed, true);
   user = { userId: 'owner' };
   for (const extra of [{ reviewNote: '' }, { confirmed: 'true' }, { expectedUpdatedAt: null }]) assert.equal((await call(extra)).statusCode, 400);
   assert.equal((await call({ expectedUpdatedAt: '2000-01-01T00:00:00Z' })).statusCode, 409);
@@ -282,7 +283,8 @@ test('only the owner can attest an official LinkedIn badge; stale checks and app
   assert.equal(res.body.screening.passed, false); assert.equal(res.body.fit, 59);
   await f.store.update(row.id, { state: 'screening' });
   assert.equal((await call()).statusCode, 409);
-  await f.store.update(row.id, { state: 'ready', profile_url: 'https://linkedin.com.evil.test/in/example' });
+  const latest = await f.store.get(row.id);
+  await f.store.update(row.id, { state: 'ready', profile_url: 'https://linkedin.com.evil.test/in/example', screening: { ...latest.screening, linkedinProfile: null } });
   assert.equal((await call()).statusCode, 400);
 });
 

@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   const runtime = referralRuntime();
   if (req.method === 'GET' && req.query.view === 'outbox') {
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json({ outbox: runtime.outbox, aiEnabled: runtime.screener.enabled() });
+    return res.status(200).json({ outbox: runtime.outbox, aiEnabled: process.env.REFERRAL_AI_ENABLED === '1' && runtime.screener.enabled() });
   }
   return runtime.previewAdmin(req, res);
 }

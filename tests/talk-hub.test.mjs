@@ -202,7 +202,7 @@ test('each step names what is missing before moving on', async () => {
   await type('referral-years', 'five');
   await click(button('Continue'));
   assert.deepEqual(errors().sort(), ['Attach your résumé as a PDF.', 'Choose the option that fits best.', 'Enter a whole number of years, or leave this empty.',
-    'Enter an email address I can reply to.', 'Enter your full name.']);
+    'Enter an email address you can be reached at.', 'Enter your full name.']);
 });
 
 async function addExtraRoles() {
@@ -276,7 +276,7 @@ test('arriving at the review does not send anything; sending needs consent and v
   // Regression: the click on "Continue" must not also submit the form it turns into.
   assert.deepEqual(requests, []); assert.deepEqual(errors(), []);
   assert.equal($('[data-verification]').getAttribute('data-verification'), 'referral_submit');
-  assert.match(container.textContent, /an AI model \(Google Gemini\) may read them to prepare a summary only he sees/);
+  assert.match(container.textContent, /an AI model \(Google Gemini\) may read them to screen the request/);
   assert.match(container.textContent, /the résumé file for up to 30 days, or until the request is closed/);
   await submitForm();
   assert.deepEqual(errors(), ['Please confirm how your details will be used.']); assert.deepEqual(requests, []);

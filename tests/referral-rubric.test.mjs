@@ -19,15 +19,20 @@ test('59 does not pass and 60 does, without adding other paths', () => {
   assert.equal(grade.score, 59); assert.equal(grade.passed, false);
 });
 
-test('each alternative can pass alone; the employer path also needs a trusted official badge check', () => {
+test('each alternative can pass alone; the employer path needs a LinkedIn profile, and the owner can take it away', () => {
   const employer = assessment({ employer: strong(88), openSource: none() });
-  const pending = gradeEvidence(employer, { profileUrl });
-  assert.equal(pending.score, 59); assert.equal(pending.passed, false); assert.equal(pending.criteria.employer.pendingBadge, true);
+  const open = gradeEvidence(employer, { profileUrl });
+  assert.equal(open.score, 88); assert.deepEqual(open.qualifiedPaths, ['employer']); assert.equal(open.criteria.employer.check, 'unchecked');
+  assert.equal(gradeEvidence(employer).passed, false, 'no LinkedIn profile to hold it against');
   const badge = { confirmed: true, profileUrl, checkedBy: 'owner', checkedAt: '2026-11-16T12:00:00Z' };
-  assert.deepEqual(gradeEvidence(employer, { profileUrl, badge }).qualifiedPaths, ['employer']);
-  for (const invalid of [{ confirmed: true }, { ...badge, profileUrl: 'https://www.linkedin.com/in/another' }, { ...badge, confirmed: false }]) {
-    assert.equal(gradeEvidence(employer, { profileUrl, badge: invalid }).passed, false);
+  assert.equal(gradeEvidence(employer, { profileUrl, badge }).criteria.employer.check, 'verified');
+  // A confirmation for another profile, or without an owner, verifies nothing but takes nothing away.
+  for (const partial of [{ confirmed: true }, { ...badge, profileUrl: 'https://www.linkedin.com/in/another' }]) {
+    const grade = gradeEvidence(employer, { profileUrl, badge: partial });
+    assert.equal(grade.passed, true); assert.equal(grade.criteria.employer.check, 'unchecked');
   }
+  const refused = gradeEvidence(employer, { profileUrl, badge: { ...badge, confirmed: false } });
+  assert.equal(refused.passed, false); assert.equal(refused.score, 59); assert.equal(refused.criteria.employer.pendingBadge, true);
   const contest = gradeEvidence(assessment({ employer: none(), openSource: none(), contests: { ...strong(85), links: ['https://leetcode.com/u/example'] } }));
   assert.equal(contest.score, 85); assert.deepEqual(contest.qualifiedPaths, ['contests']);
 });

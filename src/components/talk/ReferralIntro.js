@@ -14,7 +14,12 @@ export default function ReferralIntro({ company }) {
         <li><Check size={16} aria-hidden="true" /><span>Your résumé as a PDF, 2 MB or smaller.</span></li>
         <li><Check size={16} aria-hidden="true" /><span>A short introduction of you, written by you in third person, the way it would read in a referral form.</span></li>
       </ul>
-      <p>I read every request myself. An AI summary helps me go through them faster; it never decides anything, and a referral is not guaranteed.</p>
+      <p>
+        I refer people whose request shows at least one of three things: strong open-source engineering (your own project or merged upstream work),
+        strong LeetCode weekly or biweekly contest results, or substantial engineering experience at a major technology or financial company.
+        Include the GitHub or LeetCode links: they are checked.
+      </p>
+      <p>Requests are screened automatically against this bar, and one under it is declined without reaching me. You can follow yours on a status page. One request per person; a referral is not guaranteed.</p>
       <div className={styles.explainActions}>
         <Link href={referralHref}>
           <a className={styles.primary}>Start a referral request <ArrowRight size={17} aria-hidden="true" /></a>

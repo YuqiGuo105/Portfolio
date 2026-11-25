@@ -25,7 +25,7 @@ function fullText(row) {
   const ai = note.source === 'ai';
   const paths = currentScreening(note) && note.criteria ? Object.entries(EVIDENCE_PATHS).map(([id, label]) => {
     const item = note.criteria[id];
-    return `${label}: ${item.score}/100; ${item.eligible ? 'meets the gate' : item.pendingBadge ? 'official badge not confirmed' : 'below the gate'}. ${item.reason}`;
+    return `${label}: ${item.score}/100; ${item.eligible ? 'meets the gate' : item.pendingBadge ? 'profile not confirmed by the owner' : 'below the gate'}. ${item.reason}`;
   }) : [];
   const lists = [['Evidence paths', paths], [ai ? 'Strengths' : 'Provided', note.strengths], [ai ? 'Concerns' : 'Missing', note.concerns], ['Worth asking', note.followUps],
     ['Flags', (note.flags || []).map(flag => FLAG_TEXT[flag] || flag)]].filter(([, items]) => items?.length);
@@ -53,7 +53,7 @@ export function referralDigestMail(rows, { adminUrl = 'https://www.yuqi.site/adm
   const subject = single
     ? `Referral request: ${single.additional_roles?.length ? `${single.additional_roles.length + 1} roles` : single.role_title} · ${single.name} (${signalOf(single)})`
     : `${sorted.length} new referral requests${passed ? ` (${passed} passed initial screening)` : ''}`;
-  const caveat = '60/100 requires at least one strong evidence path. AI assesses submitted material; links and claims are not independently verified. The owner records official LinkedIn badge checks separately. This is not a referral decision.';
+  const caveat = '60/100 requires at least one strong evidence path. AI assesses submitted material; GitHub and LeetCode links are checked against those services, other claims are not independently verified. The owner records official LinkedIn badge checks separately. Requests under the bar are declined automatically and are not listed here. This is not a referral decision.';
   const more = waiting > 0 ? `${waiting} more ${waiting === 1 ? 'is' : 'are'} still being screened.` : '';
   const detailed = sorted.length <= 3;
 
@@ -87,7 +87,80 @@ export function referralDigestMail(rows, { adminUrl = 'https://www.yuqi.site/adm
   return { subject: oneLine(subject).slice(0, 200), ...(single ? { replyTo: single.email } : {}), text, html };
 }
 
+// The two emails a qualifying request sends at once, both from the no-reply mailbox: a confirmation
+// to the applicant, and a note asking the owner to submit the referral. The applicant's copy says
+// where the request stands and nothing about the score or the screening note.
+export function passMails(row, { statusLink = '', adminUrl = 'https://www.yuqi.site/admin/referrals' } = {}) {
+  const roles = storedRoles(row).map(role => role.roleTitle).join(' / ');
+  const company = row.company || 'the company';
+  const applicantLines = [
+    `Hi ${oneLine(row.name)},`, '',
+    `Your referral request ${row.reference} for ${roles} at ${company} has passed screening, and Yuqi has been asked to submit your referral.`,
+    'A referral is not a job offer and is not guaranteed: Yuqi still reads the request himself, and what happens after a referral is decided by the company.',
+    ...(statusLink ? ['', `Follow your request here: ${statusLink}`] : []), '',
+    'This mailbox sends automatic messages and is not read. Please do not reply to it.',
+  ];
+  const owner = fullText(row);
+  const facts = Object.values(row.screening?.checkFacts || {}).flat();
+  const ownerLines = [
+    `${row.name} passed screening for ${roles} at ${company}. Please submit the referral, or decide otherwise on the review page.`, '',
+    ...owner.lines, ...(facts.length ? ['', 'Checked against public data:', ...facts.map(item => `- ${item}`)] : []), '',
+    `Review and download the résumé: ${adminUrl}`, 'The applicant has been sent a confirmation at the same time.',
+    'The score is a screening heuristic over submitted evidence, with GitHub and LeetCode facts fetched where links were given. LinkedIn and employment are not checked automatically.',
+  ];
+  const html = lines => `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;line-height:1.55;color:#1d2a27;max-width:680px">${
+    lines.map(item => (item ? `<p style="margin:0 0 10px;white-space:pre-wrap">${escapeHtml(item)}</p>` : '')).join('')}</div>`;
+  return {
+    applicant: { to: row.email, subject: oneLine(`Your referral request ${row.reference} passed screening`).slice(0, 200), text: applicantLines.join('\n'), html: html(applicantLines) },
+    owner: { subject: oneLine(`Please refer: ${row.name} · ${roles} (${signalOf(row)})`).slice(0, 200), replyTo: row.email, text: ownerLines.join('\n'), html: html(ownerLines) },
+  };
+}
+
+// The one email a request under the screening bar gets, from the no-reply mailbox. It says the
+// outcome and nothing about the score or the reasons.
+export function declineMail(row, { statusLink = '' } = {}) {
+  const roles = storedRoles(row).map(role => role.roleTitle).join(' / ');
+  const lines = [
+    `Hi ${oneLine(row.name)},`, '',
+    `Thank you for your referral request ${row.reference} for ${roles} at ${row.company || 'the company'}.`,
+    'Requests are screened against what Yuqi looks for before he refers anyone, and this one was not selected, so he will not be submitting a referral for it. '
+      + 'This is not a judgement of you, and it does not affect applying to the company directly.',
+    'Your résumé file is deleted from the site.',
+    ...(statusLink ? ['', `Your request: ${statusLink}`] : []), '',
+    'This mailbox sends automatic messages and is not read. Please do not reply to it.',
+  ];
+  return { to: row.email, subject: oneLine(`Your referral request ${row.reference}`).slice(0, 200), text: lines.join('\n'),
+    html: `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;line-height:1.55;color:#1d2a27;max-width:680px">${
+      lines.map(item => (item ? `<p style="margin:0 0 10px">${escapeHtml(item)}</p>` : '')).join('')}</div>` };
+}
+
+// The no-reply mailbox: an account that is neither the owner's own address nor the one that
+// receives his mail. Applicants are only ever written to from it; without it they get no email.
+export function noReplyMailbox(env = process.env) {
+  const url = String(env.REFERRAL_NOREPLY_SMTP_URL || '').trim(), from = String(env.REFERRAL_NOREPLY_FROM || '').trim();
+  if (!/^smtps?:\/\//.test(url) || !from) return null;
+  const address = (from.match(/<([^<>\s]+@[^<>\s]+)>\s*$/)?.[1] || from).toLowerCase();
+  let user = '';
+  try { user = decodeURIComponent(new URL(url).username).toLowerCase(); } catch { return null; }
+  const personal = [env.EMAIL_USER, env.EMAIL_TO].filter(Boolean).map(value => String(value).trim().toLowerCase());
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) || personal.includes(address) || personal.includes(user)) return null;
+  return { url, from };
+}
+
+// Mail from the no-reply mailbox. `to` defaults to the owner's inbox.
+export async function sendNoReplyMail(mail, { env = process.env } = {}) {
+  const box = noReplyMailbox(env);
+  const to = mail.to || env.REFERRAL_OWNER_EMAIL || env.EMAIL_TO;
+  if (!box || !to) throw new Error('The no-reply mailbox is not configured');
+  const { default: nodemailer } = await import('nodemailer');
+  const transporter = nodemailer.createTransport(box.url, { connectionTimeout: 10000, socketTimeout: 20000 });
+  await transporter.sendMail({ ...mail, from: box.from, to });
+}
+
+// The owner's digest. It leaves from the no-reply mailbox when there is one, otherwise from the
+// contact form's account as before.
 export async function sendReferralMail(mail, { env = process.env } = {}) {
+  if (noReplyMailbox(env)) return sendNoReplyMail(mail, { env });
   const { EMAIL_USER: user, EMAIL_PASS: pass, EMAIL_TO: to } = env;
   if (!user || !pass || !to) throw new Error('Referral email is not configured');
   const { default: nodemailer } = await import('nodemailer');

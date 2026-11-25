@@ -4,6 +4,7 @@
 // any number of workers can run at once without screening a request twice.
 import { randomUUID } from 'node:crypto';
 import { CLOSED_STATUSES, REQUEST_KEEP_DAYS, RESUME_KEEP_DAYS, STATUSES } from './config.mjs';
+import { applicantKey } from './fields.mjs';
 
 const missingTable = error => ['42P01', 'PGRST205', 'PGRST202'].includes(error?.code);
 const fail = () => { throw new Error('Referral store unavailable'); };
@@ -14,7 +15,7 @@ export const validStatus = value => STATUSES.includes(value);
 // The row written when a request is accepted. Its résumé is uploaded next, to `resume_path`.
 export function referralRow({ key, reference, request, resume, path, company }) {
   return {
-    idempotency_key: key, reference, state: 'awaiting_upload', status: 'new', company,
+    idempotency_key: key, reference, state: 'awaiting_upload', status: 'new', company, applicant_key: applicantKey(request.email, company),
     name: request.name, email: request.email, profile_url: request.profileUrl || null,
     role_title: request.roleTitle, job_url: request.jobUrl, job_id: request.jobId || null, location: request.location || null,
     additional_roles: request.additionalRoles || [],
@@ -45,9 +46,40 @@ export function supabaseReferralStore(client) {
       if (missingTable(inserted.error)) return null;
       if (inserted.error.code !== '23505') fail();
       const existing = await this.findByKey(row.idempotency_key);
-      if (!existing) fail(); // the clash was on the reference, not the key: the caller retries with a new one
-      return { row: existing, created: false };
+      if (existing) return { row: existing, created: false };
+      // Not this request again: the same person asking a second time (the unique index on applicant_key).
+      const earlier = row.applicant_key ? await this.findByApplicant(row.applicant_key) : null;
+      if (earlier) return { duplicate: earlier };
+      return fail(); // the clash was on the reference
     },
+    // The request this person already has for this company, if any.
+    async findByApplicant(key) {
+      const { data, error } = await table().select('*').eq('applicant_key', key).maybeSingle();
+      if (missingTable(error)) return null;
+      if (error) fail();
+      return data;
+    },
+    // Another request that came with the very same résumé file: its reference, or null.
+    async sameResume(sha256, exceptId) {
+      const { data, error } = await table().select('reference').eq('resume_sha256', sha256).neq('id', exceptId).limit(1);
+      if (error) fail();
+      return data?.[0]?.reference || null;
+    },
+    // Requests with an outcome to tell someone about (a pass: two emails; an automatic decline: one)
+    // that have not been mailed yet, each claimed by a conditional
+    // update so overlapping workers never send a pair twice.
+    async claimPassMails(limit = 10) {
+      const due = rows(await table().select('id').in('outcome', ['passed', 'auto_declined']).is('outcome_mail_at', null).eq('state', 'ready')
+        .gt('created_at', new Date(Date.now() - 7 * DAY).toISOString()).order('created_at').limit(limit));
+      const claimed = [];
+      for (const { id } of due) {
+        const taken = rows(await table().update({ outcome_mail_at: new Date().toISOString() }).eq('id', id).is('outcome_mail_at', null).select('*'));
+        if (taken.length) claimed.push(taken[0]);
+      }
+      return claimed;
+    },
+    // Bookkeeping that must not look like an edit: updated_at guards the owner's own changes.
+    async mark(id, patch) { rows(await table().update(patch).eq('id', id).select('id')); },
     async findByKey(key) {
       const { data, error } = await table().select('*').eq('idempotency_key', key).maybeSingle();
       if (missingTable(error)) return null;
@@ -147,7 +179,7 @@ export function memoryReferralStore(seed = [], now = Date.now) {
     const at = now();
     const saved = { id: randomUUID(), created_at: iso(at), updated_at: iso(at), expires_at: iso(at + REQUEST_KEEP_DAYS * DAY),
       resume_expires_at: iso(at + RESUME_KEEP_DAYS * DAY), state: 'awaiting_upload', status: 'new', screening: {}, recommendation: null, fit: null,
-      resume_sha256: null, lease_until: null, attempts: 0, notified_at: null, owner_note: null, ...row };
+      resume_sha256: null, lease_until: null, attempts: 0, notified_at: null, owner_note: null, applicant_key: null, outcome: null, outcome_mail_at: null, ...row };
     rows.set(saved.id, saved); return saved;
   };
   seed.forEach(add);
@@ -156,8 +188,19 @@ export function memoryReferralStore(seed = [], now = Date.now) {
     async accept(row) {
       const existing = [...rows.values()].find(item => item.idempotency_key === row.idempotency_key);
       if (existing) return { row: copy(existing), created: false };
+      const earlier = row.applicant_key && [...rows.values()].find(item => item.applicant_key === row.applicant_key);
+      if (earlier) return { duplicate: copy(earlier) };
       return { row: copy(add(row)), created: true };
     },
+    size() { return rows.size; },
+    async findByApplicant(key) { return copy([...rows.values()].find(item => item.applicant_key === key)); },
+    async sameResume(sha256, exceptId) { return [...rows.values()].find(item => item.resume_sha256 === sha256 && item.id !== exceptId)?.reference || null; },
+    async claimPassMails(limit = 10) {
+      const due = [...rows.values()].filter(row => ['passed', 'auto_declined'].includes(row.outcome) && !row.outcome_mail_at && row.state === 'ready').slice(0, limit);
+      for (const row of due) row.outcome_mail_at = iso(now());
+      return due.map(copy);
+    },
+    async mark(id, patch) { const row = rows.get(id); if (row) Object.assign(row, patch); },
     async findByKey(key) { return copy([...rows.values()].find(item => item.idempotency_key === key)); },
     async markUploaded(id, bytes) {
       const row = rows.get(id); if (!row) return { row: null, changed: false };

@@ -5,6 +5,7 @@ import ContactVerification from "../ContactVerification";
 import { INTRO_MAX, INTRO_MIN, LIMITS, MAX_REFERRAL_ROLES, RELATIONSHIPS, RESUME_MAX_BYTES } from "../../lib/referral/config.mjs";
 import { firstPersonWords, hasPlaceholder, httpsUrl, introTemplate, introVoice, parseReferralRoles } from "../../lib/referral/fields.mjs";
 import { expandPostingLinks, postingLinks, requestRoles, ROLE_FIELDS } from "../../lib/referral/roles.mjs";
+import { STATUS_KEY } from "./ReferralStatus";
 import styles from "./Talk.module.css";
 
 const STEPS = [
@@ -49,7 +50,7 @@ function validate(step, data, resume) {
   }
   if (step === 1) {
     if (!data.name.trim()) errors.name = "Enter your full name.";
-    if (!EMAIL.test(data.email.trim())) errors.email = "Enter an email address I can reply to.";
+    if (!EMAIL.test(data.email.trim())) errors.email = "Enter an email address you can be reached at.";
     if (data.profileUrl.trim() && !httpsUrl(data.profileUrl, LIMITS.profileUrl)) errors.profileUrl = "Use a full https:// link, or leave this empty.";
     if (data.years !== "" && !/^\d{1,2}$/.test(String(data.years).trim())) errors.years = "Enter a whole number of years, or leave this empty.";
     if (!resume) errors.resume = "Attach your résumé as a PDF.";
@@ -93,6 +94,7 @@ export default function ReferralWizard({ company }) {
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState("");
   const [done, setDone] = useState(null);
+  const [copied, setCopied] = useState(false);
   // "", "saving", "uploading" or "finishing": which part of sending is under way.
   const [phase, setPhase] = useState("");
   const heading = useRef(null);
@@ -250,7 +252,9 @@ export default function ReferralWizard({ company }) {
       }
       try { sessionStorage.removeItem(DRAFT_KEY); sessionStorage.removeItem(REQUEST_KEY); } catch { /* optional */ }
       moved.current = true;
-      setDone({ reference: result.reference || ticket.current.reference, email: data.email.trim() });
+      // Kept on this device so the status page opens here without the link.
+      try { if (result.statusToken) localStorage.setItem(STATUS_KEY, result.statusToken); } catch { /* optional */ }
+      setDone({ reference: result.reference || ticket.current.reference, email: data.email.trim(), statusToken: result.statusToken || "" });
     } catch (error) {
       const fieldStep = error.field?.startsWith("additionalRoles.") ? 0 : FIELD_STEP[error.field];
       if (error.field && fieldStep < 3) {
@@ -265,11 +269,22 @@ export default function ReferralWizard({ company }) {
   }
 
   if (done) {
+    const statusLink = done.statusToken ? `${window.location.origin}/talk/status#${done.statusToken}` : "";
     return (
       <div className={styles.hub}><div className={styles.done} role="status">
         <h3 className={styles.panelTitle} ref={heading} tabIndex={-1}><CircleCheck size={22} aria-hidden="true" />Request received</h3>
-        <p>Your reference is <span className={styles.reference}>{done.reference}</span>. Keep it in case you write to me about this request.</p>
-        <p>I read every request myself. If I can refer you, I will reply to {done.email}; I may ask a question or two first. A referral is not guaranteed.</p>
+        <p>Your reference is <span className={styles.reference}>{done.reference}</span>. It is being screened now, usually within a minute.</p>
+        {statusLink && <>
+          <p>Follow it on your status page. Save this link: it is the only way to open the page from another device.</p>
+          <span className={styles.statusLink} data-status-link>{statusLink}</span>
+          <div className={styles.explainActions}>
+            <a className={styles.primary} href={statusLink}>Open my status page<ArrowRight size={17} aria-hidden="true" /></a>
+            <button type="button" className={styles.secondary} onClick={async () => { try { await navigator.clipboard.writeText(statusLink); setCopied(true); } catch { /* The link is selectable. */ } }}>
+              {copied ? "Link copied" : "Copy the link"}
+            </button>
+          </div>
+        </>}
+        <p>The outcome of screening is emailed to {done.email}. If your request passes, I am asked to submit your referral. A referral is not guaranteed. One request per person is considered.</p>
       </div></div>
     );
   }
@@ -300,6 +315,7 @@ export default function ReferralWizard({ company }) {
         <section aria-labelledby="referral-step-title">
           <h3 className={styles.stepHeading} id="referral-step-title" ref={heading} tabIndex={-1}>Which roles at {company}?</h3>
           <p className={styles.lead}>You can request a referral for up to three openings. Start with your first choice.</p>
+          <p className={styles.voiceNote}>What I look for, at least one of: strong open-source engineering, strong LeetCode contest results, or substantial experience at a major technology or financial company. Requests are screened automatically against this, and each person can ask once.</p>
           <Field id="referral-roleTitle" label="Role title" hint="Your first-choice opening." error={errors.roleTitle}>
             <input type="text" {...input("roleTitle", { hint: true })} maxLength={LIMITS.roleTitle} placeholder="Software Engineer, Payments" autoComplete="off" />
           </Field>
@@ -346,7 +362,7 @@ export default function ReferralWizard({ company }) {
           <Field id="referral-profileUrl" label="LinkedIn or portfolio link" optional error={errors.profileUrl}>
             <input type="url" inputMode="url" {...input("profileUrl")} maxLength={LIMITS.profileUrl} placeholder="https://" autoComplete="url" />
           </Field>
-          <Field id="referral-resume" label="Résumé" hint="PDF, 2 MB or smaller. It is emailed to me and not kept on this site." error={errors.resume}>
+          <Field id="referral-resume" label="Résumé" hint="PDF, 2 MB or smaller. It is stored privately for up to 30 days and deleted sooner if the request is closed." error={errors.resume}>
             <div className={styles.file} data-invalid={errors.resume ? "true" : undefined}>
               <input className={styles.fileInput} type="file" id="referral-resume" accept="application/pdf,.pdf" onChange={pickFile}
                 aria-describedby={`referral-resume-hint${errors.resume ? " referral-resume-error" : ""}`} />
@@ -440,8 +456,9 @@ export default function ReferralWizard({ company }) {
             <input type="checkbox" id="referral-consent" checked={consent} aria-invalid={errors.consent ? "true" : undefined}
               onChange={(event) => { setConsent(event.target.checked); if (errors.consent) setErrors({}); }} />
             <span>
-              I agree that Yuqi receives these details and my résumé, and that an AI model (Google Gemini) may read them to prepare a summary only he sees.
-              The site keeps the request for up to 180 days and the résumé file for up to 30 days, or until the request is closed. <Link href="/privacy"><a target="_blank" rel="noopener">Privacy</a></Link>
+              I agree that Yuqi receives these details and my résumé, and that an AI model (Google Gemini) may read them to screen the request.
+              GitHub and LeetCode links in them are checked against those services’ public data. A request under the screening bar is declined automatically;
+              I can follow the outcome on my status page, and only Yuqi sees the score and the notes. The site keeps the request for up to 180 days and the résumé file for up to 30 days, or until the request is closed. <Link href="/privacy"><a target="_blank" rel="noopener">Privacy</a></Link>
             </span>
           </label>
           {errors.consent && <p className={styles.error} role="alert" style={{ margin: "-10px 0 16px" }}><CircleAlert size={14} aria-hidden="true" /><span>{errors.consent}</span></p>}

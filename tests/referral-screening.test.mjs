@@ -166,7 +166,7 @@ test('the model cannot set the final score or confirm a LinkedIn badge', () => {
 test('the rubric rejects padding and asks for substantive evidence rather than job matching', async () => {
   const f = fixture(); await f.ai.screen(request, resume);
   const instruction = f.calls[1].body.systemInstruction.parts[0].text;
-  for (const phrase of ['NOT job-description matching', 'official LinkedIn verification badge', 'typo-only', 'Stars and merged PRs are supporting evidence', 'Solved-problem counts', 'never add weak paths together']) assert.ok(instruction.includes(phrase));
+  for (const phrase of ['NOT job-description matching', 'CANNOT verify it or any badge', 'The résumé is the main evidence', 'typo-only', 'Stars and merged PRs are supporting evidence', 'Solved-problem counts', 'never add weak paths together']) assert.ok(instruction.includes(phrase));
   assert.equal(f.calls[1].body.generationConfig.maxOutputTokens, 1600);
   const blocked = normalizeScreening({ ...AI_NOTE, consistency: 'conflicts' }, { resumeRead: true });
   assert.equal(blocked.passed, false); assert.equal(blocked.score, 59);

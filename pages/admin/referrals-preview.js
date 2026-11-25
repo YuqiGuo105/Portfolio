@@ -35,7 +35,7 @@ export default function ReferralsPreview() {
             <p className={ui.subtitle}>
               This is what /admin/referrals will show. Entries marked “sample” are made up and have no résumé file; anything you send from{" "}
               <Link href="/talk?intent=referral"><a style={{ color: "#0f766e" }}>the form on /talk</a></Link> on this machine appears here too, with its file.
-              {outbox.aiEnabled ? " AI screening is on and uses the shared monthly budget." : " AI screening is off in this preview, so your own test requests get a completeness check instead of an AI note."}
+              {outbox.aiEnabled ? " AI screening is on and uses the shared monthly budget." : " No model runs in this preview: a stand-in passes a request that names a GitHub or LeetCode link and scores any other under the bar, so you can watch a pass (two emails below) and an automatic decline."}
             </p>
           </div>
           <div className={ui.headerActions}><button className={ui.buttonSecondary} onClick={() => setTick((value) => value + 1)}>Refresh</button></div>

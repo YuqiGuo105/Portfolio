@@ -13,7 +13,8 @@ import { sameCompany } from '../currentRole.mjs';
 import { ReferralError, idempotencyKey, referralFields } from './fields.mjs';
 import { resumeMeta } from './resume.mjs';
 import { resumePath } from './storage.mjs';
-import { currentScreening, gradeEvidence, linkedInProfile } from './rubric.mjs';
+import { currentScreening, gradeEvidence, linkedInProfile, screeningOutcome, storedChecks } from './rubric.mjs';
+import { publicStatus, readStatusToken, statusToken } from './status.mjs';
 import { referralRow, validStatus } from './store.mjs';
 
 export const REFERRAL_ACTION = 'referral_submit';
@@ -42,6 +43,7 @@ const MESSAGES = {
   verification_required: 'Please complete the verification before sending.',
   verification_failed: 'Verification expired or failed. Please verify again.',
   verification_unavailable: 'Verification is temporarily unavailable. Your request has not been sent. Please try again.',
+  already_applied: 'A request from this email address is already on file. Each person can ask once; use the status link you were given to follow it.',
   rate_limited: 'Too many requests from this network. Please try again later.',
   busy: 'Referral requests are paused for now. Please try again later, or send a message instead.',
   referrals_paused: 'I am not taking referral requests right now. Nothing was sent; you can send me a message instead.',
@@ -108,7 +110,18 @@ export function createReferralHandler({ isRateLimited, store, storage, availabil
           res.setHeader('Retry-After', '3600'); throw new ReferralError('busy', 429);
         }
         const id = randomUUID();
-        const accepted = await store.accept({ id, ...referralRow({ key, reference: reference(), request, resume, path: resumePath(id), company }) });
+        const insert = () => store.accept({ id, ...referralRow({ key, reference: reference(), request, resume, path: resumePath(id), company }) });
+        let accepted = await insert();
+        // One request per person and company. An earlier try that never got its résumé in, or whose
+        // file was refused, is not a request: it is replaced. Anything else is answered "already on file".
+        if (accepted?.duplicate) {
+          const earlier = accepted.duplicate;
+          if (!['awaiting_upload', 'file_rejected'].includes(earlier.state)) throw new ReferralError('already_applied', 409, 'email');
+          const removed = await store.remove(earlier.id);
+          if (removed?.resume_path) await storage.remove([removed.resume_path]).catch(() => {});
+          accepted = await insert();
+          if (accepted?.duplicate) throw new ReferralError('already_applied', 409, 'email');
+        }
         if (!accepted) throw new ReferralError('unavailable', 503);
         ({ row, created } = accepted);
       }
@@ -149,7 +162,28 @@ export function createReferralCompleteHandler({ isRateLimited, store, storage, k
       }
       try { audit({ event: 'referral_complete', requestId, outcome: 'queued', state: row.state }); } catch { /* optional */ }
       // The applicant learns that it arrived, never what the screening said.
-      return res.status(200).json({ ok: true, reference: row.reference, message: 'Your request was received.', requestId });
+      // The link also works later and from another device; it shows the status and nothing else.
+      return res.status(200).json({ ok: true, reference: row.reference, message: 'Your request was received.', statusToken: statusToken(row.id, env), requestId });
+    } catch (error) { return fail(res, error, requestId); }
+  };
+}
+
+// Where a request stands, for the person holding its link: one read by primary key.
+export function createReferralStatusHandler({ isRateLimited, store, env = process.env } = {}) {
+  return async function referralStatusHandler(req, res) {
+    const requestId = randomUUID();
+    res.setHeader('X-Request-Id', requestId);
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    try {
+      begin(req, res, env);
+      if (await isRateLimited(contactIp(req, env), 'referral-status', { limit: Number(env.REFERRAL_STATUS_RATE_LIMIT || 120), windowMs: HOUR })) {
+        res.setHeader('Retry-After', '3600'); throw new ReferralError('rate_limited', 429);
+      }
+      // A wrong link and a request that no longer exists get the same answer.
+      const id = readStatusToken(req.body?.token, env);
+      const row = id ? await store.get(id) : null;
+      if (!row || row.state === 'awaiting_upload') throw new ReferralError('not_found', 404);
+      return res.status(200).json({ ok: true, status: publicStatus(row), requestId });
     } catch (error) { return fail(res, error, requestId); }
   };
 }
@@ -157,7 +191,9 @@ export function createReferralCompleteHandler({ isRateLimited, store, storage, k
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // The owner's review list. `authorize` resolves to a user, or answers the request itself and resolves to null.
-export function createReferralAdminHandler({ authorize, store, storage, availability, refresh = async () => {}, kick = async () => {} }) {
+export function createReferralAdminHandler({ authorize, store, storage, availability, refresh = async () => {}, kick = async () => {}, env = process.env }) {
+  // What the applicant sees: the owner can open the same page from the review list.
+  const withLink = row => (row ? { ...row, status_token: statusToken(row.id, env) } : row);
   const offer = async () => {
     const now = await availability.get();
     return { company: now.company, accepting: now.accepting, reason: now.reason, switchedOn: now.switchedOn, since: now.role?.since || '', title: now.role?.title || '' };
@@ -173,7 +209,7 @@ export function createReferralAdminHandler({ authorize, store, storage, availabi
         if (requests === null) return res.status(200).json({ enabled: false, requests: [], offer: await offer() });
         // Opening the list is a good moment to finish anything still waiting to be screened.
         if (requests.some(row => row.state === 'queued')) await kick(req).catch(() => {});
-        return res.status(200).json({ enabled: true, requests, offer: await offer() });
+        return res.status(200).json({ enabled: true, requests: requests.map(withLink), offer: await offer() });
       }
       if (req.method !== 'POST') { res.setHeader('Allow', 'GET, POST'); return res.status(405).json({ error: 'method_not_allowed' }); }
       const { id, action, status, note } = req.body || {};
@@ -194,15 +230,18 @@ export function createReferralAdminHandler({ authorize, store, storage, availabi
         if (row.state !== 'ready' || !currentScreening(row.screening) || row.screening.source !== 'ai' || row.updated_at !== expectedUpdatedAt) {
           return res.status(409).json({ error: 'stale_screening', message: 'Refresh the request or screen it under the current policy first.' });
         }
-        const profileUrl = linkedInProfile(row.profile_url);
+        const profileUrl = linkedInProfile(row.profile_url) || linkedInProfile(row.screening.linkedinProfile);
         if (!profileUrl) return res.status(400).json({ error: 'invalid_profile', message: 'A LinkedIn member profile is required for badge verification.' });
         const badge = { confirmed, profileUrl, note: reviewNote.trim(), checkedAt: new Date().toISOString(), checkedBy: String(user.userId || user.id || '') };
         if (!badge.checkedBy) return res.status(403).json({ error: 'unauthorized', message: 'An identified administrator is required.' });
-        const screening = { ...row.screening, ...gradeEvidence(row.screening.criteria, { profileUrl, badge,
+        const screening = { ...row.screening, ...gradeEvidence(row.screening.criteria, { profileUrl, badge, verification: storedChecks(row.screening),
           blocked: row.screening.flags?.some(flag => flag !== 'incomplete') || row.screening.consistency === 'conflicts' }) };
-        const updated = await store.update(id, { screening, fit: screening.score, recommendation: screening.recommendation }, { expectedUpdatedAt, expectedState: 'ready' });
+        // A confirmed badge can turn a waiting request into a pass: the worker then sends its two emails.
+        const outcome = screeningOutcome(screening, { ...env, REFERRAL_AUTO_DECLINE_BELOW: '0' });
+        const updated = await store.update(id, { screening, fit: screening.score, recommendation: screening.recommendation, outcome }, { expectedUpdatedAt, expectedState: 'ready' });
         if (!updated) return res.status(409).json({ error: 'stale_screening', message: 'The request changed. Refresh before recording the badge check.' });
-        return res.status(200).json(updated);
+        if (outcome === 'passed' && !updated.outcome_mail_at) await kick(req).catch(() => {});
+        return res.status(200).json(withLink(updated));
       }
       if (action === 'delete') {
         const removed = await store.remove(id);
@@ -234,7 +273,7 @@ export function createReferralAdminHandler({ authorize, store, storage, availabi
         updated = await store.update(id, { resume_path: null });
       }
       if (action === 'rescreen') await kick(req).catch(() => {});
-      return res.status(200).json(updated);
+      return res.status(200).json(withLink(updated));
     } catch (error) {
       console.error('[referrals] admin operation failed', error?.message || error);
       return res.status(503).json({ error: 'referrals_unavailable', message: 'Referral requests could not be loaded or updated.' });

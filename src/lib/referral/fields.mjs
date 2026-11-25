@@ -125,6 +125,17 @@ export function referralFields(body) {
   };
 }
 
+// One request per person and company. The key folds the usual ways of writing one mailbox
+// differently: letter case, a "+tag", and for Gmail the dots, which Gmail ignores.
+export function applicantKey(email, company) {
+  const [local = '', domain = ''] = String(email || '').trim().toLowerCase().split('@');
+  const where = String(company || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!local || !domain || !where) return null;
+  const gmail = domain === 'gmail.com' || domain === 'googlemail.com';
+  const name = local.split('+')[0];
+  return `${where}|${gmail ? name.replaceAll('.', '') : name}@${gmail ? 'gmail.com' : domain}`.slice(0, 500);
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 // The key the form generates once per request. Sending it again never creates a second request.
 export function idempotencyKey(value) {

@@ -828,3 +828,91 @@
   .spinner { animation: none; }
   .hub.hub .intent { transition: none; }
 }
+
+/* The applicant's status page: a four-step track, one message, a few facts. */
+.hub.hub .track {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 20px;
+}
+
+.hub.hub .trackStep {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 3px solid var(--soft-line);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.hub.hub .trackStep[data-state="done"],
+.hub.hub .trackStep[data-state="current"] {
+  border-top-color: var(--accent);
+  color: var(--ink);
+}
+
+.hub.hub .trackStep[data-state="current"] { font-weight: 600; }
+
+.trackDot {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.trackStep[data-state="done"] .trackDot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.trackStep[data-state="current"] .trackDot { border-color: var(--accent); color: var(--accent); }
+
+.explain[data-tone="warn"] {
+  border-color: var(--warn);
+  background: var(--warn-tint);
+}
+
+.hub.hub .explain .panelTitle:has(svg) { display: flex; align-items: center; gap: 8px; }
+.hub.hub .explain .panelTitle svg { flex: none; }
+
+.hub.hub .statusFacts {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0 4px;
+  font-size: 15px;
+}
+
+.hub.hub .statusFacts div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.hub.hub .statusFacts dt { color: var(--muted); }
+.hub.hub .statusFacts dd { overflow-wrap: anywhere; }
+
+.hub.hub .statusLink {
+  display: block;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+@container (max-width: 520px) {
+  .hub.hub .trackStep { font-size: 12px; }
+  .hub.hub .statusFacts div { grid-template-columns: 1fr; gap: 2px; }
+}

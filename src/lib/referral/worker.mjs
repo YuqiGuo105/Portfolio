@@ -7,7 +7,9 @@
 // attempts a request is delivered with a plain completeness note instead of being retried forever.
 import { ReferralError } from './fields.mjs';
 import { inspectResume } from './resume.mjs';
-import { referralDigestMail } from './mail.mjs';
+import { declineMail, passMails, referralDigestMail } from './mail.mjs';
+import { autoDeclineBelow, screeningOutcome } from './rubric.mjs';
+import { statusUrl } from './status.mjs';
 import { rulesScreening } from './screening.mjs';
 import { MAX_ATTEMPTS, requestFromRow } from './store.mjs';
 
@@ -18,7 +20,9 @@ const REFUSED = {
   resume_active_content: 'The uploaded PDF contains scripts or embedded files, so it was deleted.',
 };
 
-export function createReferralWorker({ store, storage, screener, sendMail, isRateLimited, env = process.env, now = Date.now,
+// `passMailer` is the no-reply mailbox: { enabled(), send(mail) }. Without it a request that passes is
+// announced in the owner's digest like any other, and the applicant gets no email.
+export function createReferralWorker({ store, storage, screener, sendMail, isRateLimited, passMailer = null, env = process.env, now = Date.now,
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = entry => console.info(JSON.stringify(entry)) }) {
   const number = (name, fallback) => (Number.isFinite(Number(env[name])) && env[name] !== '' && env[name] !== undefined ? Number(env[name]) : fallback);
 
@@ -45,8 +49,25 @@ export function createReferralWorker({ store, storage, screener, sendMail, isRat
     // The model is only one of two ceilings on spend: the monthly ledger, and this daily allowance.
     const capped = screener.enabled() && await isRateLimited('all', 'referral-ai', { limit: number('REFERRAL_AI_DAILY_LIMIT', 40), windowMs: 86400000 });
     const note = await screener.screen(request, resume, { skipAi: capped ? 'daily_cap' : null });
-    await store.finishScreening(row.id, { state: 'ready', screening: note, recommendation: note.recommendation, fit: note.fit, resume_sha256: resume.sha256 });
-    return 'screened';
+    // One person, one request: the same file arriving under another address is worth knowing about.
+    const twin = await store.sameResume(resume.sha256, row.id).catch(() => null);
+    if (twin) note.concerns = [`The same résumé file came with request ${twin}.`, ...(note.concerns || [])].slice(0, 4);
+    // Under the bar with nothing left for a person to check: declined here. Only a request the owner
+    // has not touched is decided this way, and screening it again can undo it.
+    const outcome = screeningOutcome(note, env);
+    const automatic = row.status === 'new' || row.screening?.auto?.declined === true;
+    const patch = { state: 'ready', screening: note, recommendation: note.recommendation, fit: note.fit, resume_sha256: resume.sha256, outcome };
+    const at = new Date(now()).toISOString();
+    if (outcome === 'auto_declined' && automatic) {
+      note.auto = { declined: true, below: autoDeclineBelow(env), at };
+      Object.assign(patch, { status: 'declined', notified_at: row.notified_at || at });
+    } else if (row.screening?.auto?.declined === true && row.status === 'declined') patch.status = 'new';
+    // With the no-reply mailbox a pass has its own pair of emails, so it is left out of the digest.
+    if (outcome === 'passed' && passMailer?.enabled()) patch.notified_at = row.notified_at || at;
+    // A new outcome is mailed; the same outcome after "Screen again" is not mailed twice.
+    if (outcome !== row.outcome) patch.outcome_mail_at = null;
+    await store.finishScreening(row.id, patch);
+    return patch.status === 'declined' ? 'declined' : 'screened';
   }
 
   return {
@@ -57,7 +78,7 @@ export function createReferralWorker({ store, storage, screener, sendMail, isRat
     // kicks are being throttled is always picked up by a run that is still alive.
     async run({ budgetMs = 40000, batch = 4, housekeeping = false, lingerMs = 0, pollMs = 2000 } = {}) {
       const started = now();
-      const summary = { claimed: 0, screened: 0, rejected: 0, failed: 0, notified: 0, filesDeleted: 0, purged: 0, waiting: 0 };
+      const summary = { claimed: 0, screened: 0, declined: 0, rejected: 0, failed: 0, notified: 0, announced: 0, turnedDown: 0, filesDeleted: 0, purged: 0, waiting: 0 };
       // One digest for everything that became ready. A few an hour at most, however many requests arrive.
       const notify = async () => {
         const ready = await store.claimDigest(number('REFERRAL_DIGESTS_PER_HOUR', 6), 50).catch(() => []);
@@ -66,12 +87,40 @@ export function createReferralWorker({ store, storage, screener, sendMail, isRat
         try { await sendMail(referralDigestMail(ready, { waiting })); summary.notified += ready.length; }
         catch { await store.unmarkNotified(ready.map(row => row.id)).catch(() => {}); }
       };
+      // A request that passed: the owner is asked to refer and the applicant is told, together. The
+      // owner's copy goes first, so a failure never leaves an applicant told about a request nobody was asked to act on.
+      const announce = async () => {
+        if (!passMailer?.enabled()) return;
+        for (const row of await store.claimPassMails(10).catch(() => [])) {
+          let asked = false;
+          try {
+            if (row.outcome === 'auto_declined') {
+              // Not if the owner has overruled it since, and never for a request flagged as spam or as an
+              // attempt to steer the model: the address on those is as likely someone else's as the sender's.
+              if (row.status !== 'declined' || row.screening?.auto?.declined !== true || row.screening?.flags?.some(flag => flag !== 'incomplete')) continue;
+              if (await isRateLimited('all', 'referral-decline-mail', { limit: number('REFERRAL_DECLINE_MAILS_PER_DAY', 100), windowMs: 86400000 })) throw new Error('capped');
+              await passMailer.send(declineMail(row, { statusLink: statusUrl(row.id, env) }));
+              summary.turnedDown += 1;
+              continue;
+            }
+            if (await isRateLimited('all', 'referral-pass-mail', { limit: number('REFERRAL_PASS_MAILS_PER_DAY', 50), windowMs: 86400000 })) throw new Error('capped');
+            const mails = passMails(row, { statusLink: statusUrl(row.id, env) });
+            await passMailer.send(mails.owner); asked = true;
+            await passMailer.send(mails.applicant);
+            summary.announced += 1;
+          } catch {
+            // Nothing sent: tried again on a later run. Owner already asked: not repeated.
+            if (!asked) await store.mark(row.id, { outcome_mail_at: null }).catch(() => {});
+            else log({ event: 'referral_pass_mail', outcome: 'applicant_copy_failed', reference: row.reference });
+          }
+        }
+      };
       let idleSince = null;
       while (now() - started < budgetMs) {
         const rows = await store.claimScreenings(batch, number('REFERRAL_LEASE_SECONDS', 120));
         if (!rows.length) {
           // The queue has just emptied: tell the owner now rather than after lingering.
-          if (idleSince === null) { idleSince = now(); await notify(); }
+          if (idleSince === null) { idleSince = now(); await notify(); await announce(); }
           if (now() - idleSince >= lingerMs) break;
           await sleep(pollMs);
           continue;
@@ -93,6 +142,7 @@ export function createReferralWorker({ store, storage, screener, sendMail, isRat
         }
       }
       await notify();
+      await announce();
       summary.waiting = await store.queueDepth().catch(() => 0);
 
       if (housekeeping) {

@@ -105,45 +105,88 @@ in the work history**: the row of the `experience` table whose period ends in "C
 
 The worker first checks the stored file (`inspectResume`): it must be a real PDF, not
 password-protected, with no scripts, launch actions or embedded files. A file that fails is deleted
-before anyone can open it and the request is marked "résumé refused"; the request still arrives.
+before anyone can open it and the request is marked "résumé refused"; the applicant's status page
+says so and they may send the request again.
 
-The `evidence-v1` policy is **not job matching**. It produces a private 0-100 evidence score with
-a pass mark of **60**. At least one of three independent paths must qualify:
+The `evidence-v2` policy is **not job matching**. It produces a private 0-100 evidence score with
+a pass mark of **60**. The résumé is the main evidence: someone who has one of these lists it there.
+At least one of three independent paths must qualify:
 
 1. Substantial engineering employment at a major established technology or financial-services
-   company, **and an official LinkedIn verification badge confirmed by the owner**.
-2. Strong original open-source engineering or substantive merged upstream work. A real Kafka /
-   microservices platform can qualify through ownership, failure handling, tests, deployment and
-   measurable impact. Stars, technology lists, tutorial clones and trivial PR counts are not enough.
+   company, on the résumé with team, dates and work, **plus a LinkedIn member profile link** (typed
+   into the form or found in the résumé). Such a request reaches the owner directly; he opens the
+   profile himself. Recording "not verified" on the review page takes the pass away again.
+2. Strong original open-source engineering or substantive merged upstream work. Stars, technology
+   lists, tutorial clones and trivial PR counts are not enough.
 3. Strong LeetCode weekly/biweekly performance, supported by rating, dated rankings and consistency.
-   Solved-problem counts and practice streaks do not qualify. There is no arbitrary fixed rating,
-   star or PR cutoff; the AI must explain the substantive quality.
 
-The model supplies a score, gate assessment, reason, evidence quotations and supporting links for
-each path. `rubric.mjs` computes the final result: the strongest path wins, **not the sum**. A path
-without substantive evidence, the required reference, or its required badge confirmation is capped
-at 59 in the final score. Spam, prompt injection, off-topic requests and conflicting evidence cannot
-pass. The model cannot set the final score or attest a badge. A score is a screening heuristic, not
-a probability. No request is automatically declined, hidden or referred; the owner decides.
+### Public-data checks (`publicEvidence.mjs`)
 
-All material is untrusted. The prompt excludes protected characteristics and rejects padding.
-Malformed model responses fall back to an unscored completeness note. Evidence and URLs come from
-the submitted form or resume, **not independent web retrieval**. The UI and email make this limit
-explicit. Contact email and the separately entered profile URL are still excluded from model input.
+Before the model is called, GitHub and LeetCode links are collected from the form answers and from
+the résumé PDF (visible text and link annotations, including compressed streams, with a hard cap on
+inflated bytes). For at most three pull requests, three repositories, one GitHub account and one
+LeetCode account, the server asks `api.github.com`, `leetcode.com` or `leetcode.cn`: is the pull
+request merged and by whom, is the repository a fork, how many merged pull requests the account has
+in other people's repositories, the contest rating and how many contests stand behind it.
 
-LinkedIn verification is recorded in the authenticated review panel. The owner opens the supplied
-LinkedIn member profile, checks the official badge and records its type and what was checked.
-Premium, OAuth sign-in, a URL and an applicant's own assertion do not count. A badge may verify
-identity, workplace or education; it does not by itself certify the entire work history
-([LinkedIn Help](https://www.linkedin.com/help/linkedin/answer/a1357905)). The server stores the
-owner ID, timestamp, note and profile URL with the screening JSON, then recalculates the score.
-Conditional updates reject stale reviews and concurrent rescreening. Rescreening clears a previous
-badge confirmation and asks for a fresh check. No third-party badge-verification API is connected.
+- A link the applicant wrote is never opened. It is parsed for an owner, repository, number or
+  username, each matched against a strict pattern, and the request goes to one of the three hosts.
+- Five seconds per lookup, all in parallel. Without `REFERRAL_GITHUB_TOKEN` GitHub allows 60
+  requests an hour per address, which shared hosting can exhaust; a token with no scopes raises
+  that to 5,000.
+- The facts are given to the model as `publicChecks` and stored with the note (`checks`,
+  `checkFacts`) for the review page and the owner's email.
+- `rubric.mjs` uses them as a gate the model cannot set: **verified** references satisfy the
+  "needs a reference" rule; **contradicted** ones (the cited PR is not merged, the repository is a
+  fork or missing, the contest history is empty) cap the path at 39; **unavailable** never counts
+  against the applicant, and holds the request for the owner if the path would otherwise pass.
+- The facts describe an account, not a person. LinkedIn is never fetched.
+- The LeetCode endpoints are unofficial and may refuse server traffic; that shows as "unavailable".
 
-Existing job-fit notes are labelled as previous-policy results and excluded from score ranking;
-use "Screen again" to reevaluate them. No bulk re-screen, database migration or retention change
-is required. The legacy `fit` column mirrors the new score for storage compatibility; only a note
-with the `evidence-v1` rubric can be displayed as a current score.
+### Outcome (`screeningOutcome`)
+
+| Outcome | When | What happens |
+|---|---|---|
+| `passed` | one path qualifies | status stays "new"; two emails go out together (below) |
+| `auto_declined` | a model scored it under `REFERRAL_AUTO_DECLINE_BELOW` (60; `0` switches this off) and nothing is left for a person to check | status becomes "declined"; one email to the applicant from the no-reply mailbox, with no score and no reason (`REFERRAL_DECLINE_MAILS_PER_DAY`, 100; never for a request flagged as spam or prompt injection); the résumé file is deleted by the next housekeeping run |
+| `review` | no model note, a résumé that disagrees with the introduction, a lookup that could not be made, or the owner's own "not verified" | waits in the list and the digest |
+
+Automatic decline only touches a request whose status is still "new", never one the owner has
+moved, and "Screen again" undoes it when the new result is not a decline. The owner can overrule
+it by choosing another status. The model supplies scores and reasons; the server computes the
+result: the strongest path wins, **not the sum**. Spam, prompt injection, off-topic requests and
+conflicting evidence cannot pass. All material is untrusted; the prompt excludes protected
+characteristics and rejects padding. Malformed model responses fall back to an unscored
+completeness note, which decides nothing.
+
+### One request per person
+
+`applicant_key` is the company plus the mailbox, folded for letter case, "+tags" and Gmail dots,
+with a unique index, so two simultaneous submissions cannot both land. A second request is answered
+`already_applied` (409) after verification. An attempt whose résumé never arrived, or whose file was
+refused, is replaced instead. Deleting a request on the review page lets that person ask again. The
+same résumé file under another address is pointed out in the note.
+
+### What the applicant sees
+
+`POST /api/referral/complete` returns a status token; the form shows `/talk/status#<token>` and
+keeps it in the browser. The token is an HMAC of the request id (`REFERRAL_STATUS_SECRET`, else
+`CRON_SECRET`), so nothing is stored and the link can be rebuilt for an email. It sits in the URL
+fragment, which is never sent to a server. `POST /api/referral/status` is one read by primary key,
+rate limited per network, and returns the reference, company, role titles, two timestamps and a
+stage: screening, with Yuqi, passed screening, referred, not selected, closed, or résumé unreadable.
+**Never the score, the note or a reason.** The review page has "See what the applicant sees".
+
+### The two emails for a pass
+
+Sent by the worker, together, from the **no-reply mailbox** (`REFERRAL_NOREPLY_SMTP_URL`,
+`REFERRAL_NOREPLY_FROM`): a note to the owner asking him to refer, with the introduction, the
+evidence paths and the checked facts; and a confirmation to the applicant with the status link and
+no score. The owner's copy goes first, a pair is claimed with a conditional update so it is sent
+once, and `REFERRAL_PASS_MAILS_PER_DAY` (50) caps them. A mailbox whose address or login is
+`EMAIL_USER` or `EMAIL_TO` is refused: applicants are never written to from the owner's own
+address. Without a no-reply mailbox the applicant gets no email (the status page still works) and
+a pass is announced in the owner's digest as before. With one, the digest also leaves from it.
 
 - Model: the same `gemini-2.5-flash-lite` constant as discovery, thinking disabled, 1,600 output tokens.
 - Off by default. It runs only with `REFERRAL_AI_ENABLED=1` and a key in `REFERRAL_GOOGLE_API_KEY`
@@ -185,6 +228,12 @@ note, "Screen again" and delete.
 | `REFERRAL_AI_ENABLED` | `1` switches AI screening on. Anything else: completeness check only. |
 | `REFERRAL_GOOGLE_API_KEY` | Gemini key for screening. Falls back to `DISCOVERY_GOOGLE_API_KEY`, then `GEMINI_API_KEY`. |
 | `REFERRAL_AI_DAILY_LIMIT` | AI screenings a day (40). |
+| `REFERRAL_AUTO_DECLINE_BELOW` | Evidence score under which a request is declined automatically (60, never above the pass mark). `0` switches it off. |
+| `REFERRAL_GITHUB_TOKEN` | Optional GitHub token with no scopes, for the public-data lookups. Falls back to `GITHUB_TOKEN`. |
+| `REFERRAL_NOREPLY_SMTP_URL`, `REFERRAL_NOREPLY_FROM` | The no-reply mailbox, for example `smtps://user:password@smtp.host:465` and `Referral desk <no-reply@yuqi.site>`. Must not be the owner's own address. |
+| `REFERRAL_OWNER_EMAIL` | Where the owner's copies go. Default: `EMAIL_TO`. |
+| `REFERRAL_STATUS_SECRET` | Signs status links. Default: `CRON_SECRET`. Changing it invalidates links already given out. |
+| `REFERRAL_PASS_MAILS_PER_DAY`, `REFERRAL_STATUS_RATE_LIMIT` | Pass email pairs a day (50); status lookups an hour per network (120). |
 | `REFERRAL_DIGESTS_PER_HOUR` | Digest emails an hour (6). |
 | `REFERRAL_RATE_LIMIT`, `REFERRAL_DAILY_LIMIT` | Per-network hourly limit (6) and the site-wide flood valve (5,000 a day). |
 | `REFERRAL_COMPANY` | Leave unset. Pins the company named on the form instead of taking it from the work history. |
@@ -204,6 +253,7 @@ only shortens the worst case; normal latency comes from the kicks.
    then the form answers "could not be saved" and `/admin/referrals` shows a notice. Then run
    `20261116100000_knowledge_lexical_employers_from_history.sql` (it only swaps two employer
    names written into the assistant's keyword search for the names in the work history).
+   Then `20261125020000_referral_outcomes.sql` (one request per person, outcome, pass emails).
 2. Check that `CRON_SECRET` is set in Vercel.
 3. Decide whether to switch AI on (`REFERRAL_AI_ENABLED=1` and a key). It can be left off.
 4. Deploy TalkNest's `connect` change first, so the live-chat text matches what visitors see.
