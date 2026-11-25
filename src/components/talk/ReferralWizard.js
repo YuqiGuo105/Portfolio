@@ -315,7 +315,16 @@ export default function ReferralWizard({ company }) {
         <section aria-labelledby="referral-step-title">
           <h3 className={styles.stepHeading} id="referral-step-title" ref={heading} tabIndex={-1}>Which roles at {company}?</h3>
           <p className={styles.lead}>You can request a referral for up to three openings. Start with your first choice.</p>
-          <p className={styles.voiceNote}>What I look for, at least one of: strong open-source engineering, strong LeetCode contest results, or substantial experience at a major technology or financial company. Requests are screened automatically against this, and each person can ask once.</p>
+          <div className={styles.explain} style={{ marginBottom: 22 }} data-referral-how>
+            <h4 className={styles.panelTitle}>My own AI reads every request, in the background</h4>
+            <p>I built a personal screening pipeline for referrals, so every request gets the same careful read within about a minute, at any hour, and it is built to hold up under load.</p>
+            <ol className={styles.sequence}>
+              <li><span><strong>Evidence, not keywords.</strong> An AI model reads your résumé against three bars: strong open-source engineering, strong LeetCode contest results, or substantial engineering experience at a major technology or financial company. One strong path is enough.</span></li>
+              <li><span><strong>Checked at the source.</strong> GitHub and LeetCode links are looked up live: merged pull requests, original repositories, contest rating and history. A claim that does not hold up does not count.</span></li>
+              <li><span><strong>Asynchronous by design.</strong> Your request is accepted at once and screened from a durable queue with retries, so the form never keeps you waiting and nothing is lost.</span></li>
+              <li><span><strong>A clear answer either way.</strong> Pass, and I am asked to refer you straight away. Fall short, and you are told rather than left waiting. A private status page shows every stage; the score and notes stay with me. Each person can ask once.</span></li>
+            </ol>
+          </div>
           <Field id="referral-roleTitle" label="Role title" hint="Your first-choice opening." error={errors.roleTitle}>
             <input type="text" {...input("roleTitle", { hint: true })} maxLength={LIMITS.roleTitle} placeholder="Software Engineer, Payments" autoComplete="off" />
           </Field>
