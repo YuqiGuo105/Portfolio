@@ -6,6 +6,12 @@ export function tourPetDimensions(width, height = 900) {
         margin: mobile ? 20 : 28, minY: mobile ? 92 : 106 }
 }
 
+// How far down his box his feet are. The figure is fitted to the box's width and centred in its
+// height, so this is not a fixed share of the height.
+export function tourPetGround(width, height) {
+    return height / 2 + width * 0.4146
+}
+
 export function frameTourTarget(rect, width, height, dockTop) {
     if (!rect || width <= 0 || height <= 0) return null
     const topLimit = Math.min(96, height * 0.2)
@@ -16,6 +22,30 @@ export function frameTourTarget(rect, width, height, dockTop) {
     const bottom = Math.min(bottomLimit, rect.top + rect.height + 10)
     if (right - left < 16 || bottom - top < 16) return null
     return { left, top, width: right - left, height: bottom - top }
+}
+
+const overlaps = (a, b, padding = 0) => !(a.right + padding < b.left || a.left - padding > b.right || a.bottom + padding < b.top || a.top - padding > b.bottom)
+
+// Where Mr. Pot stands for a chapter: on the frame round the section if there is room, otherwise in a
+// free corner. Never under the dock.
+export function placeTourPet({ target, dock, viewport, pet }) {
+    const { width: viewWidth, height: viewHeight } = viewport
+    const { width, height, margin } = pet
+    const top = viewWidth < 640 ? 82 : 96
+    const lowest = viewHeight - height - margin, rightmost = viewWidth - width - margin
+    const spots = []
+    if (target) {
+        const right = target.left + target.width, bottom = target.top + target.height, side = target.top + Math.min(72, target.height * 0.25)
+        spots.push({ x: right - width - 24, y: target.top - height - 16 }, { x: target.left + 24, y: target.top - height - 16 },
+            { x: right + 16, y: side }, { x: target.left - width - 16, y: side },
+            { x: right - width - 24, y: bottom + 16 }, { x: target.left + 24, y: bottom + 16 })
+    }
+    spots.push({ x: margin, y: lowest }, { x: rightmost, y: lowest }, { x: margin, y: viewWidth < 640 ? 92 : 120 }, { x: rightmost, y: viewWidth < 640 ? 92 : 120 })
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
+    return spots
+        .map(spot => ({ x: clamp(spot.x, margin, rightmost), y: clamp(spot.y, top, lowest) }))
+        .find(spot => !dock || !overlaps({ left: spot.x, top: spot.y, right: spot.x + width, bottom: spot.y + height }, dock, 14))
+        || { x: margin, y: lowest }
 }
 
 // Only expose links already present in this public section, never invent evidence.

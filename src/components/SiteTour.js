@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { Sparkles, X } from "lucide-react"
 import { consumePendingWebGuide } from "../lib/webGuide"
 import TourDock from "./tour/TourDock"
 import TourArrival from "./tour/TourArrival"
-import usePetPerformance from "./tour/usePetPerformance"
+import TourPet from "./tour/TourPet"
 import useTourNarration from "./tour/useTourNarration"
-import petPerformanceStyles from "./tour/PetPerformance.module.css"
 import { localizeTourStep, narrationAudio, narrationText, readingTime, tourNarrative } from "../lib/tourNarrative.mjs"
-import { collectTourDiscoveries, frameTourTarget, tourPetDimensions } from "../lib/tourScene.mjs"
+import { collectTourDiscoveries, frameTourTarget, tourPetGround } from "../lib/tourScene.mjs"
 
 const DEFAULT_CONTROLS = { previous: "Prev", next: "Next", done: "Done", close: "Close" }
 const CHINESE_NAME_AUDIO = "/assets/audio/tour/v3/chinese-name.wav"
@@ -18,74 +16,6 @@ const AFTER_NARRATION_MS = 1200
 function getRect(el) {
     const r = el.getBoundingClientRect()
     return { top: r.top, left: r.left, width: r.width, height: r.height }
-}
-
-function clamp(value, min, max) {
-    return Math.min(Math.max(value, min), max)
-}
-
-function rectsOverlap(a, b, padding = 0) {
-    return !(
-        a.right + padding < b.left
-        || a.left - padding > b.right
-        || a.bottom + padding < b.top
-        || a.top - padding > b.bottom
-    )
-}
-
-function MrPotRig() {
-    const imageHref = "/assets/images/mr-pot-tour-guide.png"
-
-    return (
-        <svg className="st-pet-rig" viewBox="0 0 1224 1285" aria-hidden="true">
-            <defs>
-                <clipPath id="st-pet-steam-clip">
-                    <rect x="500" y="20" width="205" height="205" />
-                </clipPath>
-                <clipPath id="st-pet-head-clip">
-                    <path d="M238 195H1000V580H880L855 695 795 765H440L322 730 298 590H238Z" />
-                </clipPath>
-                <clipPath id="st-pet-core-clip">
-                    {/* Shared curved seam excludes the hanging arm from the torso layer. */}
-                    <path d="M438 742H750L780 864 764 1015H452L450 985Q475 969 467 944C452 898 462 850 478 795L485 780Z" />
-                </clipPath>
-                <clipPath id="st-pet-left-arm-clip">
-                    <path d="M320 750H485V780L478 795C462 850 452 898 467 944Q475 969 450 985L442 1010H320Z" />
-                </clipPath>
-                <clipPath id="st-pet-right-arm-clip">
-                    <path d="M750 780L845 722 890 590H1020V870L790 920 740 855Z" />
-                </clipPath>
-                <clipPath id="st-pet-left-leg-clip">
-                    <path d="M405 995H595V1180H405Z" />
-                </clipPath>
-                <clipPath id="st-pet-right-leg-clip">
-                    <path d="M600 995H815V1180H600Z" />
-                </clipPath>
-            </defs>
-
-            <g className="st-pet-layer st-pet-arm st-pet-arm-left" clipPath="url(#st-pet-left-arm-clip)">
-                <image href={imageHref} width="1224" height="1285" />
-            </g>
-            <g className="st-pet-layer st-pet-arm st-pet-arm-right" clipPath="url(#st-pet-right-arm-clip)">
-                <image href={imageHref} width="1224" height="1285" />
-            </g>
-            <g className="st-pet-layer st-pet-leg st-pet-leg-left" clipPath="url(#st-pet-left-leg-clip)">
-                <image href={imageHref} width="1224" height="1285" />
-            </g>
-            <g className="st-pet-layer st-pet-leg st-pet-leg-right" clipPath="url(#st-pet-right-leg-clip)">
-                <image href={imageHref} width="1224" height="1285" />
-            </g>
-            <g className="st-pet-layer st-pet-core" clipPath="url(#st-pet-core-clip)">
-                <image href={imageHref} width="1224" height="1285" />
-            </g>
-            <g className="st-pet-layer st-pet-head" clipPath="url(#st-pet-head-clip)">
-                <image href={imageHref} width="1224" height="1285" />
-            </g>
-            <g className="st-pet-layer st-pet-steam" clipPath="url(#st-pet-steam-clip)">
-                <image href={imageHref} width="1224" height="1285" />
-            </g>
-        </svg>
-    )
 }
 
 export default function SiteTour() {
@@ -183,7 +113,11 @@ export default function SiteTour() {
 
     const [open, setOpen] = useState(false)
     const [arriving, setArriving] = useState(false)
+    // Where Mr. Pot stood on the opening screen, so the guide can pick him up from that very spot.
+    const stageRef = useRef(null)
     const enterGuide = useCallback(() => {
+        const actor = document.querySelector("[data-tour-actor]")?.getBoundingClientRect()
+        stageRef.current = actor ? { centre: actor.left + actor.width / 2, ground: actor.top + tourPetGround(actor.width, actor.height), width: actor.width } : null
         unlockAudio()
         setArriving(false)
     }, [unlockAudio])
@@ -205,35 +139,7 @@ export default function SiteTour() {
     const [collapsed, setCollapsed] = useState(false)
     // Autoplay narrates each chapter; "Stop audio" during autoplay keeps it going silently.
     const [muted, setMuted] = useState(false)
-    const [petFacing, setPetFacing] = useState(1)
-    const [petWalking, setPetWalking] = useState(false)
-    const [petDragging, setPetDragging] = useState(false)
-    const [petReady, setPetReady] = useState(false)
     const [petHidden, setPetHidden] = useState(false)
-    const { gesture: petGesture, duration: petGestureDuration, interact: playWithPet } = usePetPerformance({
-        enabled: open && !arriving && uiReady && !petHidden,
-        busy: petWalking || petDragging || petSpeaking || mapOpen,
-    })
-    const petPerformingRef = useRef(false)
-    petPerformingRef.current = petGesture !== "rest" || petSpeaking
-    const [petTransform, setPetTransform] = useState("translate3d(-120px, 120px, 0)")
-    const petPositionRef = useRef({ x: -120, y: 120 })
-    const petBaseRef = useRef({ x: -120, y: 120 })
-    const petMoveTimerRef = useRef(0)
-    const petPatrolTimerRef = useRef(0)
-    const petDraggingRef = useRef(false)
-    const petDragRef = useRef({
-        pointerId: null,
-        offsetX: 0,
-        offsetY: 0,
-        startX: 0,
-        startY: 0,
-        lastX: 0,
-        moved: false,
-    })
-    const movePetTo = useCallback((position) => {
-        setPetTransform(`translate3d(${position.x}px, ${position.y}px, 0)`)
-    }, [])
     const scheduleUpdateRect = useCallback(() => {
         if (!open) return
         if (!activeElRef.current) return
@@ -264,21 +170,10 @@ export default function SiteTour() {
         setMuted(false)
         setCollapsed(false)
         stopNarration()
-        setPetReady(false)
         setPetHidden(false)
-        setPetWalking(false)
-        setPetDragging(false)
-        petDraggingRef.current = false
-        petDragRef.current.pointerId = null
-        petDragRef.current.moved = false
+        stageRef.current = null
         activeElRef.current = null
-        if (typeof window !== "undefined") {
-            window.clearTimeout(petMoveTimerRef.current)
-            window.clearInterval(petPatrolTimerRef.current)
-            petPositionRef.current = { x: -120, y: 120 }
-            setPetTransform("translate3d(-120px, 120px, 0)")
-            window.dispatchEvent(new CustomEvent("cw:site-tour:end"))
-        }
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("cw:site-tour:end"))
     }, [stopNarration])
     const go = useCallback(
         (nextIdx, focusFirst = true) => {
@@ -575,117 +470,10 @@ export default function SiteTour() {
         return () => observer.disconnect()
     }, [open, arriving, scheduleUpdateRect])
 
+    // The opening screen's spot is for the first Mr. Pot only: one shown again later jumps in from the side.
     useEffect(() => {
-        if (!open || !uiReady || petHidden || typeof window === "undefined") return
-
-        const viewportWidth = window.innerWidth
-        const viewportHeight = window.innerHeight
-        const mobile = viewportWidth < 640
-        const { width: petWidth, height: petHeight, margin } = tourPetDimensions(viewportWidth, viewportHeight)
-        const dialogRect = popRef.current?.getBoundingClientRect()
-        const framedRect = frameTourTarget(anchorRect, viewportWidth, viewportHeight, dialogRect?.top || viewportHeight)
-        const target = framedRect
-            ? {
-                left: framedRect.left,
-                top: framedRect.top,
-                width: framedRect.width,
-                height: framedRect.height,
-                right: framedRect.left + framedRect.width,
-                bottom: framedRect.top + framedRect.height,
-              }
-            : null
-
-        const candidates = target
-            ? [
-                { x: target.right - petWidth - 24, y: target.top - petHeight - 16 },
-                { x: target.left + 24, y: target.top - petHeight - 16 },
-                { x: target.right + 16, y: target.top + Math.min(72, target.height * 0.25) },
-                { x: target.left - petWidth - 16, y: target.top + Math.min(72, target.height * 0.25) },
-                { x: target.right - petWidth - 24, y: target.bottom + 16 },
-                { x: target.left + 24, y: target.bottom + 16 },
-              ]
-            : []
-
-        candidates.push(
-            { x: margin, y: viewportHeight - petHeight - margin },
-            { x: viewportWidth - petWidth - margin, y: viewportHeight - petHeight - margin },
-            { x: margin, y: mobile ? 92 : 120 },
-            { x: viewportWidth - petWidth - margin, y: mobile ? 92 : 120 },
-        )
-
-        const safeCandidates = candidates
-            .map((candidate) => ({
-                x: clamp(candidate.x, margin, viewportWidth - petWidth - margin),
-                y: clamp(candidate.y, mobile ? 82 : 96, viewportHeight - petHeight - margin),
-            }))
-            .filter((candidate) => {
-                if (!dialogRect) return true
-                const petRect = {
-                    left: candidate.x,
-                    top: candidate.y,
-                    right: candidate.x + petWidth,
-                    bottom: candidate.y + petHeight,
-                }
-                return !rectsOverlap(petRect, dialogRect, 14)
-            })
-
-        const destination = safeCandidates[0]
-            || { x: margin, y: viewportHeight - petHeight - margin }
-        const previous = petPositionRef.current
-
-        petBaseRef.current = destination
-        if (Math.abs(destination.x - previous.x) > 4) {
-            setPetFacing(destination.x > previous.x ? 1 : -1)
-        }
-        setPetWalking(true)
-        setPetReady(true)
-        petPositionRef.current = destination
-        movePetTo(destination)
-        window.clearTimeout(petMoveTimerRef.current)
-        petMoveTimerRef.current = window.setTimeout(() => setPetWalking(false), 820)
-
-        window.clearInterval(petPatrolTimerRef.current)
-        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) petPatrolTimerRef.current = window.setInterval(() => {
-            if (petDraggingRef.current || petPerformingRef.current || document.hidden) return
-            const base = petBaseRef.current
-            const current = petPositionRef.current
-            const direction = Math.random() > 0.5 ? 1 : -1
-            const next = {
-                x: clamp(base.x + direction * (mobile ? 26 : 52), margin, viewportWidth - petWidth - margin),
-                y: clamp(base.y + (Math.random() > 0.5 ? 8 : -8), mobile ? 82 : 96, viewportHeight - petHeight - margin),
-            }
-            if (dialogRect && rectsOverlap({ left: next.x, top: next.y, right: next.x + petWidth, bottom: next.y + petHeight }, dialogRect, 14)) return
-            setPetFacing(next.x >= current.x ? 1 : -1)
-            setPetWalking(true)
-            petPositionRef.current = next
-            movePetTo(next)
-            window.clearTimeout(petMoveTimerRef.current)
-            petMoveTimerRef.current = window.setTimeout(() => setPetWalking(false), 760)
-        }, 8000)
-
-        return () => {
-            window.clearTimeout(petMoveTimerRef.current)
-            window.clearInterval(petPatrolTimerRef.current)
-        }
-    }, [anchorRect, idx, movePetTo, open, petHidden, uiReady, collapsed])
-
-    useEffect(() => {
-        if (!petDragging || typeof window === "undefined") return
-        const releaseDrag = () => {
-            petDragRef.current.pointerId = null
-            petDraggingRef.current = false
-            setPetDragging(false)
-            setPetWalking(false)
-        }
-        window.addEventListener("pointerup", releaseDrag)
-        window.addEventListener("pointercancel", releaseDrag)
-        window.addEventListener("blur", releaseDrag)
-        return () => {
-            window.removeEventListener("pointerup", releaseDrag)
-            window.removeEventListener("pointercancel", releaseDrag)
-            window.removeEventListener("blur", releaseDrag)
-        }
-    }, [petDragging])
+        if (open && !arriving) stageRef.current = null
+    }, [open, arriving])
 
     if (typeof window === "undefined") return null
     if (!open) return null
@@ -750,74 +538,15 @@ export default function SiteTour() {
         }, 0)
     }
 
-    const petDimensions = () => {
-        return tourPetDimensions(window.innerWidth, window.innerHeight)
-    }
-
-    const startPetDrag = (event) => {
-        if (!petReady || (event.pointerType === "mouse" && event.button !== 0)) return
-        const rect = event.currentTarget.getBoundingClientRect()
-        petDragRef.current = {
-            pointerId: event.pointerId,
-            offsetX: event.clientX - rect.left,
-            offsetY: event.clientY - rect.top,
-            startX: event.clientX,
-            startY: event.clientY,
-            lastX: event.clientX,
-            moved: false,
-        }
-        petDraggingRef.current = true
-        setPetDragging(true)
-        setPetWalking(false)
-        petPositionRef.current = { x: rect.left, y: rect.top }
-        petBaseRef.current = { x: rect.left, y: rect.top }
-        movePetTo({ x: rect.left, y: rect.top })
-        window.clearTimeout(petMoveTimerRef.current)
-        event.currentTarget.setPointerCapture?.(event.pointerId)
-        event.preventDefault()
-    }
-
-    const movePetDrag = (event) => {
-        const drag = petDragRef.current
-        if (!petDraggingRef.current || drag.pointerId !== event.pointerId) return
-        const { width, height, margin, minY } = petDimensions()
-        const next = {
-            x: clamp(event.clientX - drag.offsetX, margin, window.innerWidth - width - margin),
-            y: clamp(event.clientY - drag.offsetY, minY, window.innerHeight - height - margin),
-        }
-        const deltaX = event.clientX - drag.lastX
-        if (Math.abs(deltaX) > 2) setPetFacing(deltaX > 0 ? 1 : -1)
-        if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 5) {
-            drag.moved = true
-        }
-        drag.lastX = event.clientX
-        petPositionRef.current = next
-        petBaseRef.current = next
-        movePetTo(next)
-        event.preventDefault()
-    }
-
-    const stopPetDrag = (event) => {
-        const drag = petDragRef.current
-        if (!petDraggingRef.current || drag.pointerId !== event.pointerId) return
-        event.currentTarget.releasePointerCapture?.(event.pointerId)
-        drag.pointerId = null
-        petDraggingRef.current = false
-        setPetDragging(false)
-        setPetWalking(false)
-    }
-
-    const activatePet = () => {
-        if (petDragRef.current.moved) {
-            petDragRef.current.moved = false
-            return
-        }
-        speakCurrentStep()
+    const hidePet = () => {
+        stopNarration()
+        setAutoPlay(false)
+        setPetHidden(true)
     }
 
     return createPortal(
         <>
-            {arriving && <TourArrival language={guideLanguage} onEnter={enterGuide} onClose={close}><MrPotRig /></TourArrival>}
+            {arriving && <TourArrival language={guideLanguage} onEnter={enterGuide} onClose={close} />}
             {!arriving && uiReady && frame && !mapOpen && (
                 <div
                     className="st-scene-frame"
@@ -828,72 +557,11 @@ export default function SiteTour() {
                 ><i /><i /><i /><i /><span className="st-scene-caption" key={idx}>{String(idx + 1).padStart(2, "0")} / {current?.title}</span></div>
             )}
 
-            {!petHidden && !arriving ? <div
-                className={`st-roaming-pet ${petPerformanceStyles.performer}${petReady ? " is-ready" : ""}${petWalking ? " is-walking" : ""}${petSpeaking ? " is-speaking" : ""}${petDragging ? " is-dragging" : ""}`}
-                data-chapter={current?.id}
-                data-gesture={petGesture}
-                style={{
-                    transform: petTransform,
-                    "--st-pet-facing": petFacing,
-                    "--pet-gesture-duration": `${petGestureDuration}ms`,
-                    "--st-pet-width": `${petDimensions().width}px`,
-                    "--st-pet-height": `${petDimensions().height}px`,
-                }}
-                role="group"
-                draggable={false}
-                aria-grabbed={petDragging}
-                onDragStart={(event) => event.preventDefault()}
-                onPointerDown={startPetDrag}
-                onPointerMove={movePetDrag}
-                onPointerUp={stopPetDrag}
-                onPointerCancel={stopPetDrag}
-                onLostPointerCapture={stopPetDrag}
-            >
-                <button type="button" className="st-pet-play"
-                    aria-label={guideLanguage === "zh" ? "和 Mr.Pot 互动" : "Play with Mr.Pot"}
-                    title={guideLanguage === "zh" ? "和 Mr.Pot 互动" : "Play with Mr.Pot"}
-                    onPointerDown={event => event.stopPropagation()}
-                    onClick={event => { event.stopPropagation(); playWithPet() }}>
-                    <Sparkles size={17} aria-hidden="true" />
-                </button>
-                <button
-                    type="button"
-                    className="st-pet-close"
-                    aria-label={guideLanguage === "zh" ? "关闭 Mr.Pot" : "Close Mr.Pot"}
-                    title={guideLanguage === "zh" ? "关闭 Mr.Pot" : "Close Mr.Pot"}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                        event.stopPropagation()
-                        stopNarration()
-                        setAutoPlay(false)
-                        window.clearInterval(petPatrolTimerRef.current)
-                        setPetWalking(false)
-                        setPetHidden(true)
-                    }}
-                >
-                    <X size={13} aria-hidden="true" />
-                </button>
-                <div className="st-roaming-bubble">
-                    <strong>{petWalking ? guideLanguage === "zh" ? "跟我来" : "Follow me" : petSpeaking ? guideLanguage === "zh" ? "正在讲解" : "Speaking" : guideLanguage === "zh" ? "我们到了" : "Here we are"}</strong>
-                    <span>{petWalking ? guideLanguage === "zh" ? "这边，有东西想给你看。" : "Something to show you." : narrative.title}</span>
-                </div>
-                <div
-                    className="st-roaming-pet-body"
-                    role="button"
-                    tabIndex={0}
-                    aria-label={guideLanguage === "zh" ? "点击 Mr.Pot 听当前区域讲解" : "Click Mr.Pot to narrate this section"}
-                    onClick={activatePet}
-                    onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault()
-                            speakCurrentStep()
-                        }
-                    }}
-                >
-                    <MrPotRig />
-                </div>
-                <span className="st-roaming-shadow" />
-            </div> : null}
+            {!petHidden && !arriving ? <TourPet language={guideLanguage} title={narrative.title} chapter={current?.id}
+                stop={`${idx}:${selectedDiscovery?.href || ""}`} frame={uiReady ? frame : null} dockRef={popRef}
+                ready={uiReady} collapsed={collapsed} speaking={petSpeaking} mapOpen={mapOpen}
+                finale={effectiveSteps.length > 1 && idx === effectiveSteps.length - 1}
+                from={stageRef.current} onSpeak={speakCurrentStep} onHide={hidePet} /> : null}
 
             {!arriving && <TourDock ref={popRef} steps={effectiveSteps} index={idx} current={current} visited={visited}
                 action={currentAction} language={guideLanguage} ready={uiReady}
@@ -919,10 +587,9 @@ export default function SiteTour() {
                 .st-scene-frame i:nth-child(3) { bottom: -2px; left: -2px; border-width: 0 0 2px 2px; border-radius: 0 0 0 5px; }
                 .st-scene-frame i:nth-child(4) { bottom: -2px; right: -2px; border-width: 0 2px 2px 0; border-radius: 0 0 5px 0; }
                 @keyframes st-point-out { 0%, 100% { transform: rotate(0); } 25%, 70% { transform: rotate(22deg) translateX(18px); } }
-                @keyframes st-reading-nod { 0%, 100% { transform: rotate(0); } 30%, 65% { transform: rotate(-5deg) translateY(10px); } }
                 @keyframes st-friendly-bow { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(7deg) translateY(8px); } }
                 @keyframes st-hello-wave { 0%, 100% { transform: rotate(0); } 35% { transform: rotate(-9deg); } 70% { transform: rotate(7deg); } }
-                @media (prefers-reduced-motion: reduce) { .st-scene-frame { transition: none; } .st-scene-caption, .st-roaming-pet .st-pet-layer { animation: none !important; } }
+                @media (prefers-reduced-motion: reduce) { .st-scene-frame { transition: none; } .st-scene-caption { animation: none !important; } }
                 .st-highlight {
                     position: fixed;
                     z-index: 9999;
@@ -984,15 +651,12 @@ export default function SiteTour() {
                     width: var(--st-pet-width, 144px);
                     height: var(--st-pet-height, 168px);
                     opacity: 0;
-                    transform: translate3d(-120px, 120px, 0);
                     cursor: grab;
                     outline: none;
                     pointer-events: none;
                     touch-action: none;
                     user-select: none;
-                    transition:
-                        transform 820ms cubic-bezier(0.2, 0.72, 0.22, 1),
-                        opacity 180ms ease;
+                    transition: opacity 180ms ease;
                     will-change: transform;
                 }
 
@@ -1003,7 +667,6 @@ export default function SiteTour() {
 
                 .st-roaming-pet.is-dragging {
                     cursor: grabbing;
-                    transition: opacity 180ms ease;
                 }
 
                 .st-roaming-pet:focus-visible .st-roaming-pet-body {
@@ -1017,6 +680,8 @@ export default function SiteTour() {
                     height: 100%;
                     filter: drop-shadow(0 8px 9px rgba(15, 23, 42, 0.2));
                     overflow: visible;
+                    transform-origin: 50% var(--st-pet-ground, 87%);
+                    will-change: transform;
                 }
 
                 .st-pet-close {
@@ -1068,134 +733,22 @@ export default function SiteTour() {
                     background: #334155;
                 }
 
-                .st-pet-rig {
-                    display: block;
-                    width: 100%;
-                    height: 100%;
-                    overflow: visible;
-                    pointer-events: none;
-                    -webkit-user-drag: none;
-                    transform: scaleX(var(--st-pet-facing, 1));
-                    transform-origin: center;
-                    transition: transform 120ms ease;
-                }
-
-                .st-pet-layer {
-                    transform-box: view-box;
-                }
-
-                .st-pet-head,
-                .st-pet-core {
-                    transform-origin: 600px 760px;
-                    animation: st-pet-breathe 2.6s ease-in-out infinite;
-                }
-
-                .st-pet-head {
-                    animation: st-pet-look-around 14s ease-in-out infinite;
-                }
-
-                .st-pet-steam {
-                    transform-origin: 600px 200px;
-                    animation: st-pet-steam-drift 2.1s ease-in-out infinite alternate;
-                }
-
-                .st-pet-arm-left {
-                    transform-origin: 465px 785px;
-                    animation: st-pet-arm-rest-left 11s ease-in-out infinite;
-                }
-
-                .st-pet-arm-right {
-                    transform-origin: 760px 815px;
-                    animation: st-pet-wave 8s ease-in-out infinite;
-                }
-
-                .st-pet-leg-left,
-                .st-pet-leg-right {
-                    transform-origin: 515px 1000px;
-                }
-                .st-pet-leg-right { transform-origin: 700px 1000px; }
-                .st-pet-leg-left { animation: st-pet-toe-tap 12s ease-in-out infinite; }
-                .st-pet-leg-right { animation: st-pet-weight-shift 12s ease-in-out infinite; }
-
-                .st-roaming-pet.is-walking .st-pet-head,
-                .st-roaming-pet.is-walking .st-pet-core {
-                    animation: st-pet-step-body 260ms ease-in-out infinite alternate;
-                }
-
-                .st-roaming-pet.is-walking .st-pet-arm-left {
-                    animation: st-pet-arm-swing-left 310ms ease-in-out infinite alternate;
-                }
-
-                .st-roaming-pet.is-walking .st-pet-arm-right {
-                    animation: st-pet-arm-swing-right 310ms ease-in-out infinite alternate;
-                }
-
-                .st-roaming-pet.is-walking .st-pet-leg-left {
-                    animation: st-pet-leg-step-left 260ms ease-in-out infinite alternate;
-                }
-
-                .st-roaming-pet.is-walking .st-pet-leg-right {
-                    animation: st-pet-leg-step-right 260ms ease-in-out infinite alternate;
-                }
-
-                .st-roaming-pet.is-walking .st-pet-steam {
-                    animation: st-pet-steam-walk 380ms ease-in-out infinite alternate;
-                }
-
-                .st-roaming-pet.is-speaking .st-pet-arm-right {
-                    animation: st-pet-talk-wave 4.3s ease-in-out infinite;
-                }
-
-                .st-roaming-pet.is-speaking:not(.is-walking):not(.is-dragging) .st-pet-head {
-                    animation: st-reading-nod 2.6s ease-in-out infinite;
-                }
-
-                .st-roaming-pet.is-speaking .st-pet-steam {
-                    animation: st-pet-steam-speak 2.9s ease-in-out infinite;
-                }
-
-                .st-roaming-pet.is-dragging .st-pet-head,
-                .st-roaming-pet.is-dragging .st-pet-core {
-                    animation: st-pet-drag-body 1100ms ease-out both;
-                }
-
-                .st-roaming-pet.is-dragging .st-pet-arm-left {
-                    animation: st-pet-drag-arm-left 1200ms ease-out both;
-                }
-
-                .st-roaming-pet.is-dragging .st-pet-arm-right {
-                    animation: st-pet-drag-arm-right 1300ms ease-out both;
-                }
-
-                .st-roaming-pet.is-dragging .st-pet-leg-left {
-                    animation: st-pet-dangle-left 1400ms ease-out both;
-                }
-
-                .st-roaming-pet.is-dragging .st-pet-leg-right {
-                    animation: st-pet-dangle-right 1500ms ease-out both;
-                }
-
                 .st-roaming-shadow {
                     position: absolute;
-                    right: 17px;
-                    bottom: 2px;
-                    left: 17px;
+                    right: 19%;
+                    top: calc(var(--st-pet-ground, 87%) - 3px);
+                    left: 19%;
                     z-index: 1;
                     height: 8px;
                     border-radius: 50%;
                     background: rgba(15, 23, 42, 0.22);
                     filter: blur(3px);
-                    transition: transform 180ms ease, opacity 180ms ease;
-                }
-
-                .st-roaming-pet.is-walking .st-roaming-shadow {
-                    opacity: 0.6;
-                    transform: scaleX(0.82);
+                    will-change: transform, opacity;
                 }
 
                 .st-roaming-bubble {
                     position: absolute;
-                    bottom: calc(100% - 7px);
+                    bottom: calc(100% + 1px);
                     left: 50%;
                     z-index: 4;
                     width: max-content;
@@ -1207,8 +760,9 @@ export default function SiteTour() {
                     box-shadow: 0 8px 22px rgba(15, 23, 42, 0.14);
                     color: #45545c;
                     opacity: 1;
-                    transform: translateX(-50%) translateY(0);
-                    transition: opacity 160ms ease, transform 160ms ease;
+                    transform: translateX(-50%) translateY(0) scale(1);
+                    transform-origin: 50% calc(100% + 6px);
+                    transition: opacity 140ms ease, transform 320ms cubic-bezier(0.3, 1.5, 0.5, 1);
                     text-align: center;
                     pointer-events: none;
                 }
@@ -1244,14 +798,11 @@ export default function SiteTour() {
                     line-height: 1.35;
                 }
 
-                .st-roaming-pet.is-walking .st-roaming-bubble {
-                    opacity: 0.18;
-                    transform: translateX(-50%) translateY(5px);
-                }
-
+                .st-roaming-pet.is-walking.is-leading .st-roaming-bubble,
                 .st-roaming-pet.is-dragging .st-roaming-bubble {
                     opacity: 0;
-                    transform: translateX(-50%) translateY(7px);
+                    transform: translateX(-50%) translateY(8px) scale(0.7);
+                    transition: opacity 100ms ease, transform 120ms ease-in;
                 }
 
                 .st-roaming-pet.is-speaking .st-roaming-pet-body::before,
@@ -1324,127 +875,6 @@ export default function SiteTour() {
                     font-size: 14px;
                     text-overflow: ellipsis;
                     white-space: nowrap;
-                }
-
-                @keyframes st-pet-breathe {
-                    0%, 100% { transform: translateY(0) scaleY(1); }
-                    50% { transform: translateY(-1px) scaleY(1.008); }
-                }
-
-                @keyframes st-pet-steam-drift {
-                    0% { transform: translateX(-5px) rotate(-4deg) scaleY(0.96); opacity: 0.76; }
-                    100% { transform: translateX(5px) rotate(4deg) scaleY(1.04); opacity: 1; }
-                }
-
-                @keyframes st-pet-arm-rest-left {
-                    0%, 48%, 76%, 100% { transform: rotate(0); }
-                    57% { transform: rotate(8deg); }
-                    66% { transform: rotate(4deg); }
-                }
-
-                @keyframes st-pet-wave {
-                    0%, 58%, 100% { transform: rotate(0); }
-                    67% { transform: rotate(-9deg); }
-                    74% { transform: rotate(6deg); }
-                    81% { transform: rotate(-7deg); }
-                    89% { transform: rotate(4deg); }
-                }
-
-                @keyframes st-pet-look-around {
-                    0%, 18%, 52%, 100% { transform: rotate(0) translateY(0); }
-                    26%, 32% { transform: rotate(-3deg) translateY(-3px); }
-                    42% { transform: rotate(3deg) translateY(-2px); }
-                    72%, 78% { transform: rotate(-2deg) translateY(3px); }
-                    86% { transform: rotate(1deg); }
-                }
-
-                @keyframes st-pet-toe-tap {
-                    0%, 62%, 89%, 100% { transform: rotate(0) translateY(0); }
-                    68%, 79% { transform: rotate(7deg) translateY(-9px); }
-                    73%, 85% { transform: rotate(0) translateY(0); }
-                }
-
-                @keyframes st-pet-weight-shift {
-                    0%, 59%, 92%, 100% { transform: rotate(0); }
-                    66%, 84% { transform: rotate(-2deg); }
-                }
-
-                @keyframes st-pet-step-body {
-                    0% { transform: translateY(0) rotate(-0.6deg); }
-                    100% { transform: translateY(-4px) rotate(0.6deg); }
-                }
-
-                @keyframes st-pet-arm-swing-left {
-                    0% { transform: rotate(-5deg); }
-                    100% { transform: rotate(8deg); }
-                }
-
-                @keyframes st-pet-arm-swing-right {
-                    0% { transform: rotate(6deg); }
-                    100% { transform: rotate(-6deg); }
-                }
-
-                @keyframes st-pet-leg-step-left {
-                    0% { transform: rotate(-4deg) translateY(2px); }
-                    100% { transform: rotate(5deg) translateY(-9px); }
-                }
-
-                @keyframes st-pet-leg-step-right {
-                    0% { transform: rotate(5deg) translateY(-9px); }
-                    100% { transform: rotate(-4deg) translateY(2px); }
-                }
-
-                @keyframes st-pet-steam-walk {
-                    0% { transform: translateX(-8px) rotate(-7deg) scaleY(0.94); }
-                    100% { transform: translateX(7px) rotate(6deg) scaleY(1.05); }
-                }
-
-                @keyframes st-pet-talk-wave {
-                    0%, 12%, 100% { transform: rotate(0); }
-                    28% { transform: rotate(-5deg); }
-                    40% { transform: rotate(1.5deg); }
-                    57% { transform: rotate(-2.5deg); }
-                    72%, 88% { transform: rotate(-.5deg); }
-                }
-
-                @keyframes st-pet-steam-speak {
-                    0%, 100% { transform: scale(0.96); opacity: 0.72; }
-                    50% { transform: scale(1.08) translateY(-4px); opacity: 1; }
-                }
-
-                @keyframes st-pet-drag-body {
-                    0%, 100% { transform: rotate(0); }
-                    25% { transform: rotate(-1.8deg); }
-                    52% { transform: rotate(.9deg); }
-                    78% { transform: rotate(-.3deg); }
-                }
-
-                @keyframes st-pet-drag-arm-left {
-                    0%, 100% { transform: rotate(0); }
-                    28% { transform: rotate(9deg); }
-                    54% { transform: rotate(-3deg); }
-                    78% { transform: rotate(1deg); }
-                }
-
-                @keyframes st-pet-drag-arm-right {
-                    0%, 100% { transform: rotate(0); }
-                    32% { transform: rotate(-6deg); }
-                    58% { transform: rotate(2deg); }
-                    80% { transform: rotate(-.6deg); }
-                }
-
-                @keyframes st-pet-dangle-left {
-                    0%, 100% { transform: rotate(0); }
-                    25% { transform: rotate(-6deg); }
-                    50% { transform: rotate(3deg); }
-                    73% { transform: rotate(-1deg); }
-                }
-
-                @keyframes st-pet-dangle-right {
-                    0%, 100% { transform: rotate(0); }
-                    29% { transform: rotate(5deg); }
-                    54% { transform: rotate(-2.5deg); }
-                    77% { transform: rotate(.8deg); }
                 }
 
                 @keyframes st-pet-sound {
@@ -1961,8 +1391,7 @@ export default function SiteTour() {
 
                 @media (prefers-reduced-motion: reduce) {
                     .st-roaming-pet,
-                    .st-pet-rig,
-                    .st-pet-layer,
+                    .st-roaming-bubble,
                     .st-roaming-pet.is-speaking .st-roaming-pet-body::before,
                     .st-roaming-pet.is-speaking .st-roaming-pet-body::after {
                         animation: none !important;

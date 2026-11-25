@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const REPERTOIRE = ['curious', 'stretch', 'happy', 'balance', 'sleepy', 'greet'];
-const RESPONSES = ['happy', 'greet', 'balance'];
-const DURATION = { curious: 3700, stretch: 4600, happy: 2400, balance: 3800, sleepy: 5100, greet: 2900 };
+// What he does on his own while a visitor reads, in order; the showier ones answer a click on the sparkle.
+const REPERTOIRE = ['curious', 'dance', 'stretch', 'tiphat', 'happy', 'boil', 'balance', 'spin', 'sleepy', 'greet'];
+const RESPONSES = ['happy', 'spin', 'greet', 'flip', 'dance', 'balance'];
+const DURATION = { curious: 3700, stretch: 4600, happy: 2400, balance: 3800, sleepy: 5100, greet: 2900, tiphat: 2000, dance: 3300, boil: 3900, spin: 1900, flip: 2400, bow: 1500 };
 
 export default function usePetPerformance({ enabled, busy }) {
     const [gesture, setGesture] = useState('rest');

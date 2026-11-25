@@ -10,6 +10,63 @@ without calling a model; its example execution record is explicitly a fixture.
 It also shows every look Mr. Pot has, one button each (see `docs/CHAT_WINDOW.md`).
 The lab returns 404 in production mode.
 
+## The guide's Mr. Pot
+
+The figure that leads the Vibe Guide (`src/components/SiteTour.js`) is the illustration
+`public/assets/images/mr-pot-tour-guide.png`, cut into parts that turn on their joints. His
+face and steam are drawn over it as shapes measured from the illustration, so at rest the
+picture is unchanged and in motion he can blink, look, talk and let off steam.
+
+| File | Holds |
+| --- | --- |
+| `src/lib/tourPetRig.mjs` | How he moves: springs per joint, the walk, the jump, being carried, his performances. No DOM, no timers |
+| `src/lib/tourPetDrawing.mjs` | The measurements of the illustration and the shapes for one frame |
+| `src/components/tour/TourPetFigure.js` | The SVG; `draw(pose)` touches only attributes that changed |
+| `src/components/tour/useTourPet.js` | One rig on one animation loop: every frame while he travels, every other frame at rest |
+| `src/components/tour/TourPet.js` | The guide: where he stands (`placeTourPet`), dragging, the caption, the sparkle button |
+| `src/components/tour/TourArrival.js` | The opening screen he walks onto |
+
+How he gets about:
+
+- A short way on the level is walked, with the legs in time with the ground covered. Anything
+  further or steeper is a jump: a crouch, an arc, a landing that rattles the lid.
+- A new chapter that leaves him on the same spot still gets a jump on the spot.
+- A page that scrolls under him carries him; he only sets off again if his spot gets more than
+  half a body width away.
+- From the opening screen he jumps to the first section from where he stood, coming down to
+  his own size on the way.
+- In a visitor's hand he hangs from the pointer and stays where he is put down.
+- With reduced motion he is placed and holds still.
+
+What he does besides:
+
+- Ten performances take turns while a visitor reads: curious, dance, stretch, tiphat (he tips his
+  lid), happy, boil (the lid rattles until it lets go), balance, spin, sleepy, greet. The sparkle
+  button answers with the showier ones, a flip head over heels among them.
+- He bows when he has finished narrating a chapter, goes head over heels on reaching the last
+  one, skips when clicked and perks up when the pointer comes to him.
+- Standing still he blinks, looks at the section, the visitor or the pointer, shifts his weight,
+  taps a foot, rocks on his heels, lifts his lid a crack and watches his steam.
+
+Three things worth knowing before changing him:
+
+- The cuts decide whether he stays whole when a part moves. The dark line between the hanging arm
+  and the body is in both layers: the body keeps its side, the arm has an inner edge. The hand
+  belongs to the arm alone, the chin to the head alone and the line of the belly to the body alone.
+  Under everything lie a neck, skin over each hip and the start of each inner leg line: hidden at
+  rest, they are what shows when a part swings away. Arms may swing far; legs turn at the hip and
+  are kept within about twelve degrees. `tests/pet-motion.browser.mjs` checks who owns which pixels.
+
+- His eyes never change shape. A lid comes down over them, and its edge is the line of a closed
+  eye: curved down for a blink or a doze, up for a beam.
+- The springs are advanced in steps of at most 1/120 s (`SPRING_STEP`). At rest he is stepped
+  every other frame; without the shorter steps the eyelid spring overshoots further on each one
+  and the eyes flutter after a blink. `tests/tour-pet.test.mjs` holds him to that.
+
+Try every move without starting the guide on `/mr-pot-lab` (section "Mr. Pot / the guide").
+Checks: `tests/tour-pet.test.mjs` runs with `npm test`; `tests/pet-motion.browser.mjs` drives a
+real browser against a running dev server (`TEST_ORIGIN=http://127.0.0.1:3168/`).
+
 Available actions:
 
 | Action | Effect | Boundary |
