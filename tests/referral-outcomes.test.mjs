@@ -96,6 +96,10 @@ test('references that do not hold are contradicted; a service that cannot be ask
   assert.match(evidenceFacts(unmerged).openSource.join(' '), /is not merged \(open\).*is a fork/);
   assert.deepEqual(pathChecks(await gather({})), { openSource: 'contradicted', contests: 'unavailable' }, 'not found on GitHub; LeetCode answered 404');
   assert.deepEqual(pathChecks(await gather({ 'api.github.com': 403, 'leetcode.com': 'down' })), { openSource: 'unavailable', contests: 'unavailable' });
+  // Linking someone else's well-known repository verifies nothing, and is not a false claim either.
+  const famous = await gather({ '/repos/torvalds/linux': { owner: { login: 'torvalds' }, fork: false, stargazers_count: 200000 }, '/search/issues': { total_count: 0 },
+    '/users/torvalds/repos': [], '/users/torvalds': { login: 'torvalds', public_repos: 9 } }, 'Alex admires https://github.com/torvalds/linux and is github.com/alex-nobody');
+  assert.deepEqual(pathChecks(famous), {});
   // Only a profile link: nothing specific was cited, so nothing is contradicted.
   assert.deepEqual(pathChecks(await gather({ '/search/issues': { total_count: 0 }, '/users/alex': GITHUB['/users/alex'] }, 'See github.com/alex')), {});
 });

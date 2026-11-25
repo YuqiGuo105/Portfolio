@@ -261,11 +261,16 @@ export function pathChecks(evidence) {
   const github = evidence?.github;
   if (github) {
     const cited = [...github.pulls, ...github.repos];
-    const holds = github.pulls.some(item => item.status === 'ok' && item.merged) || github.repos.some(item => item.status === 'ok' && !item.fork)
+    // A repository only speaks for the applicant when it belongs to the account they gave: linking a
+    // famous project proves nothing by itself.
+    const login = String(github.account?.login || '').toLowerCase();
+    const own = item => item.status === 'ok' && !item.fork && login && String(item.owner || '').toLowerCase() === login;
+    const holds = github.pulls.some(item => item.status === 'ok' && item.merged) || github.repos.some(own)
       || (github.account?.mergedElsewhere || 0) > 0;
     if (holds) checks.openSource = 'verified';
     else if (github.status === 'unavailable' || cited.some(item => item.status === 'unavailable')) checks.openSource = 'unavailable';
-    else if (cited.length) checks.openSource = 'contradicted';
+    // Someone else's repository is neither proof nor a false claim: only missing, forked or unmerged references contradict.
+    else if (cited.length && !github.repos.some(item => item.status === 'ok' && !item.fork)) checks.openSource = 'contradicted';
   }
   const contest = evidence?.leetcode;
   if (contest) {
