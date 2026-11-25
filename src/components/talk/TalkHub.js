@@ -39,7 +39,8 @@ function ReferralClosed({ reason, onMessage }) {
 
 // The home section offers message/chat; its separate referral link opens the full /talk form.
 // `referral` comes from the page's static props: { company, reason } (src/lib/referral/availability.mjs).
-export default function TalkHub({ mode = "section", initialIntent = "message", referral = null }) {
+// `syncUrl` keeps /talk's address in step with the open tab. A page with its own address (/referral) turns it off.
+export default function TalkHub({ mode = "section", initialIntent = "message", referral = null, syncUrl = true }) {
   const router = useRouter();
   const choices = mode === "section" ? CONTACT_INTENTS : INTENTS;
   const startingIntent = choices.some(({ id }) => id === initialIntent) ? initialIntent : "message";
@@ -63,7 +64,7 @@ export default function TalkHub({ mode = "section", initialIntent = "message", r
 
   const choose = (id) => {
     show(id);
-    if (mode === "page") {
+    if (mode === "page" && syncUrl) {
       router.replace({ pathname: TALK_PATH, query: id === "message" ? {} : { intent: id } }, undefined, { shallow: true, scroll: false });
     }
   };

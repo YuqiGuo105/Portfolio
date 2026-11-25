@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, CircleAlert, LoaderCircle, RefreshCw } from "lucide-react";
-import { TALK_PATH } from "./links";
+import { TALK_PATH, referralHref } from "./links";
 import styles from "./Talk.module.css";
 
 export const STATUS_KEY = "talk:referral:status:v1";
@@ -96,7 +96,7 @@ export default function ReferralStatus() {
           {stage.title}
         </h2>
         <p>{stage.text}</p>
-        {status.stage === "file_problem" && <div className={styles.explainActions}><Link href={`${TALK_PATH}?intent=referral`}><a className={styles.primary}>Send the request again</a></Link></div>}
+        {status.stage === "file_problem" && <div className={styles.explainActions}><Link href={referralHref}><a className={styles.primary}>Send the request again</a></Link></div>}
       </div>
       <dl className={styles.statusFacts}>
         <div><dt>Reference</dt><dd><span className={styles.reference}>{status.reference}</span></dd></div>

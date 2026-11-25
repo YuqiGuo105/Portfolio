@@ -22,6 +22,8 @@ const nextConfig = {
       { source: "/work-single", destination: "/works-list", permanent: true },
       { source: "/blog", destination: "/blogs", permanent: true },
       { source: "/blog-single", destination: "/blogs", permanent: true },
+      // Links already sent as /talk?intent=referral open, and preview as, the referral page.
+      { source: "/talk", has: [{ type: "query", key: "intent", value: "referral" }], destination: "/referral", permanent: false },
     ];
   },
 

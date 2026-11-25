@@ -103,7 +103,7 @@ test('Contact Me exposes a direct referral link without switching tabs or making
     assert.ok($('#contact-section .vertical-line.contact-form-column [data-talk-hub="section"]'));
     const link = all('#contact-section a').find(node => node.textContent === 'Request a referral');
     assert.ok(link);
-    assert.equal(link.getAttribute('href'), '/talk?intent=referral');
+    assert.equal(link.getAttribute('href'), '/referral');
     assert.equal(link.getAttribute('target'), null);
     assert.equal(all('[role="tab"]')[0].getAttribute('aria-selected'), 'true');
     assert.equal($('[data-wizard]'), null);

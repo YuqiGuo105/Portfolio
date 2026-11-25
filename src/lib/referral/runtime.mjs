@@ -26,7 +26,7 @@ function previewHistory(env) {
 }
 
 // Pages that state the employer or the referral company; regenerated at once when either changes.
-const PAGES = ['/', '/talk'];
+const PAGES = ['/', '/talk', '/referral'];
 
 const KEY = Symbol.for('portfolio.referral.runtime.v3');
 export function referralRuntime() {
