@@ -51,6 +51,13 @@ test('links are read from the form and from compressed PDF streams, and only rea
   const stream = deflateSync(Buffer.from('<< /Type /Annot /A << /S /URI /URI (https://github.com/alex/ledger/pull/7) >> >>'));
   const file = Buffer.concat([Buffer.from('%PDF-1.4\n1 0 obj\n<< /Filter /FlateDecode /Length 1 >>\nstream\n', 'latin1'), stream, Buffer.from('\nendstream\nendobj\n(https://leetcode.cn/u/alexc)\n%%EOF', 'latin1')]);
   assert.deepEqual(resumeLinks(file).sort(), ['https://github.com/alex/ledger/pull/7', 'https://leetcode.cn/u/alexc']);
+  // Chrome and Skia write link targets with octal escapes; other writers use hex strings or nested brackets.
+  const skia = Buffer.from('%PDF-1.3\n<< /Type /Annot /A << /S /URI /URI (https\\072\\057\\057github\\056com\\057YuqiGuo105) >> >>\n'
+    + '<< /A << /S /URI /URI (https\\072\\057\\057www\\056linkedin\\056com\\057in\\057yuqi\\055guo) >> >>\n'
+    + `<< /A << /URI <${Buffer.from('https://leetcode.com/u/alexc/').toString('hex')}> >> >>\n<< /A << /URI (mailto\\072a\\100b\\056c) >> >>\n%%EOF`, 'latin1');
+  assert.deepEqual(resumeLinks(skia).sort(), ['https://github.com/YuqiGuo105', 'https://leetcode.com/u/alexc/', 'https://www.linkedin.com/in/yuqi-guo']);
+  const fromSkia = evidenceTargets({}, skia);
+  assert.deepEqual({ logins: fromSkia.logins, leetcode: fromSkia.leetcode.username, linkedin: fromSkia.linkedin }, { logins: ['YuqiGuo105'], leetcode: 'alexc', linkedin: 'https://www.linkedin.com/in/yuqi-guo' });
   // A crafted stream cannot expand without limit.
   const bomb = Buffer.concat([Buffer.from('%PDF-1.4\n<< /Filter /FlateDecode >>\nstream\n', 'latin1'), deflateSync(Buffer.alloc(8 * 1024 * 1024, 0x61)), Buffer.from('\nendstream', 'latin1')]);
   assert.deepEqual(resumeLinks(bomb), []);

@@ -30,6 +30,38 @@ const line = (value, max) => (typeof value === 'string' ? value.replace(/[\u0000
 const count = value => (Number.isFinite(Number(value)) && Number(value) >= 0 ? Math.floor(Number(value)) : null);
 const day = value => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null);
 
+// A PDF writes a link target as a string object: "(…)" with backslash escapes, where Chrome and
+// Skia spell every ":", "/" and "." as an octal code ("https\072\057\057github\056com…"), or "<…>" in hex.
+const PDF_ESCAPES = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f' };
+function pdfUris(text) {
+  const out = [];
+  const marker = /\/URI\s*([(<])/g;
+  let match;
+  while ((match = marker.exec(text)) && out.length < 200) {
+    let at = marker.lastIndex, value = '';
+    if (match[1] === '<') {
+      const end = text.indexOf('>', at);
+      if (end < 0 || end - at > 1200) continue;
+      const hex = text.slice(at, end).replace(/\s+/g, '');
+      if (!/^(?:[0-9a-fA-F]{2})+$/.test(hex)) continue;
+      value = Buffer.from(hex, 'hex').toString('latin1');
+    } else {
+      for (let depth = 1; at < text.length && value.length < 600; at += 1) {
+        const char = text[at];
+        if (char === '\\') {
+          const octal = /^[0-7]{1,3}/.exec(text.slice(at + 1, at + 4));
+          if (octal) { value += String.fromCharCode(parseInt(octal[0], 8) & 0xff); at += octal[0].length; }
+          else { const next = text[at + 1]; if (next !== '\n' && next !== '\r') value += PDF_ESCAPES[next] ?? next ?? ''; at += 1; }
+        } else if (char === '(') { depth += 1; value += char; }
+        else if (char === ')') { depth -= 1; if (!depth) break; value += char; }
+        else value += char;
+      }
+    }
+    out.push(value);
+  }
+  return out;
+}
+
 function scan(text, found) {
   for (const match of String(text || '').matchAll(LINK)) {
     if (found.size >= MAX.links) return;
@@ -43,7 +75,8 @@ export function resumeLinks(bytes, { maxStreams = 80, maxInflated = 4 * 1024 * 1
   const found = new Set();
   if (!Buffer.isBuffer(bytes)) return [];
   const raw = bytes.toString('latin1');
-  scan(raw, found);
+  const read = text => { scan(text, found); for (const uri of pdfUris(text)) scan(uri, found); };
+  read(raw);
   let at = 0, streams = 0, inflated = 0;
   while (streams < maxStreams && inflated < maxInflated) {
     const start = raw.indexOf('stream', at);
@@ -59,7 +92,7 @@ export function resumeLinks(bytes, { maxStreams = 80, maxInflated = 4 * 1024 * 1
     try {
       const out = inflateSync(bytes.subarray(from, end), { maxOutputLength: maxInflated - inflated });
       inflated += out.length;
-      scan(out.toString('latin1'), found);
+      read(out.toString('latin1'));
     } catch { /* Not a plain deflate stream, or too large: skipped. */ }
   }
   return [...found];
