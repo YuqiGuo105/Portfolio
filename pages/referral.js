@@ -4,6 +4,7 @@ import TalkHub from "../src/components/talk/TalkHub";
 import styles from "../styles/TalkPage.module.css";
 
 // The referral form at its own address, so a link sent to someone previews as what it is.
+// The preview names no company: it says "Ask for a referral" and nothing else.
 // Same static page as /talk in every other respect: the company comes from the work history
 // when the page is generated, and the page is regenerated in the background.
 export async function getStaticProps() {
@@ -14,12 +15,11 @@ export async function getStaticProps() {
 }
 
 export default function ReferralPage({ referral }) {
-  const where = referral?.company ? ` at ${referral.company}` : "";
   return (
     <Layout>
       <SeoHead
-        title={`Ask for a referral${where}`}
-        description={`Ask Yuqi Guo for a referral${where}. Every request is evaluated by his own AI screening system, and you can follow yours on a status page.`}
+        title="Ask for a referral"
+        description="Ask Yuqi Guo for a referral. Every request is evaluated by his own AI screening system, and you can follow yours on a status page."
         url="/referral"
       />
       <section className={`section ${styles.page}`}>
