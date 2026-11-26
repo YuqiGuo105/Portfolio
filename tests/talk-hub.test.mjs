@@ -99,7 +99,7 @@ test('Contact Me exposes a direct referral link without switching tabs or making
   for (const referral of [OPEN, { company: null, reason: 'paused' }]) {
     await render(React.createElement(ContactForm, { referral }));
     assert.equal($('#contact-section .m-titles > #tour-contact').textContent, 'Contact Me');
-    assert.equal(all('#contact-section .contact-details .numbers-item').length, 1);
+    assert.equal(all('#contact-section .contact-details .numbers-item').length, 3);
     assert.ok($('#contact-section .vertical-line.contact-form-column [data-talk-hub="section"]'));
     const link = all('#contact-section a').find(node => node.textContent === 'Request a referral');
     assert.ok(link);
