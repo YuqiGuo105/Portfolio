@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Check } from "lucide-react";
 import Layout from "../src/layout/Layout";
 import SeoHead from "../src/components/SeoHead";
 import TalkHub from "../src/components/talk/TalkHub";
@@ -36,7 +37,7 @@ export default function ReferralPage({ referral }) {
                   and I will take it from there{company ? ` at ${company}` : ""}.
                 </p>
                 <a className={styles.start} href="#referral-form">Start my request</a>
-                <p className={styles.terms}>About five minutes. One request per person.</p>
+                <p className={styles.terms}>Free, always. About five minutes. One request per person.</p>
               </div>
               {/* An illustration of what is being asked for; it holds no data. */}
               <div className={styles.slip} aria-hidden="true">
@@ -67,6 +68,12 @@ export default function ReferralPage({ referral }) {
                 <p>A private status page shows every stage. When your request passes, I am asked to submit your referral.</p>
               </li>
             </ol>
+
+            <ul className={styles.promises}>
+              <li><Check size={18} aria-hidden="true" /><span><strong>Free.</strong> I never charge for a referral, and nobody should ask you to pay for one.</span></li>
+              <li><Check size={18} aria-hidden="true" /><span><strong>Tracked the whole way.</strong> Your own status page follows the request from the moment you send it to the outcome.</span></li>
+              <li><Check size={18} aria-hidden="true" /><span><strong>Help when you need it.</strong> Stuck on the form or have a question about your request? <Link href={TALK_PATH}><a>Message me</a></Link> and I will help.</span></li>
+            </ul>
 
             <div className={styles.form} id="referral-form">
               <h2 className={styles.formTitle}>Your request</h2>

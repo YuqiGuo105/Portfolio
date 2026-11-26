@@ -183,7 +183,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
-  margin: 0 0 64px;
+  margin: 0 0 44px;
   padding: 0;
   border-top: 1px solid var(--rule);
   list-style: none;
@@ -218,6 +218,30 @@
 }
 
 .page .steps p { margin: 0; color: var(--muted); font-size: 15.5px; line-height: 1.6; }
+
+/* Three things worth knowing before filling anything in. Not a sequence, so no numbers. */
+.page .promises {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 32px;
+  margin: 0 0 40px;
+  padding: 0;
+  list-style: none;
+}
+
+.page .promises li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+
+.page .promises svg { margin-top: 4px; color: var(--green); }
+.page .promises strong { color: var(--ink); font-weight: 500; }
+.page .promises a { color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
 
 .form {
   scroll-margin-top: 110px;
@@ -258,7 +282,8 @@
   .page { padding: 112px 0 72px; }
   .page .lead { font-size: 17px; }
   .page .start { width: 100%; justify-content: center; }
-  .page .steps { grid-template-columns: 1fr; margin-bottom: 44px; }
+  .page .steps { grid-template-columns: 1fr; margin-bottom: 32px; }
+  .page .promises { grid-template-columns: 1fr; margin-bottom: 32px; }
   .page .steps li { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 12px; padding: 20px 0; }
   .page .steps li + li { padding-left: 0; border-left: 0; border-top: 1px solid var(--rule); }
   .page .steps li::before { grid-row: span 2; margin: 0; font-size: 34px; }
