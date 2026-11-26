@@ -7,6 +7,7 @@ import WebSocket from 'ws';
 import { createVoiceRelay, signTicket, verifyTicket, createBudgetStore } from '../services/voice/relay.mjs';
 import { createVoiceProxy } from '../src/lib/voice/productionProxy.mjs';
 import { QWEN_MODEL } from '../src/lib/voice/qwenProtocol.mjs';
+import { BUILT_IN_GUIDE } from '../src/lib/voice/protocol.mjs';
 
 const secret = 'test-only-voice-secret-'.repeat(3);
 const origin = 'https://www.yuqi.site';
@@ -43,7 +44,8 @@ async function fixture(options = {}) {
   const providers = [], requests = [], connections = []; let tokens = 0;
   const env = { NODE_ENV: 'production', VOICE_PROVIDER: 'google', VOICE_ENABLED: 'true', VOICE_GATEWAY_TOKEN: secret, GEMINI_API_KEY: 'never-browser',
     VOICE_PUBLIC_URL: 'https://relay.example', VOICE_RECORD_TRANSCRIPTS: 'false', ...overrides };
-  const relay = createVoiceRelay({ env, budget: store(), loadProfile: async () => profile,
+  // The site guide is read over MCP in production; here it is this build's own copy unless a test says otherwise.
+  const relay = createVoiceRelay({ env, budget: store(), loadProfile: async () => profile, loadGuide: async () => BUILT_IN_GUIDE,
     fetchImpl: async (url, init) => {
       requests.push({ url, init });
       if (url !== 'https://generativelanguage.googleapis.com/v1beta/auth_tokens') {
@@ -325,7 +327,7 @@ test('Qwen retains the relay usage, audio output, turn, tool and client-input li
         for (let i = 0; i < 9; i++) emit(provider, { type: 'response.done', response: { id: `turn-${i}`, status: 'completed' } });
       }
       if (kind === 'tools') {
-        for (let i = 0; i < 7; i++) emit(provider, { type: 'response.function_call_arguments.done', response_id: 'r1', call_id: `tool-${i}`, name: 'read_page', arguments: '{}' });
+        for (let i = 0; i < 17; i++) emit(provider, { type: 'response.function_call_arguments.done', response_id: 'r1', call_id: `tool-${i}`, name: 'read_page', arguments: '{}' });
       }
       if (kind === 'flood') for (let i = 0; i < 30; i++) call.client.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
       if (kind === 'invalid_audio') call.client.send(JSON.stringify({ realtimeInput: { audio: { data: 'AAAA', mimeType: 'audio/pcm;rate=24000' } } }));
@@ -497,4 +499,50 @@ test('history flush can hold the request socket for no more than six seconds', {
     assert.ok(elapsed >= 5900 && elapsed < 7500, `flush deadline took ${elapsed}ms`);
     assert.ok(call.events.some(event => event.reason === 'client_hangup' && event.conversationId));
   } finally { gate.resolve(); await f.close(); }
+});
+
+test('on the home page the relay shows a section and says so, elsewhere it only offers it; the guide decides which exist', async () => {
+  const guide = { source: 'MCP', sections: BUILT_IN_GUIDE.sections.filter(section => section.target !== 'contact')
+    .map(section => (section.target === 'background' ? { ...section, covers: 'Degrees and employers, from the tool.' } : section)) };
+  const f = await fixture({ loadGuide: async () => guide });
+  const tool = (provider, id, target) => emit(provider, { toolCall: { functionCalls: [{ id, name: 'navigate_section', args: { target } }] } });
+  const answer = provider => provider.messages.at(-1).toolResponse.functionResponses[0].response;
+  try {
+    const home = await f.reserve(); const call = await f.open(home.data.ticket);
+    const setup = f.providers[0].messages.find(message => message.setup).setup;
+    assert.deepEqual(setup.tools[0].functionDeclarations[2].parameters.properties.target.enum, ['about', 'background', 'projects', 'articles', 'dashboard']);
+    assert.match(setup.systemInstruction.parts[0].text, /Degrees and employers, from the tool\./);
+    tool(f.providers[0], 'show', 'background');
+    assert.deepEqual(answer(f.providers[0]), { status: 'shown', label: 'My Background' });
+    await waitFor(() => call.events.some(event => event.toolCall));
+    assert.deepEqual(call.events.find(event => event.toolCall).toolCall.functionCalls, [{ id: 'show', name: 'navigate_section', args: { target: 'background', mode: 'show' } }]);
+    tool(f.providers[0], 'gone', 'contact');
+    assert.deepEqual(answer(f.providers[0]), { error: 'Tool not allowed.' }, 'a section the guide no longer lists cannot be shown');
+    tool(f.providers[0], 'made-up', 'admin');
+    assert.deepEqual(answer(f.providers[0]), { error: 'Tool not allowed.' });
+    await pause(20);
+    assert.equal(call.events.filter(event => event.toolCall).length, 1);
+    call.client.close(); await once(call.client, 'close'); await pause(10);
+
+    const reserved = await fetch(`${f.base}/session`, { method: 'POST', headers: { Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ page: { path: '/blogs', text: 'Articles' }, origin }) });
+    const other = await f.open((await reserved.json()).ticket);
+    tool(f.providers[1], 'offer', 'projects');
+    assert.deepEqual(answer(f.providers[1]), { status: 'offered_waiting_for_user', label: 'Projects' });
+    await waitFor(() => other.events.some(event => event.toolCall));
+    assert.deepEqual(other.events.find(event => event.toolCall).toolCall.functionCalls[0].args, { target: 'projects' });
+  } finally { await f.close(); }
+});
+
+test('a call starts with this build\'s guide when the guide tool cannot be read', async () => {
+  const f = await fixture({ loadGuide: async () => { throw new Error('get_site_guide is not published yet'); } });
+  try {
+    const reservation = await f.reserve(); assert.equal(reservation.status, 200);
+    const call = await f.open(reservation.data.ticket);
+    assert.ok(call.events.some(event => event.setupComplete));
+    const setup = f.providers[0].messages.find(message => message.setup).setup;
+    assert.deepEqual(setup.tools[0].functionDeclarations[2].parameters.properties.target.enum, BUILT_IN_GUIDE.sections.map(section => section.target));
+    emit(f.providers[0], { toolCall: { functionCalls: [{ id: 'show', name: 'navigate_section', args: { target: 'contact' } }] } });
+    assert.deepEqual(f.providers[0].messages.at(-1).toolResponse.functionResponses[0].response, { status: 'shown', label: 'Contact' });
+  } finally { await f.close(); }
 });

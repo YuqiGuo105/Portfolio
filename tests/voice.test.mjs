@@ -469,3 +469,35 @@ test('a line still reserved by an unfinished attempt is waited out; a line that 
     assert.deepEqual(taken.events.at(-1), { status: 'error', error: 'Mr. Pot is on another call. Please try shortly.' });
   } finally { taken.session.close(); }
 });
+
+test('a section is shown in place on the home page and only offered elsewhere; a relayed session does what the relay said', async () => {
+  const home = harness();
+  try {
+    await home.session.start(); home.session.handle({ setupComplete: {} });
+    home.session.handle({ toolCall: { functionCalls: [{ id: 'show', name: 'navigate_section', args: { target: 'background' } }] } });
+    assert.deepEqual(home.actions.at(-1), { href: '/#tour-background', label: 'My Background', callId: 'show', page: '/', show: true });
+    assert.deepEqual(home.sent.at(-1).toolResponse.functionResponses[0].response, { status: 'shown', label: 'My Background' });
+  } finally { home.session.close(); }
+
+  const away = harness({ readPage: () => ({ path: '/blogs', title: 'Blogs', text: 'Articles' }) });
+  try {
+    await away.session.start(); away.session.handle({ setupComplete: {} });
+    away.session.handle({ toolCall: { functionCalls: [{ id: 'offer', name: 'navigate_section', args: { target: 'background' } }] } });
+    assert.deepEqual(away.actions.at(-1), { href: '/#tour-background', label: 'My Background', callId: 'offer', page: '/blogs' });
+    assert.deepEqual(away.sent.at(-1).toolResponse.functionResponses[0].response, { status: 'offered_waiting_for_user', label: 'My Background' });
+  } finally { away.session.close(); }
+
+  const relayed = relayHarness();
+  try {
+    await relayed.session.start(); relayed.socket.onopen(); relayed.session.handle({ setupComplete: {} });
+    relayed.session.handle({ toolCall: { functionCalls: [{ id: 'r1', name: 'navigate_section', args: { target: 'projects', mode: 'show' } }] } });
+    assert.equal(relayed.actions.at(-1).show, true);
+    // An older relay names no mode: the visitor is offered the button, as before.
+    relayed.session.handle({ toolCall: { functionCalls: [{ id: 'r2', name: 'navigate_section', args: { target: 'projects' } }] } });
+    assert.equal(relayed.actions.at(-1).show, undefined); assert.equal(relayed.actions.at(-1).href, '/#tour-projects');
+    const offers = relayed.actions.length;
+    relayed.session.handle({ toolCall: { functionCalls: [{ id: 'r3', name: 'navigate_section', args: { target: 'admin', mode: 'show' } }] } });
+    assert.equal(relayed.actions.length, offers, 'an unknown destination shows nothing');
+    assert.equal(relayed.sent.some(message => message.toolResponse), false, 'the relay, not the browser, answers the model');
+  } finally { relayed.session.close(); }
+});

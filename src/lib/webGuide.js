@@ -1,14 +1,11 @@
+import { SITE_SECTIONS } from "./siteGuide.mjs"
+
 const PENDING_GUIDE_KEY = "__pending_web_guide_v1"
 
-const GUIDE_TARGETS = Object.freeze({
-  "home.about": { route: "/", targetId: "tour-about", href: "/#tour-about" },
-  "home.background": { route: "/", targetId: "tour-background", href: "/#tour-background" },
-  "home.projects": { route: "/", targetId: "tour-projects", href: "/#tour-projects" },
-  "home.techBlogs": { route: "/", targetId: "tour-techblogs", href: "/#tour-techblogs" },
-  "home.lifeBlogs": { route: "/", targetId: "tour-life", href: "/#tour-life" },
-  "home.dashboard": { route: "/", targetId: "tour-real-time-data", href: "/#tour-real-time-data" },
-  "home.contact": { route: "/", targetId: "tour-contact", href: "/#tour-contact" },
-})
+// Where a guide step may point: the sections of the site's own map, and nothing else.
+const GUIDE_TARGETS = Object.freeze(Object.fromEntries(
+  SITE_SECTIONS.map(({ key, route, targetId, href }) => [key, { route, targetId, href }]),
+))
 
 const DEFAULT_CONTROLS = Object.freeze({
   start: "Start web guide",

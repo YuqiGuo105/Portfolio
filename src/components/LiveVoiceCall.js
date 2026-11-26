@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/router';
-import { ArrowUpRight, Check, ChevronDown, Loader2, Maximize2, MessageSquareText, Mic, MicOff, Minus, Phone, PhoneOff, X } from 'lucide-react';
+import { ArrowUpRight, Check, ChevronDown, Loader2, MapPin, Maximize2, MessageSquareText, Mic, MicOff, Minus, Phone, PhoneOff, X } from 'lucide-react';
 import VoiceCallStage from './VoiceCallStage';
 import { GoogleLiveSession } from '../lib/voice/googleLive.mjs';
 import { QwenLiveSession } from '../lib/voice/qwenLive.mjs';
@@ -30,6 +30,8 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
   const activation = useRef(audioActivation);
   const mounted = useRef(false);
   const startRef = useRef(null);
+  const shownTimer = useRef(null);
+  const shownGlow = useRef(null);
   const callbacks = useRef({ onStateChange });
   callbacks.current = { onStateChange };
   const [state, setState] = useState({ status: 'ready', error: '' });
@@ -37,6 +39,8 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
   const [history, setHistory] = useState([]);
   const [partial, setPartial] = useState({ user: '', assistant: '' });
   const [navigation, setNavigation] = useState(null);
+  // The section Mr. Pot has just brought into view on the page, named in the call for a moment.
+  const [shown, setShown] = useState('');
   const [config, setConfig] = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
@@ -80,6 +84,8 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
     window.addEventListener('pagehide', pageExit);
     return () => {
       mounted.current = false;
+      clearTimeout(shownTimer.current);
+      shownGlow.current?.cancel();
       const call = session.current;
       session.current = null;
       call?.close();
@@ -95,6 +101,32 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
   useEffect(() => {
     if (captions.current) captions.current.scrollTop = captions.current.scrollHeight;
   }, [history, partial]);
+
+  // The page follows the conversation: the section being talked about comes into view and its
+  // heading lights up briefly. Nothing navigates, so the call goes on; only this site's own
+  // section anchors are ever followed.
+  const showSection = target => {
+    if (!Object.values(VOICE_TARGETS).some(known => known.href === target.href)) return;
+    const element = document.getElementById(target.href.split('#')[1]);
+    if (!element) return;
+    clearTimeout(shownTimer.current);
+    shownGlow.current?.cancel();
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Leave the heading a little below the top edge, clear of the site header.
+    const margin = element.style.scrollMarginTop;
+    element.style.scrollMarginTop = '18vh';
+    element.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
+    element.style.scrollMarginTop = margin;
+    // A glow that runs beside whatever the page itself animates on this heading, and leaves no trace.
+    const ring = { borderRadius: '10px', outline: calm ? '2px solid #ff8059' : '2px solid rgba(255, 128, 89, 0)', outlineOffset: '8px' };
+    shownGlow.current = element.animate?.(calm ? [ring, ring] : [
+      { ...ring, boxShadow: '0 0 0 0 rgba(255, 128, 89, 0)', backgroundColor: 'rgba(255, 128, 89, 0)' },
+      { ...ring, boxShadow: '0 0 0 10px rgba(255, 128, 89, 0.24)', backgroundColor: 'rgba(255, 128, 89, 0.24)', offset: 0.14 },
+      { ...ring, boxShadow: '0 0 0 16px rgba(255, 128, 89, 0)', backgroundColor: 'rgba(255, 128, 89, 0)' },
+    ], { duration: 2600, easing: 'ease-out' }) || null;
+    setShown(target.label);
+    shownTimer.current = setTimeout(() => setShown(''), 4200);
+  };
 
   const start = (preparedAudio) => {
     if (session.current && !session.current.closed) return;
@@ -124,7 +156,10 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
           setPartial({ user: '', assistant: '' });
         } else setPartial(turn);
       },
-      onNavigation: value => { if (session.current === call) setNavigation(value); },
+      onNavigation: value => {
+        if (session.current !== call) return;
+        if (value?.show) showSection(value); else setNavigation(value);
+      },
     });
     session.current = call;
     call.start();
@@ -183,6 +218,7 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
         {END_LABELS[turns.at(-1).completion] && <p className={styles.turnNote}>{END_LABELS[turns.at(-1).completion]}</p>}
       </div>}
       {navigation && <button type="button" className={styles.destination} onClick={navigate}><span>{navigation.label}</span><ArrowUpRight size={16} /></button>}
+      {shown && !navigation && <p className={styles.shownNote} role="status"><MapPin size={13} aria-hidden="true" />On the page: {shown}</p>}
     </section>
     {transcriptOpen && <aside className={styles.transcript} aria-label="Call transcript">
       <div className={styles.transcriptHeader}><h3>Conversation</h3><button type="button" title="Collapse transcript" aria-label="Collapse transcript" onClick={() => setTranscriptOpen(false)}><ChevronDown size={20} /></button></div>

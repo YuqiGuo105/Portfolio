@@ -1,5 +1,5 @@
 import { BrowserVoiceAudio } from './browserAudio.mjs';
-import { VOICE_TARGETS, MAX_CALL_SECONDS, cleanPageContext, voiceError, voiceGreeting } from './protocol.mjs';
+import { VOICE_TARGETS, MAX_CALL_SECONDS, cleanPageContext, showsInPlace, voiceError, voiceGreeting } from './protocol.mjs';
 
 const ENDPOINT = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
 
@@ -204,8 +204,11 @@ export class GoogleLiveSession {
     else if (call.name === 'read_page') result = page || { error: 'Private or unavailable page.' };
     else if (call.name === 'navigate_section' && Object.hasOwn(VOICE_TARGETS, call.args?.target || '')) {
       const target = VOICE_TARGETS[call.args.target];
-      this.onNavigation?.({ ...target, callId: call.id, page: page?.path });
-      result = { status: 'offered_waiting_for_user', label: target.label };
+      // Through the relay, the relay has already told the model what happens and says so here.
+      // Without it this session answers the model itself, by the same rule.
+      const show = this.relay ? call.args.mode === 'show' : showsInPlace(page?.path);
+      this.onNavigation?.({ ...target, callId: call.id, page: page?.path, ...(show ? { show: true } : {}) });
+      result = { status: show ? 'shown' : 'offered_waiting_for_user', label: target.label };
     } else result = { error: 'Tool or destination not allowed.' };
     this.send({ toolResponse: { functionResponses: [{ id: call.id, name: call.name, response: result }] } });
   }

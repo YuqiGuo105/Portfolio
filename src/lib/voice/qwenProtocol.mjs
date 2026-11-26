@@ -11,8 +11,8 @@ function jsonSchema(value) {
     [key, key === 'type' && typeof item === 'string' ? item.toLowerCase() : jsonSchema(item)]));
 }
 
-export function qwenSetup(page, profile) {
-  const config = liveConfig(page, profile);
+export function qwenSetup(page, profile, guide) {
+  const config = liveConfig(page, profile, guide);
   return { type: 'session.update', session: {
     modalities: ['text', 'audio'],
     audio: {

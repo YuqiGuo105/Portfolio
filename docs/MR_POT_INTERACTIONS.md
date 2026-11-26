@@ -118,6 +118,35 @@ Publish the website endpoint before the MCP tool.
 The Java agent change must also be running for natural-language page actions.
 An unchanged remote agent will not emit the new action contract.
 
+## Site guide MCP
+
+`src/lib/siteGuide.mjs` is the one list of the site's sections: key, anchor, name, what the
+section shows and the words people use for it. The web guide's targets and the voice call's
+destinations are read from it. `GET /api/site/guide` serves it (public text and links to this
+site only, cached for five minutes), and the companion MCP tool `get_site_guide` serves that
+endpoint to AI clients, with an optional `topic` for the section that answers a request.
+
+The voice relay reads the guide the way any other client does, through `get_site_guide`, when
+a call starts. The answer is kept for five minutes; the relay waits four seconds at most and
+then works from its own copy of the list. Only the wording is taken from the answer, and only
+for sections the build already knows: where a section points never comes from the network.
+The relay's `voice_closed` log line says which one a call used (`guide: mcp` or `built_in`).
+
+During a call `navigate_section` brings a section into view:
+
+| Where the visitor is | What happens | The model is told |
+| --- | --- | --- |
+| The home page | The page scrolls to the section and its heading glows. The call goes on, and the dialog names the section for a few seconds | `shown` |
+| Any other page | A button is offered. Following it leaves the page and ends the call, as before | `offered_waiting_for_user` |
+
+Only a scroll happens without a click: the address does not change and no page is loaded.
+A relayed call ends when the page changes, which is why the home page's own sections are the
+only ones shown in place.
+
+Release order: the website first (the endpoint, and a browser that understands
+`mode: "show"`), then the MCP tool, then the voice relay. Until the tool is published the
+relay works from its own copy of the list; an older relay keeps offering the button.
+
 ## Verification
 
 - `npm run test:browser-actions`: validation, route readiness, replay privacy and

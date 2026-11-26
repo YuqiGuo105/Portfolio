@@ -17,7 +17,7 @@ export function qwenConfiguration(env = process.env) {
   return { configured: Boolean(env.QWEN_LIVE_API_KEY && endpoint), model, endpoint };
 }
 
-export function createQwenConnection({ env = process.env, page, profile,
+export function createQwenConnection({ env = process.env, page, profile, guide,
   connect = (url, options) => new WebSocket(url, options) } = {}) {
   const config = qwenConfiguration(env);
   if (!config.configured) throw new Error('Qwen voice is not configured.');
@@ -145,7 +145,7 @@ export function createQwenConnection({ env = process.env, page, profile,
         eventIds.add(event.event_id);
       }
       if (event.type === 'session.created') {
-        if (!setupSent) { setupSent = true; send(qwenSetup(page, profile)); }
+        if (!setupSent) { setupSent = true; send(qwenSetup(page, profile, guide)); }
         return;
       }
       if (event.type === 'session.updated') {

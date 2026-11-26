@@ -1,7 +1,8 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import WebSocket, { WebSocketServer } from 'ws';
-import { cleanPageContext, LIVE_MODEL, liveConfig, VOICE_TARGETS, wireSetup, voiceGreeting } from '../../src/lib/voice/protocol.mjs';
+import { BUILT_IN_GUIDE, cleanPageContext, cleanVoiceGuide, LIVE_MODEL, liveConfig, showsInPlace, VOICE_TARGETS, wireSetup, voiceGreeting } from '../../src/lib/voice/protocol.mjs';
 import { createProfileLoader } from '../../src/lib/voice/publicProfile.mjs';
+import { createGuideLoader } from '../../src/lib/voice/publicGuide.mjs';
 import { createVoiceHistory } from '../../src/lib/voice/history.mjs';
 import { createQwenConnection, qwenConfiguration } from './qwenTransport.mjs';
 
@@ -42,6 +43,8 @@ export function createBudgetStore(env, fetchImpl = fetch) {
 
 export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl = fetch,
   budget = createBudgetStore(env, fetchImpl), loadProfile = createProfileLoader(),
+  // The site guide is read through the public MCP tool; a short wait, then this build's own copy.
+  loadGuide = createGuideLoader({ timeoutMs: 4000 }),
   connect = (url, options) => new WebSocket(url, options) } = {}) {
   const secret = env.VOICE_GATEWAY_TOKEN;
   const selection = env.VOICE_PROVIDER || 'qwen';
@@ -55,6 +58,7 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32768, perMessageDeflate: false });
   const closers = new Set();
   let cachedStatus, cachedUntil = 0;
+  const guideFor = () => Promise.resolve().then(loadGuide).then(guide => (guide?.sections?.length ? guide : BUILT_IN_GUIDE)).catch(() => BUILT_IN_GUIDE);
 
   async function http(req, res) {
     if (req.url === '/health' && req.method === 'GET') return json(res, 200, { ok: true });
@@ -75,7 +79,8 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
       if (!page || page.path.startsWith('/admin') || !origins.has(body.origin)) return json(res, 400, { error: 'Public portfolio pages only.' });
       // A cold profile read must not spend a daily call or the ticket lifetime.
       // The same loader coalesces requests and is reused during the handshake.
-      const profile = await loadProfile();
+      // The guide is warmed here too, so the handshake finds it ready. It never holds a call back.
+      const [profile] = await Promise.all([loadProfile(), guideFor()]);
       if (profile.status !== 'EVIDENCE_FOUND') return json(res, 503, {
         configured: false, reason: 'profile_unavailable', error: 'Portfolio information is temporarily unavailable. Please try again.',
       });
@@ -93,7 +98,7 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
   function upgrade(req, socket, head) {
     if (!configured || req.url !== '/voice' || !origins.has(req.headers.origin) || wss.clients.size >= 4) { socket.destroy(); return; }
     wss.handleUpgrade(req, socket, head, client => {
-      let closed = false, claiming = false, ready = false, upstream, ticketHash, call;
+      let closed = false, claiming = false, ready = false, upstream, ticketHash, call, guideSource;
       let history, historyStart, closePromise;
       let inputBytes = 0, outputBytes = 0, estimatedUsd = 0, turns = 0, toolCount = 0;
       let windowAt = now(), windowBytes = 0, windowMessages = 0;
@@ -127,7 +132,7 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
               client.once('close', () => clearTimeout(forceClose));
             } else client.terminate();
             closers.delete(stop);
-            if (call) console.log(JSON.stringify({ event: 'voice_closed', reason, provider, model,
+            if (call) console.log(JSON.stringify({ event: 'voice_closed', reason, provider, model, ...(guideSource ? { guide: guideSource } : {}),
               ...(conversationId ? { conversationId } : {}), inputSeconds: Math.round(inputBytes / 32000),
               outputSeconds: Math.round(outputBytes / 48000), estimatedUsd: Number(estimatedUsd.toFixed(4)) }));
           }
@@ -166,8 +171,10 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
               try { const state = await budget('status'); if (state.reason === 'disabled') stop('disabled'); }
               catch { stop('quota_unavailable'); } finally { checking = false; }
             }, 10000));
-            const profile = await loadProfile();
+            const [profile, guide] = await Promise.all([loadProfile(), guideFor()]);
             if (closed) return;
+            const destinations = new Set(cleanVoiceGuide(guide).map(section => section.target));
+            guideSource = guide.source === 'MCP' ? 'mcp' : 'built_in';
             // Do not charge for a portfolio assistant unable to load its core facts.
             if (profile.status !== 'EVIDENCE_FOUND') { stop('profile_unavailable'); return; }
             try {
@@ -177,8 +184,8 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
               await historyStart;
             } catch { stop('history_unavailable'); return; }
             if (closed) return;
-            const setup = wireSetup(LIVE_MODEL, liveConfig(call.page, profile));
-            if (selection === 'qwen') upstream = createQwenConnection({ env, page: call.page, profile, connect });
+            const setup = wireSetup(LIVE_MODEL, liveConfig(call.page, profile, guide));
+            if (selection === 'qwen') upstream = createQwenConnection({ env, page: call.page, profile, guide, connect });
             else {
               const tokenResponse = await fetchImpl('https://generativelanguage.googleapis.com/v1beta/auth_tokens', {
                 method: 'POST', signal: controller.signal, redirect: 'error',
@@ -223,14 +230,18 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
                 const responses = [];
                 for (const tool of event.toolCall?.functionCalls || []) {
                   if (seen.has(tool.id)) continue;
-                  if (++toolCount > 6 || typeof tool.id !== 'string' || tool.id.length > 200) { stop('tool_limit'); return; }
+                  // Eight turns at most, each with a fact lookup and a section to show.
+                  if (++toolCount > 16 || typeof tool.id !== 'string' || tool.id.length > 200) { stop('tool_limit'); return; }
                   seen.add(tool.id);
                   let result = { error: 'Tool not allowed.' };
                   if (tool.name === 'get_profile') result = profile;
                   if (tool.name === 'read_page') result = call.page;
-                  if (tool.name === 'navigate_section' && Object.hasOwn(VOICE_TARGETS, tool.args?.target || '')) {
-                    result = { status: 'offered_waiting_for_user', label: VOICE_TARGETS[tool.args.target].label };
-                    send({ toolCall: { functionCalls: [{ id: tool.id, name: tool.name, args: { target: tool.args.target } }] } });
+                  if (tool.name === 'navigate_section' && destinations.has(tool.args?.target) && Object.hasOwn(VOICE_TARGETS, tool.args.target)) {
+                    // On the home page the browser brings the section into view and the call goes on.
+                    // Anywhere else it only offers a button: following it leaves the page, and the call.
+                    const show = showsInPlace(call.page.path);
+                    result = { status: show ? 'shown' : 'offered_waiting_for_user', label: VOICE_TARGETS[tool.args.target].label };
+                    send({ toolCall: { functionCalls: [{ id: tool.id, name: tool.name, args: { target: tool.args.target, ...(show ? { mode: 'show' } : {}) } }] } });
                   }
                   responses.push({ id: tool.id, name: tool.name, response: result });
                 }
