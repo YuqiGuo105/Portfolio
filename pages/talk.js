@@ -14,14 +14,14 @@ export async function getStaticProps() {
   return { props: { referral: publicAvailability(state) }, revalidate: state.known ? 300 : 30 };
 }
 
-// One page for every way to reach Yuqi: a message, a referral request, or a live chat.
-// /talk?intent=referral and /talk?intent=chat open that tab directly.
+// Two ways to reach Yuqi: a message or a live chat. /talk?intent=chat opens that tab directly.
+// A referral is asked for on /referral; an old /talk?intent=referral link is sent there.
 export default function TalkPage({ referral }) {
   return (
     <Layout>
       <SeoHead
         title="Talk with me"
-        description={`Send Yuqi Guo a message, ask for a referral${referral?.company ? ` at ${referral.company}` : ""}, or chat and call live on TalkNest.`}
+        description="Send Yuqi Guo a message, or chat and call live on TalkNest."
         url="/talk"
       />
       <section className={`section ${styles.page}`}>
@@ -29,7 +29,7 @@ export default function TalkPage({ referral }) {
           <div className={styles.inner}>
             <h1 className={styles.title}>Talk with me</h1>
             <p className={styles.lead}>
-              Choose what you came for. Messages and referral requests land in my inbox; live chat and calls happen on TalkNest.
+              Choose what you came for. Messages land in my inbox; live chat and calls happen on TalkNest.
             </p>
             <TalkHub mode="page" referral={referral} />
           </div>

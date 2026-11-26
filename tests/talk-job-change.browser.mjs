@@ -24,7 +24,7 @@ const worksFor = () => page.evaluate(() => [...document.querySelectorAll('script
 
 try {
   // Before: everything names the employer the preview started with.
-  await open('/talk?intent=referral');
+  await open('/referral');
   await referralHeading().waitFor();
   const before = (await referralHeading().textContent()).replace('Which role at ', '').replace('?', '');
   assert.ok(before && before !== 'Northwind Labs', `the preview starts at another employer (${before})`);
@@ -50,7 +50,7 @@ try {
   await shot('job-2-recorded');
 
   // After: the form, the home page and structured data follow, with no code or setting changed.
-  await open('/talk?intent=referral');
+  await open('/referral');
   await referralHeading().waitFor();
   assert.equal(await referralHeading().textContent(), 'Which role at Northwind Labs?');
   assert.equal(await page.locator('#talk-tab-referral').textContent().then(text => /At Northwind Labs/.test(text)), true);
@@ -76,7 +76,7 @@ try {
   // Pausing closes the public form at once; reopening brings it back.
   await page.getByRole('button', { name: 'Pause requests' }).click();
   await page.getByText('The form on /talk is closed: you paused it').waitFor();
-  await open('/talk?intent=referral');
+  await open('/referral');
   await page.getByText('Referral requests are closed right now').waitFor();
   assert.equal(await page.locator('[data-referral-form]').count(), 0);
   assert.match(await page.locator('#talk-tab-referral').textContent(), /Not open right now/);
@@ -90,7 +90,7 @@ try {
   await page.getByLabel('Last month at Northwind Labs').fill('Sep 2028');
   await page.getByRole('button', { name: 'Record the change' }).click();
   await page.getByText('No current employer').waitFor();
-  await open('/talk?intent=referral');
+  await open('/referral');
   await page.getByText('I am between roles').waitFor();
   await open('/');
   assert.equal(await worksFor(), null, 'structured data names no employer between jobs');

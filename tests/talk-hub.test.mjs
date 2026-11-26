@@ -157,13 +157,13 @@ test('arrow keys move between the choices', async () => {
   assert.equal(all('[role="tab"]')[0].getAttribute('aria-selected'), 'true');
 });
 
-test('/talk?intent=referral opens the form itself and keeps the address in step with the tab', async () => {
+test('/talk offers a message or a live chat; the retired /talk?intent=referral is sent on to /referral', async () => {
   router.query = { intent: 'referral' };
   await render(React.createElement(TalkHub, { mode: 'page', referral: OPEN }));
-  assert.deepEqual(all('[role="tab"]').map(tab => tab.querySelector('.intentTitle').textContent), ['Send a message', 'Ask for a referral', 'Chat or call live']);
-  assert.equal(all('[role="tab"]')[1].getAttribute('aria-selected'), 'true');
-  assert.ok($('#talk-panel-referral [data-wizard]'));
-  await click(all('[role="tab"]')[2]);
+  assert.deepEqual(all('[role="tab"]').map(tab => tab.querySelector('.intentTitle').textContent), ['Send a message', 'Chat or call live']);
+  assert.equal($('#talk-panel-referral'), null); assert.equal($('[data-wizard]'), null);
+  assert.deepEqual(router.replaced, ['/referral']);
+  await click(all('[role="tab"]')[1]);
   assert.deepEqual(router.replaced.at(-1), { pathname: '/talk', query: { intent: 'chat' } });
   await click(all('[role="tab"]')[0]);
   assert.deepEqual(router.replaced.at(-1), { pathname: '/talk', query: {} });
@@ -444,9 +444,8 @@ test('typed answers survive a reload in the same tab', async () => {
 
 test('the standalone hub names whichever company the page was given, on the tab and the form', async () => {
   const referral = { company: 'Northwind Labs', reason: null };
-  await render(React.createElement(TalkHub, { mode: 'page', referral }));
+  await render(React.createElement(TalkHub, { mode: 'page', initialIntent: 'referral', only: 'referral', syncUrl: false, referral }));
   assert.equal(all('[role="tab"]')[1].querySelector('.intentHint').textContent, 'At Northwind Labs. About five minutes.');
-  await click(all('[role="tab"]')[1]);
   assert.ok($('#talk-panel-referral [data-wizard]'));
   assert.doesNotMatch(container.textContent, /Goldman/);
 
@@ -462,8 +461,7 @@ test('between jobs or when paused the referral tab says so and offers the messag
     [{ company: null, reason: 'unknown' }, /could not check where I can refer you/],
     [null, /not taking referral requests at the moment/],
   ]) {
-    router.query = { intent: 'referral' };
-    await render(React.createElement(TalkHub, { mode: 'page', key: JSON.stringify(referral), referral }));
+    await render(React.createElement(TalkHub, { mode: 'page', initialIntent: 'referral', only: 'referral', syncUrl: false, key: JSON.stringify(referral), referral }));
     assert.equal(all('[role="tab"]')[1].querySelector('.intentHint').textContent, 'Not open right now.');
     assert.match($('#talk-panel-referral').textContent, /Referral requests are closed right now/);
     assert.match($('#talk-panel-referral').textContent, text);

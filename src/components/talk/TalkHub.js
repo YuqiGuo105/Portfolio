@@ -4,10 +4,10 @@ import { useRouter } from "next/router";
 import { Handshake, Mail, MessagesSquare } from "lucide-react";
 import MessageForm from "./MessageForm";
 import LiveChatPanel from "./LiveChatPanel";
-import { TALK_PATH } from "./links";
+import { REFERRAL_PATH, TALK_PATH } from "./links";
 import styles from "./Talk.module.css";
 
-// The full form is only needed on /talk, so the home page does not download it.
+// The full form is only needed on /referral, so the other pages do not download it.
 const ReferralWizard = dynamic(() => import("./ReferralWizard"), { ssr: false });
 
 export const INTENTS = [
@@ -15,7 +15,6 @@ export const INTENTS = [
   { id: "referral", title: "Ask for a referral", label: "Referral", hint: "About five minutes.", icon: Handshake },
   { id: "chat", title: "Chat or call live", label: "Live chat", hint: "On TalkNest, my chat and calling app.", icon: MessagesSquare },
 ];
-const known = (value) => INTENTS.some((item) => item.id === value);
 const CONTACT_INTENTS = INTENTS.filter(({ id }) => id !== "referral");
 // The referral tab names the company it is for, or says that requests are closed.
 const hintFor = (item, referral) => (item.id !== "referral" ? item.hint : referral?.company ? `At ${referral.company}. About five minutes.` : "Not open right now.");
@@ -37,13 +36,13 @@ function ReferralClosed({ reason, onMessage }) {
   );
 }
 
-// The home section offers message/chat; its separate referral link opens the full /talk form.
+// The home section and /talk offer message/chat; a referral is asked for on its own page, /referral.
 // `referral` comes from the page's static props: { company, reason } (src/lib/referral/availability.mjs).
 // `syncUrl` keeps /talk's address in step with the open tab. A page with its own address (/referral) turns it off.
 // `only` shows one panel with no chooser: the referral page is about one thing.
 export default function TalkHub({ mode = "section", initialIntent = "message", referral = null, syncUrl = true, only = null }) {
   const router = useRouter();
-  const choices = mode === "section" ? CONTACT_INTENTS : INTENTS;
+  const choices = only ? INTENTS : CONTACT_INTENTS;
   const startingIntent = choices.some(({ id }) => id === initialIntent) ? initialIntent : "message";
   const [intent, setIntent] = useState(startingIntent);
   // A panel stays mounted once opened, so switching tabs never discards a half-written form.
@@ -55,11 +54,13 @@ export default function TalkHub({ mode = "section", initialIntent = "message", r
     setOpened((current) => (current.has(id) ? current : new Set(current).add(id)));
   };
 
-  // /talk?intent=referral opens the referral form directly (static page, so the query arrives after hydration).
+  // /talk?intent=chat opens that tab directly (static page, so the query arrives after hydration).
+  // /talk?intent=referral is retired: an old link is sent on to the referral page.
   useEffect(() => {
     if (mode !== "page" || !router.isReady) return;
     const wanted = Array.isArray(router.query.intent) ? router.query.intent[0] : router.query.intent;
-    if (known(wanted)) show(wanted);
+    if (wanted === "referral" && !only) { router.replace(REFERRAL_PATH); return; }
+    if (choices.some(({ id }) => id === wanted)) show(wanted);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, router.isReady, router.query.intent]);
 

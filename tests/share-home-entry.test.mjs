@@ -27,7 +27,7 @@ async function loadComponent(path) {
     if (name === 'next/dynamic') return { __esModule: true, default: () => () => null };
     if (name === 'next/router') return { useRouter: () => ({ pathname: '/' }) };
     if (name.endsWith('SocialLinks')) return { __esModule: true, default: () => null };
-    if (name.endsWith('/talk/links')) return { referralHref: '/talk?intent=referral' };
+    if (name.endsWith('/talk/links')) return { referralHref: '/referral' };
     if (name.endsWith('chatPagePolicy.mjs')) return chatPagePolicy;
     if (name.endsWith('TalkHub')) return { __esModule: true, default: () => React.createElement('form', null, React.createElement('input', { name: 'message', defaultValue: 'Unsent draft' })) };
     return require(name);

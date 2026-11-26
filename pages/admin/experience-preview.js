@@ -41,7 +41,7 @@ export default function ExperiencePreview() {
               <h1 className={ui.title}>Work history <span className={`${ui.status} ${ui.statusPending}`} style={{ marginLeft: 8, verticalAlign: "middle" }}>Local preview</span></h1>
               <p className={ui.subtitle}>
                 This is what /admin/experience will show, over a made-up work history kept in memory. Record a job change, then open{" "}
-                <Link href="/talk?intent=referral"><a>the referral form</a></Link>, <Link href="/"><a>the home page</a></Link> and{" "}
+                <Link href="/referral"><a>the referral form</a></Link>, <Link href="/"><a>the home page</a></Link> and{" "}
                 <Link href="/admin/referrals-preview"><a>the review list</a></Link> to see them follow. Restarting the preview resets it.
               </p>
             </div>

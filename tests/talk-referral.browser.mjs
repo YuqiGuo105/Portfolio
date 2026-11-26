@@ -37,7 +37,7 @@ try {
     assert.deepEqual(api, [], 'opening the page calls no referral API');
 
     await page.getByRole('tab', { name: /Ask for a referral/ }).click();
-    await page.waitForURL(/intent=referral/);
+    await page.waitForURL(/\/referral/);
     const form = page.locator('[data-referral-form]');
     await form.waitFor();
     await form.getByRole('button', { name: 'Continue' }).click();
@@ -105,7 +105,7 @@ try {
     await page.goto(`${base}/?subscriptionPreview=0`, { waitUntil: 'domcontentloaded' });
     const section = page.locator('#contact-section');
     await section.getByRole('tab', { name: /Ask for a referral/ }).click();
-    assert.equal(await section.getByRole('link', { name: /Start a referral request/ }).getAttribute('href'), '/talk?intent=referral');
+    assert.equal(await section.getByRole('link', { name: /Start a referral request/ }).getAttribute('href'), '/referral');
     await section.getByRole('tab', { name: /Chat or call live/ }).click();
     assert.match(await section.getByRole('link', { name: /Open TalkNest/ }).getAttribute('href'), /connect=Yuqi%20Guo/);
     assert.deepEqual(pageErrors, []);

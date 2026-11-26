@@ -2,7 +2,7 @@
 
 `/talk` is the one place to reach Yuqi: send a message, ask for a referral, or open a live chat on
 TalkNest. The home page's Contact section keeps Message and Live chat as two compact tabs;
-an independent Request a referral link opens `/talk?intent=referral`.
+an independent Request a referral link opens `/referral`. `/talk` offers only a message or a live chat; an old `/talk?intent=referral` link is sent on to `/referral`.
 
 | Choice | What happens |
 |---|---|
