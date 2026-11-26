@@ -81,7 +81,7 @@ function Field({ id, label, optional, hint, error, counter, children }) {
 
 // `company` is the employer the referral is for: the current one in the work history, passed down
 // from the page. It is sent with the request so the server can refuse a form opened before a job change.
-export default function ReferralWizard({ company }) {
+export default function ReferralWizard({ company, plain = false }) {
   const [data, setData] = useState(EMPTY);
   const [resume, setResume] = useState(null);
   const [step, setStep] = useState(0);
@@ -315,15 +315,16 @@ export default function ReferralWizard({ company }) {
         <section aria-labelledby="referral-step-title">
           <h3 className={styles.stepHeading} id="referral-step-title" ref={heading} tabIndex={-1}>Which roles at {company}?</h3>
           <p className={styles.lead}>You can request a referral for up to three openings. Start with your first choice.</p>
-          <div className={styles.explain} style={{ marginBottom: 22 }} data-referral-how>
-            <h4 className={styles.panelTitle}>Every request gets a full evaluation by my own AI</h4>
-            <p>I built a personal AI screening system for referrals. It evaluates each candidate comprehensively, from their background and their résumé, so every request gets the same thorough and consistent read within about a minute, at any hour.</p>
-            <ol className={styles.sequence}>
-              <li><span><strong>Comprehensive.</strong> It weighs your whole background and résumé, not a list of keywords.</span></li>
-              <li><span><strong>Fast.</strong> Your request is accepted at once and evaluated in the background, so the form never keeps you waiting.</span></li>
-              <li><span><strong>Clear.</strong> You get an answer either way, and a private status page shows every stage. Each person can ask once.</span></li>
-            </ol>
-          </div>
+          {/* The referral page says this in its own header. */}
+          {!plain && (<div className={styles.explain} style={{ marginBottom: 22 }} data-referral-how>
+              <h4 className={styles.panelTitle}>Every request gets a full evaluation by my own AI</h4>
+              <p>I built a personal AI screening system for referrals. It evaluates each candidate comprehensively, from their background and their résumé, so every request gets the same thorough and consistent read within about a minute, at any hour.</p>
+              <ol className={styles.sequence}>
+                <li><span><strong>Comprehensive.</strong> It weighs your whole background and résumé, not a list of keywords.</span></li>
+                <li><span><strong>Fast.</strong> Your request is accepted at once and evaluated in the background, so the form never keeps you waiting.</span></li>
+                <li><span><strong>Clear.</strong> You get an answer either way, and a private status page shows every stage. Each person can ask once.</span></li>
+              </ol>
+            </div>)}
           <Field id="referral-roleTitle" label="Role title" hint="Your first-choice opening." error={errors.roleTitle}>
             <input type="text" {...input("roleTitle", { hint: true })} maxLength={LIMITS.roleTitle} placeholder="Software Engineer, Payments" autoComplete="off" />
           </Field>

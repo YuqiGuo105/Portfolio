@@ -40,7 +40,8 @@ function ReferralClosed({ reason, onMessage }) {
 // The home section offers message/chat; its separate referral link opens the full /talk form.
 // `referral` comes from the page's static props: { company, reason } (src/lib/referral/availability.mjs).
 // `syncUrl` keeps /talk's address in step with the open tab. A page with its own address (/referral) turns it off.
-export default function TalkHub({ mode = "section", initialIntent = "message", referral = null, syncUrl = true }) {
+// `only` shows one panel with no chooser: the referral page is about one thing.
+export default function TalkHub({ mode = "section", initialIntent = "message", referral = null, syncUrl = true, only = null }) {
   const router = useRouter();
   const choices = mode === "section" ? CONTACT_INTENTS : INTENTS;
   const startingIntent = choices.some(({ id }) => id === initialIntent) ? initialIntent : "message";
@@ -81,7 +82,7 @@ export default function TalkHub({ mode = "section", initialIntent = "message", r
 
   return (
     <div className={styles.root} data-talk-hub={mode}>
-      <div className={styles.hub}>
+      <div className={styles.hub} hidden={Boolean(only)}>
         <p className={mode === "section" ? styles.srOnly : styles.question} id={`talk-question-${mode}`}>What would you like to do?</p>
         <div className={styles.intents} role="tablist" aria-labelledby={`talk-question-${mode}`} onKeyDown={onKeyDown}>
           {choices.map(({ id, title, label, icon: Icon, ...item }) => (
@@ -111,7 +112,7 @@ export default function TalkHub({ mode = "section", initialIntent = "message", r
           {opened.has(id) && id === "message" && <MessageForm />}
           {opened.has(id) && id === "referral" && (!referral?.company
             ? <ReferralClosed reason={referral?.reason} onMessage={() => { choose("message"); tabs.current.message?.focus(); }} />
-            : <ReferralWizard key={referral.company} company={referral.company} />)}
+            : <ReferralWizard key={referral.company} company={referral.company} plain={only === "referral"} />)}
           {opened.has(id) && id === "chat" && <LiveChatPanel onMessage={() => { choose("message"); tabs.current.message?.focus(); }} />}
         </div>
       ))}
