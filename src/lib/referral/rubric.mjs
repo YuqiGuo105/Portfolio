@@ -8,7 +8,7 @@ export const CHECKS = Object.freeze(['verified', 'contradicted', 'unavailable', 
 export const CONTRADICTED_CAP = 39;
 export const PASS_SCORE = 60;
 export const EVIDENCE_PATHS = Object.freeze({
-  employer: 'Major-company engineering experience',
+  employer: 'Strong engineering experience',
   openSource: 'Substantial open-source engineering',
   contests: 'Strong LeetCode contest performance',
 });

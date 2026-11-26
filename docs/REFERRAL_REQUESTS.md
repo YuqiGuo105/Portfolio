@@ -112,10 +112,11 @@ The `evidence-v2` policy is **not job matching**. It produces a private 0-100 ev
 a pass mark of **60**. The résumé is the main evidence: someone who has one of these lists it there.
 At least one of three independent paths must qualify:
 
-1. Substantial engineering employment at a major established technology or financial-services
-   company, on the résumé with team, dates and work, **plus a LinkedIn member profile link** (typed
-   into the form or found in the résumé). Such a request reaches the owner directly; he opens the
-   profile himself. Recording "not verified" on the review page takes the pass away again.
+1. Substantial software-engineering work at a company that is well regarded in its industry (a
+   major technology or financial company, or a smaller one with a strong engineering reputation or
+   a well-known product), or engineering work that is clearly strong in itself, on the résumé with
+   team, dates and what was built. A LinkedIn profile link is optional and is for the owner to open.
+   Recording "not verified" on the review page takes the pass away again.
 2. Strong original open-source engineering or substantive merged upstream work. Stars, technology
    lists, tutorial clones and trivial PR counts are not enough.
 3. Strong LeetCode weekly/biweekly performance, supported by rating, dated rankings and consistency.

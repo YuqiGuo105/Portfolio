@@ -64,7 +64,7 @@ function EvidenceScore({ request, busy, onBadge }) {
       })}
       <details className={styles.evidencePath}>
         <summary><span>Official LinkedIn badge · {note.linkedinBadge?.confirmed ? "Confirmed by owner" : "Not confirmed"}</span><ChevronRight className={styles.evidenceChevron} size={15} aria-hidden="true" /></summary>
-        <p className={styles.caveat}>A request with major-company experience on the résumé and a LinkedIn profile reaches you without waiting for this check. Open the profile before you refer; recording “not verified” takes the pass away. Premium, a LinkedIn login, a profile link or the applicant&apos;s claim does not count. A badge alone does not prove their employment history.</p>
+        <p className={styles.caveat}>A request with strong engineering experience on the résumé reaches you without waiting for this check. Open the profile before you refer; recording “not verified” takes the pass away. Premium, a LinkedIn login, a profile link or the applicant&apos;s claim does not count. A badge alone does not prove their employment history.</p>
         {note.linkedinBadge && <p className={styles.caveat}>{note.linkedinBadge.note} · {when(note.linkedinBadge.checkedAt)}</p>}
         {profile ? <>
           <a className={styles.action} href={profile} target="_blank" rel="noopener noreferrer">Open LinkedIn profile</a>
