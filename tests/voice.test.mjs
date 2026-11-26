@@ -447,3 +447,25 @@ test('interruptions and hard call limits label incomplete replies without retryi
     assert.equal(h.socket.readyState, 3);
   } finally { h.session.close(); }
 });
+
+test('a line still reserved by an unfinished attempt is waited out; a line that stays busy is reported once', async () => {
+  const ready = { ok: true, json: async () => ({ token: 'auth_tokens/temporary', profile, setup: wireSetup('gemini-3.8-live', liveConfig(page, profile)), maxSeconds: 180 }) };
+  const busy = { ok: false, status: 429, json: async () => ({ reason: 'busy' }) };
+  let calls = 0;
+  const freed = harness({ fetchImpl: async () => (++calls < 3 ? busy : ready) });
+  freed.session.busyRetryMs = 1;
+  try {
+    await freed.session.start(); freed.socket.onopen();
+    assert.equal(calls, 3);
+    assert.equal(freed.events.some(event => event.status === 'error'), false, 'the visitor never sees the stale reservation');
+  } finally { freed.session.close(); }
+
+  calls = 0;
+  const taken = harness({ fetchImpl: async () => { calls += 1; return busy; } });
+  taken.session.busyRetryMs = 1;
+  try {
+    await taken.session.start();
+    assert.equal(calls, 8);
+    assert.deepEqual(taken.events.at(-1), { status: 'error', error: 'Mr. Pot is on another call. Please try shortly.' });
+  } finally { taken.session.close(); }
+});

@@ -76,13 +76,25 @@ export class GoogleLiveSession {
       // Obtain microphone permission before reserving a paid call attempt.
       await this.audio.start();
       if (!current()) return;
-      const response = await this.fetchImpl(this.sessionEndpoint, {
+      const request = () => this.fetchImpl(this.sessionEndpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ page: cleanPageContext(this.readPage()) }), signal: this.controller.signal,
       });
+      let response = await request();
       if (!current()) return;
+      let detail = response.ok ? null : await response.json().catch(() => ({}));
+      // An attempt that was closed before it connected keeps the line reserved for up to 30 seconds.
+      // That is not another caller, so wait it out here instead of telling the visitor to try again.
+      for (let attempt = 0; detail?.reason === 'busy' && attempt < 7; attempt += 1) {
+        clearTimeout(this.connectTimer);
+        await new Promise(resolve => setTimeout(resolve, this.busyRetryMs ?? 5000));
+        if (!current()) return;
+        this.connectTimer = setTimeout(() => this.fail('Voice connection timed out. Please try again.'), 20000);
+        response = await request();
+        if (!current()) return;
+        detail = response.ok ? null : await response.json().catch(() => ({}));
+      }
       if (!response.ok) {
-        const detail = await response.json().catch(() => ({}));
         const reasons = { daily_limit: 'Today\'s shared voice allowance is used up.', monthly_limit: 'Voice is paused until next month.', busy: 'Mr. Pot is on another call. Please try shortly.', disabled: 'Voice is temporarily paused.', profile_unavailable: 'Portfolio facts could not be loaded. No call was started. Please retry shortly.' };
         throw new Error(reasons[detail.reason] || (response.status === 503 ? 'Voice is temporarily unavailable. Please try later.' : voiceError(response.status, this.provider)));
       }

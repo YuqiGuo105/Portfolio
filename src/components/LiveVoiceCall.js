@@ -175,7 +175,8 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
         <span>{muted && active ? 'Mic muted' : LABELS[state.status]}</span>
       </div>
       {state.error && <p className={styles.error} role="alert">{state.error}</p>}
-      {config && !config.configured && <p className={styles.error}>{UNAVAILABLE[config.reason] || 'Voice is temporarily unavailable. Please try later.'}</p>}
+      {/* One reason is enough: a failed call already says why. */}
+      {config && !config.configured && !state.error && <p className={styles.error}>{UNAVAILABLE[config.reason] || 'Voice is temporarily unavailable. Please try later.'}</p>}
       {turns.length > 0 && !transcriptOpen && <div className={styles.latest} aria-live="off">
         {turns.at(-1).user && <p className={styles.userCaption}>{turns.at(-1).user}</p>}
         {turns.at(-1).assistant && <p className={styles.assistantCaption}>{turns.at(-1).assistant}</p>}
