@@ -162,7 +162,7 @@ the curved pot surface during gaze and blinks, avoiding pupils intersecting the
 eye whites or pot. Existing mesh counts, neutral proportions and colors are unchanged.
 The upper body has gentle shoulder settling, arm-depth gestures and weight shifts;
 both feet remain grounded. Three short idle variations replace a repeated glance.
-Speech gestures use a slower amplitude envelope than the mouth to avoid arm jitter.
+Speech gestures use a slower amplitude envelope than the mouth to avoid arm jitter. When he speaks the smile itself opens, as in the chat window's drawing: the corners stay put, the upper lip flattens a little and the lower lip drops in a round curve (`sampleCallMouth`). Nothing is swapped in, and talking barely lifts the brows; an earlier dark oval with raised brows looked startled.
 Run `node tests/voice-motion.browser.mjs` against the local preview server to
 verify framing, state motion, idle sleep, interaction, mobile and fallback.
 The 2026-10-21 attention revision passed 43 local voice/audio/motion/provider

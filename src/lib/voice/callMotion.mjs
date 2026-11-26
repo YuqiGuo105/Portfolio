@@ -12,6 +12,27 @@ export function stepCallMouth(current, level, dt) {
   return current + (target - current) * (1 - Math.exp(-dt * (target > current ? 24 : 13)));
 }
 
+// The speaking mouth is the smile itself, opened, as in the chat window's drawing: the corners
+// stay where they are, the upper lip flattens a little and the lower lip drops in a round curve,
+// so it still reads as a smile while he talks and nothing is swapped in. Depths are measured
+// downwards from the line between the corners, in model units.
+export const CALL_MOUTH = Object.freeze({ half: 0.16, y: 2.20, sag: 0.09, samples: 17 });
+
+// Fills `out` with an upper and a lower depth for each sample across the mouth, left to right.
+// At rest both lie on the closed smile, so the opening has no area and hides behind its line.
+export function sampleCallMouth(out, open) {
+  const amount = Number.isFinite(open) ? clamp(open) : 0;
+  const t = clamp((amount - 0.02) / 0.23), parted = t * t * (3 - 2 * t);
+  const { sag, samples } = CALL_MOUTH;
+  for (let i = 0; i < samples; i++) {
+    const u = i / (samples - 1) * 2 - 1, round = 1 - u * u;
+    const closed = sag * (1 - Math.abs(u) ** 3.4);
+    out[i] = closed + (0.04 * round - closed) * parted;
+    out[samples + i] = closed + (0.015 * parted + 0.075 * amount) * round ** 0.75;
+  }
+  return out;
+}
+
 export function createCallAttention() {
   return { eyes: { x: 0, y: 0, vx: 0, vy: 0 }, head: { x: 0, y: 0, vx: 0, vy: 0 }, body: { x: 0, y: 0, vx: 0, vy: 0 } };
 }
@@ -86,7 +107,8 @@ export function sampleCallPose(out, status, age, clock, audioLevel, reactionAge 
   out.gazeX = recall * -0.026 + attentive * 0.016 + idleLook * 0.02;
   out.gazeY = (thinking ? -0.022 * pulse(thinkTime, 0.3, 5.2) : 0)
     + recall * 0.022 - nod * 0.018 + delight * 0.022 + consider * 0.012;
-  out.brow = recall * 0.032 + attentive * 0.022 + welcome * 0.035 + speech * 0.025 + delight * 0.045 + consider * 0.022;
+  // Talking barely moves the brows: raised brows over an open mouth read as alarm.
+  out.brow = recall * 0.032 + attentive * 0.022 + welcome * 0.035 + speech * 0.008 + delight * 0.045 + consider * 0.022;
   out.mouth = speech;
   out.arm = welcome * (0.12 + Math.sin(age * 7) * 0.17)
     + farewell * (0.09 + Math.sin(age * 8) * 0.12) + explain * 0.21 - emphasis * 0.07

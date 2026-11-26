@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createCallAttention, IDLE_SECONDS, REACTION_SECONDS, sampleCallPose, stepCallAttention, stepCallMouth, WELCOME_SECONDS } from '../src/lib/voice/callMotion.mjs';
+import { CALL_MOUTH, createCallAttention, IDLE_SECONDS, REACTION_SECONDS, sampleCallMouth, sampleCallPose, stepCallAttention, stepCallMouth, WELCOME_SECONDS } from '../src/lib/voice/callMotion.mjs';
 import * as THREE from 'three';
 import { createFullBodyPot, disposeFullBody, fullBodyStats, potFaceDepth } from '../src/lib/voice/fullBodyModel.mjs';
 import { createCallEyes } from '../src/lib/voice/callEyes.mjs';
@@ -73,6 +73,34 @@ test('mouth envelope attacks quickly, releases smoothly, settles and is frame-ra
   for (let i = 0; i < 24; i++) slow = stepCallMouth(slow, 0, 1 / 24);
   assert.ok(slow < 0.00001);
   assert.equal(stepCallMouth(0, NaN, 0.05), 0);
+});
+
+test('the speaking mouth is the smile opened: corners fixed, never a gaping or startled shape', () => {
+  const n = CALL_MOUTH.samples, middle = (n - 1) / 2, lips = new Float32Array(n * 2);
+  const opening = level => { sampleCallMouth(lips, level); return lips[n + middle] - lips[middle]; };
+  // Closed: both lips lie on the smile, so the opening has no area anywhere.
+  assert.equal(sampleCallMouth(lips, 0), lips, 'reuse output without per-frame allocations');
+  for (let i = 0; i < n; i++) assert.equal(lips[i], lips[n + i]);
+  assert.ok(Math.abs(lips[middle] - CALL_MOUTH.sag) < 1e-6 && lips[0] === 0 && lips[n - 1] === 0);
+  let last = 0;
+  for (let level = 0; level <= 1.0001; level += 0.05) {
+    const height = opening(level);
+    assert.ok(height >= last - 1e-6, 'a louder sound never closes the mouth');
+    last = height;
+    for (let i = 0; i < n; i++) {
+      assert.ok(lips[n + i] >= lips[i] - 1e-6, 'the lower lip stays under the upper lip');
+      assert.ok(lips[i] >= 0, 'the upper lip stays under the corners, so it still reads as a smile');
+    }
+    assert.ok(lips[0] === 0 && lips[n - 1] === 0 && lips[n] === 0 && lips[2 * n - 1] === 0, 'the corners do not move');
+  }
+  assert.ok(opening(0.5) > 0.08, 'ordinary speech opens far enough to see');
+  assert.ok(opening(1) < 0.15, 'the loudest sound stays well under the eye height of 0.45');
+  // The line of the smile is 0.06 thick, so an opening this small is still hidden behind it.
+  assert.ok(opening(0.02) < 0.003 && opening(0.06) < 0.02, 'it parts gradually from the closed line');
+  for (const bad of [NaN, Infinity, -3]) assert.ok(Number.isFinite(opening(bad)));
+  // Talking does not lift the brows: raised brows over an open mouth read as alarm.
+  const quiet = sampleCallPose({}, 'speaking', 20, 20, 0).brow, loud = sampleCallPose({}, 'speaking', 20, 20, 1).brow;
+  assert.ok(loud - quiet <= 0.01);
 });
 
 test('idle and tap reactions settle without changing proportions or restarting a call', () => {

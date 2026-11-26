@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createFullBodyPot, disposeFullBody } from './fullBodyModel.mjs';
 import { createCallEyes } from './callEyes.mjs';
-import { createCallAttention, IDLE_SECONDS, isLivePose, REACTION_SECONDS, sampleCallPose, stepCallAttention, stepCallMouth, WELCOME_SECONDS } from './callMotion.mjs';
+import { CALL_MOUTH, createCallAttention, IDLE_SECONDS, isLivePose, REACTION_SECONDS, sampleCallMouth, sampleCallPose, stepCallAttention, stepCallMouth, WELCOME_SECONDS } from './callMotion.mjs';
 import { CALL_GROUND } from './callTheme.mjs';
 
 export function createCallScene(canvas, { onFailure = () => {}, dark = false } = {}) {
@@ -37,12 +37,28 @@ export function createCallScene(canvas, { onFailure = () => {}, dark = false } =
   const smile = model.face.getObjectByName('Smile');
   const mouth = new THREE.Group(); mouth.position.set(0, 2.15, 0); model.face.add(mouth);
   mouth.add(smile); smile.position.y -= 2.15;
-  // A small open mouth replaces the smile only during audible speech. It is
-  // tangent to the face, not a stretched copy of the whole lower face.
+  // When he speaks the smile itself opens (sampleCallMouth). The opening is one small patch
+  // between the two lips, in the smile's own ink and just in front of it, so the line stays
+  // drawn, the corners keep their round ends and nothing is swapped in or out.
   smile.geometry.computeBoundingBox();
   const mouthZ = smile.geometry.boundingBox.max.z + 0.006;
-  const openMouth = new THREE.Mesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: '#373936', side: THREE.DoubleSide }));
-  openMouth.position.set(0, 2.155, mouthZ); openMouth.visible = false; model.face.add(openMouth);
+  const lipDepths = new Float32Array(CALL_MOUTH.samples * 2), lipPoints = new Float32Array(CALL_MOUTH.samples * 6), lipFaces = [];
+  for (let i = 0; i < CALL_MOUTH.samples; i++) {
+    const x = (i / (CALL_MOUTH.samples - 1) * 2 - 1) * CALL_MOUTH.half;
+    for (const row of [0, CALL_MOUTH.samples]) { lipPoints[(row + i) * 3] = x; lipPoints[(row + i) * 3 + 2] = mouthZ; }
+    if (i) lipFaces.push(i - 1, CALL_MOUTH.samples + i - 1, CALL_MOUTH.samples + i, i - 1, CALL_MOUTH.samples + i, i);
+  }
+  const lipShape = new THREE.BufferGeometry();
+  lipShape.setAttribute('position', new THREE.BufferAttribute(lipPoints, 3)); lipShape.setIndex(lipFaces);
+  const lips = new THREE.Mesh(lipShape, new THREE.MeshBasicMaterial({ color: smile.material.color, side: THREE.DoubleSide }));
+  lips.name = 'Lips'; lips.visible = false; lips.frustumCulled = false; model.face.add(lips);
+  const shapeMouth = open => {
+    lips.visible = open > 0.02;
+    if (!lips.visible) return;
+    sampleCallMouth(lipDepths, open);
+    for (let i = 0; i < lipDepths.length; i++) lipPoints[i * 3 + 1] = CALL_MOUTH.y - lipDepths[i];
+    lipShape.attributes.position.needsUpdate = true;
+  };
   const eyes = createCallEyes(model.face);
   // Keep both feet planted. Articulate the existing upper body around the hips
   // without stretching geometry or opening the shoulder/neck joins.
@@ -95,9 +111,7 @@ export function createCallScene(canvas, { onFailure = () => {}, dark = false } =
       model.leftArm.rotation.y = pose.otherArmDepth;
       model.leftArm.rotation.x = pose.otherArmPitch;
       handles[0].rotation.z = -pose.handle; handles[1].rotation.z = pose.handle;
-      openMouth.visible = pose.mouth > (openMouth.visible ? 0.08 : 0.14);
-      smile.visible = !openMouth.visible;
-      openMouth.scale.set(0.115 + pose.mouth * 0.02, 0.025 + pose.mouth * 0.065, 1);
+      shapeMouth(pose.mouth);
       eyes.update(pose.gazeX + attention.eyes.x * 0.028, pose.gazeY + attention.eyes.y * 0.022, pose.blink);
       for (const brow of brows) brow.position.y = pose.brow;
       for (let i = 0; i < steam.length; i++) { steam[i].position.x = pose.steam * (i ? -0.6 : 1); steam[i].position.y = Math.abs(pose.steam); }
