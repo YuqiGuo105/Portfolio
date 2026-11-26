@@ -1,5 +1,5 @@
-import { useId, useState } from "react"
-import { BookOpen, Check, ChevronDown, Copy, LockKeyhole, MapPin, Timer, X, ThumbsDown, ThumbsUp } from "lucide-react"
+import { useEffect, useId, useRef, useState } from "react"
+import { BookOpen, Check, ChevronDown, Copy, LockKeyhole, MapPin, Timer, X } from "lucide-react"
 import { isSourceLinked } from "../../lib/chatEvidence.mjs"
 import { formatCost, formatCount, formatMs } from "../../lib/chatRunSummary.mjs"
 import ResearchSteps from "./ResearchSteps"
@@ -17,6 +17,21 @@ function CopyButton({ text, label, className = "cw-act cw-act-icon", size = 15 }
     <button type="button" className={className} onClick={copy} aria-label={copied ? "Copied" : label} title={copied ? "Copied" : label}>
       {copied ? <Check size={size} aria-hidden="true" /> : <Copy size={size} aria-hidden="true" />}
     </button>
+  )
+}
+
+// The thumb of a verdict. It is the Lucide thumb drawn in two parts, hand first and cuff line on
+// top, so that a chosen thumb can be filled and still show where the cuff ends, and so that the
+// hand can swing on its wrist. Turned half round it is the thumb down.
+function Thumb({ down = false }) {
+  return (
+    <svg className="cw-thumb" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <g transform={down ? "rotate(180 12 12)" : undefined}>
+        <path className="cw-thumb-hand" d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+        <path className="cw-thumb-cuff" d="M7 10v12" />
+      </g>
+    </svg>
   )
 }
 
@@ -111,6 +126,23 @@ export default function AnswerFooter({ content = "", sources = [], steps = [], t
   const [panel, setPanel] = useState(null)
   const id = useId()
   const toggle = name => setPanel(current => current === name ? null : name)
+  // A verdict shows the moment it is pressed, while it is being saved; once the save is over the
+  // buttons follow what was actually stored, so a failed save falls back by itself.
+  const [pressed, setPressed] = useState(undefined)
+  // The button that plays its press animation: only a verdict just given, never one taken back
+  // and never one that was already there when the answer was drawn.
+  const [cheer, setCheer] = useState(null)
+  const cheerTimer = useRef(null)
+  useEffect(() => { if (!feedbackPending) setPressed(undefined) }, [feedbackPending, feedback])
+  useEffect(() => () => clearTimeout(cheerTimer.current), [])
+  const shown = pressed === undefined ? feedback : pressed
+  const press = verdict => {
+    const next = feedback === verdict ? null : verdict
+    setPressed(next)
+    clearTimeout(cheerTimer.current)
+    setCheer(next)
+    if (next) cheerTimer.current = setTimeout(() => setCheer(null), 900)
+  }
   const hasRun = steps.length > 0 || Boolean(runId) || Boolean(research)
   const stepCount = steps.length ? `${steps.length} step${steps.length === 1 ? "" : "s"}` : "Run details"
   if (!content.trim() && !sources.length && !hasRun) return null
@@ -146,15 +178,16 @@ export default function AnswerFooter({ content = "", sources = [], steps = [], t
             {/* Pressing the one already chosen takes it back. */}
             {onFeedback ? (
               <>
-                <button type="button" className={`cw-act cw-act-icon cw-act-rate${feedback === "up" ? " is-chosen" : ""}`} aria-pressed={feedback === "up"}
+                <button type="button" className={`cw-act cw-act-icon cw-act-rate cw-act-up${shown === "up" ? " is-chosen" : ""}${cheer === "up" ? " is-cheer" : ""}`} aria-pressed={feedback === "up"}
                   disabled={feedbackPending} aria-busy={feedbackPending} title={feedbackPending ? "Saving rating" : "Good answer"}
-                  onClick={() => onFeedback(feedback === "up" ? null : "up")} aria-label="Good answer">
-                  <ThumbsUp size={15} aria-hidden="true" />
+                  onClick={() => { press("up"); onFeedback(feedback === "up" ? null : "up") }} aria-label="Good answer">
+                  <Thumb />
+                  {cheer === "up" ? <span className="cw-burst" aria-hidden="true" /> : null}
                 </button>
-                <button type="button" className={`cw-act cw-act-icon cw-act-rate${feedback === "down" ? " is-chosen" : ""}`} aria-pressed={feedback === "down"}
+                <button type="button" className={`cw-act cw-act-icon cw-act-rate cw-act-down${shown === "down" ? " is-chosen" : ""}${cheer === "down" ? " is-cheer" : ""}`} aria-pressed={feedback === "down"}
                   disabled={feedbackPending} aria-busy={feedbackPending} title={feedbackPending ? "Saving rating" : "Not helpful"}
-                  onClick={() => onFeedback(feedback === "down" ? null : "down")} aria-label="Not helpful">
-                  <ThumbsDown size={15} aria-hidden="true" />
+                  onClick={() => { press("down"); onFeedback(feedback === "down" ? null : "down") }} aria-label="Not helpful">
+                  <Thumb down />
                 </button>
               </>
             ) : null}

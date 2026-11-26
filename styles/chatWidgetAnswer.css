@@ -552,14 +552,123 @@ body.dark-skin #__chat_widget_root#__chat_widget_root .cw-codeblock {
 #__chat_widget_root#__chat_widget_root .cw-act-end .cw-act-icon {
   margin-left: 0;
 }
+
+/* A verdict. The thumb leans in under the pointer, sinks when pressed and, once given, fills in:
+   the hand swings up off its wrist while a ring and a few sparks leave the button. A thumb down
+   only dips. Nothing here changes the size of the button or of the line. */
+#__chat_widget_root#__chat_widget_root .cw-act-rate {
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+#__chat_widget_root#__chat_widget_root .cw-act-rate:disabled {
+  opacity: 1;
+  cursor: default;
+}
+#__chat_widget_root#__chat_widget_root .cw-thumb {
+  position: relative;
+  z-index: 1;
+  overflow: visible;
+  transform-origin: 30% 86%;
+  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+#__chat_widget_root#__chat_widget_root .cw-act-down .cw-thumb {
+  transform-origin: 70% 14%;
+}
+#__chat_widget_root#__chat_widget_root .cw-thumb-hand {
+  fill: currentColor;
+  fill-opacity: 0;
+  transition: fill-opacity 180ms ease;
+}
+#__chat_widget_root#__chat_widget_root .cw-thumb-cuff {
+  transition: stroke 180ms ease;
+}
+@media (hover: hover) {
+  #__chat_widget_root#__chat_widget_root .cw-act-rate:hover:not(:disabled) {
+    background: var(--cwm-accent-soft);
+    color: var(--cwm-accent);
+  }
+  #__chat_widget_root#__chat_widget_root .cw-act-rate:hover:not(:disabled) .cw-thumb {
+    transform: rotate(-16deg) scale(1.22);
+  }
+  #__chat_widget_root#__chat_widget_root .cw-act-rate.is-chosen:hover:not(:disabled) .cw-thumb {
+    transform: scale(1.1);
+  }
+}
+#__chat_widget_root#__chat_widget_root .cw-act-rate:active:not(:disabled) .cw-thumb {
+  transform: scale(0.8);
+  transition-duration: 90ms;
+}
 #__chat_widget_root#__chat_widget_root .cw-act-rate.is-chosen,
 #__chat_widget_root#__chat_widget_root .cw-act-rate.is-chosen:hover {
   background: var(--cwm-accent-soft);
   color: var(--cwm-accent);
 }
-#__chat_widget_root#__chat_widget_root .cw-act-rate.is-chosen svg {
-  fill: currentColor;
-  fill-opacity: 0.2;
+#__chat_widget_root#__chat_widget_root .cw-act-rate.is-chosen .cw-thumb-hand {
+  fill-opacity: 1;
+}
+/* drawn over the filled hand, the cuff line is the gap between cuff and hand */
+#__chat_widget_root#__chat_widget_root .cw-act-rate.is-chosen .cw-thumb-cuff {
+  stroke: var(--cwm-surface);
+}
+#__chat_widget_root#__chat_widget_root .cw-act-up.is-cheer .cw-thumb {
+  animation: cw-thumb-cheer 640ms cubic-bezier(0.3, 0.9, 0.4, 1) both;
+}
+#__chat_widget_root#__chat_widget_root .cw-act-down.is-cheer .cw-thumb {
+  animation: cw-thumb-dip 460ms cubic-bezier(0.3, 0.9, 0.4, 1) both;
+}
+#__chat_widget_root#__chat_widget_root .cw-burst {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+#__chat_widget_root#__chat_widget_root .cw-burst::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 2px solid var(--cwm-accent);
+  border-radius: 50%;
+  animation: cw-burst-ring 560ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+#__chat_widget_root#__chat_widget_root .cw-burst::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  color: var(--cwm-accent);
+  box-shadow: 0 -24px 0 0 currentColor, 21px -12px 0 0 #f2b34c, 21px 12px 0 0 currentColor,
+    0 24px 0 0 #f2b34c, -21px 12px 0 0 currentColor, -21px -12px 0 0 #f2b34c;
+  animation: cw-burst-sparks 620ms cubic-bezier(0.2, 0.7, 0.3, 1) 60ms both;
+}
+@keyframes cw-thumb-cheer {
+  0% { transform: rotate(18deg) scale(0.6); }
+  38% { transform: rotate(-28deg) scale(1.55); }
+  60% { transform: rotate(10deg) scale(0.92); }
+  80% { transform: rotate(-5deg) scale(1.08); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+@keyframes cw-thumb-dip {
+  0% { transform: rotate(0deg) scale(1); }
+  40% { transform: rotate(-20deg) scale(1.25); }
+  72% { transform: rotate(6deg) scale(0.95); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+@keyframes cw-burst-ring {
+  0% { transform: scale(0.35); opacity: 0.8; border-width: 7px; }
+  100% { transform: scale(1.7); opacity: 0; border-width: 1px; }
+}
+@keyframes cw-burst-sparks {
+  0% { transform: scale(0.25) rotate(-12deg); opacity: 0; }
+  20% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: scale(1.1) rotate(10deg); opacity: 0; }
 }
 
 #__chat_widget_root#__chat_widget_root .cw-panel {
@@ -769,5 +878,16 @@ body.dark-skin #__chat_widget_root#__chat_widget_root .cw-codeblock {
   }
   #__chat_widget_root#__chat_widget_root :is(.cw-link-go, .cw-act-chev, .cw-link-row, .cw-act) {
     transition: none !important;
+  }
+  #__chat_widget_root#__chat_widget_root :is(.cw-thumb, .cw-thumb-hand, .cw-thumb-cuff) {
+    animation: none !important;
+    transition: none !important;
+  }
+  #__chat_widget_root#__chat_widget_root .cw-act-rate:hover .cw-thumb,
+  #__chat_widget_root#__chat_widget_root .cw-act-rate:active .cw-thumb {
+    transform: none;
+  }
+  #__chat_widget_root#__chat_widget_root .cw-burst {
+    display: none;
   }
 }
