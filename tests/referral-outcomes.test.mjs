@@ -11,7 +11,7 @@ import { applicantKey, referralFields } from '../src/lib/referral/fields.mjs';
 import { applicantStage, publicStatus, readStatusToken, statusToken, statusUrl } from '../src/lib/referral/status.mjs';
 import { createReferralAdminHandler, createReferralCompleteHandler, createReferralHandler, createReferralStatusHandler } from '../src/lib/referral/handler.mjs';
 import { createReferralWorker } from '../src/lib/referral/worker.mjs';
-import { noReplyMailbox, passMails } from '../src/lib/referral/mail.mjs';
+import { noReplyMailbox, passMails, sendNoReplyMail } from '../src/lib/referral/mail.mjs';
 import { memoryReferralStore, referralRow } from '../src/lib/referral/store.mjs';
 import { memoryResumeStorage, resumePath } from '../src/lib/referral/storage.mjs';
 import { inspectResume } from '../src/lib/referral/resume.mjs';
@@ -362,7 +362,7 @@ test('the same résumé under another address is pointed out to the owner', asyn
   assert.equal(inspectResume(pdf()).sha256, (await f.store.get(second)).resume_sha256);
 });
 
-test('the no-reply mailbox is never the owner\'s own address', () => {
+test('the no-reply mailbox is never the owner\'s own address', async () => {
   const base = { EMAIL_USER: 'yuqi@example.com', EMAIL_TO: 'inbox@example.com' };
   const box = noReplyMailbox({ ...base, REFERRAL_NOREPLY_SMTP_URL: 'smtps://no-reply%40mail.example:pw@smtp.mail.example:465', REFERRAL_NOREPLY_FROM: 'Referral desk <no-reply@mail.example>' });
   assert.equal(box.from, 'Referral desk <no-reply@mail.example>');
@@ -371,9 +371,19 @@ test('the no-reply mailbox is never the owner\'s own address', () => {
     { REFERRAL_NOREPLY_SMTP_URL: 'smtps://x:pw@smtp.example', REFERRAL_NOREPLY_FROM: 'Yuqi <YUQI@example.com>' },
     { REFERRAL_NOREPLY_SMTP_URL: 'smtps://inbox%40example.com:pw@smtp.example', REFERRAL_NOREPLY_FROM: 'no-reply@mail.example' },
     { REFERRAL_NOREPLY_SMTP_URL: 'smtps://x:pw@smtp.example', REFERRAL_NOREPLY_FROM: 'not an address' }]) assert.equal(noReplyMailbox({ ...base, ...bad }), null);
+  // A sending service on the site's own domain needs no mailbox at all.
+  assert.deepEqual(noReplyMailbox({ ...base, RESEND_API_KEY: 're_test' }), { kind: 'resend', key: 're_test', from: 'Yuqi Guo referrals <no-reply@yuqi.site>' });
+  assert.equal(noReplyMailbox({ ...base, RESEND_API_KEY: 're_test', REFERRAL_NOREPLY_FROM: 'yuqi@example.com' }), null, 'never the owner\'s own address');
   const mails = passMails({ id: randomUUID(), reference: 'R-TEST', name: 'Alex\r\nBcc: x@evil.test', email: 'alex@example.com', role_title: 'Engineer', company: 'Goldman Sachs', intro: 'Intro.', relationship: 'school',
     screening: passing() });
   assert.equal(/[\r\n]/.test(mails.applicant.subject + mails.owner.subject), false);
+  const calls = [];
+  const fetchImpl = async (url, options) => { calls.push({ url, auth: options.headers.Authorization, body: JSON.parse(options.body) }); return new Response('{}', { status: calls.length === 1 ? 200 : 403 }); };
+  await sendNoReplyMail(mails.owner, { env: { ...base, RESEND_API_KEY: 're_test' }, fetchImpl });
+  assert.deepEqual({ url: calls[0].url, auth: calls[0].auth, from: calls[0].body.from, to: calls[0].body.to, reply: calls[0].body.reply_to },
+    { url: 'https://api.resend.com/emails', auth: 'Bearer re_test', from: 'Yuqi Guo referrals <no-reply@yuqi.site>', to: ['inbox@example.com'], reply: 'alex@example.com' });
+  await assert.rejects(sendNoReplyMail(mails.applicant, { env: { ...base, RESEND_API_KEY: 're_test' }, fetchImpl }), /answered 403/);
+  assert.deepEqual(calls[1].body.to, ['alex@example.com']);
 });
 
 test('the owner can take a major-company pass away after opening the profile; the review list carries the applicant link', async () => {

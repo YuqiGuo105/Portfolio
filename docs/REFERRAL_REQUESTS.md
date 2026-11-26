@@ -231,6 +231,7 @@ note, "Screen again" and delete.
 | `REFERRAL_AI_DAILY_LIMIT` | AI screenings a day (40). |
 | `REFERRAL_AUTO_DECLINE_BELOW` | Evidence score under which a request is declined automatically (60, never above the pass mark). `0` switches it off. |
 | `REFERRAL_GITHUB_TOKEN` | Optional GitHub token with no scopes, for the public-data lookups. Falls back to `GITHUB_TOKEN`, then `GITHUB_PAT`. |
+| `RESEND_API_KEY` | Set by the Resend integration on Vercel. With it, mail leaves from `no-reply@yuqi.site` (or `REFERRAL_NOREPLY_FROM`) through Resend; the domain must be verified there. |
 | `REFERRAL_NOREPLY_SMTP_URL`, `REFERRAL_NOREPLY_FROM` | The no-reply mailbox, for example `smtps://user:password@smtp.host:465` and `Referral desk <no-reply@yuqi.site>`. Must not be the owner's own address. |
 | `REFERRAL_OWNER_EMAIL` | Where the owner's copies go. Default: `EMAIL_TO`. |
 | `REFERRAL_STATUS_SECRET` | Signs status links. Default: `CRON_SECRET`. Changing it invalidates links already given out. |

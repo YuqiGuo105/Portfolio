@@ -136,22 +136,36 @@ export function declineMail(row, { statusLink = '' } = {}) {
 
 // The no-reply mailbox: an account that is neither the owner's own address nor the one that
 // receives his mail. Applicants are only ever written to from it; without it they get no email.
+// Two ways to have one: a sending service on the site's own domain (RESEND_API_KEY, provisioned by
+// the Vercel integration; the address only sends and nobody reads it), or any SMTP account
+// (REFERRAL_NOREPLY_SMTP_URL). Either way the From address must not be one of the owner's own.
+export const NOREPLY_FROM = 'Yuqi Guo referrals <no-reply@yuqi.site>';
 export function noReplyMailbox(env = process.env) {
-  const url = String(env.REFERRAL_NOREPLY_SMTP_URL || '').trim(), from = String(env.REFERRAL_NOREPLY_FROM || '').trim();
-  if (!/^smtps?:\/\//.test(url) || !from) return null;
+  const url = String(env.REFERRAL_NOREPLY_SMTP_URL || '').trim(), key = String(env.RESEND_API_KEY || '').trim();
+  const smtp = /^smtps?:\/\//.test(url);
+  const from = String(env.REFERRAL_NOREPLY_FROM || '').trim() || (!smtp && key ? NOREPLY_FROM : '');
+  if ((!smtp && !key) || !from) return null;
   const address = (from.match(/<([^<>\s]+@[^<>\s]+)>\s*$/)?.[1] || from).toLowerCase();
   let user = '';
-  try { user = decodeURIComponent(new URL(url).username).toLowerCase(); } catch { return null; }
+  if (smtp) { try { user = decodeURIComponent(new URL(url).username).toLowerCase(); } catch { return null; } }
   const personal = [env.EMAIL_USER, env.EMAIL_TO].filter(Boolean).map(value => String(value).trim().toLowerCase());
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) || personal.includes(address) || personal.includes(user)) return null;
-  return { url, from };
+  return smtp ? { kind: 'smtp', url, from } : { kind: 'resend', key, from };
 }
 
 // Mail from the no-reply mailbox. `to` defaults to the owner's inbox.
-export async function sendNoReplyMail(mail, { env = process.env } = {}) {
+export async function sendNoReplyMail(mail, { env = process.env, fetchImpl = fetch } = {}) {
   const box = noReplyMailbox(env);
   const to = mail.to || env.REFERRAL_OWNER_EMAIL || env.EMAIL_TO;
   if (!box || !to) throw new Error('The no-reply mailbox is not configured');
+  if (box.kind === 'resend') {
+    const response = await fetchImpl('https://api.resend.com/emails', { method: 'POST', signal: AbortSignal.timeout(15000),
+      headers: { Authorization: `Bearer ${box.key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: box.from, to: [to], subject: mail.subject, text: mail.text, ...(mail.html ? { html: mail.html } : {}),
+        ...(mail.replyTo ? { reply_to: mail.replyTo } : {}) }) });
+    if (!response.ok) throw new Error(`The sending service answered ${response.status}`);
+    return;
+  }
   const { default: nodemailer } = await import('nodemailer');
   const transporter = nodemailer.createTransport(box.url, { connectionTimeout: 10000, socketTimeout: 20000 });
   await transporter.sendMail({ ...mail, from: box.from, to });
