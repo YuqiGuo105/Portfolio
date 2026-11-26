@@ -79,7 +79,7 @@ export default function SiteTour() {
                 targetKey: "home.dashboard",
                 targetId: "tour-real-time-data",
                 title: "Real-Time Data",
-                content: "See live market moves, quick currency conversions, and a snapshot of the weather I'm tracking right now.",
+                content: "See who is visiting right now on the live globe, and how the services behind this site are running.",
                 meta: "Live services · Visitor intelligence · Observability",
                 action: { href: "/analytics", label: "Open analytics" },
             },

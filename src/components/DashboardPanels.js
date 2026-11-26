@@ -15,26 +15,6 @@ const MONITOR_SERVICE_VISIBLE_LIMIT = 8;
    Helpers
    ============================================================ */
 
-const formatCurrency = (value, currency) => {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: currency === "JPY" ? 0 : 2,
-    }).format(value);
-  } catch (error) {
-    return `${Number(value).toFixed(2)} ${currency}`;
-  }
-};
-
-const getHoursSince = (timestamp) => {
-  if (!timestamp) return null;
-  const diffMs = Date.now() - timestamp;
-  const hours = diffMs / (1000 * 60 * 60);
-  return Math.max(hours, 0);
-};
-
 const toTimestampMs = (timestamp) => {
   if (!timestamp) return null;
   if (typeof timestamp === "number") return timestamp;
@@ -68,21 +48,6 @@ const RelativeUpdateTime = ({ timestamp }) => {
 
   if (!timestamp) return null;
   return <span>{formatRelativeUpdate(timestamp, now)}</span>;
-};
-
-const isAbortError = (error) =>
-  error?.name === "AbortError" ||
-  String(error?.message || "").toLowerCase().includes("aborted");
-
-const useDebouncedValue = (value, delayMs) => {
-  const [debounced, setDebounced] = useState(value);
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(t);
-  }, [value, delayMs]);
-
-  return debounced;
 };
 
 const buildPinLabel = (r) => {
@@ -273,79 +238,7 @@ const aggregatePinsByRegion = (rows, maxLabels = 1200) => {
   });
 };
 
-const weatherIcon = (
-  <svg
-    width="42"
-    height="42"
-    viewBox="0 0 48 48"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    aria-hidden="true"
-  >
-    <circle
-      cx="16"
-      cy="16"
-      r="8"
-      stroke="var(--accent-color)"
-      strokeWidth="2.5"
-      fill="none"
-    />
-    <path
-      d="M12 32h16a8 8 0 1 0-1.7-15.8"
-      stroke="var(--accent-color)"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      fill="none"
-    />
-    <path
-      d="M8 32h16a6 6 0 1 1-0.2 12H10a6 6 0 1 1 2-11.6"
-      stroke="var(--accent-color)"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      fill="none"
-    />
-  </svg>
-);
-
 const DashboardPanels = () => {
-  const [marketData, setMarketData] = useState([]);
-  const [marketFallback, setMarketFallback] = useState(false);
-  const [marketMeta, setMarketMeta] = useState(null);
-  const [isMarketLoading, setIsMarketLoading] = useState(true);
-
-  const [currency, setCurrency] = useState({
-    amount: 1,
-    base: "USD",
-    target: "EUR",
-    rate: 0.8589,
-    timestamp: Date.now(),
-    fallback: true,
-    meta: { source: "init" },
-  });
-  const [isCurrencyLoading, setIsCurrencyLoading] = useState(true);
-
-  const [amount, setAmount] = useState("1");
-  const [baseCurrency, setBaseCurrency] = useState("USD");
-  const [targetCurrency, setTargetCurrency] = useState("EUR");
-
-  const debouncedAmount = useDebouncedValue(amount, 300);
-  const debouncedBase = useDebouncedValue(baseCurrency, 150);
-  const debouncedTarget = useDebouncedValue(targetCurrency, 150);
-
-  const [weather, setWeather] = useState({
-    temperature: 49,
-    weatherDescription: "Partly cloudy",
-    sunrise: null,
-    sunset: null,
-    location: null,
-    fetchedAt: Date.now(),
-    fallback: true,
-    meta: { provider: "init" },
-  });
-  const [isWeatherLoading, setIsWeatherLoading] = useState(true);
-
   // Visitors
   const [visitors, setVisitors] = useState({
     last30: 0,
@@ -369,23 +262,6 @@ const DashboardPanels = () => {
   const [showAllMonitoredServices, setShowAllMonitoredServices] = useState(false);
   const serviceDetails = useServiceHoverDetails(metrics?.services || [], metrics?.updatedAt);
 
-  const hoursAgoLabel = (timestamp) => {
-    const hours = getHoursSince(timestamp);
-    if (hours === null) return "Updated just now";
-    if (hours < 1) {
-      const minutes = Math.max(Math.round(hours * 60), 1);
-      return `Updated > ${minutes} min ago`;
-    }
-    return `Updated > ${Math.round(hours)} hr ago`;
-  };
-
-  const formatTime = (value) => {
-    if (!value) return "—";
-    const date = typeof value === "number" ? new Date(value) : new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
-    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  };
-
   const formatUptime = (seconds) => {
     if (seconds === null || seconds === undefined) return "—";
     const d = Math.floor(seconds / 86400);
@@ -395,118 +271,6 @@ const DashboardPanels = () => {
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m`;
   };
-
-  /* ============================================================
-     Market
-     ============================================================ */
-  useEffect(() => {
-    let mounted = true;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4500);
-
-    const fetchMarket = async () => {
-      setIsMarketLoading(true);
-      try {
-        const response = await fetch("/api/market-data", { signal: controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const json = await response.json();
-
-        if (!mounted) return;
-        if (json?.data) setMarketData(json.data);
-        setMarketFallback(Boolean(json?.fallback));
-        setMarketMeta(json?.meta ?? null);
-      } catch (error) {
-        if (isAbortError(error)) return;
-        console.error("Failed to load market data", error);
-      } finally {
-        if (mounted) setIsMarketLoading(false);
-      }
-    };
-
-    fetchMarket();
-
-    return () => {
-      mounted = false;
-      clearTimeout(timeout);
-      controller.abort();
-    };
-  }, []);
-
-  /* ============================================================
-     Currency
-     ============================================================ */
-  useEffect(() => {
-    let mounted = true;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4500);
-
-    const fetchCurrency = async () => {
-      setIsCurrencyLoading(true);
-      try {
-        const params = new URLSearchParams({
-          base: debouncedBase,
-          target: debouncedTarget,
-          amount: (debouncedAmount || "1").toString(),
-        });
-
-        const response = await fetch(`/api/currency?${params.toString()}`, {
-          signal: controller.signal,
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const json = await response.json();
-
-        if (!mounted) return;
-        if (json?.rate) setCurrency(json);
-      } catch (error) {
-        if (isAbortError(error)) return;
-        console.error("Failed to load currency data", error);
-      } finally {
-        if (mounted) setIsCurrencyLoading(false);
-      }
-    };
-
-    fetchCurrency();
-
-    return () => {
-      mounted = false;
-      clearTimeout(timeout);
-      controller.abort();
-    };
-  }, [debouncedBase, debouncedTarget, debouncedAmount]);
-
-  /* ============================================================
-     Weather
-     ============================================================ */
-  useEffect(() => {
-    let mounted = true;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    const fetchWeather = async () => {
-      setIsWeatherLoading(true);
-      try {
-        const response = await fetch("/api/weather", { signal: controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const json = await response.json();
-
-        if (!mounted) return;
-        if (json) setWeather(json);
-      } catch (error) {
-        if (isAbortError(error)) return;
-        console.error("Failed to load weather data", error);
-      } finally {
-        if (mounted) setIsWeatherLoading(false);
-      }
-    };
-
-    fetchWeather();
-
-    return () => {
-      mounted = false;
-      clearTimeout(timeout);
-      controller.abort();
-    };
-  }, []);
 
   /* ============================================================
      ✅ Visitors — "pins first, stats later" (FIX)
@@ -712,28 +476,6 @@ const DashboardPanels = () => {
     };
   }, []);
 
-  const convertedAmount = useMemo(() => {
-    const amt = Number.parseFloat(amount);
-    if (Number.isNaN(amt) || !currency?.rate) return null;
-    return amt * currency.rate;
-  }, [amount, currency]);
-
-  const [temperatureUnit, setTemperatureUnit] = useState("C");
-  const toggleTemperatureUnit = () => {
-    setTemperatureUnit((current) => (current === "F" ? "C" : "F"));
-  };
-
-  const displayTemperature = useMemo(() => {
-    if (isWeatherLoading || weather.temperature === null || weather.temperature === undefined) {
-      return "--";
-    }
-    if (temperatureUnit === "C") {
-      const celsius = ((weather.temperature - 32) * 5) / 9;
-      return `${Math.round(celsius)}°C`;
-    }
-    return `${Math.round(weather.temperature)}°F`;
-  }, [isWeatherLoading, weather.temperature, temperatureUnit]);
-
   const monitoredServices = metrics?.services || [];
   const checkIntervals = monitoredServices.map(service => service.metadata?.intervalSeconds).filter(Number.isFinite);
   const minimumCheckInterval = checkIntervals.length ? Math.min(...checkIntervals) : null;
@@ -749,32 +491,6 @@ const DashboardPanels = () => {
     0
   );
 
-  const { marketBadgeText, marketBadgeClassName } = useMemo(() => {
-    if (isMarketLoading) {
-      return { marketBadgeText: "loading…", marketBadgeClassName: "badge badge-warning" };
-    }
-
-    if (marketMeta?.source === "simulated" || marketFallback) {
-      return { marketBadgeText: "Fallback data.", marketBadgeClassName: "badge badge-warning" };
-    }
-
-    if (marketMeta?.source === "stooq") {
-      const partial = marketMeta?.partial?.length
-        ? ` · partial: ${marketMeta.partial.join(", ")}`
-        : "";
-      return { marketBadgeText: `delayed quotes (stooq)${partial}`, marketBadgeClassName: "badge" };
-    }
-
-    if (marketMeta?.source && marketMeta.source !== "yahoo-finance") {
-      return {
-        marketBadgeText: `cached snapshot · source: ${marketMeta.source}`,
-        marketBadgeClassName: "badge badge-warning",
-      };
-    }
-
-    return { marketBadgeText: null, marketBadgeClassName: "badge" };
-  }, [isMarketLoading, marketFallback, marketMeta]);
-
   return (
     <section className="dashboard-wrapper" id="market-weather-dashboard">
       <div className="section-heading">
@@ -784,150 +500,6 @@ const DashboardPanels = () => {
       </div>
 
       <div className="dashboard-container">
-        <div className="dashboard-card-1 market-card">
-          <header>
-            <h3>Market Data</h3>
-            {marketBadgeText && <span className={marketBadgeClassName}>{marketBadgeText}</span>}
-          </header>
-
-          <div className="market-rows">
-            {marketData.map((item) => {
-              const changeValue =
-                typeof item.change === "number" && !Number.isNaN(item.change) ? item.change : null;
-              const changePercent =
-                typeof item.changePercent === "number" && !Number.isNaN(item.changePercent)
-                  ? item.changePercent
-                  : null;
-              const changeSign = changeValue !== null ? (changeValue >= 0 ? "+" : "") : "";
-              const changeColor =
-                changeValue === null ? "neutral" : changeValue >= 0 ? "positive" : "negative";
-
-              return (
-                <div className="market-row" key={item.label}>
-                  <div className="row-main">
-                    <span className="symbol">{item.label}</span>
-                    <span className="price">{formatCurrency(item.price, item.currency)}</span>
-                    <span className="currency">{item.currency}</span>
-                    <span className={`change ${changeColor}`}>
-                      {changeValue !== null ? `${changeSign}${changeValue.toFixed(2)}` : "—"}
-                      {", "}
-                      <span className="percent">
-                        {changePercent !== null ? `${changeSign}${changePercent.toFixed(2)}%` : "—"}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="row-sub">
-                    <span className="timestamp">{hoursAgoLabel(item.timestamp)}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="column-container">
-          <div className="dashboard-card-2 currency-card">
-            <header>
-              <h3>Currency Converter</h3>
-            </header>
-
-            <div className="output-container">
-              <div className="conversion-output">
-                {convertedAmount !== null ? (
-                  <span>
-                    {amount || 1} {baseCurrency} ≈ {convertedAmount.toFixed(4)} {targetCurrency}
-                  </span>
-                ) : (
-                  <span>Enter an amount to convert</span>
-                )}
-              </div>
-
-              <div className="converter-form">
-                <label className="input-group">
-                  <span>Amount</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={amount}
-                    onChange={(event) => setAmount(event.target.value)}
-                  />
-                </label>
-
-                <label className="input-group">
-                  <span>From</span>
-                  <select value={baseCurrency} onChange={(e) => setBaseCurrency(e.target.value)}>
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="GBP">GBP</option>
-                    <option value="JPY">JPY</option>
-                    <option value="CNY">CNY</option>
-                  </select>
-                </label>
-
-                <label className="input-group">
-                  <span>To</span>
-                  <select value={targetCurrency} onChange={(e) => setTargetCurrency(e.target.value)}>
-                    <option value="EUR">EUR</option>
-                    <option value="USD">USD</option>
-                    <option value="GBP">GBP</option>
-                    <option value="JPY">JPY</option>
-                    <option value="CNY">CNY</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className="currency-rate">
-                <span className="timestamp">
-                  {isCurrencyLoading ? "Updating…" : hoursAgoLabel(currency.timestamp)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="dashboard-card-3 weather-card">
-            <header>
-              <h3>Weather</h3>
-            </header>
-
-            <div className="weather-container">
-              <div className="weather-main">
-                <div className="icon-wrapper" aria-hidden="true">
-                  {weatherIcon}
-                </div>
-
-                <div className="weather-info">
-                  <div className="temperature-row">
-                    <div className="temperature">{displayTemperature}</div>
-                    <button
-                      type="button"
-                      className="unit-toggle"
-                      onClick={toggleTemperatureUnit}
-                      aria-label={`Switch to ${temperatureUnit === "F" ? "Celsius" : "Fahrenheit"}`}
-                    >
-                      Show °{temperatureUnit === "F" ? "C" : "F"}
-                    </button>
-                  </div>
-
-                  <div className="description">Outlook: {weather.weatherDescription}</div>
-
-                  {weather.location && (
-                    <div className="location">
-                      {weather.location.city ? `${weather.location.city}, ` : ""}
-                      {weather.location.region || weather.location.country}
-                    </div>
-                  )}
-
-                  <div className="sun-times">
-                    <span>Sunrise: {formatTime(weather.sunrise)}</span>
-                    <span>Sunset: {formatTime(weather.sunset)}</span>
-                    <span className="timestamp">{hoursAgoLabel(weather.fetchedAt)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Visitors */}
         <div className="dashboard-card-4 visitors-card">
           <header>
