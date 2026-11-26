@@ -4732,10 +4732,20 @@ export default function ChatWidget() {
       })
     }
 
+    // The tour stepped aside (it is hidden, or its page is going away): the chat comes back only if
+    // the tour was what closed it.
     const reopenAfterTour = () => {
       if (typeof window === "undefined") return
       setTourActive(false)
       if (!tourCollapsedRef.current) return
+      tourCollapsedRef.current = false
+      setOpen(true)
+    }
+    // The tour finished or was closed: the visitor always lands back in the chat, also when the tour
+    // began on another page and this widget never saw it start.
+    const openAfterTour = () => {
+      if (typeof window === "undefined") return
+      setTourActive(false)
       tourCollapsedRef.current = false
       setOpen(true)
     }
@@ -4746,11 +4756,11 @@ export default function ChatWidget() {
     }
 
     window.addEventListener("cw:site-tour:start", collapseForTour)
-    window.addEventListener("cw:site-tour:end", reopenAfterTour)
+    window.addEventListener("cw:site-tour:end", openAfterTour)
     window.addEventListener("cw:site-tour:visibility", syncTourVisibility)
     return () => {
       window.removeEventListener("cw:site-tour:start", collapseForTour)
-      window.removeEventListener("cw:site-tour:end", reopenAfterTour)
+      window.removeEventListener("cw:site-tour:end", openAfterTour)
       window.removeEventListener("cw:site-tour:visibility", syncTourVisibility)
     }
   }, [])
