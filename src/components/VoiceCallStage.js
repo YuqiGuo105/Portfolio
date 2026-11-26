@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import { isDarkPage } from '../lib/voice/callTheme.mjs';
 import styles from './LiveVoiceCall.module.css';
 
 export default function VoiceCallStage({ status, level, visible = true, replay = 0 }) {
@@ -17,7 +18,7 @@ export default function VoiceCallStage({ status, level, visible = true, replay =
       try {
         const { createCallScene } = await import('../lib/voice/callScene.mjs');
         if (disposed || motion.matches) return;
-        scene.current = createCallScene(canvas.current, { onFailure: fallback });
+        scene.current = createCallScene(canvas.current, { onFailure: fallback, dark: isDarkPage() });
         scene.current.visible(shown.current);
         scene.current.state(latest.current);
         setReady(true);
@@ -25,9 +26,17 @@ export default function VoiceCallStage({ status, level, visible = true, replay =
     };
     const change = () => { if (motion.matches) fallback(); else load(); };
     load(); motion.addEventListener('change', change);
+    // The ground under him follows the site's day and night switch while a call is open. The page
+    // changes its classes for other reasons too, so only a real switch repaints.
+    let night = isDarkPage();
+    const theme = new MutationObserver(() => {
+      if (isDarkPage() === night) return;
+      night = !night; scene.current?.theme(night);
+    });
+    for (const node of [document.documentElement, document.body]) theme.observe(node, { attributes: true, attributeFilter: ['class'] });
     // The audio analyser already runs at a bounded rate; no React updates.
     level.current = value => scene.current?.level(value);
-    return () => { disposed = true; motion.removeEventListener('change', change); level.current = null; scene.current?.dispose(); scene.current = null; };
+    return () => { disposed = true; theme.disconnect(); motion.removeEventListener('change', change); level.current = null; scene.current?.dispose(); scene.current = null; };
   }, [level]);
   useEffect(() => { scene.current?.state(status); }, [status]);
   useEffect(() => { scene.current?.visible(visible); }, [visible]);

@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { createFullBodyPot, disposeFullBody } from './fullBodyModel.mjs';
 import { createCallEyes } from './callEyes.mjs';
 import { createCallAttention, IDLE_SECONDS, isLivePose, REACTION_SECONDS, sampleCallPose, stepCallAttention, stepCallMouth, WELCOME_SECONDS } from './callMotion.mjs';
+import { CALL_GROUND } from './callTheme.mjs';
 
-export function createCallScene(canvas, { onFailure = () => {} } = {}) {
+export function createCallScene(canvas, { onFailure = () => {}, dark = false } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power', failIfMajorPerformanceCaveat: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -15,22 +16,23 @@ export function createCallScene(canvas, { onFailure = () => {} } = {}) {
   camera.position.set(0.15, 2.99, 14);
   camera.lookAt(0.15, 2.43, 0);
 
-  // Architectural steps sit behind the unchanged reference model. No shadow
-  // maps, environment textures, postprocessing or per-frame allocations.
+  // The ground and a soft contact shadow under the unchanged reference model. No shadow maps,
+  // environment textures, postprocessing or per-frame allocations. The wall behind him is the
+  // call window itself, seen through the transparent canvas.
   const setting = new THREE.Group(); scene.add(setting);
-  for (let i = 0; i < 3; i++) {
-    const step = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.30 + i * 0.38, 2.0),
-      new THREE.MeshLambertMaterial({ color: ['#d7e6e0', '#e0ebe6', '#e9efec'][i] }));
-    step.position.set(-3.3 - i * 0.65, -0.38 + i * 0.19, -2.1 - i * 1.5);
-    step.rotation.y = -0.16;
-    setting.add(step);
-  }
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 40), new THREE.MeshBasicMaterial({ color: '#eaf0ec' }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 40), new THREE.MeshBasicMaterial());
   floor.rotation.x = -Math.PI / 2; floor.position.y = -0.06; setting.add(floor);
   scene.add(new THREE.HemisphereLight('#ffffff', '#8a9d91', 2.5));
   const key = new THREE.DirectionalLight('#fff6eb', 2.0); key.position.set(-4, 7, 6); scene.add(key);
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshBasicMaterial({ color: '#65776f', opacity: 0.10, transparent: true, depthWrite: false }));
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2; shadow.scale.set(1.17, 0.55, 1); shadow.position.set(0.10, -0.045, 0.12); setting.add(shadow);
+  // Only the ground follows the page's theme; Mr. Pot is lit the same in both.
+  const paint = night => {
+    const ground = night ? CALL_GROUND.dark : CALL_GROUND.light;
+    floor.material.color.set(ground.floor);
+    shadow.material.color.set(ground.shadow); shadow.material.opacity = ground.shade;
+  };
+  paint(dark);
 
   const smile = model.face.getObjectByName('Smile');
   const mouth = new THREE.Group(); mouth.position.set(0, 2.15, 0); model.face.add(mouth);
@@ -146,6 +148,8 @@ export function createCallScene(canvas, { onFailure = () => {} } = {}) {
     },
     replay() { stateAt = performance.now(); idleCycle = false; clearTimeout(idleTimer); idleTimer = null; invalidate(); },
     visible(value) { visible = value; if (!value) pause(); else { pointerAt = performance.now(); resize(); invalidate(); } },
+    // A hidden scene is repainted when it is shown again.
+    theme(night) { paint(night); if (visible && !stopped) render(); },
     enter() { bounds = canvas.getBoundingClientRect(); },
     point(x, y) {
       if (!bounds || !visible) return;

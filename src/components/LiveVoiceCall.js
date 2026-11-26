@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/router';
-import { ArrowUpRight, Check, ChevronDown, Loader2, MapPin, Maximize2, MessageSquareText, Mic, MicOff, Minus, Phone, PhoneOff, X } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Check, ChevronDown, Loader2, MapPin, Maximize2, MessageSquareText, Mic, MicOff, Minus, Phone, PhoneOff, X } from 'lucide-react';
 import VoiceCallStage from './VoiceCallStage';
 import { GoogleLiveSession } from '../lib/voice/googleLive.mjs';
 import { QwenLiveSession } from '../lib/voice/qwenLive.mjs';
@@ -21,8 +21,8 @@ const provider = process.env.NODE_ENV === 'development'
 export default function LiveVoiceCall({ onClose, onStateChange, audioActivation }) {
   const router = useRouter();
   const session = useRef(null);
-  const meter = useRef(null);
   const captions = useRef(null);
+  const latest = useRef(null);
   const dialog = useRef(null);
   const sceneLevel = useRef(null);
   const startedAt = useRef(0);
@@ -98,9 +98,14 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
     };
   }, [router.events]);
 
+  // Both the full transcript and the two caption lines keep their newest words in view.
   useEffect(() => {
     if (captions.current) captions.current.scrollTop = captions.current.scrollHeight;
-  }, [history, partial]);
+    const box = latest.current;
+    if (!box) return;
+    box.scrollTop = box.scrollHeight;
+    box.dataset.clipped = String(box.scrollHeight > box.clientHeight + 1);
+  }, [history, partial, navigation, shown, transcriptOpen, collapsed, state.error]);
 
   // The page follows the conversation: the section being talked about comes into view and its
   // heading lights up briefly. Nothing navigates, so the call goes on; only this site's own
@@ -146,7 +151,8 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
         callbacks.current.onStateChange?.(['listening', 'thinking', 'speaking'].includes(next.status) ? next.status : next.status === 'connecting' ? 'thinking' : 'idle');
       },
       onLevel: value => {
-        if (meter.current) meter.current.style.setProperty('--voice-level', String(value));
+        // One number drives the bars in the status line and the light behind Mr. Pot.
+        dialog.current?.style.setProperty('--voice-level', String(value));
         sceneLevel.current?.(value);
       },
       onTranscript: turn => {
@@ -189,35 +195,37 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
 
   const close = () => { session.current?.close(); onClose(); };
   const turns = [...history, partial].filter(turn => turn.user || turn.assistant);
+  const last = turns.at(-1);
+  const waiting = state.status === 'connecting' || state.status === 'ready';
+  // One small sign beside the status: waiting, done, failed, muted, or the live line itself.
+  const cue = waiting ? <Loader2 size={16} className={styles.spinner} /> : state.status === 'ended' ? <Check size={16} />
+    : state.status === 'error' ? <AlertCircle size={16} /> : muted ? <MicOff size={15} />
+      : <span className={styles.meter} aria-hidden="true"><i /><i /><i /><i /><i /></span>;
   const time = `${String(Math.floor(elapsed / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`;
   return createPortal(<section ref={dialog} role="dialog" className={styles.call} aria-modal="false" aria-label="Live voice call" data-no-voice data-status={state.status} data-collapsed={collapsed}
     onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (transcriptOpen) setTranscriptOpen(false); else close(); }
     }}>
     <header className={styles.header}>
-      <div className={styles.identity}><h2>Mr. Pot<span>.</span></h2><span className={styles.kicker}>{collapsed ? LABELS[state.status] : 'VOICE CALL'}</span></div>
+      <div className={styles.identity}><h2>Mr. Pot<span>.</span></h2><span className={styles.kicker}>{collapsed ? LABELS[state.status] : 'Voice call'}</span></div>
       <div className={styles.headerActions}>
-        {active && <span className={styles.timer}>{time}</span>}
+        {active && <span className={styles.timer} data-live={connected}>{time}</span>}
         <button type="button" title={collapsed ? 'Expand call' : 'Minimize call'} aria-label={collapsed ? 'Expand call' : 'Minimize call'} onClick={() => setCollapsed(value => !value)}>{collapsed ? <Maximize2 size={17} /> : <Minus size={18} />}</button>
         <button type="button" title="Close voice" aria-label="Close voice" onClick={close}><X size={22} /></button>
       </div>
     </header>
     <VoiceCallStage status={state.status} level={sceneLevel} visible={!collapsed && !transcriptOpen} />
     <section className={styles.conversation}>
-      <div className={styles.status} role="status">
-        {state.status === 'connecting' || state.status === 'ready' ? <Loader2 size={18} className={styles.spinner} /> : state.status === 'ended' ? <Check size={18} /> :
-          <span ref={meter} className={styles.meter} aria-hidden="true"><i /><i /><i /><i /><i /></span>}
-        <span>{muted && active ? 'Mic muted' : LABELS[state.status]}</span>
-      </div>
+      <div className={styles.status} role="status">{cue}<span>{muted && active ? 'Mic muted' : LABELS[state.status]}</span></div>
       {state.error && <p className={styles.error} role="alert">{state.error}</p>}
       {/* One reason is enough: a failed call already says why. */}
       {config && !config.configured && !state.error && <p className={styles.error}>{UNAVAILABLE[config.reason] || 'Voice is temporarily unavailable. Please try later.'}</p>}
-      {turns.length > 0 && !transcriptOpen && <div className={styles.latest} aria-live="off">
-        {turns.at(-1).user && <p className={styles.userCaption}>{turns.at(-1).user}</p>}
-        {turns.at(-1).assistant && <p className={styles.assistantCaption}>{turns.at(-1).assistant}</p>}
-        {END_LABELS[turns.at(-1).completion] && <p className={styles.turnNote}>{END_LABELS[turns.at(-1).completion]}</p>}
+      {last && !transcriptOpen && <div ref={latest} className={styles.latest} aria-live="off">
+        {last.user && <p className={styles.userCaption}>{last.user}</p>}
+        {last.assistant && <p className={styles.assistantCaption}>{last.assistant}</p>}
+        {END_LABELS[last.completion] && <p className={styles.turnNote}>{END_LABELS[last.completion]}</p>}
       </div>}
-      {navigation && <button type="button" className={styles.destination} onClick={navigate}><span>{navigation.label}</span><ArrowUpRight size={16} /></button>}
+      {navigation && <button type="button" className={styles.destination} onClick={navigate}><span>{navigation.label}</span><ArrowUpRight size={15} /></button>}
       {shown && !navigation && <p className={styles.shownNote} role="status"><MapPin size={13} aria-hidden="true" />On the page: {shown}</p>}
     </section>
     {transcriptOpen && <aside className={styles.transcript} aria-label="Call transcript">
@@ -225,7 +233,7 @@ export default function LiveVoiceCall({ onClose, onStateChange, audioActivation 
       <div ref={captions} className={styles.captions} role="log" aria-label="Voice captions" aria-live="off">
         {turns.map((turn, index) => <div key={index}>
           {turn.user && <p><strong>You</strong>{turn.user}</p>}
-          {turn.assistant && <p><strong>Mr. Pot</strong>{turn.assistant}</p>}
+          {turn.assistant && <p className={styles.potTurn}><strong>Mr. Pot</strong>{turn.assistant}</p>}
           {END_LABELS[turn.completion] && <p className={styles.turnNote}>{END_LABELS[turn.completion]}</p>}
         </div>)}
       </div>
