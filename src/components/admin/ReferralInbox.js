@@ -85,6 +85,13 @@ function Detail({ request, busy, onStatus, onNote, onDelete, onResume, onRescree
   const roles = storedRoles(request);
   const [ownerNote, setOwnerNote] = useState(request.owner_note || "");
   const [copied, setCopied] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const removeNow = async () => {
+    const problem = await onDelete();
+    // On success this card is gone; only a failure comes back here.
+    if (problem) { setDeleteError(problem); setConfirming(false); }
+  };
   const relationship = RELATIONSHIPS.find((item) => item.id === request.relationship)?.label || request.relationship;
   const copy = async () => {
     try { await navigator.clipboard.writeText(request.intro); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* Clipboard may be blocked; the text is selectable. */ }
@@ -168,7 +175,7 @@ function Detail({ request, busy, onStatus, onNote, onDelete, onResume, onRescree
             The applicant sees the status on their page, never the score or these notes.
           </p>
           {request.status_token && <div className={styles.buttons}><a className={styles.action} href={`/talk/status#${request.status_token}`} target="_blank" rel="noopener noreferrer">See what the applicant sees</a></div>}
-          <p className={styles.caveat}>Declining or archiving deletes the résumé file straight away. Otherwise it is deleted 30 days after the request arrived.</p>
+          <p className={styles.caveat}>Declining or archiving deletes the résumé file straight away. Otherwise it is deleted 30 days after the request arrived. A request you have not touched for 30 days is deleted with it; changing its status or saving a note keeps it another 30.</p>
         </div>
         <div className={styles.block}>
           <h4 className={styles.blockTitle}><label htmlFor={`note-${request.id}`}>Your note</label></h4>
@@ -176,8 +183,15 @@ function Detail({ request, busy, onStatus, onNote, onDelete, onResume, onRescree
           <div className={styles.buttons}>
             <button type="button" className={styles.action} disabled={busy || ownerNote.trim() === (request.owner_note || "")} onClick={() => onNote(ownerNote)}>Save note</button>
             <a className={styles.action} href={`mailto:${request.email}?subject=${encodeURIComponent(`Your referral request: ${request.role_title}`)}`}><Mail size={13} aria-hidden="true" />Reply by email</a>
-            <button type="button" className={styles.danger} disabled={busy} onClick={onDelete}><Trash2 size={13} aria-hidden="true" />Delete</button>
+            {confirming
+              ? <>
+                  <button type="button" className={styles.danger} disabled={busy} onClick={removeNow}><Trash2 size={13} aria-hidden="true" />{busy ? "Deleting" : "Yes, delete for good"}</button>
+                  <button type="button" className={styles.action} disabled={busy} onClick={() => setConfirming(false)}>Keep it</button>
+                </>
+              : <button type="button" className={styles.danger} disabled={busy} onClick={() => { setDeleteError(""); setConfirming(true); }}><Trash2 size={13} aria-hidden="true" />Delete</button>}
           </div>
+          {confirming && <p className={styles.caveat} role="status">This removes the request and its résumé file. It cannot be undone.</p>}
+          {deleteError && <p className={styles.caveat} role="alert">{deleteError}</p>}
         </div>
       </div>
     </div>
@@ -249,11 +263,13 @@ export default function ReferralInbox({ api, onState }) {
     catch (err) { setError(err.message || "The résumé could not be opened."); }
     finally { setBusy(""); }
   }
+  // The question is asked on the page itself (see Detail): a browser dialog is silently refused in
+  // in-app browsers and home-screen apps on phones, which left the button doing nothing. A failure is
+  // returned so it can be shown next to the button, where it was pressed.
   async function remove(id) {
-    if (!window.confirm("Delete this request? It cannot be undone.")) return;
     setBusy(id); setError("");
-    try { await api.remove(id); setRequests((current) => current.filter((item) => item.id !== id)); setOpen(""); }
-    catch (err) { setError(err.message || "The request could not be deleted."); }
+    try { await api.remove(id); setRequests((current) => current.filter((item) => item.id !== id)); setOpen(""); return ""; }
+    catch (err) { return err.message || "The request could not be deleted."; }
     finally { setBusy(""); }
   }
 
