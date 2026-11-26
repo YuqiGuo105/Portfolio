@@ -196,9 +196,16 @@ test('housekeeping deletes expired and closed files, old requests and uploads th
   f.advance(25 * 3600000);
   summary = await f.worker.run({ housekeeping: true });
   assert.equal(summary.purged, 1); assert.equal(await f.store.get(abandoned), null);
+  // A request nobody touches for 30 days goes; one the owner is still working on stays.
+  f.advance(28 * 86400000);
+  await f.store.update(kept, { owner_note: 'Referred, waiting to hear back.' });
+  f.advance(3 * 86400000);
+  summary = await f.worker.run({ housekeeping: true });
+  assert.equal(summary.purged, 2); assert.equal(await f.store.get(closed), null); assert.equal(await f.store.get(old), null);
+  assert.ok(await f.store.get(kept), 'a request with recent activity is kept');
   f.advance(181 * 86400000);
   summary = await f.worker.run({ housekeeping: true });
-  assert.equal(summary.purged, 3); assert.equal(summary.filesDeleted, 1); assert.equal(f.storage.objects.size, 0); assert.deepEqual(await f.store.list(), []);
+  assert.equal(summary.purged, 1); assert.equal(f.storage.objects.size, 0); assert.deepEqual(await f.store.list(), []);
 });
 
 test('a run stops claiming when its time budget is spent and reports what is still waiting', async () => {

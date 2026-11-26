@@ -3,7 +3,7 @@
 // one insert, and the worker claims queued rows in batches with a lease (FOR UPDATE SKIP LOCKED), so
 // any number of workers can run at once without screening a request twice.
 import { randomUUID } from 'node:crypto';
-import { CLOSED_STATUSES, REQUEST_KEEP_DAYS, RESUME_KEEP_DAYS, STATUSES } from './config.mjs';
+import { CLOSED_STATUSES, IDLE_KEEP_DAYS, REQUEST_KEEP_DAYS, RESUME_KEEP_DAYS, STATUSES } from './config.mjs';
 import { applicantKey } from './fields.mjs';
 
 const missingTable = error => ['42P01', 'PGRST205', 'PGRST202'].includes(error?.code);
@@ -164,7 +164,11 @@ export function supabaseReferralStore(client) {
       const old = rows(await table().delete().lt('expires_at', new Date(now).toISOString()).select('id, resume_path'));
       // A request whose file never arrived is not a request; it is dropped after a day.
       const abandoned = rows(await table().delete().eq('state', 'awaiting_upload').lt('created_at', new Date(now - DAY).toISOString()).select('id, resume_path'));
-      return { removed: old.length + abandoned.length, paths: [...old, ...abandoned].map(row => row.resume_path).filter(Boolean) };
+      // Nothing has happened to it for a month (no screening, status change or note): it is not being
+      // followed, so it goes. Anything the owner touches starts the month again.
+      const idle = rows(await table().delete().lt('updated_at', new Date(now - IDLE_KEEP_DAYS * DAY).toISOString()).select('id, resume_path'));
+      const gone = [...old, ...abandoned, ...idle];
+      return { removed: gone.length, paths: gone.map(row => row.resume_path).filter(Boolean) };
     },
   };
 }
@@ -253,7 +257,7 @@ export function memoryReferralStore(seed = [], now = Date.now) {
     async purge() {
       const at = now(), paths = []; let removed = 0;
       for (const row of [...rows.values()]) {
-        if (Date.parse(row.expires_at) < at || (row.state === 'awaiting_upload' && Date.parse(row.created_at) < at - DAY)) {
+        if (Date.parse(row.expires_at) < at || (row.state === 'awaiting_upload' && Date.parse(row.created_at) < at - DAY) || Date.parse(row.updated_at) < at - IDLE_KEEP_DAYS * DAY) {
           rows.delete(row.id); removed += 1; if (row.resume_path) paths.push(row.resume_path);
         }
       }

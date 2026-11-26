@@ -467,7 +467,7 @@ export default function ReferralWizard({ company, plain = false }) {
             <span>
               I agree that Yuqi receives these details and my résumé, and that an AI model (Google Gemini) may read them to screen the request.
               A request under the screening bar is declined automatically;
-              I can follow the outcome on my status page, and only Yuqi sees the score and the notes. The site keeps the request for up to 180 days and the résumé file for up to 30 days, or until the request is closed. <Link href="/privacy"><a target="_blank" rel="noopener">Privacy</a></Link>
+              I can follow the outcome on my status page, and only Yuqi sees the score and the notes. The site deletes the request 30 days after the last activity on it, and the résumé file within 30 days or as soon as the request is closed. <Link href="/privacy"><a target="_blank" rel="noopener">Privacy</a></Link>
             </span>
           </label>
           {errors.consent && <p className={styles.error} role="alert" style={{ margin: "-10px 0 16px" }}><CircleAlert size={14} aria-hidden="true" /><span>{errors.consent}</span></p>}

@@ -67,7 +67,7 @@ export default function ReferralStatus() {
       <div className={styles.hub}><div className={styles.explain}>
         <h2 className={styles.panelTitle}>{token ? "This request could not be found" : "Open this page from your status link"}</h2>
         <p>{token
-          ? "The link may be incomplete, or the request has been removed. Requests are kept for up to 180 days."
+          ? "The link may be incomplete, or the request has been removed. Requests are deleted 30 days after the last activity on them."
           : "The link was shown when you sent your referral request, and it is in the confirmation email if one was sent. On the device you used to send the request, this page opens without it."}</p>
         <div className={styles.explainActions}><Link href={TALK_PATH}><a className={styles.secondary}>Back to Talk with me</a></Link></div>
       </div></div>

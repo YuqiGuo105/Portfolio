@@ -31,6 +31,8 @@ export const STATES = Object.freeze(['awaiting_upload', 'queued', 'screening', '
 // Closing a request deletes its résumé file straight away; otherwise the file goes after this many days.
 export const RESUME_KEEP_DAYS = 30;
 export const REQUEST_KEEP_DAYS = 180;
+// A request nobody has touched for this long (no screening, status change or note) is deleted.
+export const IDLE_KEEP_DAYS = 30;
 export const CLOSED_STATUSES = Object.freeze(['declined', 'archived']);
 export const RECOMMENDATIONS = Object.freeze(['strong', 'promising', 'unclear', 'weak']);
 export const RECOMMENDATION_LABELS = Object.freeze({

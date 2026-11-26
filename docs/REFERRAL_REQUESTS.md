@@ -206,7 +206,7 @@ a pass is announced in the owner's digest as before. With one, the digest also l
 
 | What | Where | Until |
 |---|---|---|
-| The request and its screening note | `public.referral_requests` (service role only, RLS on) | 180 days |
+| The request and its screening note | `public.referral_requests` (service role only, RLS on) | 30 days after the last activity on it (screening, a status change or a note), and never longer than 180 days |
 | The résumé file | private bucket `referral-resumes` | the request is declined, archived or deleted; otherwise 30 days |
 | A form whose upload never finished | same table, not shown to the owner | 1 day |
 

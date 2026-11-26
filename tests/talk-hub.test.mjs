@@ -277,7 +277,7 @@ test('arriving at the review does not send anything; sending needs consent and v
   assert.deepEqual(requests, []); assert.deepEqual(errors(), []);
   assert.equal($('[data-verification]').getAttribute('data-verification'), 'referral_submit');
   assert.match(container.textContent, /an AI model \(Google Gemini\) may read them to screen the request/);
-  assert.match(container.textContent, /the résumé file for up to 30 days, or until the request is closed/);
+  assert.match(container.textContent, /the résumé file within 30 days or as soon as the request is closed/);
   await submitForm();
   assert.deepEqual(errors(), ['Please confirm how your details will be used.']); assert.deepEqual(requests, []);
   await agree(); await submitForm();
