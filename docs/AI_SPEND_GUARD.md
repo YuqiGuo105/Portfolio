@@ -240,6 +240,23 @@ The same receipt prevents repeated executions from exceeding the approved
 aggregate amount. Do not remove/reset it to obtain more paid attempts without
 new approval. Its local test-only budget is not the production shared ledger.
 
+## Deep Mode Since November 26, 2026
+
+Deep no longer means web research on a larger model; the gateway admits neither tools nor
+an unpriced model, which is why Deep was switched off in the recovery above. Deep is now a
+bounded loop on the standard low-cost model (`portfolio-ai-platform`, `DeepAnswerLoop`): a
+full first answer, a short review of it against the question and the evidence, a look-up in
+the knowledge base for what the review found missing, and one rewrite. Every pass is an
+ordinary gateway call (no tools, `thinkingBudget: 0`, at most 4096 output tokens), so the
+gateway's ledger and the agent's daily budget cover it like any other call. The worst case
+is three generation-side calls for one Deep answer instead of one; the loop also stops
+starting passes after 45 seconds.
+
+The switch is unchanged: the agent's Actions variable `AGENT_DEEP_PATH_ENABLED`. It was
+still `false` when the loop shipped; Deep is offered in the chat window only after it is set
+to `true` and the agent service is deployed again. Web search for Deep stays off
+(`agent.generation.deep-web-search`), and attachments stay disabled.
+
 ## Pricing References
 
 Checked October 26, 2026. Recheck before enabling a new model or changing rates.

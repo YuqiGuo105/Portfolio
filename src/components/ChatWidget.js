@@ -2985,7 +2985,7 @@ function ChatWindow({ onMinimize, onDragStart, routerPathname, pageHighlightRef,
                     <Brain className="cw-mode-item-ico" />
                       <span className="cw-mode-left">
                         <span className="cw-mode-name">Deep</span>
-                        <span className="cw-mode-desc">{capabilities.deep ? "Searches and verifies sources" : "Temporarily unavailable"}</span>
+                        <span className="cw-mode-desc">{capabilities.deep ? "More thorough / reviews its answer" : "Temporarily unavailable"}</span>
                       </span>
                   </span>
                   {mode === "thinking" ? <Check className="cw-check" /> : null}
