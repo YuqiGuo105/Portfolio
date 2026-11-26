@@ -238,7 +238,14 @@ export default function ReferralInbox({ api, onState }) {
 
   async function download(id) {
     setBusy(id); setError("");
-    try { const { url } = await api.resume(id); window.open(url, "_blank", "noopener"); }
+    // The link is fetched first, so opening a new window here would be blocked as a pop-up (always on
+    // phones). The link answers with a download, so following it in this tab leaves the page where it is.
+    try {
+      const { url } = await api.resume(id);
+      const link = document.createElement("a");
+      link.href = url; link.rel = "noopener"; link.style.display = "none";
+      document.body.appendChild(link); link.click(); link.remove();
+    }
     catch (err) { setError(err.message || "The résumé could not be opened."); }
     finally { setBusy(""); }
   }
