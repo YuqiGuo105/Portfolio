@@ -3,7 +3,8 @@ WORKDIR /app
 COPY services/voice/package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY services/voice/server.mjs services/voice/relay.mjs services/voice/qwenTransport.mjs services/voice/modelGateway.mjs ./services/voice/
-COPY src/lib/voice/protocol.mjs src/lib/voice/publicProfile.mjs src/lib/voice/qwenProtocol.mjs src/lib/voice/history.mjs src/lib/voice/spendGuard.mjs src/lib/voice/qwenDictation.mjs ./src/lib/voice/
+COPY src/lib/voice/protocol.mjs src/lib/voice/publicProfile.mjs src/lib/voice/publicGuide.mjs src/lib/voice/qwenProtocol.mjs src/lib/voice/history.mjs src/lib/voice/spendGuard.mjs src/lib/voice/qwenDictation.mjs ./src/lib/voice/
+COPY src/lib/siteGuide.mjs ./src/lib/
 ENV NODE_ENV=production
 USER node
 EXPOSE 8080
