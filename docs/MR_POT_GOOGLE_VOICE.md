@@ -50,6 +50,19 @@ For an existing deployment, apply only the `create or replace function` and
 function grants from `db/voice-budget.sql`; do not recreate or seed the budget
 table. The five-call update preserves today's usage and the monthly allowance.
 
+One line, and the newest caller has it. A reservation takes the line over from
+whoever holds it, so a visitor is never told that Mr. Pot is on another call,
+and an attempt that never connected keeps nobody out. A call whose line was
+taken ends with `replaced`: at once when both calls are on the same relay
+instance, at the next five-second check otherwise. An attempt reserved within
+the last two minutes that never connected reached no model; the next
+reservation continues it and the two count as one call. The five-a-day and
+forty-a-month limits are unchanged. The function and the relay can be released
+in either order: an older relay ignores `holds`, and an older function never
+sends it (it still answers `busy`, which the browser waits out).
+`tests/voice-allowance-sql.test.mjs` runs the function in an in-memory
+PostgreSQL when `VOICE_PGLITE_MODULE` points at PGlite.
+
 The one-click revision passes 57 voice tests, 201 portfolio regressions and 40
 security checks. Mocked browser coverage verifies one click/one reservation,
 one greeting, no automatic redial, permission denial without reservation, and

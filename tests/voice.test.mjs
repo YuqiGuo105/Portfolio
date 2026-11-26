@@ -501,3 +501,14 @@ test('a section is shown in place on the home page and only offered elsewhere; a
     assert.equal(relayed.sent.some(message => message.toolResponse), false, 'the relay, not the browser, answers the model');
   } finally { relayed.session.close(); }
 });
+
+test('a call whose line was taken by a newer caller ends and says so', async () => {
+  const h = relayHarness();
+  try {
+    await h.session.start(); h.socket.onopen(); h.session.handle({ setupComplete: {} });
+    h.session.handle({ type: 'relay.closed', reason: 'replaced' });
+    assert.equal(h.events.at(-1).status, 'ended');
+    assert.match(h.events.at(-1).error, /answered a newer call/);
+    assert.equal(h.audio.closes, 1);
+  } finally { h.session.close(); }
+});

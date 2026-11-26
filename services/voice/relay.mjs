@@ -45,6 +45,8 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
   budget = createBudgetStore(env, fetchImpl), loadProfile = createProfileLoader(),
   // The site guide is read through the public MCP tool; a short wait, then this build's own copy.
   loadGuide = createGuideLoader({ timeoutMs: 4000 }),
+  // How often a call asks whether the line is still its own (another instance may have given it away).
+  lineCheckMs = 5000,
   connect = (url, options) => new WebSocket(url, options) } = {}) {
   const secret = env.VOICE_GATEWAY_TOKEN;
   const selection = env.VOICE_PROVIDER || 'qwen';
@@ -57,6 +59,8 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
   if (env.NODE_ENV !== 'production' && env.VOICE_LOCAL_ORIGIN) origins.add(env.VOICE_LOCAL_ORIGIN);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32768, perMessageDeflate: false });
   const closers = new Set();
+  // Calls on this instance that hold, or held, the line. There is one line: the newest caller has it.
+  const holders = new Set();
   let cachedStatus, cachedUntil = 0;
   const guideFor = () => Promise.resolve().then(loadGuide).then(guide => (guide?.sections?.length ? guide : BUILT_IN_GUIDE)).catch(() => BUILT_IN_GUIDE);
 
@@ -107,7 +111,7 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
       const send = message => { if (!closed && client.readyState === 1) client.send(JSON.stringify(message)); };
       const stop = (reason = 'ended') => {
         if (closed) return closePromise;
-        closed = true; controller.abort();
+        closed = true; controller.abort(); holders.delete(stop);
         for (const timer of timers) { clearTimeout(timer); clearInterval(timer); }
         if (upstream && upstream.readyState !== WebSocket.CLOSED) upstream.terminate();
         if (ticketHash) budget('release', ticketHash).catch(() => {});
@@ -161,6 +165,10 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
             ticketHash = candidate;
             if (closed) { await budget('release', ticketHash); return; }
             call = ticket;
+            // This caller now has the line. A call still running here ends at once; one on another
+            // instance learns it at its next check.
+            for (const end of [...holders]) end('replaced');
+            holders.add(stop);
             const expires = Date.parse(allowance.expiresAt);
             if (!Number.isFinite(expires) || expires <= now()) throw new Error('Expired');
             timers.add(setTimeout(() => stop('time_limit'), Math.min(120000, expires - now())));
@@ -168,9 +176,12 @@ export function createVoiceRelay({ env = process.env, now = Date.now, fetchImpl 
             timers.add(setInterval(async () => {
               if (checking || closed) return;
               checking = true;
-              try { const state = await budget('status'); if (state.reason === 'disabled') stop('disabled'); }
-              catch { stop('quota_unavailable'); } finally { checking = false; }
-            }, 10000));
+              try {
+                const state = await budget('status', ticketHash);
+                if (state.reason === 'disabled') stop('disabled');
+                else if (state.holds === false) stop('replaced');
+              } catch { stop('quota_unavailable'); } finally { checking = false; }
+            }, lineCheckMs));
             const [profile, guide] = await Promise.all([loadProfile(), guideFor()]);
             if (closed) return;
             const destinations = new Set(cleanVoiceGuide(guide).map(section => section.target));

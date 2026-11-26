@@ -133,7 +133,7 @@ export class GoogleLiveSession {
   handle(message) {
     if (this.closed) return;
     if (message.type === 'relay.closed') {
-      const notes = { time_limit: 'Call time limit reached.', usage_limit: 'Call usage limit reached.', output_limit: 'Call response limit reached.', profile_unavailable: 'Portfolio facts could not be loaded. Please try later.', disabled: 'Voice is temporarily paused.' };
+      const notes = { replaced: 'Mr. Pot answered a newer call, so this one ended.', time_limit: 'Call time limit reached.', usage_limit: 'Call usage limit reached.', output_limit: 'Call response limit reached.', profile_unavailable: 'Portfolio facts could not be loaded. Please try later.', disabled: 'Voice is temporarily paused.' };
       this.close(notes[message.reason] || 'Call ended.'); return;
     }
     if (this.maxEstimatedUsd && message.usageMetadata) {

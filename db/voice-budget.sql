@@ -24,6 +24,7 @@ declare
   d date := (t at time zone 'America/Denver')::date;
   m text := to_char(t at time zone 'America/Denver', 'YYYY-MM');
   why text;
+  retry boolean;
 begin
   if p_action not in ('status', 'reserve', 'claim', 'release') then
     raise exception 'Invalid voice operation';
@@ -31,7 +32,8 @@ begin
   select * into strict b from public.voice_budget where singleton for update;
   if b.usage_day <> d then b.usage_day := d; b.daily_calls := 0; end if;
   if b.usage_month <> m then b.usage_month := m; b.monthly_calls := 0; end if;
-  if p_action <> 'status' and (p_ticket_hash is null or p_ticket_hash !~ '^[a-f0-9]{64}$') then
+  if (p_action <> 'status' and p_ticket_hash is null)
+    or (p_ticket_hash is not null and p_ticket_hash !~ '^[a-f0-9]{64}$') then
     raise exception 'Invalid voice ticket';
   end if;
   if p_action = 'release' then
@@ -43,13 +45,21 @@ begin
     b.claimed := true;
     b.active_until := t + interval '120 seconds';
   else
+    -- One line for the whole site, and the newest caller has it. A reservation takes the line
+    -- over from whoever holds it, so nobody is told to try again later, and an attempt that never
+    -- connected cannot keep anyone out. The relay ends a call whose line has been taken.
+    -- An attempt that was reserved a moment ago and never connected reached no model: trying
+    -- again continues that attempt and is not counted as another call.
+    retry := b.ticket_hash is not null and not b.claimed and b.claim_by > t - interval '2 minutes';
     why := case when not b.enabled then 'disabled'
-      when b.daily_calls >= 5 then 'daily_limit'
-      when b.monthly_calls >= 40 then 'monthly_limit'
-      when b.active_until > t then 'busy' else null end;
+      when not retry and b.daily_calls >= 5 then 'daily_limit'
+      when not retry and b.monthly_calls >= 40 then 'monthly_limit'
+      else null end;
     if p_action = 'reserve' and why is null then
-      b.daily_calls := b.daily_calls + 1;
-      b.monthly_calls := b.monthly_calls + 1;
+      if not retry then
+        b.daily_calls := b.daily_calls + 1;
+        b.monthly_calls := b.monthly_calls + 1;
+      end if;
       b.ticket_hash := p_ticket_hash;
       b.claim_by := t + interval '30 seconds';
       b.active_until := b.claim_by;
@@ -63,7 +73,9 @@ begin
   return jsonb_build_object('allowed', why is null, 'reason', why,
     'remainingCalls', greatest(0, least(5 - b.daily_calls, 40 - b.monthly_calls)),
     'expiresAt', b.active_until,
-    'resetAt', ((d + 1)::timestamp at time zone 'America/Denver'));
+    'resetAt', ((d + 1)::timestamp at time zone 'America/Denver'),
+    -- For a caller that names its ticket: whether the line is still its own.
+    'holds', case when p_ticket_hash is null then null else coalesce(b.ticket_hash = p_ticket_hash, false) end);
 end;
 $$;
 revoke all on function public.voice_allowance(text, text) from public, anon, authenticated;

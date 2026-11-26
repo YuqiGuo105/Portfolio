@@ -23,6 +23,8 @@ async function waitFor(check) {
   assert.fail('Expected condition did not become true');
 }
 
+// The allowance as db/voice-budget.sql keeps it: one line, the newest caller has it, and an attempt
+// that never connected is continued by the next one instead of being counted again.
 function store() {
   let calls = 0, active = null, claimed = false;
   return async (action, ticket) => {
@@ -30,12 +32,15 @@ function store() {
       if (ticket !== active || claimed) return { allowed: false, remainingCalls: 5 - calls };
       claimed = true;
     }
-    if (action === 'release' && active === ticket) active = null;
+    if (action === 'release' && active === ticket) { active = null; claimed = false; }
     if (action === 'reserve') {
-      if (calls >= 5 || active) return { allowed: false, reason: calls >= 5 ? 'daily_limit' : 'busy', remainingCalls: 5 - calls };
-      active = ticket; calls++; claimed = false;
+      const retry = active !== null && !claimed;
+      if (!retry && calls >= 5) return { allowed: false, reason: 'daily_limit', remainingCalls: 0 };
+      if (!retry) calls++;
+      active = ticket; claimed = false;
     }
-    return { allowed: true, remainingCalls: 5 - calls, expiresAt: new Date(Date.now() + 120000).toISOString() };
+    return { allowed: true, remainingCalls: 5 - calls, expiresAt: new Date(Date.now() + 120000).toISOString(),
+      ...(ticket ? { holds: ticket === active } : {}) };
   };
 }
 
@@ -100,14 +105,18 @@ test('signed one-use ticket rejects altered payloads, foreign origins, expiry an
   }
 });
 
-test('two relay instances share an atomic allowance; status and refresh do not spend or renew it', async () => {
+test('two relay instances share one line and one allowance; status and refresh do not spend or renew it', async () => {
   const budget = store(); const a = await fixture({ budget }), b = await fixture({ budget });
   try {
     const attempts = await Promise.all(Array.from({ length: 12 }, (_, i) => (i % 2 ? a : b).reserve()));
-    assert.equal(attempts.filter(x => x.status === 200).length, 1);
+    assert.equal(attempts.filter(x => x.status === 200).length, 12, 'nobody is turned away while the line is only reserved');
     assert.equal(a.tokens() + b.tokens(), 0);
-    const first = attempts.find(x => x.status === 200);
+    // Twelve attempts that never connected are one call, and only the newest ticket has the line.
+    const first = await a.reserve();
+    assert.equal(first.data.ticket === attempts[0].data.ticket, false);
     assert.equal(JSON.stringify(first.data).includes('never-browser'), false);
+    assert.equal((await b.open(attempts[0].data.ticket)).client.readyState, 3, 'a ticket that lost the line starts nothing');
+    assert.equal(a.tokens() + b.tokens(), 0);
     const { client, events } = await a.open(first.data.ticket);
     assert.ok(events.some(x => x.setupComplete)); client.close(); await once(client, 'close'); await pause(10);
     for (let i = 0; i < 4; i++) {
@@ -249,10 +258,11 @@ test('Qwen uses the shared five-per-day allowance, normalized setup, fixed greet
     assert.equal(status.provider, 'Qwen'); assert.equal(status.model, QWEN_MODEL);
     assert.equal(status.dailyLimit, 5); assert.equal(status.maxSeconds, 120); assert.equal(status.remainingCalls, 5);
     const attempts = await Promise.all(Array.from({ length: 8 }, (_, i) => (i % 2 ? a : b).reserve()));
-    assert.equal(attempts.filter(result => result.status === 200).length, 1);
+    assert.equal(attempts.filter(result => result.status === 200).length, 8);
     for (let i = 0; i < 5; i++) {
       const f = i % 2 ? a : b;
-      const reservation = i === 0 ? attempts.find(result => result.status === 200) : await f.reserve();
+      // The first of these continues the eight attempts above, which never connected: one call.
+      const reservation = await f.reserve();
       assert.equal(reservation.status, 200); assert.equal(reservation.data.provider, 'Qwen'); assert.equal(reservation.data.maxSeconds, 120);
       const call = await f.open(reservation.data.ticket), provider = f.providers.at(-1);
       assert.equal(call.events.filter(event => event.setupComplete).length, 1);
@@ -545,4 +555,46 @@ test('a call starts with this build\'s guide when the guide tool cannot be read'
     emit(f.providers[0], { toolCall: { functionCalls: [{ id: 'show', name: 'navigate_section', args: { target: 'contact' } }] } });
     assert.deepEqual(f.providers[0].messages.at(-1).toolResponse.functionResponses[0].response, { status: 'shown', label: 'Contact' });
   } finally { await f.close(); }
+});
+
+test('a newer caller takes the line: the call it replaces ends at once, and an attempt that never connected keeps nobody out', async () => {
+  const f = await fixture();
+  const headers = { Authorization: `Bearer ${secret}` };
+  try {
+    const abandoned = await f.reserve(); assert.equal(abandoned.status, 200);
+    const first = await f.reserve();
+    assert.equal(first.status, 200, 'an attempt that never connected is not "another call"');
+    const one = await f.open(first.data.ticket);
+    assert.ok(one.events.some(event => event.setupComplete));
+    assert.equal((await (await fetch(`${f.base}/session`, { headers })).json()).configured, true, 'the line is never reported busy');
+    const second = await f.reserve(); assert.equal(second.status, 200);
+    const two = await f.open(second.data.ticket);
+    await one.closed;
+    assert.ok(one.events.some(event => event.type === 'relay.closed' && event.reason === 'replaced'));
+    assert.equal(f.providers[0].readyState, 3, 'the replaced call stops costing anything');
+    assert.ok(two.events.some(event => event.setupComplete)); assert.equal(two.client.readyState, 1);
+    await pause(30);
+    assert.equal(two.client.readyState, 1, 'the ended call does not take the line back with it');
+    assert.equal((await (await fetch(`${f.base}/session`, { headers })).json()).remainingCalls, 3, 'two calls were made, not three');
+    two.client.send(JSON.stringify({ type: 'hangup' })); await two.closed;
+  } finally { await f.close(); }
+});
+
+test('a call on another instance ends at its next check once its line is taken; one that still has it goes on', async () => {
+  const budget = store();
+  const a = await fixture({ budget, lineCheckMs: 20 }), b = await fixture({ budget, lineCheckMs: 20 });
+  // An allowance function from before this rule says nothing about who holds the line: calls go on.
+  const older = store();
+  const c = await fixture({ lineCheckMs: 20, budget: async (...args) => { const { holds, ...rest } = await older(...args); return rest; } });
+  try {
+    const one = await a.open((await a.reserve()).data.ticket);
+    const kept = await c.open((await c.reserve()).data.ticket);
+    await pause(90);
+    assert.equal(one.client.readyState, 1); assert.equal(kept.client.readyState, 1);
+    const two = await b.open((await b.reserve()).data.ticket);
+    await one.closed;
+    assert.ok(one.events.some(event => event.type === 'relay.closed' && event.reason === 'replaced'));
+    await pause(90);
+    assert.equal(two.client.readyState, 1); assert.equal(kept.client.readyState, 1);
+  } finally { await a.close(); await b.close(); await c.close(); }
 });
